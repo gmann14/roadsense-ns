@@ -8,6 +8,8 @@ Ship a private TestFlight build to 20–50 Halifax-area beta testers within **8 
 
 "Done" for MVP is defined in §Release Criteria at the bottom of this doc. It's deliberately narrower than the full product spec — the goal is a real, dogfoodable loop that we can iterate on in public, not feature completeness.
 
+For literal task order and acceptance-criteria slicing, use [08-implementation-backlog.md](08-implementation-backlog.md) alongside this roadmap.
+
 ## Guiding Principles
 
 1. **Own the critical path ruthlessly.** Backend schema, OSM import, and vector tile plumbing block everything. Start them week 1, even before the iOS client is collecting real data.
@@ -20,7 +22,7 @@ Ship a private TestFlight build to 20–50 Halifax-area beta testers within **8 
 
 ```
 Week 1 ──┬─ Apple Developer Program enrollment (Day 1 — can take 48h)
-         ├─ Domain purchased (roadsense.ca or chosen alternative)
+         ├─ Domain purchased (`roadsense.ca`)
          ├─ Supabase project + PostGIS + schema migrations 001–008 applied
          ├─ Xcode project skeleton + SPM deps (Mapbox, Supabase, Sentry) — builds empty shell
          └─ HRM-only OSM import (proof-of-concept, not full NS)
@@ -82,9 +84,9 @@ These are reversible-but-expensive choices. Make them early and explicitly:
 1. **[DECISION] Mapbox account tier.** Free (< 50k MAU) for MVP. Confirmed — but sign up for the account week 1 so the SDK key isn't blocking in week 3.
 2. **[DECISION] Supabase region.** `us-east-1` (Halifax → US East has lowest latency vs. EU or west coast). Lock before any migrations run.
 3. **[DECISION] `batch_id` generation.** Client generates UUIDv4 per batch; server enforces uniqueness for idempotent retries. See [03-api-contracts.md](03-api-contracts.md).
-4. **[DECISION] Device token rotation cadence.** Monthly, generated on device, never sent in readable form — server only sees SHA-256 hash. Rotation means one person = multiple contributor counts over time; accept this.
+4. **[DECISION] Device token rotation cadence.** Monthly, generated on device, sent as a cleartext UUID over TLS, and hashed with a server-side pepper inside the upload Edge Function before persistence. Rotation means one person = multiple contributor counts over time; accept this.
 5. **[DECISION] OSM snapshot date for MVP.** Pin a specific Geofabrik `nova-scotia-latest.osm.pbf` download date in the import script (lets us reproduce segment IDs). Refresh quarterly after launch.
-6. **[OPEN] Bundle ID / app name.** Product spec still has 3 working names. Pick one by end of week 1 — App Store Connect setup needs it. Working default: `ca.roadsense.ios`, display name "RoadSense NS".
+6. **[DECISION] Bundle ID / app name.** Lock to bundle ID `ca.roadsense.ios`, display name `RoadSense NS`, and public site domain `roadsense.ca`. Use those values consistently across App Store Connect, privacy policy, screenshots, and deployment config.
 7. **[DECISION] Platform: iOS native first.** Decision made. Swift + SwiftUI + CoreMotion + CoreLocation. No React Native / Flutter for MVP. Rationale: raw-sensor access and tight battery control are the differentiator; cross-platform frameworks add friction with no upside in our 8-week window. Android follow-on starts week 9 (see §Android Follow-On below).
 
 ## Risks to Watch (and Trip-Wires)
@@ -106,7 +108,7 @@ Ranked by likelihood × impact. Each has an explicit detection signal so we can 
 ### M1 — "Dial tone" (end of week 2)
 
 - Supabase project exists, migrations applied, `road_segments` table populated for HRM only (we expand later)
-- iOS project builds and runs; permission prompts render; dummy upload to `/api/upload-readings` with 1 hardcoded reading returns 200
+- iOS project builds and runs; permission prompts render; dummy upload to `/upload-readings` with 1 hardcoded reading returns 200
 - CI green
 
 ### M2 — "End-to-end stub" (end of week 3)
@@ -178,7 +180,65 @@ Not part of MVP delivery, but the "what's next" so we can answer users asking:
 - Expand beyond HRM to Cape Breton Regional Municipality
 - "Worst roads in Halifax" automated report → local media outreach
 - First municipal contact (informal — not a commercial deal)
+- Web dashboard for public + municipal aggregation (see next section)
 - Android client (see below)
+
+## Web Dashboard Direction (Phase 2+)
+
+The web interface is **not** a clone of the phone app. The phone is for passive collection and quick visualization; the web is where we aggregate, explain, compare, and publish.
+
+Detailed UX and implementation guidance lives in [07-web-dashboard-implementation.md](07-web-dashboard-implementation.md). This section exists to keep roadmap and product-shape assumptions aligned with the week-by-week plan.
+
+Primary audiences:
+
+- **Public explorer** — "what roads near me are rough?"
+- **Journalist / advocate** — "what neighborhoods or corridors look worst, and is it getting better or worse?"
+- **Municipal / public-works viewer** — "where do we have confident signal, where is coverage thin, and what changed recently?"
+
+### UX goals
+
+1. **Explain the map in one screen.** A first-time visitor should understand the color scale, confidence, and freshness without reading a whitepaper.
+2. **Make trust visible.** Show confidence, last-updated times, methodology link, and coverage caveats prominently.
+3. **Support scanning before analysis.** The first experience is visual discovery; tables and exports come second.
+4. **Stay public-facing.** Avoid "enterprise dashboard" clutter, over-filtering, and tiny control panels.
+
+### Proposed information architecture
+
+1. **Home / Map**
+   - full-width aggregate map
+   - clear legend
+   - municipality selector
+   - freshness + confidence explainer
+2. **Road detail panel**
+   - current category
+   - recent trend
+   - pothole presence
+   - number of contributors / readings
+3. **Coverage view**
+   - where we have enough data vs. where we need drivers
+4. **Trends / Reports**
+   - worst segments
+   - improving / worsening corridors
+   - municipality comparison
+5. **Methodology / Privacy**
+   - how scoring works
+   - what data is collected
+   - why some roads are missing
+
+### Visual direction
+
+- Think **civic newsroom + high-quality map**, not generic BI dashboard.
+- Light background by default, strong typography, restrained chrome, large map area.
+- One accent family for controls, one semantic ramp for road quality, and one neutral ramp for confidence / unscored states.
+- Use motion sparingly: panel transitions, hover emphasis, animated trend lines. No spinning metric cards or noisy dashboard ornaments.
+
+### What to avoid on the web
+
+- dashboard-soup layouts with 12 cards above the fold
+- overuse of tables before the map
+- mystery colors without a legend
+- default admin-template styling
+- hiding methodology or freshness behind tiny info icons
 
 ## Android Follow-On (weeks 13–18)
 

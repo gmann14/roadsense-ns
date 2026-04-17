@@ -11,7 +11,7 @@ Privacy isn't a feature; it's the foundation. A data leak in a civic-tech app tr
 1. **Collect only what's needed.** No email, no phone, no name. No account system in MVP.
 2. **Never see raw tracks server-side.** Client strips privacy-zone readings; server only ingests individual windows with midpoint coordinates.
 3. **Never store the raw device token.** The client sends the token UUID over TLS; the Edge Function hashes it with a server-side pepper on receipt and discards the cleartext in the same request. The raw token is never persisted, never logged, never returned. (It *is* in server memory for the duration of the request — that's a necessary trust boundary, not a marketing claim to obscure.) Rotate monthly.
-4. **No third-party analytics or ad SDKs.** Sentry (errors only, with PII scrubbing) and nothing else.
+4. **No third-party analytics or ad SDKs.** Sentry for crashes and limited performance diagnostics only, with PII scrubbing, and nothing else.
 5. **Anonymized from the outside in.** Privacy policy, App Store labels, user-facing copy all say the same thing the code enforces.
 
 ## PIPEDA Compliance Checklist
@@ -54,11 +54,11 @@ No age-gating in MVP. Our data collection model doesn't ID minors because it doe
 
 ## Privacy Policy (content outline)
 
-Publish at `https://roadsense.ca/privacy` (or wherever) before TestFlight external review.
+Publish at `https://roadsense.ca/privacy` before TestFlight external review.
 
 Sections:
 
-1. **What we collect** — accelerometer, GPS, speed, timestamps, IP (for rate limiting, not logged)
+1. **What we collect** — accelerometer, GPS, speed, timestamps, IP (for rate limiting, not logged), and crash / performance diagnostics from Sentry with PII scrubbing
 2. **What we don't collect** — no name, no email, no phone, no account, no raw GPS tracks
 3. **How we use it** — aggregate road quality scores shown on a public map
 4. **How long we keep it** — raw readings 6 months, aggregates indefinitely
@@ -71,14 +71,27 @@ Sections:
 
 **Plain language.** If anything reads like a lawyer wrote it, rewrite it. Legal correctness without readability fails PIPEDA principle 8 (openness).
 
+## Phase 2 Web Dashboard Privacy Guardrails
+
+When the public web dashboard ships, keep these rules aligned with [07-web-dashboard-implementation.md](07-web-dashboard-implementation.md):
+
+- no accounts in W1 web
+- no cookies except strictly necessary platform/session mechanics if they ever become unavoidable
+- no ad tech
+- no session replay
+- no map-click logging tied to person-like identifiers
+- no raw trace, raw reading, or per-device views on the public web
+
+If frontend error monitoring is added later, keep it to error capture only and apply the same PII scrubbing rule as iOS/backend. Do not log free-form search text if it can encode a home address or specific route.
+
 ## App Store Privacy Labels
 
 What we enter in App Store Connect:
 
 **Data Types Collected:**
 - **Location — Precise Location** ✅
-  - Use: App Functionality, Analytics (aggregate only)
-  - Linked to user? **No**
+  - Use: App Functionality
+  - Linked to user? **Yes**
   - Used for tracking? **No**
 
 **Data NOT collected:**
@@ -90,7 +103,6 @@ What we enter in App Store Connect:
 - Identifiers (user ID, advertising ID)
 - Purchases
 - Usage data
-- Financial, Purchases, Browsing history, Identifiers, User content
 
 **Data Types Collected (continued):**
 - **Diagnostics — Crash Data** ✅ (Sentry uncaught exceptions + stack traces)
@@ -102,9 +114,9 @@ What we enter in App Store Connect:
   - Linked to user? **No**
   - Used for tracking? **No**
 
-Apple's policy: diagnostics ARE "collected" data under their framework, even if scrubbed. The "linked to user" answer is No because we strip PII and do not collect user identifiers. This is the honest label — the older rumour that "Sentry doesn't count" is wrong.
+Apple's policy: diagnostics ARE "collected" data under their framework, even if scrubbed. The location answer here is **Linked = Yes** because the uploaded precise location is associated with a rotating device token before aggregation; that token is pseudonymous, but Apple still treats it as linkable app-collected data. This is the honest label — the older rumour that "Sentry doesn't count" is wrong.
 
-**Red flag:** our label assertion of "not linked to user" relies on the device token being truly one-way and pseudonymous. If we ever add a user account feature, the label changes drastically. Don't do that casually.
+**Red flag:** the location answer here is driven by the device-token linkability story. If we ever add a user account feature, or start attaching diagnostics to that same token, the labels change again. Don't do that casually.
 
 ## Threat Model
 
@@ -130,7 +142,7 @@ Apple's policy: diagnostics ARE "collected" data under their framework, even if 
 | Tracking individual drives | Midpoint-of-window coords (not continuous track); 50m granularity server-side; per-device weekly reading cap of 3 per segment |
 | Long-term device identification | Monthly device token rotation; SHA-256 server hash with secret pepper |
 | Uploaded data intercepted | TLS 1.3 only; certificate pinning (nice-to-have — evaluate week 6) |
-| MITM rewriting traffic | TLS; Edge Function validates signed batch (deferred — add in Phase 2 if abuse emerges) |
+| MITM rewriting traffic | TLS; no signed batch in MVP. If abuse emerges, add request signing / attestation in Phase 2 rather than claiming it now. |
 | Stolen phone | iOS device lock is the primary defense. App contains no credentials to steal; SwiftData store contains only local readings (already "my drives") |
 | Supabase DB breach | No PII in DB; device tokens are hashed; raw readings are 6-month rolling; aggregates contain nothing identifying |
 | Bogus data / trolls | Rate limits (50 batches/device/24h, 10/IP/hr); plausibility checks (NS bbox, speed range, acceleration range); per-device reading cap; statistical outlier trimming in nightly recompute |
@@ -194,7 +206,7 @@ Contact form at `https://roadsense.ca/privacy#contact` (or a simple `mailto:`). 
 ### Backend
 
 - [ ] TLS only — Supabase enforces this by default; verify no HTTP endpoint exposed
-- [ ] Edge Functions run with anon key for reads, service role ONLY for ingestion
+- [ ] Edge Functions use the narrowest viable key: anon-scoped clients for simple read wrappers where RLS is sufficient, service role for ingestion, locked RPC-backed reads (`tiles`), and `/health`
 - [ ] RLS policies as in Migration 008 ([02-backend-implementation.md](02-backend-implementation.md))
 - [ ] Validate & sanitize ALL user-supplied input before SQL (we use parameterized queries via Supabase client; no raw SQL string concat)
 - [ ] Rate limit logic is DB-atomic (`INSERT ... ON CONFLICT UPDATE`)
@@ -234,9 +246,9 @@ Contact form at `https://roadsense.ca/privacy#contact` (or a simple `mailto:`). 
 - **What to keep private if anything:** Nothing for MVP. The server-side pepper is a Supabase secret, not in the repo. No special business logic that would be security-through-obscurity
 - **Contribution requirements:** CLA deferred (overkill for a hobby civic project); just require PR reviews
 
-## Open Questions
+## Security / Privacy Policy Decisions
 
-- **[OPEN] Certificate pinning on iOS?** Would harden against MITM but complicates operations (cert rotation). Recommendation: defer past MVP. Add if we ever see MITM in the wild.
-- **[OPEN] Should aggregates have a "data as of" disclaimer on public tiles?** E.g., "last updated 14 hours ago". Recommendation: yes, add to the segment detail view but not the tile (not pragmatic to encode per-tile).
-- **[OPEN] Do we publish all data under ODbL like SmartRoadSense?** Strongly consider yes — aligns with open-data civic-tech ethos. Defer the decision until we have a reasonable volume; communicate the intent in the privacy policy.
-- **[OPEN] PIPEDA privacy impact assessment (PIA)?** Not legally required at our scale, but a lightweight PIA doc in `docs/` is cheap insurance if a municipality wants to partner later.
+- **No certificate pinning in MVP.** Standard TLS is enough for launch; pinning can be added later if the threat model changes.
+- **Always show freshness context in human-readable UI, not per tile.** Segment detail, trust strips, and report pages should expose "updated" timing; vector-tile attributes do not need to carry user-facing disclaimer copy.
+- **Open-data licensing stays deferred until post-launch.** Decide once there is enough real data volume to make the policy concrete.
+- **Write a lightweight PIPEDA privacy impact assessment before any municipal partnership discussion, not as an MVP launch blocker.**

@@ -8,7 +8,7 @@ Authoritative request/response shapes for all endpoints. **Lock this doc by end 
 
 - Base URL: `https://<project-ref>.supabase.co/functions/v1`
 - Content-Type: `application/json` for JSON endpoints, `application/vnd.mapbox-vector-tile` for tiles
-- Auth: Supabase anon key in `Authorization: Bearer <anon>` header for all requests (reads and uploads). Supabase Edge Functions require the Authorization header; the `apikey` header is also accepted for compatibility. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
+- Auth: Supabase anon key in `Authorization: Bearer <anon>` header for all requests except `GET /health`, which is intentionally unauthenticated for uptime monitoring. Supabase Edge Functions require the Authorization header; the `apikey` header is also accepted for compatibility. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
 - The `ingest_reading_batch` RPC is `SECURITY DEFINER` with `EXECUTE` granted only to `service_role`; the anon key cannot invoke it directly. Uploads MUST go through the `/functions/v1/upload-readings` Edge Function, which holds the service role key and enforces rate limits before dispatching.
 - All timestamps are RFC 3339 / ISO 8601 with timezone (`2026-04-17T14:30:00Z`)
 - All coordinates are WGS84 (EPSG:4326), `lng` then `lat` where ordered, but JSON fields are named explicitly (`lat`, `lng`) to avoid ambiguity
@@ -82,11 +82,11 @@ Batch upload of processed point readings.
 
 **Notes**
 
-- `batch_id` must be UUIDv4, generated on client. Server uses it for idempotency — retried uploads with the same `batch_id` return the original result.
-- `device_token` is a UUIDv4 generated on client, rotated monthly. Server hashes it server-side with a pepper; raw token is never stored.
+- `batch_id` must be UUIDv4, generated on client. Server uses it for idempotency — retried uploads with the same `batch_id` replay the original `{accepted, rejected, duplicate, rejected_reasons}` result.
+- `device_token` is a UUIDv4 generated on client, rotated monthly. It is sent over TLS to the Edge Function, hashed there with a server-side pepper, and discarded. The raw token is never persisted.
 - `readings.length ≤ 1000`. Larger → `batch_too_large` error; client must split.
-- `readings[].recorded_at` must be within the last 7 days.
-- All `readings[].lat`/`lng` must be within NS bbox: `[-66.5, 43.3, -59.5, 47.1]`. Out-of-bounds readings are dropped server-side (not a full-batch reject).
+- Hard 400s are only for malformed payloads: missing required fields, non-UUID `batch_id` / `device_token`, non-numeric scalar fields, or `batch_too_large`.
+- Domain-level bad readings are soft-rejected and counted in `rejected_reasons` with a 200 response. That includes stale/future timestamps, out-of-bounds coordinates, low-quality readings, unpaved matches, and no-match cases.
 
 **Response — 200 OK**
 
@@ -107,12 +107,12 @@ Batch upload of processed point readings.
 - `rejected`: `readings.length - accepted`
 - `duplicate`: `true` if this `batch_id` was already processed (no-op retry)
 - `rejected_reasons`: counts by reason code. Only codes the server actually emits are listed — clients must tolerate unknown keys for forward-compat. MVP-emitted enum:
-  - `out_of_bounds` — lat/lng outside NS bbox (emitted by Edge Function pre-filter)
-  - `no_segment_match` — no road segment within 25m / heading window (emitted by stored proc)
-  - `low_quality` — GPS accuracy, speed, or window length outside acceptance envelope (emitted by Edge Function pre-filter)
-  - `future_timestamp` — `recorded_at` in the future > 60s clock skew (Edge Function)
-  - `stale_timestamp` — `recorded_at` older than 7 days (Edge Function)
-  - `unpaved` — segment flagged as non-paved in OSM (stored proc)
+  - `out_of_bounds` — lat/lng outside NS bbox
+  - `no_segment_match` — no road segment within 25m / heading window
+  - `low_quality` — server-visible quality gates failed (`gps_accuracy_m > 20`, `speed_kmh < 15`, `speed_kmh > 160`, or `roughness_rms` outside `[0, 15]`). Client-only gates such as `duration_s > 15` and `sample_count < 30` should have been dropped before upload and never reach the backend.
+  - `future_timestamp` — `recorded_at` in the future by > 60s
+  - `stale_timestamp` — `recorded_at` older than 7 days
+  - `unpaved` — matched segment surface is non-paved in OSM
 
 **Intentionally removed from MVP:**
 - `invalid_value` — a full-batch `validation_failed` is returned instead; there is no per-reading "accepted-but-flagged" path.
@@ -123,10 +123,10 @@ Batch upload of processed point readings.
 ```json
 {
     "error": "validation_failed",
-    "message": "Multiple readings have speed_kmh out of range.",
+    "message": "Payload is malformed.",
     "field_errors": {
-        "readings[3].speed_kmh": "must be between 0 and 200",
-        "readings[12].recorded_at": "must be within the last 7 days"
+        "device_token": "must be a UUIDv4 string",
+        "readings[3].roughness_rms": "must be numeric"
     },
     "request_id": "01H9Z..."
 }
@@ -185,7 +185,7 @@ Vector tile with road quality overlays and pothole markers.
 | `magnitude` | float | g-force |
 | `confirmation_count` | int | |
 
-**Response — 204 No Content** if tile has no data at this zoom.
+**Response — 204 No Content** if tile has no data at this zoom. Response still carries cache headers.
 
 ---
 
@@ -282,7 +282,7 @@ Public global stats for the stats card on the home screen.
 }
 ```
 
-Cache-Control: `public, max-age=300`. Computed from a materialized view refreshed every 5 minutes.
+Cache-Control: `public, max-age=300`. Computed from a materialized view refreshed every 5 minutes by `pg_cron`.
 
 ---
 
@@ -303,6 +303,100 @@ Liveness + basic readiness.
 ```
 
 Unauthenticated. Used by uptime monitoring.
+
+---
+
+## Phase 2 Web Dashboard Endpoints
+
+These are not part of the iOS/TestFlight MVP, but they are required for the public web dashboard defined in [07-web-dashboard-implementation.md](07-web-dashboard-implementation.md).
+
+### `GET /tiles/coverage/{z}/{x}/{y}.mvt`
+
+Coverage tile for the public web `Coverage` mode.
+
+Use this instead of the normal quality tile when the UI is answering: "where do we have enough community data?" The standard tile endpoint is intentionally not enough because it hides low-confidence and unscored roads.
+
+**Request**
+
+- URL params: `z` (zoom), `x` (tile col), `y` (tile row)
+- Optional query: `?v=<int>` for cache-busting (daily rotation)
+- Headers: `apikey`, `Authorization`
+
+**Response — 200 OK**
+
+- `Content-Type: application/vnd.mapbox-vector-tile`
+- `Cache-Control: public, max-age=3600, s-maxage=3600`
+- Body: binary MVT containing source-layer `segment_coverage`
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `id` | string (UUID) | segment_id |
+| `road_name` | string? | from OSM |
+| `road_type` | string | motorway, primary, ... |
+| `coverage_level` | string | `none`, `emerging`, `published`, `strong` |
+| `updated_at` | string? | last aggregate refresh time when available |
+
+**Coverage-level derivation**
+
+- `none` — no aggregate row or `total_readings = 0`
+- `emerging` — aggregate exists but `unique_contributors < 3`
+- `published` — `unique_contributors >= 3` and `< 10`
+- `strong` — `unique_contributors >= 10`
+
+**Privacy note:** do not include raw `total_readings` or `unique_contributors` on `none` / `emerging` segments. The web only needs a public coverage tier, not low-sample counts.
+
+**Response — 204 No Content** if tile has no data at this zoom. Response still carries cache headers.
+
+---
+
+### `GET /segments/worst?municipality=<name>&limit=<n>`
+
+Top-N roughest published segments for the web `Worst Roads` report.
+
+**Request**
+
+- `municipality` optional exact municipality display name
+- `limit` required integer, `1 <= limit <= 100`
+
+**Ranking semantics**
+
+- published roads only (`unique_contributors >= 3`, confidence not low)
+- exclude `unscored`
+- exclude `unpaved`
+- sort by `avg_roughness_score DESC`, then `pothole_count DESC`, then `total_readings DESC`
+
+**Response — 200 OK**
+
+```json
+{
+    "generated_at": "2026-04-17T03:20:00Z",
+    "municipality": "Halifax",
+    "rows": [
+        {
+            "rank": 1,
+            "segment_id": "c8a1b2d3-...",
+            "road_name": "Barrington Street",
+            "municipality": "Halifax",
+            "road_type": "primary",
+            "category": "very_rough",
+            "confidence": "high",
+            "avg_roughness_score": 1.181,
+            "score_last_30d": 1.242,
+            "score_30_60d": 1.011,
+            "trend": "worsening",
+            "total_readings": 182,
+            "unique_contributors": 37,
+            "pothole_count": 3,
+            "last_reading_at": "2026-04-16T22:15:00Z"
+        }
+    ]
+}
+```
+
+**Response — 400 validation_failed**
+
+- invalid municipality name
+- invalid or missing `limit`
 
 ## Client-side Behavior Expectations
 
@@ -327,19 +421,18 @@ Client MUST use the same `batch_id` for retries of the same batch. Changing `bat
 
 - Client rotates on the first app launch after the 1st of each month
 - Old token is not persisted; new token replaces it immediately
-- Server never sees cleartext token — only the SHA-256 hash
+- Server receives the cleartext token over TLS at upload time, hashes it inside the Edge Function, persists only the hash, and discards the cleartext immediately
 
 ## Deferred Endpoints (post-MVP)
 
 These are in the spec but not in MVP. Listing them here so the shape is ready when needed:
 
-- `GET /segments/worst?municipality=<name>&limit=N` — top-N worst segments
 - `GET /segments/export?bbox=...&format=geojson|kml` — data export
 - `POST /report-repair` — user-reported road repair
 - `GET /coverage?municipality=<name>` — coverage % by municipality
 - `GET /contributors/me` — personal stats authenticated via device token (requires token-signing flow, out of scope for MVP)
 
-## Open Questions
+## Deferred Contract Work
 
-- **[OPEN] Should `/segments/{id}` include surrounding segments for route continuity?** Current design returns `neighbors.prev/next`. For MVP, adequate. Full route requires a different endpoint.
-- **[OPEN] Auth for contributor stats.** If we add personal stats at launch, we need a way to prove device ownership without accounts. Option: challenge/sign the device-token with a one-time code shown on device; out of scope for MVP.
+- `/segments/{id}` stays single-segment in MVP and Phase-2 web. If route continuity ever matters, add a dedicated adjacent-segments or corridor endpoint rather than overloading this one.
+- Contributor-specific stats remain out of scope until there is a real authenticated ownership proof. Do not add `/contributors/me` opportunistically.

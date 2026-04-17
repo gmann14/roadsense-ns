@@ -60,12 +60,13 @@ Tests live in `supabase/tests/`. Use `pgTAP` (Postgres test framework). Run in C
 
 | Module | Coverage |
 |---|---|
-| `ingest_reading_batch` | Happy path, duplicate batch returns same result, batch with no matches, batch with out-of-bounds readings. |
+| `ingest_reading_batch` | Happy path, duplicate batch returns the same result, concurrent duplicate retry on the same `batch_id` returns a clean duplicate response rather than a PK-violation 502, and batches with no matches / out-of-bounds readings are counted correctly. |
 | Map-matching KNN query | Known point on known segment → correct segment_id. Known point between parallel roads → correct disambiguation by heading. |
 | `update_segment_aggregates_from_batch` | Weighted average math, confidence tier thresholds, category boundaries. |
 | `nightly_recompute_aggregates` | Outlier trimming correctness, recency weighting, trend detection (improving/worsening/stable). |
 | `fold_pothole_candidates` | New pothole, confirmation of existing, too-far-away creates new. |
 | `expire_unconfirmed_potholes` | 90-day threshold, idempotent. |
+| Read-side models | `public_stats_mv` refreshes cleanly, `GET /segments/{id}` joins the right aggregate row, pothole bbox query respects the max area cap. |
 | Partition management | Next-month partition auto-created, old partition dropped. |
 | Rate limits | Per-device and per-IP counters increment; window slides correctly. |
 
@@ -75,8 +76,64 @@ Tests live in `supabase/tests/`. Use `pgTAP` (Postgres test framework). Run in C
 
 Tests live in `supabase/functions/<fn>/test.ts`. Use Deno's built-in `Deno.test` + `supabase start` for a local stack.
 
-- Contract tests per endpoint: valid payload → 200, each validation error path → 400 with exact field_errors
+- Contract tests per endpoint: valid payload → 200, malformed payload → 400 with exact field_errors, all-soft-rejected payload → 200 with populated `rejected_reasons`
 - Rate limit test: 51st request in 24h → 429 with Retry-After
+- Tile test: empty tile → 204 with cache headers, non-empty tile → 200 with MVT content-type
+- Read-endpoint tests: `/segments/{id}`, `/potholes`, `/stats`, `/health`
+- Phase-2 web contract tests: `/tiles/coverage/{z}/{x}/{y}.mvt` returns `segment_coverage` layer with only `coverage_level` semantics (no raw low-sample counts), and `/segments/worst` enforces ranking/order/filter rules exactly
+
+### Web Dashboard (Phase 2)
+
+Tests live in `apps/web/tests/`. Use:
+
+- `Vitest` for unit tests
+- `React Testing Library` for component/integration tests
+- `MSW` for mocked API contracts in browser tests
+- `Playwright` for end-to-end and visual-regression coverage
+
+#### What gets unit-tested
+
+| Module | Coverage |
+|---|---|
+| `url-state` | parse/serialize of `mode`, `segment`, `lat/lng/z`, invalid param fallback |
+| `municipality-manifest` | unique slugs, exact display-name mapping, finite bbox coordinates |
+| display formatters | confidence labels, freshness labels, score rounding, trend labels |
+| search normalization | municipality-first matching before geocoder fallback |
+
+#### What gets integration-tested
+
+| Surface | Coverage |
+|---|---|
+| Home map shell | legend, trust strip, and mode switcher render before client-side data settles |
+| Segment drawer | skeleton → resolved content, bad `segment` query param fails gracefully |
+| Search | municipality route transition, place search pans map without mutating mode |
+| Potholes mode | bbox requests debounced and skipped outside potholes mode |
+| Coverage mode | legend explicitly explains that coverage is not road condition |
+| Worst Roads page | caveat header, municipality filtering, stable rank ordering |
+
+#### What gets end-to-end tested
+
+Required Playwright journeys:
+
+1. `/` loads with visible map, legend, and trust strip
+2. `/municipality/halifax` initializes to Halifax context
+3. selecting a segment opens detail drawer with real content
+4. switching between quality, potholes, and coverage preserves route state correctly
+5. search routes to municipality pages when the selected result is a municipality
+6. `/reports/worst-roads` renders ranked rows and updates on municipality change
+7. `/methodology` and `/privacy` expose trust-critical copy without broken anchors
+
+#### Visual regression coverage
+
+Capture stable screenshots for:
+
+- desktop home
+- desktop municipality route
+- mobile home
+- mobile segment drawer
+- worst-roads page
+
+Do not treat screenshots as a substitute for interaction tests. They are a drift alarm only.
 
 ## Simulator Harness (iOS)
 
@@ -215,9 +272,9 @@ Drive through the MacKay / Macdonald bridges and A. Murray MacKay Bridge tunnel 
 - Readings resume within 5s of GPS signal return
 - No bogus readings attributed to wrong segments during dropout
 
-### Cold Restart Test
+### System-Termination Restart Test
 
-Force-quit app mid-drive. Wait 2 minutes. Verify `significantLocationChange` triggered relaunch and collection resumed.
+Simulate system termination / memory pressure mid-drive without user swipe-killing the app. Wait for movement to resume. Verify `significantLocationChange` relaunches collection. Do **not** use user force-quit as the acceptance test; iOS suppresses background relaunch after that gesture.
 
 ## Accessibility Testing
 
@@ -227,6 +284,27 @@ Not an afterthought. Included in week 5's polish pass.
 - Dynamic Type: tested at largest sizes in `Environment(\.sizeCategory, .accessibilityExtraExtraExtraLarge)`
 - Color contrast: WCAG AA minimum for all text and map overlays (check against both light and dark base maps)
 - Reduce Motion respected: `@Environment(\.accessibilityReduceMotion)` disables the subtle score-update animations
+
+## UX / Design QA
+
+Functional correctness is not enough. Before external TestFlight, run one explicit UX pass with 3-5 people who were not involved in implementation.
+
+Success criteria:
+
+- A first-time user can explain what the app does within 30 seconds of opening it
+- A first-time user can tell whether the app is currently recording within 5 seconds of seeing the map
+- A tester can identify what green/yellow/orange/red mean without guessing
+- A tester can find privacy zones and pause collection without assistance
+- A tester understands the difference between their local drives and community data
+- A tester can tap a road and explain confidence / last updated in plain English after reading the sheet
+
+Watch for these design failures specifically:
+
+- too much chrome obscuring the map
+- stats that feel like internal metrics instead of user value
+- error states that sound like logs instead of guidance
+- privacy explanations that read like legal disclaimers instead of user help
+- dashboard-style clutter creeping into the phone UI
 
 ## Internationalization
 
@@ -309,7 +387,7 @@ Every PR must pass:
 - [ ] New user-facing strings are localized
 - [ ] If touching sensor code: a field-test checklist item is called out in PR body
 
-## Open Questions
+## Testing Policy Decisions
 
-- **[OPEN] Do we need SwiftUI snapshot tests for the one or two critical screens?** Probably not at MVP. Revisit if we're getting visual regressions.
-- **[OPEN] Is 80% coverage the right bar for Pipeline/?** It's what we pick. Could go higher; lower feels irresponsible given the math is core.
+- **No SwiftUI snapshot tests in MVP.** They are brittle relative to the value they add here. Prefer functional UI coverage, accessibility checks, and targeted manual visual review.
+- **Keep the 80% line-coverage bar for `Pipeline/`, `Sensors/`, `Privacy/`, and `Network/`.** The exact number is imperfect, but lowering it would undercut confidence in the core math and lifecycle logic.

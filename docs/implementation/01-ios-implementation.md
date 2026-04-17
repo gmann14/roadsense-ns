@@ -289,7 +289,7 @@ func start(onChange: @escaping (Bool) -> Void) {
 - `locationManager.allowsBackgroundLocationUpdates = true` **only set this flag AFTER `.authorizedAlways` is granted.** Setting it under `.authorizedWhenInUse` doesn't crash but silently changes nothing — background updates stop the moment the user backgrounds the app, which means no readings on the first drive for anyone still in the pre-Always flow. Guard: `if locationManager.authorizationStatus == .authorizedAlways { locationManager.allowsBackgroundLocationUpdates = true }` and re-apply on `didChangeAuthorization`.
 - `locationManager.pausesLocationUpdatesAutomatically = false`
 - `locationManager.showsBackgroundLocationIndicator = true` (required for App Store)
-- Register for `significantLocationChange` at app launch via `locationManager.startMonitoringSignificantLocationChanges()` — this is the relaunch mechanism after force-quit or memory kill. **Requires `.authorizedAlways`** — with `.authorizedWhenInUse` it silently does nothing.
+- Register for `significantLocationChange` at app launch via `locationManager.startMonitoringSignificantLocationChanges()` — this is the relaunch mechanism after system termination or memory pressure. Do **not** rely on it after a user force-quit; iOS suppresses background relaunch in that state. **Requires `.authorizedAlways`** — with `.authorizedWhenInUse` it silently does nothing.
 - **Bootstrap gap:** our permission flow requests `.authorizedWhenInUse` first and only escalates to `.authorizedAlways` after the user has completed a successful drive. During this pre-Always window, SLC-based relaunch does NOT work. Mitigate by keeping the "Recording" UI sticky in-app and showing a one-time banner after the first drive that explains the Always upgrade and what they gain.
 - On `locationManager(_:didUpdateLocations:)` after a significant-change-triggered relaunch, check if driving activity is `.automotive` and if so, resume normal collection
 
@@ -390,6 +390,10 @@ Apple enforces Required Reason API declarations via the privacy manifest for all
 - Mapbox Maps iOS SDK v11+: ships its own `PrivacyInfo.xcprivacy` in the xcframework — verify present in SDK release notes
 - Supabase Swift SDK: verify manifest present (they added one in late 2024)
 - Sentry Cocoa SDK ≥ 8.21.0: ships manifest — pin to that or newer in Package.swift
+
+The aggregate privacy report should therefore show:
+- Precise Location from the app manifest above
+- Diagnostics / performance data from Sentry's SDK manifest
 
 **Before every TestFlight upload:** run `xcrun PrivacyReport` on the archive and confirm the manifest aggregates cleanly — missing reasons fail Beta App Review on external testing.
 
@@ -502,12 +506,12 @@ every queue tick:
   attempt upload
      on 200: mark uploadedAt, trigger local map overlay refresh
      on 400 (validation error): mark batch failed_permanent, log, stop retrying
-     on 429 (rate limited): back off 60s + jitter
+     on 429 (rate limited): respect Retry-After header; if missing, back off 60s + jitter
      on 5xx / network error: exponential backoff (1s, 2s, 4s, 8s, 16s), max 5 attempts
      after 5 failures: set status = .failedPermanent, surface in Settings screen
 ```
 
-**Idempotency:** `batch_id` is the dedup key server-side. Client retries send the same batch_id; the server returns 200 with `{already_processed: true}` on re-submit.
+**Idempotency:** `batch_id` is the dedup key server-side. Client retries send the same batch_id; the server returns 200 with the original `{accepted, rejected, duplicate: true, rejected_reasons}` result on re-submit.
 
 **WiFi detection:** `NWPathMonitor` publishes `path.isExpensive` (true on cellular/tethered) and `path.status`. If `isExpensive == true` **and** `user.allowCellularUpload == false`, defer the batch until the next non-expensive path. This also correctly defers when the user is on a personal hotspot, which we treat as cellular.
 
@@ -574,6 +578,62 @@ state: degraded-permission (any of: Motion denied, location When-In-Use only, et
 
 See [product-spec.md §Degraded Permission States](../product-spec.md) for the full matrix.
 
+## Experience Principles
+
+The iOS app is **not** a municipal analytics console squeezed onto a phone. Its job is to:
+
+1. make passive collection feel trustworthy and low-effort
+2. give the user immediate visual proof that their driving mattered
+3. explain community road quality without forcing the user to think like a GIS analyst
+
+Design decisions should bias toward these principles:
+
+- **Map first, controls second.** The map is the home screen and the emotional payoff.
+- **One primary question per screen.** Onboarding answers "why should I allow this?", the map answers "what does the road look like right now?", settings answers "what is this app doing on my phone?"
+- **Earn trust continuously.** Always show recording state, upload state, confidence, and privacy posture in plain language.
+- **Reward contribution without gamifying recklessly.** Use progress, coverage, and "you mapped this" moments, not points/badges spam.
+- **Keep civic, not corporate.** The app should feel precise and public-interest-minded, not like ad-tech or an insurance app.
+
+## Visual Direction
+
+### Look and Feel
+
+- **Mood:** "Atlantic civic utility" rather than generic startup SaaS. Quietly premium, grounded, weathered, legible.
+- **Base palette:** warm off-white surfaces, charcoal map chrome, desaturated ocean blue accents, and road-quality colors that read instantly outdoors.
+- **Avoid:** neon gradients, glossy glassmorphism, heavy shadow stacks, overly dark "hacker" styling, or a purple-white default app-store look.
+
+### Typography
+
+- Use **New York** for large headings and explanatory editorial copy blocks ("How RoadSense works", segment detail title).
+- Use **SF Pro** for controls, metrics, compact labels, and dense map UI.
+- Large stats should be bold and calm, not gamified: `12.4 km mapped`, `43 segments helped`, `2 potholes confirmed`.
+
+### Color Tokens
+
+Define app-level semantic tokens and reuse them in SwiftUI + map styling:
+
+- `surface.primary`: warm near-white (`#F6F4EF`)
+- `surface.secondary`: pale stone (`#E9E4DA`)
+- `ink.primary`: dark charcoal (`#1F2328`)
+- `ink.secondary`: slate (`#5C6670`)
+- `accent.community`: North Atlantic blue (`#2C6E91`)
+- `accent.personal`: teal (`#187E74`)
+- `status.smooth`: green (`#3FAF72`)
+- `status.fair`: amber (`#D9A441`)
+- `status.rough`: orange (`#D9752B`)
+- `status.veryRough`: brick red (`#B94A3B`)
+- `status.unscored`: muted gray-blue (`#8A97A3`)
+
+The map line colors and SwiftUI legend chips must share these exact tokens so screenshots, segment detail, and the live map tell one coherent story.
+
+### Motion
+
+- Use short, purposeful motion only where it communicates state change:
+  - recording pill gently pulses when active
+  - local-drive overlay fades into community styling after upload completes
+  - segment detail sheet springs from the tapped road with a subtle anchor effect
+- Do **not** animate constantly on the map. Motion should confirm state, not compete with geography.
+
 ## Mapbox Integration
 
 ### Setup
@@ -585,20 +645,20 @@ See [product-spec.md §Degraded Permission States](../product-spec.md) for the f
 ### Style Stack
 
 ```
-┌─ Base style (Mapbox Streets v12, dark mode variant)
+┌─ Base style (customized light-first Mapbox Streets derivative)
 ├─ Road quality overlay layer
 │   source: vector, url: AppConfig.apiBaseURL + "/tiles/{z}/{x}/{y}.mvt"
-│                   // Defaults to https://<supabase-project-ref>.supabase.co/functions/v1
-│                   // until the custom domain is decided (see 00 §Open Questions #6).
-│                   // Do NOT hardcode api.roadsense.ca — domain is still [OPEN].
+│                   // MVP default: https://<supabase-project-ref>.supabase.co/functions/v1
+│                   // Public site domain is roadsense.ca, but the API does not need a
+│                   // separate custom domain on day 1. Keep this configurable in AppConfig.
 │   source-layer: "segment_aggregates"
 │   type: line
 │   paint:
 │     line-color: interpolate on roughness_score
-│       0.3 → #4ade80  (green)
-│       0.6 → #fbbf24  (yellow)
-│       1.0 → #f97316  (orange)
-│       1.5 → #dc2626  (red)
+│       0.3 → status.smooth
+│       0.6 → status.fair
+│       1.0 → status.rough
+│       1.5 → status.veryRough
 │     line-width: interpolate on zoom
 │       10 → 1.5
 │       14 → 3
@@ -609,11 +669,16 @@ See [product-spec.md §Degraded Permission States](../product-spec.md) for the f
 │       else → 1.0
 ├─ Pothole markers layer
 │   source: vector (same endpoint, different source-layer)
-│   type: circle; data-driven radius based on magnitude
+│   type: circle; data-driven radius based on magnitude, color = deep red with pale stroke
 ├─ Local "your drives" overlay (GeoJSON from SwiftData)
+│   line-color: accent.personal
 │   line-dasharray: [2, 2]
 │   distinguishes user's unprocessed data pre-aggregation
+├─ Coverage haze layer (future toggle)
+│   soft heat/coverage texture, OFF by default in MVP
 ```
+
+Prefer a **light map by default** because users will often check the app outdoors or in bright cars. Dark mode can exist, but do not make it the primary design reference.
 
 ### Zoom-Level Filtering
 
@@ -638,14 +703,117 @@ On first launch after permissions granted, download a tile pack covering Halifax
 
 `NavigationStack` with tab-less root — the map IS the app. Settings and Stats reached via overlay buttons.
 
+The home screen should read in this order:
+
+1. recording / paused status
+2. contribution proof (`you mapped X km`)
+3. road quality on the map
+4. deeper details only on demand
+
+### Core Home-Screen Layout
+
+- **Top-left:** recording status pill
+  - `Recording`
+  - `Paused`
+  - `Needs Always Location`
+- **Top-right:** icon buttons for stats and settings
+- **Bottom floating card:** "Your contribution" card with today's km, pending uploads, and a single most-useful next action
+- **Map legend:** collapsed by default into a single "Road quality" chip; expands to show color meanings and confidence note
+
+Do not fill the map with panels. The floating chrome should stay below ~20% of the visible map area on iPhone 13-size screens.
+
 ### Screens (condensed list)
 
 - **OnboardingFlow** — 3 screens, no skip
-- **MapScreen** — full-bleed Mapbox view, floating "Your contributions" card, overlay for recording indicator
-- **SegmentDetailSheet** — `.sheet` presentation, scrollable; loads from `GET /api/segments/{id}`
+- **MapScreen** — full-bleed Mapbox view, floating contribution card, recording pill, expandable legend
+- **SegmentDetailSheet** — `.sheet` presentation, scrollable; loads from `GET /segments/{id}`
+- **StatsScreen** — personal contribution summary first, community context second
 - **SettingsScreen** — privacy zones, upload controls, battery saver, data management, about
 - **PrivacyZoneEditor** — map picker + radius slider
 - **AboutScreen** — how it works (plain language), privacy policy link, open-source link
+
+### Onboarding UX
+
+Three screens are enough, but they need stronger emotional and informational structure:
+
+1. **Value:** "Help map rough roads in Nova Scotia while you drive."
+   - full-bleed map illustration with a few highlighted roads
+   - one short paragraph, not a wall of text
+2. **Trust:** "What we use, and what we do not store."
+   - location + motion explanation
+   - explicit privacy-zone mention
+   - one tap to expand "Learn more"
+3. **Permission ask:** "Turn on location and motion to start mapping."
+   - list the immediate benefit
+   - list the user control: pause anytime, delete local data, set privacy zones
+
+Avoid copy that sounds apologetic or legalistic. The tone should be plain, civic, and confident.
+
+### MapScreen Behavior
+
+- Empty state should still feel alive:
+  - community-empty: "No road quality data here yet."
+  - personal-empty: "Drive with RoadSense on to start mapping this area."
+- When the user has local, unuploaded drives, show them immediately with the personal teal overlay and label the state as `Local only`.
+- When tapping a segment, the selected line brightens and thickens slightly before the sheet appears.
+- Low-confidence roads stay visible only where the spec already allows, but the detail sheet must explain confidence in English: `High confidence: many drivers`, `Medium confidence: enough data`, `Low confidence: early signal`.
+
+### Segment Detail Sheet
+
+The sheet should feel editorial, not raw-database:
+
+- Title: road name, municipality secondary
+- Primary stat row: category, confidence, last updated
+- Main chart area:
+  - current score chip
+  - 30-day trend sparkline placeholder area even if MVP history is empty
+- Explanation block:
+  - `Based on 137 readings from 34 contributors`
+  - `2 pothole reports nearby`
+- If history is empty in MVP, show a graceful stub: `Trend history is coming as more data accumulates.`
+
+### Stats Screen Information Architecture
+
+Stats should answer "is this app doing anything?" faster than it answers "how many raw records exist?"
+
+Order:
+
+1. `You've mapped X km`
+2. `Segments you've helped score`
+3. `Uploads pending / last upload`
+4. `Potholes flagged`
+5. community context (`Halifax coverage`, `active rough segments nearby`) only after personal stats
+
+### Settings Information Architecture
+
+Group settings into four sections only:
+
+1. **Privacy** — zones, delete local data, privacy policy
+2. **Uploads** — Wi-Fi only, allow cellular, pending count, retry
+3. **Recording** — pause/resume, battery saver explanation
+4. **About** — how it works, open source, version
+
+Do not bury privacy controls under generic "Advanced" menus.
+
+### Copy and Trust Details
+
+- Prefer plain labels such as `Recording while driving`, `Uploads waiting`, `Privacy zones active`
+- Avoid internal terms in the UI like `segment_aggregates`, `roughness_rms`, `batch_id`
+- Every state that could feel creepy should include a user-controlled explanation:
+  - why the app is recording
+  - when uploads happen
+  - how to stop it
+  - how privacy zones work
+
+### Delight Without Noise
+
+Use a few deliberate reward moments:
+
+- after first uploaded drive: `You helped map 12 km of roads today`
+- after a new municipality or neighborhood gets first coverage: `You started coverage here`
+- after a pothole is later confirmed by the community: `A road issue you detected was confirmed`
+
+No confetti. No streaks. No fake social mechanics.
 
 ### State Management
 
@@ -674,8 +842,8 @@ Cross-screen state (recording status, pending upload count, stats) lives on a si
 
 **Always log:** batch IDs, upload statuses, permission state transitions, thermal state transitions, driving state transitions
 
-## Open Questions for iOS
+## iOS Decisions Locked
 
-- **[OPEN] Should first-drive detection block the privacy-zone setup prompt?** Lean: let the user skip zone setup; prompt again after first drive when they see their data on the map.
-- **[OPEN] Dynamic Type scaling test coverage scope.** Covered under [04-testing-and-quality.md](04-testing-and-quality.md); revisit UI lock on headers that don't scale gracefully.
-- **[OPEN] Do we need haptic feedback for pothole detection?** Tempting but violates "passive collection" ethos. Default: no.
+- **Privacy-zone onboarding is mandatory before passive collection starts.** The user must either configure at least one privacy zone or explicitly confirm a high-visibility "skip for now" warning sheet that explains home/work exposure risk. Do not bury this behind a later settings screen for first-time family/friends testers.
+- **Dynamic Type coverage scope is broad, not selective.** Test onboarding, map chrome, segment drawer, stats, and settings at large accessibility sizes. The question was simply how much of the UI must be exercised at large text sizes; answer: all core user-facing flows, not just one or two screens.
+- **No pothole haptics in MVP.** Passive collection should stay quiet in the background; revisit only if a future explicit "active drive mode" exists.

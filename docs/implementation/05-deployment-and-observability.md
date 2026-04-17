@@ -32,7 +32,7 @@ Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what 
   - `RoadSenseNS.Production.xcconfig`
 - `.xcconfig` files are `.gitignore`'d — committed templates with placeholders live in `RoadSenseNS/Config/Templates/`
 - In CI, `.xcconfig` files written from GitHub Actions secrets at build time
-- Mapbox **secret** token (for private tile downloads if ever used) stored in Keychain at first launch; never in the binary
+- No Mapbox **secret** token is shipped to the device in MVP. If post-MVP private Mapbox downloads are ever needed, proxy them through a backend-controlled flow; do not stash a secret on-device.
 
 ### GitHub Actions
 
@@ -49,13 +49,17 @@ Stored in repo settings:
 ```
 roadsense-ns/
 ├── docs/
+├── apps/
+│   └── web/                     # Phase-2 public dashboard (Next.js)
 ├── ios/                         # Xcode project + Swift source
 ├── supabase/
 │   ├── migrations/              # timestamped .sql files
 │   ├── functions/               # Edge Functions (TypeScript/Deno)
 │   │   ├── upload-readings/
 │   │   ├── tiles/
+│   │   ├── tiles-coverage/
 │   │   ├── segments/
+│   │   ├── segments-worst/
 │   │   ├── potholes/
 │   │   ├── stats/
 │   │   └── health/
@@ -71,6 +75,7 @@ roadsense-ns/
 │   └── workflows/
 │       ├── ios-ci.yml
 │       ├── backend-ci.yml
+│       ├── web-ci.yml           # Phase-2
 │       ├── deploy-staging.yml
 │       ├── deploy-production.yml
 │       └── testflight.yml
@@ -106,6 +111,19 @@ Runs on `macos-14` runners. Target: < 15 min.
 
 Runs on `ubuntu-22.04`. Target: < 10 min.
 
+### `web-ci.yml` (Phase 2, every PR touching `apps/web/**`)
+
+```text
+1. Checkout
+2. Install Node dependencies
+3. Typecheck
+4. Lint
+5. Vitest (unit + integration)
+6. Playwright smoke tests against mocked APIs
+```
+
+Runs on `ubuntu-22.04`. Target: < 10 min. Add preview-URL Playwright smoke only after Vercel previews are live.
+
 ### `deploy-staging.yml` (on merge to `main`)
 
 ```
@@ -125,10 +143,11 @@ Not part of the normal deploy. Triggered manually (`workflow_dispatch`) or quart
 ```
 1. Download pinned OSM snapshot (OSM_SNAPSHOT_URL)
 2. osm2pgsql --style scripts/osm2pgsql-style.lua → osm.osm_ways
-3. TRUNCATE road_segments_staging; run scripts/segmentize.sql
+3. TRUNCATE road_segments_staging; run scripts/segmentize.sql against staging, not `road_segments`
 4. Validate row count within ±5% of prior import (guard against bad snapshot)
-5. Swap road_segments ← road_segments_staging in a single transaction
-6. Kick nightly_recompute_aggregates to reassign any orphaned segment_aggregates
+5. Run `apply_road_segment_refresh()` to upsert staging → primary while preserving existing `road_segments.id` values on `(osm_way_id, segment_index)`
+6. Run `rematch_readings_after_segment_refresh()` for retained raw readings (last 6 months) and capture the touched segment IDs
+7. Call `nightly_recompute_aggregates(<touched_segment_ids>)` to rebuild only the impacted aggregates
 ```
 
 Staging runs on schedule to catch drift early; production runs only after staging passes a manual smoke test.
@@ -184,7 +203,7 @@ Week 7: expand to ~30 internal testers (friends, willing neighbours).
 
 Week 8: submit for Beta App Review to unlock external testing. Prepare:
 - Test Information: describe the app's purpose, test focus (driving scenarios), how to report bugs
-- Privacy policy URL (required — once the domain is locked per 00 §Open Questions #6, host at `<domain>/privacy`. Working assumption is `roadsense.ca/privacy` to match 06; do not ship with two different domains across the app and the privacy policy link)
+- Privacy policy URL (required — host at `https://roadsense.ca/privacy` to match 06; do not ship with two different domains across the app and the privacy policy link)
 - Contact email (graham.mann14@gmail.com OK for MVP)
 - Demo credentials: N/A (no account required, mention this in notes)
 
@@ -296,6 +315,7 @@ Pager-style alerts (SMS/phone) are overkill for MVP. Email + checking in once a 
 ## Health Check Strategy
 
 - `GET /health` endpoint verifies DB connectivity + returns deploy metadata
+- `GET /health` is the only unauthenticated endpoint; everything else still sends the anon key
 - External uptime monitor pings `/health` every 5 minutes (UptimeRobot free tier or similar)
 - Alert on 3+ consecutive failures (15 min down)
 
@@ -354,8 +374,79 @@ Set up one dashboard with:
 
 Link it in the project README so anyone on the team (future-you included) can check health in 30s.
 
-## Open Questions
+## Phase 2 Web Dashboard Deployment (Vercel)
 
-- **[OPEN] Do we need structured frontend analytics (event tracking)?** Temptation is to use PostHog or Mixpanel. Recommendation: defer — privacy-first positioning makes analytics awkward; in-app stats + Sentry are enough for MVP.
-- **[OPEN] Logs retention period in Supabase?** Supabase default is 7 days. Could extend to 30 days on Pro for an extra fee. Lean: 7 days, extract critical signals into `ops_metrics` for longer retention.
-- **[OPEN] Alert escalation?** For MVP, single engineer. When/if team grows, formalize on-call rotation.
+When the public web dashboard in [07-web-dashboard-implementation.md](07-web-dashboard-implementation.md) is built, deploy it separately from the Supabase backend.
+
+### Hosting model
+
+- **Frontend:** Vercel
+- **API / tiles:** existing Supabase Edge Functions
+- **Domain:** same public site domain as the privacy policy once the domain decision in 00 is locked
+
+Recommended production shape:
+
+- apex or primary public domain serves the web dashboard and content pages
+- `/privacy` and `/methodology` live in the web app, not as orphaned static pages elsewhere
+- Supabase Edge Functions stay on their own function URLs or a dedicated API subdomain
+
+### Web env vars
+
+Expose only browser-safe values:
+
+- `NEXT_PUBLIC_MAPBOX_TOKEN`
+- `NEXT_PUBLIC_MAPBOX_STYLE_ID` or style URL
+- `NEXT_PUBLIC_API_BASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SITE_URL`
+
+Rules:
+
+- no service-role key in any Vercel project
+- no session-replay or ad-tech env vars
+- if future municipal-auth features need privileged reads, keep those secrets server-only and out of `NEXT_PUBLIC_*`
+
+### Vercel environments
+
+- **Preview:** every PR to the future web app
+- **Production:** merges to `main` after the web dashboard is in active development
+
+Preview deploy checks:
+
+1. page shell loads
+2. map renders
+3. `/reports/worst-roads` renders with real data
+4. `/methodology` and `/privacy` have no broken links
+
+### Web smoke test after deploy
+
+Run these on both preview and production:
+
+1. open `/`
+2. switch between quality, potholes, and coverage
+3. select a segment and load the drawer
+4. open `/municipality/halifax`
+5. open `/reports/worst-roads`
+6. verify `/privacy` and `/methodology`
+
+### Web observability
+
+Minimum viable web observability:
+
+- Vercel request logs
+- Playwright smoke run in CI against preview URL
+- backend endpoint logs still remain the source of truth for tiles and JSON read-path failures
+
+Avoid in W1 web:
+
+- product analytics suites
+- session replay
+- invasive browser telemetry
+
+If frontend error monitoring is added later, keep it to error capture only. No DOM capture, no replay, no raw query-string logging if it can contain location-like search text.
+
+## Operations Policy Decisions
+
+- **No structured frontend analytics in MVP or initial web launch.** Privacy-first positioning and limited product scope do not justify PostHog, Mixpanel, or similar tools.
+- **Keep Supabase logs at the default 7-day retention.** Extract durable signals into `ops_metrics` instead of paying for longer raw-log retention early.
+- **Alert escalation stays simple.** Email-only during MVP and early beta; formal on-call rotation only if the project grows beyond a single maintainer.

@@ -131,7 +131,7 @@ CREATE TABLE readings (
     gps_accuracy_m NUMERIC(5,1),
     is_pothole BOOLEAN NOT NULL DEFAULT FALSE,
     pothole_magnitude NUMERIC(5,2),
-    location GEOMETRY(POINT, 4326) NOT NULL,      -- kept for nightly rematch
+    location GEOMETRY(POINT, 4326) NOT NULL,      -- kept for OSM-refresh rematch + QA backfills
     recorded_at TIMESTAMPTZ NOT NULL,
     uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (recorded_at, id)                 -- includes partition key, enables FK via unique
@@ -187,6 +187,7 @@ CREATE TABLE processed_batches (
     reading_count INTEGER NOT NULL,
     accepted_count INTEGER NOT NULL,
     rejected_count INTEGER NOT NULL,
+    rejected_reasons JSONB NOT NULL DEFAULT '{}'::JSONB,
     processed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     client_sent_at TIMESTAMPTZ NOT NULL,
     client_app_version TEXT,
@@ -396,6 +397,75 @@ Beyond MVP: also pre-create three months ahead (run on the 1st) so a single cron
 
 Run as a one-off script (not a migration) — the OSM data is too large to shove into migrations, and we refresh it quarterly.
 
+### Refresh Staging Objects
+
+Quarterly refreshes must preserve existing `road_segments.id` values for stable FKs from `segment_aggregates` and historical `readings`. Use a staging table keyed on the natural segment identity, then merge into `road_segments`.
+
+```sql
+CREATE TABLE road_segments_staging (
+    osm_way_id BIGINT NOT NULL,
+    segment_index INTEGER NOT NULL,
+    geom GEOMETRY(LINESTRING, 4326) NOT NULL,
+    length_m NUMERIC(8,1) NOT NULL,
+    road_name TEXT,
+    road_type TEXT NOT NULL,
+    surface_type TEXT,
+    municipality TEXT,
+    has_speed_bump BOOLEAN DEFAULT FALSE,
+    has_rail_crossing BOOLEAN DEFAULT FALSE,
+    is_parking_aisle BOOLEAN DEFAULT FALSE,
+    bearing_degrees NUMERIC(5,2),
+    PRIMARY KEY (osm_way_id, segment_index)
+);
+
+CREATE INDEX idx_segments_staging_geom ON road_segments_staging USING GIST (geom);
+CREATE INDEX idx_segments_staging_geog ON road_segments_staging USING GIST ((geom::geography));
+```
+
+### Refresh Apply / Rematch Procedures
+
+Quarterly OSM refreshes use two explicit procedures rather than relying on the nightly job:
+
+```sql
+CREATE OR REPLACE FUNCTION apply_road_segment_refresh()
+RETURNS VOID
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    -- 1. UPDATE existing `road_segments` rows by `(osm_way_id, segment_index)`,
+    --    preserving `id`
+    -- 2. INSERT new segment keys that did not previously exist
+    -- 3. DELETE primary-table rows whose keys disappeared from staging;
+    --    FK ON DELETE CASCADE removes stale `segment_aggregates`
+    -- 4. Leave `readings.location` untouched; the rematch procedure below
+    --    recomputes `readings.segment_id`
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION rematch_readings_after_segment_refresh(
+    p_since TIMESTAMPTZ DEFAULT now() - INTERVAL '6 months'
+) RETURNS UUID[]
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    -- Re-run the same KNN + heading matcher used by ingest against
+    -- `readings.location` for retained raw readings since `p_since`.
+    -- Update `readings.segment_id` in place, set it to NULL when no paved
+    -- match remains, and return the union of old/new segment IDs touched by
+    -- the refresh so aggregate recompute can target only impacted rows.
+    RETURN ARRAY[]::UUID[];
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION apply_road_segment_refresh() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION rematch_readings_after_segment_refresh(TIMESTAMPTZ) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION apply_road_segment_refresh() TO service_role;
+GRANT EXECUTE ON FUNCTION rematch_readings_after_segment_refresh(TIMESTAMPTZ) TO service_role;
+```
+
 ### Script: `scripts/osm-import.sh`
 
 ```bash
@@ -427,6 +497,7 @@ osm2pgsql \
 # in the `osm` schema
 
 echo "→ Segmentizing ways into 50m pieces"
+psql "$DATABASE_URL" -c "TRUNCATE road_segments_staging"
 psql "$DATABASE_URL" -f scripts/segmentize.sql
 
 echo "→ Tagging municipalities via StatCan boundaries"
@@ -435,6 +506,10 @@ psql "$DATABASE_URL" -f scripts/tag-municipalities.sql
 
 echo "→ Tagging features (speed bumps, rail crossings, surface)"
 psql "$DATABASE_URL" -f scripts/tag-features.sql
+
+echo "→ Applying staged refresh into road_segments and rematching retained readings"
+psql "$DATABASE_URL" -c "SELECT apply_road_segment_refresh();"
+psql "$DATABASE_URL" -c "SELECT nightly_recompute_aggregates(rematch_readings_after_segment_refresh());"
 
 echo "→ Done. Segment count:"
 psql "$DATABASE_URL" -c "SELECT count(*) FROM road_segments;"
@@ -484,7 +559,7 @@ end
 Length is computed once per way via a CTE; segment fractions are derived from a single `generate_series` scalar. EPSG:3857 is used as a good-enough meter projection for NS (44–47°N); UTM 20N (EPSG:32620) is marginally more accurate if precision ever matters.
 
 ```sql
--- Produce road_segments by slicing each OSM way into 50m pieces
+-- Produce staged road segments by slicing each OSM way into 50m pieces
 WITH ways_m AS (
     SELECT
         w.osm_id         AS osm_way_id,
@@ -512,8 +587,9 @@ cut AS (
     FROM ways_m wm,
          LATERAL generate_series(1, CEIL(wm.len_m / 50.0)::INTEGER) AS s
 )
-INSERT INTO road_segments (osm_way_id, segment_index, geom, length_m, road_name,
-                           road_type, surface_type, bearing_degrees)
+INSERT INTO road_segments_staging (
+    osm_way_id, segment_index, geom, length_m, road_name, road_type, surface_type, bearing_degrees
+)
 SELECT
     c.osm_way_id,
     c.idx - 1                                             AS segment_index,   -- 0-indexed
@@ -529,8 +605,13 @@ ON CONFLICT (osm_way_id, segment_index) DO UPDATE
     SET geom            = EXCLUDED.geom,
         length_m        = EXCLUDED.length_m,
         road_name       = EXCLUDED.road_name,
+        road_type       = EXCLUDED.road_type,
+        surface_type    = EXCLUDED.surface_type,
         bearing_degrees = EXCLUDED.bearing_degrees,
-        updated_at      = now();
+        municipality    = NULL,
+        has_speed_bump  = FALSE,
+        has_rail_crossing = FALSE,
+        is_parking_aisle = FALSE;
 ```
 
 **Performance:** For NS (~50k OSM ways), this takes ~5 minutes on Supabase Pro small instance. Run during low-traffic window. Expect ~300k–600k segments total. If it slows with growth, add `CREATE INDEX ON osm.osm_ways USING GIST (geom);` and run in batches of 5k ways.
@@ -541,14 +622,14 @@ ON CONFLICT (osm_way_id, segment_index) DO UPDATE
 
 ```sql
 -- Spatial join each segment with StatCan CSD boundaries
-UPDATE road_segments rs
+UPDATE road_segments_staging rs
 SET municipality = m.csd_name
 FROM ref.municipalities m
 WHERE ST_Intersects(rs.geom, m.geom)
   AND rs.municipality IS NULL;
 
 -- Simple centroid tiebreak for segments crossing boundaries
-UPDATE road_segments rs
+UPDATE road_segments_staging rs
 SET municipality = m.csd_name
 FROM ref.municipalities m
 WHERE rs.municipality IS NULL
@@ -561,7 +642,7 @@ WHERE rs.municipality IS NULL
 
 ```sql
 -- Speed bumps
-UPDATE road_segments rs
+UPDATE road_segments_staging rs
 SET has_speed_bump = true
 WHERE EXISTS (
     SELECT 1 FROM osm.osm_nodes n
@@ -570,7 +651,7 @@ WHERE EXISTS (
 );
 
 -- Rail crossings
-UPDATE road_segments rs
+UPDATE road_segments_staging rs
 SET has_rail_crossing = true
 WHERE EXISTS (
     SELECT 1 FROM osm.osm_nodes n
@@ -579,17 +660,16 @@ WHERE EXISTS (
 );
 
 -- Parking aisles
-UPDATE road_segments rs
+UPDATE road_segments_staging rs
 SET is_parking_aisle = true
 WHERE road_type = 'service' AND surface_type = 'parking_aisle';
 -- (plus segments inside amenity=parking polygons)
 
--- Mark unpaved
-UPDATE segment_aggregates sa
-SET roughness_category = 'unpaved'
-FROM road_segments rs
-WHERE sa.segment_id = rs.id
-  AND rs.surface_type IN ('gravel', 'dirt', 'unpaved', 'ground', 'sand');
+-- Do NOT write aggregate categories here. Unpaved handling happens in the
+-- ingest / recompute paths, which either reject these readings with
+-- `rejected_reason = 'unpaved'` or derive the category from the matched
+-- `road_segments.surface_type` at fold time. Writing `segment_aggregates`
+-- during import is a no-op on a fresh DB and drifts once aggregates exist.
 ```
 
 ## Ingestion Pipeline
@@ -601,20 +681,56 @@ Thin validation + auth + rate limit layer. Calls stored procedure for the spatia
 ```typescript
 // supabase/functions/upload-readings/index.ts — sketch
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
-import { createClient } from "npm:@supabase/supabase-js@2"
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2"
 
-const NS_BBOX = { minLng: -66.5, minLat: 43.3, maxLng: -59.5, maxLat: 47.1 }
+type UploadPayload = {
+    batch_id: string
+    device_token: string
+    client_sent_at: string
+    client_app_version: string
+    client_os_version: string
+    readings: Array<{
+        lat: number
+        lng: number
+        roughness_rms: number
+        speed_kmh: number
+        heading: number | null
+        gps_accuracy_m: number
+        recorded_at: string
+        is_pothole?: boolean
+        pothole_magnitude?: number | null
+    }>
+}
 
 serve(async (req) => {
     if (req.method !== "POST") return new Response(null, { status: 405 })
 
+    const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID()
     const payload = await req.json() as UploadPayload
-    const validation = validate(payload)
-    if (!validation.ok) return jsonResponse({ error: validation.reason }, 400)
+    const validation = validateRequestShape(payload)
+    if (!validation.ok) {
+        return jsonResponse(
+            {
+                error: "validation_failed",
+                message: "Payload is malformed.",
+                field_errors: validation.fieldErrors,
+                request_id: requestId,
+            },
+            400,
+            {},
+            requestId,
+        )
+    }
+
+    const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    )
 
     // Hash device token server-side (client sends cleartext; hash with a
     // server-side pepper to make rainbow-tabling harder)
-    const tokenHash = await sha256(payload.device_token + Deno.env.get("TOKEN_PEPPER")!)
+    const tokenHashHex = await sha256Hex(payload.device_token + Deno.env.get("TOKEN_PEPPER")!)
+    const tokenHashBytea = `\\x${tokenHashHex}`   // Postgres BYTEA literal for RPC input
 
     // Rate limit check (device + IP).
     // Supabase Edge Functions run on Deno Deploy; the real client IP is in x-forwarded-for
@@ -630,27 +746,25 @@ serve(async (req) => {
     // populate both the JSON body AND the HTTP `Retry-After` header that the API
     // contract promises (§03 /upload-readings 429 response). Missing the header
     // causes iOS client to fall back to a 60s retry which is too aggressive.
-    const rate = await checkRateLimit(tokenHash, ip)
+    const rate = await checkRateLimit(supabase, tokenHashHex, ip)
     if (!rate.ok) {
         return jsonResponse(
             {
                 error: "rate_limited",
                 message: "Device or IP exceeded rate limit.",
                 retry_after_s: rate.retryAfterSeconds,
+                request_id: requestId,
             },
             429,
             { "Retry-After": String(rate.retryAfterSeconds) },
+            requestId,
         )
     }
 
     // Dispatch to stored procedure
-    const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    )
     const { data, error } = await supabase.rpc("ingest_reading_batch", {
         p_batch_id: payload.batch_id,
-        p_device_token_hash: tokenHash,
+        p_device_token_hash: tokenHashBytea,
         p_readings: payload.readings,
         p_client_sent_at: payload.client_sent_at,
         p_client_app_version: payload.client_app_version,
@@ -658,8 +772,18 @@ serve(async (req) => {
     })
 
     if (error) {
-        console.error("ingest_reading_batch failed", { batch_id: payload.batch_id, error })
-        return jsonResponse({ error: "processing_failed" }, 502)
+        console.error("ingest_reading_batch failed", {
+            request_id: requestId,
+            batch_id: payload.batch_id,
+            token_hash_prefix: tokenHashHex.slice(0, 4),
+            error,
+        })
+        return jsonResponse(
+            { error: "processing_failed", request_id: requestId },
+            502,
+            {},
+            requestId,
+        )
     }
 
     return jsonResponse({
@@ -668,21 +792,34 @@ serve(async (req) => {
         rejected: data.rejected,
         duplicate: data.duplicate,
         rejected_reasons: data.rejected_reasons ?? {},
-    }, 200)
+    }, 200, {}, requestId)
 })
 
-// Signature: jsonResponse(body: unknown, status: number, extraHeaders?: Record<string, string>)
+// Signature: jsonResponse(body: unknown, status: number, extraHeaders?: Record<string, string>, requestId?: string)
 // — the rate-limited path above passes { "Retry-After": "..." } through this helper. Keep the
-// helper definition alongside this file; the extraHeaders param is what makes the 429 contract
-// (§03) actually pass its contract test.
+// helper definition alongside this file; it must always emit the `x-request-id`
+// header, and the extraHeaders param is what makes the 429 contract (§03)
+// actually pass its contract test.
+//
+// Keep these helpers in the same file so the sketch is directly runnable:
+// - validateRequestShape(payload): returns { ok: boolean, fieldErrors?: Record<string, string> }
+// - sha256Hex(input): returns a 64-char lowercase hex digest
 ```
 
 ### Validation
 
-- `payload.readings.length <= 1000`
-- Each reading: `lat` ∈ NS bbox, `lng` ∈ NS bbox, `speed_kmh` ∈ [0, 200], `roughness_rms` ∈ [0, 15], `gps_accuracy_m` ∈ [0, 100], `recorded_at` within last 7 days
-- Reject entire batch if > 5% of readings fail validation (client bug signal)
-- Reject if `batch_id` isn't a valid UUIDv4
+- Hard 400 validation is for malformed payloads only:
+  - `batch_id` / `device_token` not valid UUIDv4
+  - `readings.length > 1000` (`batch_too_large`)
+  - missing required top-level fields
+  - missing or non-numeric per-reading scalar fields
+- Domain-level rejects are **not** 400s. The stored procedure counts them into `rejected_reasons` and returns 200 with partial acceptance:
+  - `out_of_bounds`
+  - `future_timestamp`
+  - `stale_timestamp`
+  - `low_quality`
+  - `no_segment_match`
+  - `unpaved`
 
 ### Rate Limits (enforced in Edge Function)
 
@@ -695,7 +832,8 @@ serve(async (req) => {
 ```typescript
 // Edge Function helper — the piece the top-level handler calls.
 async function checkRateLimit(
-    tokenHash: string,
+    supabase: SupabaseClient,
+    tokenHashHex: string,
     ip: string,
 ): Promise<{ ok: boolean; retryAfterSeconds: number }> {
     const now = new Date()
@@ -703,8 +841,8 @@ async function checkRateLimit(
     const hourBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()))
 
     // Device bucket: 50/day
-    const deviceOk = await sb.rpc("check_and_bump_rate_limit", {
-        p_key: `dev:${tokenHash}`, p_bucket_start: dayBucket.toISOString(), p_limit: 50,
+    const deviceOk = await supabase.rpc("check_and_bump_rate_limit", {
+        p_key: `dev:${tokenHashHex}`, p_bucket_start: dayBucket.toISOString(), p_limit: 50,
     })
     if (!deviceOk.data) {
         const secondsUntilNextDay = Math.ceil((dayBucket.getTime() + 86400000 - now.getTime()) / 1000)
@@ -712,7 +850,7 @@ async function checkRateLimit(
     }
 
     // IP bucket: 10/hour
-    const ipOk = await sb.rpc("check_and_bump_rate_limit", {
+    const ipOk = await supabase.rpc("check_and_bump_rate_limit", {
         p_key: `ip:${ip}`, p_bucket_start: hourBucket.toISOString(), p_limit: 10,
     })
     if (!ipOk.data) {
@@ -743,19 +881,23 @@ AS $$
 DECLARE
     v_accepted INT := 0;
     v_rejected INT := 0;
-    v_duplicate BOOLEAN := FALSE;
     v_rejected_reasons JSON := '{}'::JSON;
 BEGIN
-    -- Idempotency: if batch already processed, return prior result
+    -- Serialize duplicate retries on batch_id. Without the advisory lock,
+    -- two in-flight retries can both miss the EXISTS check and the loser
+    -- hits the processed_batches PK at the end of the transaction.
+    PERFORM pg_advisory_xact_lock(hashtextextended(p_batch_id::TEXT, 0));
+
+    -- Idempotency: if batch already processed, replay the original result exactly.
     IF EXISTS (SELECT 1 FROM processed_batches WHERE batch_id = p_batch_id) THEN
-        SELECT reading_count - rejected_count, rejected_count
-        INTO v_accepted, v_rejected
+        SELECT accepted_count, rejected_count, rejected_reasons::JSON
+        INTO v_accepted, v_rejected, v_rejected_reasons
         FROM processed_batches WHERE batch_id = p_batch_id;
         RETURN json_build_object(
             'accepted', v_accepted,
             'rejected', v_rejected,
             'duplicate', TRUE,
-            'rejected_reasons', '{}'::JSON   -- not re-derivable from persisted state
+            'rejected_reasons', v_rejected_reasons
         );
     END IF;
 
@@ -764,21 +906,51 @@ BEGIN
     -- and leftovers from a prior call can collide. Drop defensively, then recreate.
     DROP TABLE IF EXISTS tmp_batch_readings;
     DROP TABLE IF EXISTS tmp_matched;
+    DROP TABLE IF EXISTS tmp_final;
 
-    -- Stage readings into a temp table with pre-computed geometry
+    -- Stage readings into a temp table with pre-computed geometry and the
+    -- server-visible rejection reasons that are cheap to evaluate before
+    -- spatial matching. Client-only quality gates such as sample_count and
+    -- duration_s are enforced on-device and should never reach the backend.
     CREATE TEMP TABLE tmp_batch_readings ON COMMIT DROP AS
     SELECT
-        (r->>'lat')::NUMERIC AS lat,
-        (r->>'lng')::NUMERIC AS lng,
-        (r->>'roughness_rms')::NUMERIC AS roughness_rms,
-        (r->>'speed_kmh')::NUMERIC AS speed_kmh,
-        (r->>'heading')::NUMERIC AS heading,
-        (r->>'gps_accuracy_m')::NUMERIC AS gps_accuracy_m,
-        COALESCE((r->>'is_pothole')::BOOLEAN, FALSE) AS is_pothole,
-        (r->>'pothole_magnitude')::NUMERIC AS pothole_magnitude,
-        (r->>'recorded_at')::TIMESTAMPTZ AS recorded_at,
-        ST_SetSRID(ST_MakePoint((r->>'lng')::NUMERIC, (r->>'lat')::NUMERIC), 4326) AS geom
-    FROM jsonb_array_elements(p_readings) AS r;
+        p.reading_idx,
+        p.lat,
+        p.lng,
+        p.roughness_rms,
+        p.speed_kmh,
+        p.heading,
+        p.gps_accuracy_m,
+        p.is_pothole,
+        p.pothole_magnitude,
+        p.recorded_at,
+        ST_SetSRID(ST_MakePoint(p.lng, p.lat), 4326) AS geom,
+        CASE
+            WHEN p.lng NOT BETWEEN -66.5 AND -59.5
+              OR p.lat NOT BETWEEN 43.3 AND 47.1 THEN 'out_of_bounds'
+            WHEN p.recorded_at > now() + INTERVAL '60 seconds' THEN 'future_timestamp'
+            WHEN p.recorded_at < now() - INTERVAL '7 days' THEN 'stale_timestamp'
+            WHEN p.gps_accuracy_m > 20
+              OR p.speed_kmh < 15
+              OR p.speed_kmh > 160
+              OR p.roughness_rms < 0
+              OR p.roughness_rms > 15 THEN 'low_quality'
+            ELSE NULL
+        END::TEXT AS rejection_reason
+    FROM (
+        SELECT
+            ordinality AS reading_idx,
+            (r->>'lat')::NUMERIC AS lat,
+            (r->>'lng')::NUMERIC AS lng,
+            (r->>'roughness_rms')::NUMERIC AS roughness_rms,
+            (r->>'speed_kmh')::NUMERIC AS speed_kmh,
+            (r->>'heading')::NUMERIC AS heading,
+            (r->>'gps_accuracy_m')::NUMERIC AS gps_accuracy_m,
+            COALESCE((r->>'is_pothole')::BOOLEAN, FALSE) AS is_pothole,
+            (r->>'pothole_magnitude')::NUMERIC AS pothole_magnitude,
+            (r->>'recorded_at')::TIMESTAMPTZ AS recorded_at
+        FROM jsonb_array_elements(p_readings) WITH ORDINALITY AS r(r, ordinality)
+    ) p;
 
     -- Match each reading to a SINGLE best segment using KNN + heading + distance filters.
     -- The lateral takes 3 nearest candidates, filters by heading, and picks the closest
@@ -786,15 +958,17 @@ BEGIN
     -- passes the ON-filter against multiple candidates would be duplicated in tmp_matched.
     CREATE TEMP TABLE tmp_matched ON COMMIT DROP AS
     SELECT
-        t.*,
+        t.reading_idx,
         m.segment_id,
         m.distance_m,
-        m.heading_diff
+        m.heading_diff,
+        m.surface_type
     FROM tmp_batch_readings t
     LEFT JOIN LATERAL (
         SELECT * FROM (
             SELECT
                 rs.id AS segment_id,
+                rs.surface_type,
                 ST_Distance(rs.geom::geography, t.geom::geography) AS distance_m,
                 ABS(
                     ((COALESCE(t.heading, rs.bearing_degrees) - rs.bearing_degrees + 540)::INT % 360) - 180
@@ -811,7 +985,23 @@ BEGIN
           AND (candidates.heading_diff <= 45 OR candidates.heading_diff >= 135)  -- allow reverse direction
         ORDER BY candidates.distance_m
         LIMIT 1
-    ) m ON TRUE
+    ) m ON t.rejection_reason IS NULL
+    ORDER BY t.recorded_at;
+
+    CREATE TEMP TABLE tmp_final ON COMMIT DROP AS
+    SELECT
+        t.*,
+        m.segment_id,
+        m.distance_m,
+        m.heading_diff,
+        CASE
+            WHEN t.rejection_reason IS NOT NULL THEN t.rejection_reason
+            WHEN m.segment_id IS NULL THEN 'no_segment_match'
+            WHEN m.surface_type IN ('gravel', 'dirt', 'unpaved', 'ground', 'sand') THEN 'unpaved'
+            ELSE NULL
+        END::TEXT AS final_rejection_reason
+    FROM tmp_batch_readings t
+    LEFT JOIN tmp_matched m USING (reading_idx)
     ORDER BY t.recorded_at;
 
     -- Insert accepted readings
@@ -824,35 +1014,39 @@ BEGIN
         segment_id, p_batch_id, p_device_token_hash,
         roughness_rms, speed_kmh, heading, gps_accuracy_m,
         is_pothole, pothole_magnitude, geom, recorded_at
-    FROM tmp_matched
-    WHERE segment_id IS NOT NULL;
+    FROM tmp_final
+    WHERE final_rejection_reason IS NULL;
     GET DIAGNOSTICS v_accepted = ROW_COUNT;
 
-    v_rejected := (SELECT count(*) FROM tmp_batch_readings) - v_accepted;
+    v_rejected := (SELECT count(*) FROM tmp_final WHERE final_rejection_reason IS NOT NULL);
 
     -- Counts per rejection reason — surfaced in the API response so clients can
     -- distinguish transient issues (no_segment_match on a dead zone) from bugs
-    -- (out_of_bounds should be impossible if the client respects the NS bbox).
-    -- Edge Function rejections (validation_failed, stale_timestamp, privacy_zone)
-    -- are enumerated by the Edge Function itself before the RPC is called.
-    SELECT json_build_object(
-        'no_segment_match', count(*) FILTER (WHERE segment_id IS NULL),
-        'unpaved', 0   -- reserved; unpaved segments never enter tmp_matched
-    )
+    -- (`out_of_bounds` / `low_quality` mean the client let through data it
+    -- should normally have filtered on-device).
+    SELECT COALESCE(
+        jsonb_object_agg(reason, reason_count ORDER BY reason),
+        '{}'::JSONB
+    )::JSON
     INTO v_rejected_reasons
-    FROM tmp_matched;
+    FROM (
+        SELECT final_rejection_reason AS reason, count(*) AS reason_count
+        FROM tmp_final
+        WHERE final_rejection_reason IS NOT NULL
+        GROUP BY final_rejection_reason
+    ) reasons;
 
     -- Record the batch BEFORE the aggregate fold so that if the later step errors out
     -- and the transaction is rolled back, the next retry re-runs everything cleanly.
     -- Without the insert-first pattern, a mid-function crash could commit readings
     -- but not processed_batches, causing a retry to double-count.
     INSERT INTO processed_batches (
-        batch_id, device_token_hash, reading_count, accepted_count, rejected_count,
+        batch_id, device_token_hash, reading_count, accepted_count, rejected_count, rejected_reasons,
         client_sent_at, client_app_version, client_os_version
     ) VALUES (
         p_batch_id, p_device_token_hash,
-        (SELECT count(*) FROM tmp_batch_readings),
-        v_accepted, v_rejected,
+        (SELECT count(*) FROM tmp_final),
+        v_accepted, v_rejected, v_rejected_reasons::JSONB,
         p_client_sent_at, p_client_app_version, p_client_os_version
     );
 
@@ -1004,7 +1198,9 @@ BEGIN
     IF z < 10 THEN RETURN ''::bytea; END IF;
 
     WITH bounds AS (
-        SELECT ST_TileEnvelope(z, x, y) AS geom
+        SELECT
+            ST_TileEnvelope(z, x, y) AS geom_3857,
+            ST_Transform(ST_TileEnvelope(z, x, y), 4326) AS geom_4326
     ),
     segments AS (
         SELECT
@@ -1019,12 +1215,13 @@ BEGIN
             sa.pothole_count,
             ST_AsMVTGeom(
                 ST_Transform(rs.geom, 3857),
-                (SELECT geom FROM bounds),
+                (SELECT geom_3857 FROM bounds),
                 4096, 64, true
             ) AS geom
         FROM road_segments rs
         JOIN segment_aggregates sa ON sa.segment_id = rs.id
-        WHERE ST_Transform(rs.geom, 3857) && (SELECT geom FROM bounds)
+        WHERE rs.geom && (SELECT geom_4326 FROM bounds)
+          AND ST_Intersects(ST_Transform(rs.geom, 3857), (SELECT geom_3857 FROM bounds))
           AND sa.confidence != 'low'   -- low-confidence segments not published
           AND sa.unique_contributors >= 3
           AND (
@@ -1040,12 +1237,13 @@ BEGIN
             pr.confirmation_count,
             ST_AsMVTGeom(
                 ST_Transform(pr.geom, 3857),
-                (SELECT geom FROM bounds),
+                (SELECT geom_3857 FROM bounds),
                 4096, 64, true
             ) AS geom
         FROM pothole_reports pr
         WHERE pr.status = 'active'
-          AND ST_Transform(pr.geom, 3857) && (SELECT geom FROM bounds)
+          AND pr.geom && (SELECT geom_4326 FROM bounds)
+          AND ST_Intersects(ST_Transform(pr.geom, 3857), (SELECT geom_3857 FROM bounds))
           AND z >= 13
     )
     SELECT
@@ -1077,6 +1275,7 @@ GRANT EXECUTE ON FUNCTION get_tile(INT, INT, INT) TO service_role;
 ```typescript
 // supabase/functions/tiles/index.ts — sketch
 serve(async (req) => {
+    const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID()
     const url = new URL(req.url)
     const match = url.pathname.match(/\/(\d+)\/(\d+)\/(\d+)\.mvt$/)
     if (!match) return new Response(null, { status: 404 })
@@ -1093,13 +1292,28 @@ serve(async (req) => {
     const { data, error } = await supabase.rpc("get_tile", {
         z: parseInt(z), x: parseInt(x), y: parseInt(y),
     })
-    if (error) return new Response("error", { status: 500 })
+    if (error) {
+        return new Response("error", {
+            status: 500,
+            headers: { "x-request-id": requestId },
+        })
+    }
+    if (!(data instanceof Uint8Array) || data.length === 0) {
+        return new Response(null, {
+            status: 204,
+            headers: {
+                "cache-control": "public, max-age=3600, s-maxage=3600",
+                "x-request-id": requestId,
+            },
+        })
+    }
 
     return new Response(data, {
         headers: {
             "content-type": "application/vnd.mapbox-vector-tile",
             "cache-control": "public, max-age=3600, s-maxage=3600",
             "access-control-allow-origin": "*",
+            "x-request-id": requestId,
         },
     })
 })
@@ -1107,28 +1321,356 @@ serve(async (req) => {
 
 Supabase CDN caches these at the edge based on URL. Cache-bust after nightly recompute by including a short version suffix in the URL (`?v=<unix-day>`) — the iOS client appends this automatically.
 
+### Coverage Tile Endpoint for Web: `GET /functions/v1/tiles/coverage/:z/:x/:y.mvt`
+
+The standard quality tile intentionally hides low-confidence and unscored roads, so it cannot power the public web `Coverage` mode. Add a separate coverage tile RPC and Edge Function wrapper.
+
+```sql
+CREATE OR REPLACE FUNCTION get_coverage_tile(z INT, x INT, y INT)
+RETURNS BYTEA
+LANGUAGE plpgsql
+STABLE
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+    v_tile BYTEA;
+BEGIN
+    IF z < 10 THEN RETURN ''::bytea; END IF;
+
+    WITH bounds AS (
+        SELECT
+            ST_TileEnvelope(z, x, y) AS geom_3857,
+            ST_Transform(ST_TileEnvelope(z, x, y), 4326) AS geom_4326
+    ),
+    segments AS (
+        SELECT
+            rs.id,
+            rs.road_name,
+            rs.road_type,
+            CASE
+                WHEN sa.segment_id IS NULL OR COALESCE(sa.total_readings, 0) = 0
+                    THEN 'none'
+                WHEN sa.unique_contributors < 3
+                    THEN 'emerging'
+                WHEN sa.unique_contributors < 10
+                    THEN 'published'
+                ELSE 'strong'
+            END AS coverage_level,
+            sa.updated_at::TEXT AS updated_at,
+            ST_AsMVTGeom(
+                ST_Transform(rs.geom, 3857),
+                (SELECT geom_3857 FROM bounds),
+                4096, 64, true
+            ) AS geom
+        FROM road_segments rs
+        LEFT JOIN segment_aggregates sa ON sa.segment_id = rs.id
+        WHERE rs.geom && (SELECT geom_4326 FROM bounds)
+          AND ST_Intersects(ST_Transform(rs.geom, 3857), (SELECT geom_3857 FROM bounds))
+          AND rs.is_parking_aisle = FALSE
+          AND COALESCE(rs.surface_type, 'unknown') != 'unpaved'
+          AND (
+              z >= 14
+              OR rs.road_type IN ('motorway','trunk','primary','secondary','tertiary',
+                                   'motorway_link','trunk_link','primary_link','secondary_link')
+          )
+    )
+    SELECT COALESCE(
+        (SELECT ST_AsMVT(segments.*, 'segment_coverage', 4096, 'geom') FROM segments),
+        ''::bytea
+    )
+    INTO v_tile;
+
+    RETURN v_tile;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION get_coverage_tile(INT, INT, INT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_coverage_tile(INT, INT, INT) TO service_role;
+```
+
+Edge Function sketch:
+
+```typescript
+// supabase/functions/tiles-coverage/index.ts — sketch
+serve(async (req) => {
+    const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID()
+    const url = new URL(req.url)
+    const match = url.pathname.match(/\/coverage\/(\d+)\/(\d+)\/(\d+)\.mvt$/)
+    if (!match) return new Response(null, { status: 404 })
+
+    const [, z, x, y] = match
+    const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    )
+    const { data, error } = await supabase.rpc("get_coverage_tile", {
+        z: parseInt(z), x: parseInt(x), y: parseInt(y),
+    })
+    if (error) {
+        return new Response("error", {
+            status: 500,
+            headers: { "x-request-id": requestId },
+        })
+    }
+    if (!(data instanceof Uint8Array) || data.length === 0) {
+        return new Response(null, {
+            status: 204,
+            headers: {
+                "cache-control": "public, max-age=3600, s-maxage=3600",
+                "x-request-id": requestId,
+            },
+        })
+    }
+    return new Response(data, {
+        headers: {
+            "content-type": "application/vnd.mapbox-vector-tile",
+            "cache-control": "public, max-age=3600, s-maxage=3600",
+            "access-control-allow-origin": "*",
+            "x-request-id": requestId,
+        },
+    })
+})
+```
+
 ### Alternative: Martin Tile Server (if Edge Function is too slow)
 
 If Edge Function cold-start becomes painful or p95 tile latency > 300ms, migrate to [Martin](https://github.com/maplibre/martin), a Rust tile server that speaks Postgres directly. Host it on Fly.io, ~$5/month.
 
 **Trigger for migration:** p95 tile latency > 300ms consistently for 3+ days, or error rate > 1%.
 
+## Read API Endpoints
+
+These are all thin Edge Function wrappers. `segments` and `potholes` can use an anon-scoped Supabase client because RLS already allows those reads. `stats`, `tiles`, `tiles/coverage`, `segments/worst`, `upload-readings`, and `health` use service role because they depend on locked RPCs, materialized views, or unauthenticated liveness checks.
+
+### `GET /functions/v1/segments/:id`
+
+Single joined query over `road_segments` + `segment_aggregates`, returning:
+
+- static segment fields from `road_segments`
+- aggregate fields from `segment_aggregates`
+- `history: []` and `neighbors: null` as explicit MVP stubs
+
+Return 404 if either the segment does not exist or no aggregate row exists yet.
+
+### `GET /functions/v1/potholes?bbox=...`
+
+Validate the bbox before touching Postgres:
+
+- 4 comma-separated floats
+- `minLng < maxLng`, `minLat < maxLat`
+- max span approximately 10 km x 10 km (`maxLng - minLng <= 0.12`, `maxLat - minLat <= 0.09` at Halifax latitudes)
+
+Then query active potholes:
+
+```sql
+SELECT
+    id,
+    ST_Y(geom) AS lat,
+    ST_X(geom) AS lng,
+    magnitude,
+    confirmation_count,
+    first_reported_at,
+    last_confirmed_at,
+    status,
+    segment_id
+FROM pothole_reports
+WHERE status = 'active'
+  AND geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+ORDER BY last_confirmed_at DESC
+LIMIT 500;
+```
+
+### `GET /functions/v1/stats`
+
+Back the public stats card and web report surfaces with materialized views refreshed every 5 minutes:
+
+```sql
+CREATE MATERIALIZED VIEW public_stats_mv AS
+SELECT
+    COALESCE(SUM(rs.length_m) FILTER (WHERE sa.total_readings > 0), 0)::NUMERIC(12,1) / 1000 AS total_km_mapped,
+    COALESCE(SUM(sa.total_readings), 0)::BIGINT AS total_readings,
+    COUNT(*) FILTER (WHERE sa.total_readings > 0)::BIGINT AS segments_scored,
+    (SELECT COUNT(*) FROM pothole_reports WHERE status = 'active')::BIGINT AS active_potholes,
+    COUNT(DISTINCT rs.municipality) FILTER (WHERE sa.total_readings > 0)::BIGINT AS municipalities_covered,
+    now() AS generated_at
+FROM road_segments rs
+LEFT JOIN segment_aggregates sa ON sa.segment_id = rs.id;
+
+CREATE UNIQUE INDEX public_stats_mv_singleton ON public_stats_mv ((1));
+
+CREATE MATERIALIZED VIEW public_worst_segments_mv AS
+SELECT
+    rs.id AS segment_id,
+    rs.road_name,
+    rs.municipality,
+    rs.road_type,
+    sa.roughness_category::text AS category,
+    sa.confidence::text AS confidence,
+    sa.avg_roughness_score,
+    sa.score_last_30d,
+    sa.score_30_60d,
+    sa.trend::text AS trend,
+    sa.total_readings,
+    sa.unique_contributors,
+    sa.pothole_count,
+    sa.last_reading_at,
+    now() AS generated_at
+FROM road_segments rs
+JOIN segment_aggregates sa ON sa.segment_id = rs.id
+WHERE sa.unique_contributors >= 3
+  AND sa.confidence != 'low'
+  AND sa.roughness_category NOT IN ('unscored', 'unpaved');
+
+CREATE INDEX idx_public_worst_segments_mv_municipality_score
+    ON public_worst_segments_mv (municipality, avg_roughness_score DESC);
+
+CREATE INDEX idx_public_worst_segments_mv_score
+    ON public_worst_segments_mv (avg_roughness_score DESC);
+
+CREATE OR REPLACE FUNCTION refresh_public_web_views()
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW public_stats_mv;
+    REFRESH MATERIALIZED VIEW public_worst_segments_mv;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION refresh_public_web_views() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION refresh_public_web_views() TO service_role;
+```
+
+Add a lightweight cron entry:
+
+```sql
+SELECT cron.schedule(
+    'refresh-public-web-views',
+    '2-57/5 * * * *',
+    $$SELECT refresh_public_web_views()$$
+);
+```
+
+`GET /stats` reads `public_stats_mv`. `GET /segments/worst` reads `public_worst_segments_mv`.
+
+### `GET /functions/v1/segments/worst?municipality=...&limit=...`
+
+Thin wrapper over `public_worst_segments_mv` for the web `Worst Roads` report.
+
+Validation rules:
+
+- `limit` required, integer, `1 <= limit <= 100`
+- `municipality` optional exact display name; reject unknown names with 400 instead of silently returning empty rows
+
+Query:
+
+```sql
+WITH filtered AS (
+    SELECT *
+    FROM public_worst_segments_mv
+    WHERE ($1::TEXT IS NULL OR municipality = $1)
+    ORDER BY avg_roughness_score DESC, pothole_count DESC, total_readings DESC
+    LIMIT $2
+)
+SELECT
+    ROW_NUMBER() OVER (
+        ORDER BY avg_roughness_score DESC, pothole_count DESC, total_readings DESC
+    )::INT AS rank,
+    segment_id,
+    road_name,
+    municipality,
+    road_type,
+    category,
+    confidence,
+    avg_roughness_score,
+    score_last_30d,
+    score_30_60d,
+    trend,
+    total_readings,
+    unique_contributors,
+    pothole_count,
+    last_reading_at,
+    generated_at
+FROM filtered;
+```
+
+### `GET /functions/v1/health`
+
+The only unauthenticated endpoint. It proves the DB is reachable and returns deploy metadata from env vars:
+
+```sql
+CREATE OR REPLACE FUNCTION db_healthcheck()
+RETURNS TIMESTAMPTZ
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$SELECT now();$$;
+
+REVOKE EXECUTE ON FUNCTION db_healthcheck() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION db_healthcheck() TO service_role;
+```
+
+Health Edge Function sketch:
+
+```typescript
+serve(async () => {
+    const requestId = crypto.randomUUID()
+    const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    )
+    const { data, error } = await supabase.rpc("db_healthcheck")
+    if (error) {
+        return jsonResponse(
+            { status: "error", db: "unreachable", request_id: requestId },
+            503,
+            {},
+            requestId,
+        )
+    }
+    return jsonResponse(
+        {
+            status: "ok",
+            version: Deno.env.get("APP_VERSION"),
+            commit: Deno.env.get("GIT_SHA"),
+            deployed_at: Deno.env.get("DEPLOYED_AT"),
+            db: "reachable",
+            db_time: data,
+        },
+        200,
+        {},
+        requestId,
+    )
+})
+```
+
 ## Nightly Aggregate Recompute
 
 Full recompute with outlier trimming, trend calculation, and score decay.
 
 ```sql
-CREATE OR REPLACE FUNCTION nightly_recompute_aggregates()
+CREATE OR REPLACE FUNCTION nightly_recompute_aggregates(
+    p_segment_ids UUID[] DEFAULT NULL
+)
 RETURNS VOID
 LANGUAGE plpgsql
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
-    -- For each segment that has had activity in the last 24h, full recompute
-    WITH active_segments AS (
-        SELECT DISTINCT segment_id FROM readings
-        WHERE uploaded_at > now() - INTERVAL '24 hours'
+    -- Default mode: recompute segments that had activity in the last 24h.
+    -- Refresh mode: caller passes the exact touched segment IDs from
+    -- rematch_readings_after_segment_refresh().
+    WITH target_segments AS (
+        SELECT DISTINCT segment_id
+        FROM readings
+        WHERE p_segment_ids IS NULL
+          AND uploaded_at > now() - INTERVAL '24 hours'
           AND segment_id IS NOT NULL
+        UNION
+        SELECT DISTINCT unnest(p_segment_ids)
+        WHERE p_segment_ids IS NOT NULL
     ),
     per_device_capped AS (
         -- Cap each device to at most 3 readings per segment per week
@@ -1139,7 +1681,7 @@ BEGIN
                    ORDER BY r.recorded_at DESC
                ) AS rn
         FROM readings r
-        WHERE r.segment_id IN (SELECT segment_id FROM active_segments)
+        WHERE r.segment_id IN (SELECT segment_id FROM target_segments)
           AND r.recorded_at > now() - INTERVAL '6 months'
     ),
     filtered AS (
@@ -1223,12 +1765,13 @@ BEGIN
 END;
 $$;
 
--- Lock down execution: this is a heavy batch job, scheduled by pg_cron only.
+-- Lock down execution: this is a heavy batch job, scheduled by pg_cron in
+-- steady state and manually invoked only during controlled OSM refreshes.
 -- Without REVOKE + GRANT, PostgREST exposes it to anon via
 -- /rest/v1/rpc/nightly_recompute_aggregates and a single POST with the
 -- shipped anon key kicks a full aggregate recompute — cheap DoS.
-REVOKE EXECUTE ON FUNCTION nightly_recompute_aggregates() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION nightly_recompute_aggregates() TO service_role;
+REVOKE EXECUTE ON FUNCTION nightly_recompute_aggregates(UUID[]) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION nightly_recompute_aggregates(UUID[]) TO service_role;
 ```
 
 ## Pothole Expiry
@@ -1272,7 +1815,7 @@ Critical query patterns:
 
 2. **Tile fetch** (bbox intersect)
    - Index: `GIST(geom)` on `road_segments`
-   - Plan: `ST_Transform(geom,3857) && tile_bbox`
+   - Plan: `geom && tile_bbox_4326` as the indexable prefilter, then `ST_Intersects(ST_Transform(geom,3857), tile_bbox_3857)` for exact clipping
    - Target: < 100ms per tile on warm cache, served from Supabase CDN on subsequent hits
 
 3. **Segment detail** (single segment lookup)
@@ -1281,9 +1824,9 @@ Critical query patterns:
 
 Run `EXPLAIN ANALYZE` on the ingestion match query after first 100k readings exist — if any reading processing exceeds 50ms, add `segment_bbox` materialized view or reduce KNN candidates to 1.
 
-## Open Questions for Backend
+## Backend Decisions and Deferred Optimizations
 
-- **[OPEN] Should we store `readings.location` as GEOGRAPHY instead of GEOMETRY?** Geography auto-handles meters but is slower for KNN. Default: GEOMETRY(4326) + cast to geography for distance calcs. Revisit if spatial join perf is an issue.
-- **[OPEN] Materialized view for Halifax-only tile serving?** If HRM segment queries dominate, a `hrm_segments_mv` could cut tile query cost by ~50%. Defer until measured.
-- **[OPEN] When to migrate to Martin tile server?** Set up the trigger (§"Alternative: Martin") before launch; don't migrate preemptively.
-- **[OPEN] Should `device_token_hash` include a monthly salt?** Currently server peppers with a constant secret. A monthly-rotating salt breaks long-term contributor linkage but also breaks the "cap 3 readings/device/week" logic — rejected.
+- **Keep `readings.location` as `GEOMETRY(4326)`.** Cast to geography only where meter-based calculations are needed.
+- **Do not add a Halifax-only tile materialized view unless measurement proves it is needed.**
+- **Do not migrate to Martin preemptively.** Follow the documented latency/error trigger first.
+- **Do not add a monthly salt to `device_token_hash`.** The current constant-pepper approach is the correct tradeoff for weekly per-device caps and monthly client-side rotation.
