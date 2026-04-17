@@ -99,6 +99,29 @@ struct AppContainer {
 
 `Sensor*` / `Persist*` / `Uploading` are protocols; production types conform. Test container swaps in fakes. Keep DI boring.
 
+### Sensor Protocol Seam
+
+Unit tests and the simulator harness cannot construct a real `CMDeviceMotion` (it's framework-internal). The protocol therefore publishes a plain value type, not the Apple class, so fakes can emit whatever they need to.
+
+```swift
+struct MotionSample {
+    let timestamp: TimeInterval           // monotonic, from CMDeviceMotion.timestamp
+    let userAcceleration: (x: Double, y: Double, z: Double)  // G
+    let gravity: (x: Double, y: Double, z: Double)           // G, |g| = 1
+}
+
+protocol MotionService {
+    func start(rate: Double) async throws
+    func stop()
+    var samples: AsyncStream<MotionSample> { get }
+}
+
+// Production type wraps CMMotionManager and maps CMDeviceMotion → MotionSample.
+// Test/harness types can synthesize MotionSample from CSV replay without touching Core Motion.
+```
+
+Same pattern for `LocationService` (publishes a `LocationSample` DTO). The harness never subclasses framework classes.
+
 ## Sensor Pipeline
 
 ### Lifecycle
@@ -263,11 +286,112 @@ func start(onChange: @escaping (Bool) -> Void) {
 ## Background Execution
 
 - `UIBackgroundModes: ["location", "processing"]` in `Info.plist`
-- `locationManager.allowsBackgroundLocationUpdates = true`
+- `locationManager.allowsBackgroundLocationUpdates = true` **only set this flag AFTER `.authorizedAlways` is granted.** Setting it under `.authorizedWhenInUse` doesn't crash but silently changes nothing — background updates stop the moment the user backgrounds the app, which means no readings on the first drive for anyone still in the pre-Always flow. Guard: `if locationManager.authorizationStatus == .authorizedAlways { locationManager.allowsBackgroundLocationUpdates = true }` and re-apply on `didChangeAuthorization`.
 - `locationManager.pausesLocationUpdatesAutomatically = false`
 - `locationManager.showsBackgroundLocationIndicator = true` (required for App Store)
 - Register for `significantLocationChange` at app launch via `locationManager.startMonitoringSignificantLocationChanges()` — this is the relaunch mechanism after force-quit or memory kill. **Requires `.authorizedAlways`** — with `.authorizedWhenInUse` it silently does nothing.
+- **Bootstrap gap:** our permission flow requests `.authorizedWhenInUse` first and only escalates to `.authorizedAlways` after the user has completed a successful drive. During this pre-Always window, SLC-based relaunch does NOT work. Mitigate by keeping the "Recording" UI sticky in-app and showing a one-time banner after the first drive that explains the Always upgrade and what they gain.
 - On `locationManager(_:didUpdateLocations:)` after a significant-change-triggered relaunch, check if driving activity is `.automotive` and if so, resume normal collection
+
+### Required Info.plist keys (single source of truth)
+
+```xml
+<key>UIBackgroundModes</key>
+<array>
+    <string>location</string>
+    <string>processing</string>
+    <string>fetch</string>
+</array>
+<!-- `fetch` is required for BGAppRefreshTask (upload-drain); without it BGTaskScheduler.submit throws
+     BGTaskSchedulerErrorCodeUnavailable at runtime and uploads never drain in the background.
+     `processing` covers BGProcessingTask (nightly-cleanup). `location` covers continuous + SLC updates. -->
+<key>BGTaskSchedulerPermittedIdentifiers</key>
+<array>
+    <string>ca.roadsense.ios.nightly-cleanup</string>
+    <string>ca.roadsense.ios.upload-drain</string>
+</array>
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>RoadSense NS records road quality from accelerometer data while you drive so that public road conditions can be mapped. Location is used to tag readings to road segments.</string>
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>Background location lets RoadSense NS keep collecting while your phone is locked or the app is in the background during your drive. Data is filtered before upload and never shared with third parties.</string>
+<key>NSMotionUsageDescription</key>
+<string>Motion and accelerometer data are the core signal used to score road roughness. Nothing leaves your device until processed into anonymized segment readings.</string>
+```
+
+**CRITICAL:** any identifier submitted via `BGTaskScheduler.shared.submit(BGTaskRequest(...))` that isn't in `BGTaskSchedulerPermittedIdentifiers` throws at runtime. Keep this list and the `register(...)` calls in the AppDelegate in lock-step — add a unit test that asserts every registered identifier exists in the bundled Info.plist.
+
+### Privacy Manifest (PrivacyInfo.xcprivacy) — REQUIRED
+
+Apple enforces Required Reason API declarations via the privacy manifest for all App Store submissions since May 2024. Without a `PrivacyInfo.xcprivacy` file in the app bundle, submission will be rejected. Our app uses several Required Reason APIs transitively:
+
+```xml
+<!-- RoadSenseNS/PrivacyInfo.xcprivacy -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array>
+        <!-- Coarse/precise location: linked to device token (a random UUID we rotate monthly;
+             Apple considers rotated random IDs "linked" per their Data Collection guidance) -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypePreciseLocation</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+    </array>
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array>
+        <!-- UserDefaults (SwiftData + settings): reason CA92.1 -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array><string>CA92.1</string></array>
+        </dict>
+        <!-- File timestamp (SwiftData persistence): reason C617.1 -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array><string>C617.1</string></array>
+        </dict>
+        <!-- System boot time (thermal/battery correlation logs): reason 35F9.1 -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array><string>35F9.1</string></array>
+        </dict>
+        <!-- Disk space (buffer-to-disk sanity checks): reason E174.1 -->
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array><string>E174.1</string></array>
+        </dict>
+    </array>
+</dict>
+</plist>
+```
+
+**SDK manifests (Apple requires these transitively):**
+- Mapbox Maps iOS SDK v11+: ships its own `PrivacyInfo.xcprivacy` in the xcframework — verify present in SDK release notes
+- Supabase Swift SDK: verify manifest present (they added one in late 2024)
+- Sentry Cocoa SDK ≥ 8.21.0: ships manifest — pin to that or newer in Package.swift
+
+**Before every TestFlight upload:** run `xcrun PrivacyReport` on the archive and confirm the manifest aggregates cleanly — missing reasons fail Beta App Review on external testing.
 
 ### Background task registration (required at launch)
 
@@ -429,7 +553,12 @@ state: onboarding
   screen 1: "what this app does"
   screen 2: "we need When-In-Use location + Motion" → show combined rationale
      tap "Enable" → CLLocationManager.requestWhenInUseAuthorization()
-                 → CMMotionActivityManager.activityTypes triggers Motion prompt on first query
+                 → CMMotionActivityManager().startActivityUpdates(to: .main) { _ in }
+                   // ^ first call to startActivityUpdates or queryActivityStarting(from:to:to:withHandler:)
+                   //   is what triggers the Motion & Fitness prompt. There is no `activityTypes` property.
+                   //   Call this AFTER the location prompt resolves so the two dialogs don't collide.
+                   //   Immediately call `stopActivityUpdates()` after the authorization status transitions
+                   //   to avoid wasting the motion coprocessor outside of a drive.
   screen 3: "drive and check back"
   → state: foreground-collecting
 
@@ -458,7 +587,10 @@ See [product-spec.md §Degraded Permission States](../product-spec.md) for the f
 ```
 ┌─ Base style (Mapbox Streets v12, dark mode variant)
 ├─ Road quality overlay layer
-│   source: vector, url: https://api.roadsense.ca/tiles/{z}/{x}/{y}.mvt
+│   source: vector, url: AppConfig.apiBaseURL + "/tiles/{z}/{x}/{y}.mvt"
+│                   // Defaults to https://<supabase-project-ref>.supabase.co/functions/v1
+│                   // until the custom domain is decided (see 00 §Open Questions #6).
+│                   // Do NOT hardcode api.roadsense.ca — domain is still [OPEN].
 │   source-layer: "segment_aggregates"
 │   type: line
 │   paint:

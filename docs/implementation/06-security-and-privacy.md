@@ -10,7 +10,7 @@ Privacy isn't a feature; it's the foundation. A data leak in a civic-tech app tr
 
 1. **Collect only what's needed.** No email, no phone, no name. No account system in MVP.
 2. **Never see raw tracks server-side.** Client strips privacy-zone readings; server only ingests individual windows with midpoint coordinates.
-3. **Never store the raw device token.** Hash at the Edge Function boundary with a server-side pepper. Rotate monthly.
+3. **Never store the raw device token.** The client sends the token UUID over TLS; the Edge Function hashes it with a server-side pepper on receipt and discards the cleartext in the same request. The raw token is never persisted, never logged, never returned. (It *is* in server memory for the duration of the request — that's a necessary trust boundary, not a marketing claim to obscure.) Rotate monthly.
 4. **No third-party analytics or ad SDKs.** Sentry (errors only, with PII scrubbing) and nothing else.
 5. **Anonymized from the outside in.** Privacy policy, App Store labels, user-facing copy all say the same thing the code enforces.
 

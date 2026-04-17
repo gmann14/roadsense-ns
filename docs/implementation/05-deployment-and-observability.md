@@ -184,7 +184,7 @@ Week 7: expand to ~30 internal testers (friends, willing neighbours).
 
 Week 8: submit for Beta App Review to unlock external testing. Prepare:
 - Test Information: describe the app's purpose, test focus (driving scenarios), how to report bugs
-- Privacy policy URL (required — host on roadsense.ns or similar)
+- Privacy policy URL (required — once the domain is locked per 00 §Open Questions #6, host at `<domain>/privacy`. Working assumption is `roadsense.ca/privacy` to match 06; do not ship with two different domains across the app and the privacy policy link)
 - Contact email (graham.mann14@gmail.com OK for MVP)
 - Demo credentials: N/A (no account required, mention this in notes)
 
@@ -283,11 +283,13 @@ Prefer fewer, louder alerts over noise. MVP alerts:
 
 | Alert | Trigger | Channel | Action |
 |---|---|---|---|
-| Backend error rate high | Sentry: > 10 errors/hour from backend | Email to graham.mann14@gmail.com | Investigate within 4h |
-| iOS crash rate high | Sentry: crash-free-rate < 99% for 30+ minutes | Email | Hotfix evaluation |
+| Backend error rate high | Sentry: > 10 errors/hour from backend AND ≥ 50 requests/hour (floor to suppress quiet-hour flaps) | Email to graham.mann14@gmail.com | Investigate within 4h |
+| iOS crash rate high | Sentry: crash-free-rate < 99% for 30+ minutes AND ≥ 20 sessions in the window (percentages are meaningless on small denominators) | Email | Hotfix evaluation |
 | Supabase DB unhealthy | Supabase built-in alerts: CPU > 80% for 15min, storage > 80% | Email + Supabase dashboard | Upgrade instance |
-| Ingestion latency spike | Custom: p95 `/upload-readings` > 5s for 10min | Email | Check DB, check Edge Function logs |
-| Tile 5xx rate | Custom: > 1% 5xx for 10min | Email | Check Edge Function logs |
+| Ingestion latency spike | Custom: p95 `/upload-readings` > 5s for 10min AND ≥ 20 batches in the window | Email | Check DB, check Edge Function logs |
+| Tile 5xx rate | Custom: > 1% 5xx for 10min AND ≥ 100 tile requests in the window | Email | Check Edge Function logs |
+
+**Why the floors:** at MVP scale we'll have quiet hours with 0–2 requests. A single 500 becomes "100% error rate" and pages at 3 a.m. for nothing. Every rate-based alert needs a minimum-volume gate set just above typical off-peak traffic. Tune floors after the first week of production data.
 
 Pager-style alerts (SMS/phone) are overkill for MVP. Email + checking in once a day is enough at TestFlight scale.
 

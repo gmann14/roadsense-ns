@@ -8,7 +8,8 @@ Authoritative request/response shapes for all endpoints. **Lock this doc by end 
 
 - Base URL: `https://<project-ref>.supabase.co/functions/v1`
 - Content-Type: `application/json` for JSON endpoints, `application/vnd.mapbox-vector-tile` for tiles
-- Auth: Supabase anon key in `apikey` and `Authorization: Bearer <anon>` headers for all requests (reads and uploads). Supabase Edge Functions require both. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
+- Auth: Supabase anon key in `Authorization: Bearer <anon>` header for all requests (reads and uploads). Supabase Edge Functions require the Authorization header; the `apikey` header is also accepted for compatibility. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
+- The `ingest_reading_batch` RPC is `SECURITY DEFINER` with `EXECUTE` granted only to `service_role`; the anon key cannot invoke it directly. Uploads MUST go through the `/functions/v1/upload-readings` Edge Function, which holds the service role key and enforces rate limits before dispatching.
 - All timestamps are RFC 3339 / ISO 8601 with timezone (`2026-04-17T14:30:00Z`)
 - All coordinates are WGS84 (EPSG:4326), `lng` then `lat` where ordered, but JSON fields are named explicitly (`lat`, `lng`) to avoid ambiguity
 - UUIDs are lowercase v4 strings with hyphens
@@ -105,15 +106,17 @@ Batch upload of processed point readings.
 - `accepted`: number of readings persisted to `readings` table
 - `rejected`: `readings.length - accepted`
 - `duplicate`: `true` if this `batch_id` was already processed (no-op retry)
-- `rejected_reasons`: counts by reason code. Full enum:
-  - `out_of_bounds` — lat/lng outside NS bbox
-  - `no_segment_match` — no road segment within 20m / heading window
-  - `low_quality` — GPS accuracy, speed, or window length outside acceptance envelope
-  - `future_timestamp` — `recorded_at` in the future (clock skew)
-  - `stale_timestamp` — `recorded_at` older than 7 days
-  - `invalid_value` — a numeric field failed range validation but the batch as a whole still passed
-  - `privacy_zone` — point landed inside a known public privacy mask (defense in depth; client should never send these)
-  - `unpaved` — segment flagged as non-paved in OSM
+- `rejected_reasons`: counts by reason code. Only codes the server actually emits are listed — clients must tolerate unknown keys for forward-compat. MVP-emitted enum:
+  - `out_of_bounds` — lat/lng outside NS bbox (emitted by Edge Function pre-filter)
+  - `no_segment_match` — no road segment within 25m / heading window (emitted by stored proc)
+  - `low_quality` — GPS accuracy, speed, or window length outside acceptance envelope (emitted by Edge Function pre-filter)
+  - `future_timestamp` — `recorded_at` in the future > 60s clock skew (Edge Function)
+  - `stale_timestamp` — `recorded_at` older than 7 days (Edge Function)
+  - `unpaved` — segment flagged as non-paved in OSM (stored proc)
+
+**Intentionally removed from MVP:**
+- `invalid_value` — a full-batch `validation_failed` is returned instead; there is no per-reading "accepted-but-flagged" path.
+- `privacy_zone` — privacy zones live only on-device. Server has no knowledge of any user's zones and so cannot emit this code. Defense-in-depth here would require a separate mechanism (e.g., client attestation of a canonical public-zone list) and is deferred.
 
 **Response — 400 validation_failed**
 
@@ -219,17 +222,16 @@ Single segment detail for tap-on-road modal.
         "last_reading_at": "2026-04-16T22:15:00Z",
         "updated_at": "2026-04-17T03:15:00Z"
     },
-    "history": [
-        { "month": "2026-01", "avg_score": 0.65 },
-        { "month": "2026-02", "avg_score": 0.71 },
-        { "month": "2026-03", "avg_score": 0.72 }
-    ],
-    "neighbors": {
-        "prev": "c8a1b2d3-...",
-        "next": "d9a1b2d3-..."
-    }
+    "history": [],
+    "neighbors": null
 }
 ```
+
+**Scope note (MVP):** `history` and `neighbors` ship as empty/null stubs for the MVP because neither has a cheap backing query. Clients must handle empty arrays and null objects gracefully.
+
+Post-MVP plan:
+- `history`: add a `segment_history_monthly` materialized view keyed `(segment_id, month)`, refreshed by the nightly recompute job. Cheap to query, 12 rows per segment max.
+- `neighbors`: derivable from `road_segments (osm_way_id, segment_index)` via `±1` lookup once a unique index on that pair is in place (the schema already has one in Migration 002).
 
 **Response — 404 not_found** if no aggregate exists for this segment yet.
 

@@ -47,6 +47,11 @@ Tests live in `RoadSenseNSTests/`. Use `XCTest` + `Quick/Nimble` only if we hit 
 - Mocking `CMMotionManager` directly — wrap it in a protocol and mock the protocol
 - Async tests without explicit `async`/`await` + `fulfillment(of:)`
 
+**Simulator gotchas:**
+- `UIDevice.current.batteryLevel` always returns `-1.0` in the iOS Simulator regardless of `isBatteryMonitoringEnabled`. Any battery-aware code path (e.g., pause-below-15%) must be exercised via a `BatteryService` protocol seam and mocked in CI. Never let `-1.0` reach the pause logic — it would either be interpreted as "battery exhausted" or short-circuit pause checks. Guard with `batteryLevel < 0 ? .unknown : .level(batteryLevel)`.
+- `CLLocationManager` in the simulator doesn't generate `significantLocationChange` without the Freeway/City-Bicycle-Ride route recipe — document which recipe each field test uses.
+- `CMMotionActivityManager.isActivityAvailable()` returns `false` in the simulator; integration tests that assert on `.automotive` must run on a real device.
+
 ### Backend
 
 Tests live in `supabase/tests/`. Use `pgTAP` (Postgres test framework). Run in CI against the locally-booted Supabase via `supabase test db`.
@@ -245,7 +250,7 @@ Automated benchmarks that gate PRs:
 
 ### Backend
 
-- `ingest_reading_batch` with 1000 readings: p95 < 1.5s (measured against staging)
+- `ingest_reading_batch` with 1000 readings, warm Edge Function: p95 < 4s measured against staging. With a pre-warmed function the realistic target is 2–3s; cold starts on Deno Deploy add 200–500ms. Don't set a tighter gate without empirical data.
 - `get_tile` at zoom 14: p95 < 200ms
 - `GET /segments/{id}`: p95 < 50ms
 
@@ -267,11 +272,11 @@ k6 script simulating:
 
 Protocol (run in week 7, rerun any month that row counts grow > 2×):
 
-1. Populate staging with synthetic data at realistic scale: 400k segments, 50M readings over 6 months
-2. Run the function cold (no cache) — target: < 20 min
-3. Run again warm — target: < 10 min
+1. Populate staging with synthetic data at **MVP-realistic scale**: 400k segments, ~2.6M readings over 6 months (10 drivers × 500 km/week × ~20 readings/km × ~26 weeks = 2.6M). This matches spec 02's "~5M / year" steady-state figure. Load-test with 2× headroom (5M rows) to cover organic growth through Month 9.
+2. Run the function cold (no cache) on Supabase Small: target < 10 min
+3. Run again warm: target < 5 min
 4. Check peak DB CPU < 80%, peak memory < 70% of instance
-5. Budget breaker: if cold time > 25 min, fail the build — time to move to incremental recompute
+5. Budget breaker: if cold time > 15 min on Small OR the MVP grows past 25 active drivers, escalate to Medium and switch to incremental recompute. Do not run the nightly recompute on Small past 10M rows — work_mem spills will compound.
 
 ## Bug Triage & Severity
 
@@ -282,7 +287,14 @@ Per product-spec, we open GitHub issues for TestFlight bugs. Apply these severit
 - **P2 (minor / polish)** — fix within a sprint
 - **P3 (nice-to-have)** — backlog
 
-Every bug gets a repro condition. If a bug can't be reproduced in the simulator harness, capture a sensor CSV from the reporting device (hidden dev toggle emails the file to graham.mann14@gmail.com).
+Every bug gets a repro condition. If a bug can't be reproduced in the simulator harness, capture a sensor CSV from the reporting device.
+
+**Sensor-CSV upload flow (do not email):** sensor logs can contain unmasked GPS traces — emailing them to a personal Gmail address would route raw location data through an inbox with no retention controls, which is a PIPEDA exposure. Instead:
+
+1. Dev toggle shows an explicit consent dialog: *"This will upload a 60s sensor trace including GPS coordinates for debugging. Only team members can access it. Retained 14 days."*
+2. On consent, upload to a private Supabase Storage bucket `support-captures/` keyed by `device_hash/timestamp.csv`. RLS: `service_role` only.
+3. Retention policy on the bucket: delete after 14 days via scheduled job.
+4. Never enable this toggle in non-debug builds. Guard with `#if DEBUG`.
 
 ## Definition of Done for a PR
 

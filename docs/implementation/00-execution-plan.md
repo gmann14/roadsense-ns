@@ -19,14 +19,15 @@ Ship a private TestFlight build to 20–50 Halifax-area beta testers within **8 
 ## Critical Path (8 Weeks)
 
 ```
-Week 1 ──┬─ Supabase project + PostGIS + monthly partitions
-         ├─ OSM import pipeline (osm2pgsql → 50m segments for NS)
-         ├─ Xcode project bootstrap + SPM deps (Mapbox, Supabase)
-         ├─ Apple Developer Program enrollment (Day 1 — can take 48h, gates TestFlight)
-         ├─ App Store Connect app record created (bundle ID ca.roadsense.ios)
-         └─ Domain purchased (roadsense.ca or chosen alternative) — gates privacy policy URL
+Week 1 ──┬─ Apple Developer Program enrollment (Day 1 — can take 48h)
+         ├─ Domain purchased (roadsense.ca or chosen alternative)
+         ├─ Supabase project + PostGIS + schema migrations 001–008 applied
+         ├─ Xcode project skeleton + SPM deps (Mapbox, Supabase, Sentry) — builds empty shell
+         └─ HRM-only OSM import (proof-of-concept, not full NS)
 
-Week 2 ──┬─ Ingestion edge function (validation, rate limit, stub)
+Week 2 ──┬─ Full NS OSM import pipeline (osm2pgsql → 50m segments, all HRM + rest of NS)
+         ├─ App Store Connect app record created (bundle ID ca.roadsense.ios — matches the placeholder used throughout 01/05)
+         ├─ Ingestion edge function (validation, rate limit, stub)
          ├─ Stored procedure skeleton (map matching, aggregate upsert)
          ├─ iOS: permission flow + CMMotionActivity + CLLocationManager
          └─ CI (GitHub Actions) with lint + typecheck
@@ -49,7 +50,9 @@ Week 5 ──┬─ UI polish pass: onboarding, permission prompts, empty states
             — no Apple review needed; builds available ~15 min after upload
 
 Week 6 ──┬─ Internal dogfood: 3–5 team devices for 5 days
-         ├─ Observability wired (Sentry, structured logs, basic dashboards)
+         ├─ Sentry Cocoa + Deno SDKs wired (projects created, DSNs in secrets)
+         ├─ Structured batch logs (JSON one-line-per-batch) + ops_metrics counters
+         ├─ Supabase Studio dashboard + external uptime ping on /health
          ├─ Battery impact measurement on 2 device classes (old + new)
          └─ Pothole spike detection + pothole_reports ingestion
 
@@ -152,7 +155,7 @@ We ship TestFlight beta when all of these are true:
 3. Map renders Halifax roads with ≥ 50 segments showing community scores (aggregated from team dogfood)
 4. Privacy policy published; no PII stored server-side (verified by schema review)
 5. Crash-free rate > 99% across internal dogfood (Sentry)
-6. p95 upload batch latency < 2s for 1000 readings
+6. p95 upload batch latency < 4s for 1000 readings (warm Edge Function). This soft target allows for cold-start overhead on Deno Deploy and the 1000-row KNN pass. If we land below 2s we should, but don't gate launch on the tighter number without measurement.
 7. Battery drain during active driving < 15%/hr on iPhone 12 Pro (our "reference" device class)
 8. App Store privacy labels accurate and match what the app actually does
 
