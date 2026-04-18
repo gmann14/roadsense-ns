@@ -14,6 +14,7 @@ Implemented so far:
 - `B011` staging-table refresh path plus fixture-tested OSM segmentization/tagging scripts
 - `B012` reading rematch path for OSM refreshes, including fixture coverage for reassignment, stale nulling, and `p_since` filtering
 - `B013` batch ingestion RPC with duplicate replay, rejection accounting, and minimal aggregate-fold plumbing
+- `B014` tested incremental aggregate folding and real pothole folding behavior
 
 Local verification:
 
