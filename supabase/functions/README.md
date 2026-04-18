@@ -18,6 +18,8 @@ Phase-2 web additions:
 
 Implemented so far:
 
+- `upload-readings`
+  - validates request shape, hashes the monthly device token with `TOKEN_PEPPER`, enforces device/IP rate limits, and dispatches to `ingest_reading_batch`
 - `tiles`
   - `index.ts` wires the function to the `get_tile` RPC with the service role key
   - `handler.ts` keeps the route parsing, payload normalization, and HTTP contract testable
@@ -30,3 +32,8 @@ Implemented so far:
   - reads `public_stats_mv` and serves the public stats card contract with a 5-minute cache header
 - `health`
   - `verify_jwt = false`; proves DB reachability through `db_healthcheck()` and returns deploy metadata
+
+Local development note:
+
+- put function-only secrets such as `TOKEN_PEPPER` in `supabase/functions/.env`
+- keep that file uncommitted

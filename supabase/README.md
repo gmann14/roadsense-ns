@@ -18,6 +18,7 @@ Implemented so far:
 - `B015` nightly recompute, pothole expiry, partition maintenance helpers, and cron registration
 - `B020` quality tile RPC plus the first production Edge Function (`tiles`) with pgTAP and Deno contract coverage
 - `B021` read-side stats/health models plus `segments`, `potholes`, `stats`, and `health` Edge Functions
+- `B022` upload Edge Function validation, hashing, and rate limiting around the existing ingestion RPC
 
 Local verification:
 
@@ -25,5 +26,7 @@ Local verification:
 - `supabase db reset`
 - `supabase test db`
 - `deno test -A supabase/functions/*/*_test.ts`
+
+For local Edge Function secrets such as `TOKEN_PEPPER`, use `supabase/functions/.env` during development. The local edge runtime reliably picks that file up; shell-exporting secrets before `supabase start` is not enough on this machine.
 
 The OSM import scripts are designed for a manual worker or self-hosted runner, not the normal request path. They also depend on external reference geography (`ref.municipalities`) that must be loaded separately before the first import.
