@@ -52,6 +52,7 @@ Post-MVP phases:
 
 9. Web dashboard backend additions
 10. Web dashboard frontend
+11. Quarterly operational procedures (OSM refresh rematch, etc.) — runs on a calendar, not a release
 
 ## Phase 1 — Project And Environment Setup
 
@@ -113,23 +114,10 @@ Post-MVP phases:
 - **GREEN**
   - implement `osm-import.sh`, `osm2pgsql-style.lua`, `segmentize.sql`, `tag-municipalities.sql`, `tag-features.sql`
   - implement `road_segments_staging`
-  - implement `apply_road_segment_refresh()`
+  - implement `apply_road_segment_refresh()` (initial import path — merge staging into empty `road_segments`; rematch of existing readings is B100, post-MVP)
 - **Acceptance**
   - Halifax fixture import produces stable segment rows
   - production-scale import path is documented and re-runnable
-
-### B012 — OSM refresh rematch path
-
-- **Spec refs:** [02](02-backend-implementation.md), [05](05-deployment-and-observability.md)
-- **Depends on:** B011
-- **RED**
-  - pgTAP tests for rematching touched readings after a segment refresh
-  - test that stale aggregate rows are reconciled by the documented flow
-- **GREEN**
-  - implement `rematch_readings_after_segment_refresh()`
-  - wire refresh procedure into the operational runbook
-- **Acceptance**
-  - changed segment geometry can be re-imported without orphaning retained readings
 
 ### B013 — Batch ingestion stored procedure
 
@@ -201,11 +189,15 @@ Post-MVP phases:
 - **Depends on:** B014
 - **RED**
   - contract tests for `/segments/{id}`, `/potholes`, `/stats`, `/health`
-  - pgTAP tests for `public_stats_mv` and `db_healthcheck()`
+  - pgTAP tests for `public_stats_mv` (including the unique index required by `REFRESH ... CONCURRENTLY`) and `db_healthcheck()`
+  - scheduled-job integration test that the `refresh-public-stats-mv` cron entry is registered in Migration 011
 - **GREEN**
   - implement the read wrappers and SQL backing views/functions
+  - implement `refresh_public_stats_mv()` using `REFRESH MATERIALIZED VIEW CONCURRENTLY`
+  - schedule the `refresh-public-stats-mv` cron in Migration 011
 - **Acceptance**
   - all documented read endpoints exist and match spec
+  - `public_stats_mv` refresh runs under the Small Supabase instance without blocking `/stats` reads
 
 ### B022 — Rate limiting and abuse checks in Edge Function
 
@@ -494,11 +486,13 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - pgTAP tests for `public_worst_segments_mv`
   - Deno contract tests for `/segments/worst`
 - **GREEN**
-  - implement `public_worst_segments_mv`
-  - implement `refresh_public_web_views()`
+  - implement `public_worst_segments_mv` (with a unique index on `segment_id` so `REFRESH ... CONCURRENTLY` is usable)
+  - implement `refresh_public_worst_segments_mv()` using `REFRESH MATERIALIZED VIEW CONCURRENTLY`
+  - schedule the `refresh-public-worst-segments-mv` cron (Phase 9 only — the MVP stats refresh is scheduled separately in Migration 011)
   - implement `segments-worst` Edge Function
 - **Acceptance**
   - report page can query ranked rows cheaply and deterministically
+  - refreshing `public_worst_segments_mv` does not block reads from `/segments/worst`
 
 ## Phase 10 — Web Dashboard Frontend
 
@@ -565,6 +559,28 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - wire Vercel preview/production config
 - **Acceptance**
   - web app meets the documented accessibility, privacy, and deploy requirements
+
+## Phase 11 — Post-MVP Operational Procedures
+
+These tasks ship **after** MVP TestFlight launch. They exist on a quarterly cadence (OSM changes slowly) and should not block any release. Picking them up mid-MVP just because the import pipeline looks adjacent is a common cause of scope creep — don't.
+
+### B100 — OSM refresh rematch path
+
+- **Spec refs:** [02](02-backend-implementation.md), [05](05-deployment-and-observability.md)
+- **Depends on:** B011, B014, B015 (needs real `nightly_recompute_aggregates` to drive targeted recompute after rematch)
+- **Why post-MVP:** this only matters on the *second* OSM import (first import is into an empty `road_segments` where there is nothing to rematch). Between MVP launch and the first quarterly refresh, no functionality is lost. Building it before MVP means maintaining and retesting a branch of code that nothing exercises.
+- **RED**
+  - pgTAP tests for rematching touched readings after a segment refresh (geometry change, segment split, segment deletion)
+  - test that aggregate rows for impacted segments are reconciled after running `nightly_recompute_aggregates(rematch_readings_after_segment_refresh())`
+  - test that readings whose nearest paved segment disappeared get `segment_id = NULL` rather than a wrong match
+- **GREEN**
+  - implement `rematch_readings_after_segment_refresh()` body (KNN + heading matcher, bounded by `p_since`)
+  - wire the (apply → rematch → recompute) sequence into the operational runbook in [05](05-deployment-and-observability.md) with a session-level `statement_timeout` and an off-peak window
+  - add monitoring for the rematch run (duration, touched-segment count, orphaned-reading count)
+- **Acceptance**
+  - changed segment geometry can be re-imported without orphaning retained readings
+  - quarterly refresh completes inside its documented operational budget on production-scale data
+  - `/stats` and the quality map reflect the post-refresh world within one nightly cycle
 
 ## Suggested PR Slicing
 

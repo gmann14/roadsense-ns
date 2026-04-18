@@ -457,6 +457,14 @@ final class UploadBatch {
     var status: UploadStatus        // .pending, .inFlight, .succeeded, .failedPermanent
     var readingCount: Int
     var firstErrorMessage: String?
+
+    // Last server-returned ingest result. Populated on every 200 response so the
+    // user can see why the server is silently discarding readings (e.g. stationary
+    // filter, too-old timestamp, mismatched device_token hash).
+    var acceptedCount: Int          // rows written server-side this submit
+    var rejectedCount: Int          // rows dropped server-side this submit
+    var rejectedReasonsJSON: String? // JSON-encoded [ReasonCount] — see API contract
+    var wasDuplicateOnResubmit: Bool // server returned duplicate: true
 }
 
 @Model
@@ -504,14 +512,51 @@ every queue tick:
   batch_id = UUID()
   associate readings with batch_id (writes uploadBatchID)
   attempt upload
-     on 200: mark uploadedAt, trigger local map overlay refresh
+     on 200:
+         mark uploadedAt, trigger local map overlay refresh
+         persist response {accepted, rejected, rejected_reasons, duplicate}
+             onto the UploadBatch row so Settings → Uploads → Diagnostics
+             can show per-batch reject breakdowns
+         if response.rejected > 0 over a rolling 24h window
+             AND rejected / (accepted + rejected) > 0.20
+             AND the top reason is non-recoverable (e.g. `stationary`,
+                 `old_timestamp`, `duplicate_batch_id`):
+             set AppState.ingestHealth = .degraded(reasons: …)
+             surface a non-blocking banner in Settings → Uploads
      on 400 (validation error): mark batch failed_permanent, log, stop retrying
      on 429 (rate limited): respect Retry-After header; if missing, back off 60s + jitter
      on 5xx / network error: exponential backoff (1s, 2s, 4s, 8s, 16s), max 5 attempts
      after 5 failures: set status = .failedPermanent, surface in Settings screen
 ```
 
-**Idempotency:** `batch_id` is the dedup key server-side. Client retries send the same batch_id; the server returns 200 with the original `{accepted, rejected, duplicate: true, rejected_reasons}` result on re-submit.
+**Idempotency:** `batch_id` is the dedup key server-side. Client retries send the same batch_id; the server returns 200 with the original `{accepted, rejected, duplicate: true, rejected_reasons}` result on re-submit. The client stores `wasDuplicateOnResubmit` so Diagnostics can distinguish between "server dropped 47 rows" and "we already uploaded this batch and the retry was a no-op."
+
+**Rejected-reason surfacing:** The server's `rejected_reasons` array is a 1:1 map from the API contract's enum (see [03-api-contracts.md](03-api-contracts.md)). The iOS-side mapping lives in `RejectedReason.displayString`:
+
+```swift
+// RejectedReason.swift
+enum RejectedReason: String, Codable {
+    case missingFields        = "missing_fields"
+    case outOfRange           = "out_of_range"
+    case stationary           = "stationary"
+    case oldTimestamp         = "old_timestamp"
+    case duplicateBatchId     = "duplicate_batch_id"
+    case deviceTokenMismatch  = "device_token_mismatch"
+
+    var displayString: String {
+        switch self {
+        case .missingFields:       "Incomplete readings"
+        case .outOfRange:          "Invalid GPS or sensor value"
+        case .stationary:          "Not moving fast enough"
+        case .oldTimestamp:        "Recording too old to accept"
+        case .duplicateBatchId:    "Already uploaded"
+        case .deviceTokenMismatch: "Device token rotated mid-batch"
+        }
+    }
+}
+```
+
+This is intentional — the user should see exactly what the server saw, in plain language, so they can tell the difference between "my privacy filter dropped it" (local, visible via `droppedByPrivacyZone`) and "the server dropped it" (remote, visible via `rejected_reasons`).
 
 **WiFi detection:** `NWPathMonitor` publishes `path.isExpensive` (true on cellular/tethered) and `path.status`. If `isExpensive == true` **and** `user.allowCellularUpload == false`, defer the batch until the next non-expensive path. This also correctly defers when the user is on a personal hotspot, which we treat as cellular.
 
@@ -789,7 +834,7 @@ Order:
 Group settings into four sections only:
 
 1. **Privacy** — zones, delete local data, privacy policy
-2. **Uploads** — Wi-Fi only, allow cellular, pending count, retry
+2. **Uploads** — Wi-Fi only, allow cellular, pending count, retry, plus a `Diagnostics` row that opens a transparent log: last 20 batches with `{accepted, rejected, top reasons}`. Shows an inline banner when `ingestHealth == .degraded` with the top reason in plain language (e.g. "47% of readings this week were rejected because the app thought you were stationary"). No dark patterns; the row is named `Diagnostics`, not `Advanced`.
 3. **Recording** — pause/resume, battery saver explanation
 4. **About** — how it works, open source, version
 

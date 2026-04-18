@@ -389,6 +389,15 @@ SELECT cron.schedule(
     '15 4 * * *',
     $$DELETE FROM rate_limits WHERE bucket_start < now() - INTERVAL '7 days'$$
 );
+
+-- Refresh public_stats_mv every 5 min so the /stats card is never more than 5 min stale.
+-- CONCURRENTLY avoids blocking read traffic during the refresh window.
+-- Phase-9 public_worst_segments_mv has its own cron defined alongside that MV.
+SELECT cron.schedule(
+    'refresh-public-stats-mv',
+    '2-57/5 * * * *',
+    $$SELECT refresh_public_stats_mv()$$
+);
 ```
 
 Beyond MVP: also pre-create three months ahead (run on the 1st) so a single cron failure doesn't cascade.
@@ -428,18 +437,86 @@ Quarterly OSM refreshes use two explicit procedures rather than relying on the n
 
 ```sql
 CREATE OR REPLACE FUNCTION apply_road_segment_refresh()
-RETURNS VOID
+RETURNS TABLE(updated_count BIGINT, inserted_count BIGINT, deleted_count BIGINT)
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
+DECLARE
+    v_updated BIGINT := 0;
+    v_inserted BIGINT := 0;
+    v_deleted BIGINT := 0;
 BEGIN
-    -- 1. UPDATE existing `road_segments` rows by `(osm_way_id, segment_index)`,
-    --    preserving `id`
-    -- 2. INSERT new segment keys that did not previously exist
-    -- 3. DELETE primary-table rows whose keys disappeared from staging;
-    --    FK ON DELETE CASCADE removes stale `segment_aggregates`
-    -- 4. Leave `readings.location` untouched; the rematch procedure below
-    --    recomputes `readings.segment_id`
+    -- Run inside an explicit transaction at the caller side (the osm-import script
+    -- wraps this in BEGIN/COMMIT). Each statement below is atomic within that txn.
+
+    -- 1. UPDATE existing road_segments rows by (osm_way_id, segment_index),
+    --    preserving id so FKs from segment_aggregates and readings stay valid.
+    WITH upd AS (
+        UPDATE road_segments rs
+        SET geom            = s.geom,
+            length_m        = s.length_m,
+            road_name       = s.road_name,
+            road_type       = s.road_type,
+            surface_type    = s.surface_type,
+            municipality    = s.municipality,
+            has_speed_bump  = s.has_speed_bump,
+            has_rail_crossing = s.has_rail_crossing,
+            is_parking_aisle = s.is_parking_aisle,
+            bearing_degrees = s.bearing_degrees
+        FROM road_segments_staging s
+        WHERE rs.osm_way_id = s.osm_way_id
+          AND rs.segment_index = s.segment_index
+        RETURNING 1
+    )
+    SELECT COUNT(*) INTO v_updated FROM upd;
+
+    -- 2. INSERT newly appeared (osm_way_id, segment_index) tuples.
+    WITH ins AS (
+        INSERT INTO road_segments (
+            osm_way_id, segment_index, geom, length_m, road_name, road_type,
+            surface_type, municipality, has_speed_bump, has_rail_crossing,
+            is_parking_aisle, bearing_degrees
+        )
+        SELECT
+            s.osm_way_id, s.segment_index, s.geom, s.length_m, s.road_name,
+            s.road_type, s.surface_type, s.municipality, s.has_speed_bump,
+            s.has_rail_crossing, s.is_parking_aisle, s.bearing_degrees
+        FROM road_segments_staging s
+        LEFT JOIN road_segments rs
+          ON rs.osm_way_id = s.osm_way_id
+         AND rs.segment_index = s.segment_index
+        WHERE rs.id IS NULL
+        RETURNING 1
+    )
+    SELECT COUNT(*) INTO v_inserted FROM ins;
+
+    -- 3. DELETE primary-table rows whose keys disappeared from staging.
+    --    FK ON DELETE CASCADE on segment_aggregates removes stale aggregate rows.
+    --    readings.segment_id is intentionally NOT an FK (partitioned tables, plus
+    --    we want to be able to batch-rematch rather than pay per-row SET NULL on
+    --    millions of rows). Any dangling segment_id values left by this DELETE
+    --    get reconciled by rematch_readings_after_segment_refresh() below — it
+    --    rewrites every segment_id it can, and leaves no-match cases NULL.
+    WITH del AS (
+        DELETE FROM road_segments rs
+        USING (
+            SELECT rs2.id
+            FROM road_segments rs2
+            LEFT JOIN road_segments_staging s
+              ON s.osm_way_id = rs2.osm_way_id
+             AND s.segment_index = rs2.segment_index
+            WHERE s.osm_way_id IS NULL
+        ) doomed
+        WHERE rs.id = doomed.id
+        RETURNING 1
+    )
+    SELECT COUNT(*) INTO v_deleted FROM del;
+
+    RAISE NOTICE 'apply_road_segment_refresh: updated=% inserted=% deleted=%',
+                 v_updated, v_inserted, v_deleted;
+
+    RETURN QUERY SELECT v_updated, v_inserted, v_deleted;
 END;
 $$;
 
@@ -450,13 +527,62 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
+DECLARE
+    v_touched UUID[];
 BEGIN
-    -- Re-run the same KNN + heading matcher used by ingest against
-    -- `readings.location` for retained raw readings since `p_since`.
-    -- Update `readings.segment_id` in place, set it to NULL when no paved
-    -- match remains, and return the union of old/new segment IDs touched by
-    -- the refresh so aggregate recompute can target only impacted rows.
-    RETURN ARRAY[]::UUID[];
+    -- Re-run the same KNN + heading matcher used by ingest against readings.location
+    -- for retained raw readings since p_since. Readings with no paved match get
+    -- segment_id = NULL. Return the union of old and new segment IDs touched so
+    -- the caller can pass them to nightly_recompute_aggregates(segment_ids).
+
+    WITH matched AS (
+        SELECT
+            r.id                AS reading_id,
+            r.segment_id        AS old_segment_id,
+            (
+                SELECT rs.id
+                FROM road_segments rs
+                WHERE rs.surface_type IN ('paved', 'asphalt', 'concrete', 'paving_stones')
+                  AND ST_DWithin(rs.geom::geography, r.location::geography, 25)
+                  AND (
+                      r.heading IS NULL
+                      OR rs.bearing_degrees IS NULL
+                      OR LEAST(
+                          ABS(r.heading - rs.bearing_degrees),
+                          360 - ABS(r.heading - rs.bearing_degrees)
+                      ) <= 45
+                  )
+                ORDER BY rs.geom::geography <-> r.location::geography
+                LIMIT 1
+            )                   AS new_segment_id
+        FROM readings r
+        WHERE r.recorded_at >= p_since
+    ),
+    changed AS (
+        SELECT * FROM matched
+        WHERE old_segment_id IS DISTINCT FROM new_segment_id
+    ),
+    upd AS (
+        UPDATE readings r
+        SET segment_id = c.new_segment_id
+        FROM changed c
+        WHERE r.id = c.reading_id
+        RETURNING c.old_segment_id, c.new_segment_id
+    )
+    SELECT ARRAY(
+        SELECT DISTINCT sid
+        FROM (
+            SELECT old_segment_id AS sid FROM upd
+            UNION
+            SELECT new_segment_id AS sid FROM upd
+        ) u
+        WHERE sid IS NOT NULL
+    ) INTO v_touched;
+
+    RAISE NOTICE 'rematch_readings_after_segment_refresh: % segments touched',
+                 COALESCE(array_length(v_touched, 1), 0);
+
+    RETURN COALESCE(v_touched, ARRAY[]::UUID[]);
 END;
 $$;
 
@@ -465,6 +591,8 @@ REVOKE EXECUTE ON FUNCTION rematch_readings_after_segment_refresh(TIMESTAMPTZ) F
 GRANT EXECUTE ON FUNCTION apply_road_segment_refresh() TO service_role;
 GRANT EXECUTE ON FUNCTION rematch_readings_after_segment_refresh(TIMESTAMPTZ) TO service_role;
 ```
+
+**Cost note:** the rematch query does a KNN lookup per reading since `p_since`. At MVP scale (~2.6M readings over 6 months, per the testing spec), expect a few minutes on the Small Supabase instance. Run quarterly, off-peak, with session-level `statement_timeout` raised accordingly. Beyond MVP, partition the work by month and drive it from a worker that commits per-partition.
 
 ### Script: `scripts/osm-import.sh`
 
@@ -508,8 +636,15 @@ echo "→ Tagging features (speed bumps, rail crossings, surface)"
 psql "$DATABASE_URL" -f scripts/tag-features.sql
 
 echo "→ Applying staged refresh into road_segments and rematching retained readings"
-psql "$DATABASE_URL" -c "SELECT apply_road_segment_refresh();"
-psql "$DATABASE_URL" -c "SELECT nightly_recompute_aggregates(rematch_readings_after_segment_refresh());"
+# apply_road_segment_refresh returns (updated, inserted, deleted) counts; log them.
+# Wrap the three calls in a single transaction so a rematch failure doesn't leave
+# road_segments updated without aggregates reconciled.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+BEGIN;
+SELECT * FROM apply_road_segment_refresh();
+SELECT nightly_recompute_aggregates(rematch_readings_after_segment_refresh());
+COMMIT;
+SQL
 
 echo "→ Done. Segment count:"
 psql "$DATABASE_URL" -c "SELECT count(*) FROM road_segments;"
@@ -1482,7 +1617,7 @@ LIMIT 500;
 
 ### `GET /functions/v1/stats`
 
-Back the public stats card and web report surfaces with materialized views refreshed every 5 minutes:
+Back the public stats card with a materialized view refreshed every 5 minutes. `public_stats_mv` is MVP; `public_worst_segments_mv` (Phase 9) is defined later in the `/segments/worst` section. Each MV has its own refresh function so the two are decoupled — a slow worst-segments refresh cannot stall the stats card, and Phase-9 can ship without touching MVP cron.
 
 ```sql
 CREATE MATERIALIZED VIEW public_stats_mv AS
@@ -1496,8 +1631,35 @@ SELECT
 FROM road_segments rs
 LEFT JOIN segment_aggregates sa ON sa.segment_id = rs.id;
 
+-- Unique index required for REFRESH MATERIALIZED VIEW CONCURRENTLY.
+-- Stats MV has a single row; (1) is a stable unique expression.
 CREATE UNIQUE INDEX public_stats_mv_singleton ON public_stats_mv ((1));
 
+CREATE OR REPLACE FUNCTION refresh_public_stats_mv()
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    -- CONCURRENTLY avoids the ACCESS EXCLUSIVE lock that would block /stats reads
+    -- during each 5-minute refresh cycle. Requires the unique index above.
+    REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION refresh_public_stats_mv() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION refresh_public_stats_mv() TO service_role;
+```
+
+The refresh cron for `public_stats_mv` is scheduled in Migration 011 alongside the other MVP cron jobs. `GET /stats` reads `public_stats_mv`. `GET /segments/worst` (Phase 9) reads `public_worst_segments_mv`.
+
+### `GET /functions/v1/segments/worst?municipality=...&limit=...`
+
+Thin wrapper over `public_worst_segments_mv` for the web `Worst Roads` report. This endpoint and its backing MV ship with **Phase 9** (web dashboard).
+
+```sql
+-- Phase 9: worst-segments MV + refresh function + cron
 CREATE MATERIALIZED VIEW public_worst_segments_mv AS
 SELECT
     rs.id AS segment_id,
@@ -1521,43 +1683,38 @@ WHERE sa.unique_contributors >= 3
   AND sa.confidence != 'low'
   AND sa.roughness_category NOT IN ('unscored', 'unpaved');
 
+-- Unique index required for REFRESH ... CONCURRENTLY
+CREATE UNIQUE INDEX idx_public_worst_segments_mv_segment_id
+    ON public_worst_segments_mv (segment_id);
+
 CREATE INDEX idx_public_worst_segments_mv_municipality_score
     ON public_worst_segments_mv (municipality, avg_roughness_score DESC);
 
 CREATE INDEX idx_public_worst_segments_mv_score
     ON public_worst_segments_mv (avg_roughness_score DESC);
 
-CREATE OR REPLACE FUNCTION refresh_public_web_views()
+CREATE OR REPLACE FUNCTION refresh_public_worst_segments_mv()
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
-    REFRESH MATERIALIZED VIEW public_stats_mv;
-    REFRESH MATERIALIZED VIEW public_worst_segments_mv;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY public_worst_segments_mv;
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION refresh_public_web_views() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION refresh_public_web_views() TO service_role;
-```
+REVOKE EXECUTE ON FUNCTION refresh_public_worst_segments_mv() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION refresh_public_worst_segments_mv() TO service_role;
 
-Add a lightweight cron entry:
-
-```sql
+-- Worst-segments doesn't need 5-minute freshness; every 15 min is plenty.
+-- Offset from stats refresh to avoid stacking CPU.
 SELECT cron.schedule(
-    'refresh-public-web-views',
-    '2-57/5 * * * *',
-    $$SELECT refresh_public_web_views()$$
+    'refresh-public-worst-segments-mv',
+    '7-52/15 * * * *',
+    $$SELECT refresh_public_worst_segments_mv()$$
 );
 ```
-
-`GET /stats` reads `public_stats_mv`. `GET /segments/worst` reads `public_worst_segments_mv`.
-
-### `GET /functions/v1/segments/worst?municipality=...&limit=...`
-
-Thin wrapper over `public_worst_segments_mv` for the web `Worst Roads` report.
 
 Validation rules:
 
