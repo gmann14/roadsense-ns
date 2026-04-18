@@ -15,3 +15,4 @@ Current pgTAP suites:
 - `002_road_segment_refresh.sql` — `road_segments_staging` merge semantics and execute permissions
 - `003_osm_segmentization.sql` — fixture-driven segmentization plus municipality/feature tagging via the DB functions that back the operational SQL scripts
 - `004_rematch_readings_after_refresh.sql` — refresh rematch behavior for reassignment, stale-nulling, `p_since`, and execute permissions
+- `005_ingest_reading_batch.sql` — happy path, soft-rejection accounting, duplicate replay, malformed payload failure, aggregate folding, and execute permissions

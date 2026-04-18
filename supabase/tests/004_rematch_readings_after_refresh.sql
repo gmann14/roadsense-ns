@@ -100,7 +100,7 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.5994 44.6500)', 4326),
-        now() - INTERVAL '1 hour'
+        '2026-06-15T12:00:00Z'::TIMESTAMPTZ
     ),
     (
         '00000000-0000-0000-0000-00000000c002',
@@ -114,7 +114,7 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.6194 44.6600)', 4326),
-        now() - INTERVAL '2 hours'
+        '2026-06-15T12:10:00Z'::TIMESTAMPTZ
     ),
     (
         '00000000-0000-0000-0000-00000000c003',
@@ -128,7 +128,7 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.6394 44.6700)', 4326),
-        now() - INTERVAL '3 hours'
+        '2026-06-15T12:20:00Z'::TIMESTAMPTZ
     ),
     (
         '00000000-0000-0000-0000-00000000c004',
@@ -142,11 +142,11 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.5994 44.6500)', 4326),
-        now() - INTERVAL '2 days'
+        '2026-06-13T12:00:00Z'::TIMESTAMPTZ
     );
 
 CREATE TEMP TABLE tmp_rematch_result AS
-SELECT unnest(rematch_readings_after_segment_refresh(now() - INTERVAL '1 day')) AS touched_segment_id;
+SELECT unnest(rematch_readings_after_segment_refresh('2026-06-14T00:00:00Z'::TIMESTAMPTZ)) AS touched_segment_id;
 
 SELECT is(
     (SELECT segment_id::TEXT FROM readings WHERE id = '00000000-0000-0000-0000-00000000c001'),
@@ -225,13 +225,13 @@ SELECT ok(
 );
 
 SELECT lives_ok(
-    $$SELECT rematch_readings_after_segment_refresh(now() - INTERVAL '1 day')$$,
+    $$SELECT rematch_readings_after_segment_refresh('2026-06-14T00:00:00Z'::TIMESTAMPTZ)$$,
     'rematch_readings_after_segment_refresh is idempotent after the first rewrite'
 );
 
 SELECT is(
     (SELECT count(*)::INTEGER FROM (
-        SELECT unnest(rematch_readings_after_segment_refresh(now() - INTERVAL '1 day'))
+        SELECT unnest(rematch_readings_after_segment_refresh('2026-06-14T00:00:00Z'::TIMESTAMPTZ))
     ) rerun),
     0,
     'second rematch pass returns no touched segments once the data is reconciled'
