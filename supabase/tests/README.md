@@ -14,3 +14,4 @@ Current pgTAP suites:
 - `001_schema.sql` — extensions, core tables, indexes, and basic RLS/read permissions
 - `002_road_segment_refresh.sql` — `road_segments_staging` merge semantics and execute permissions
 - `003_osm_segmentization.sql` — fixture-driven segmentization plus municipality/feature tagging via the DB functions that back the operational SQL scripts
+- `004_rematch_readings_after_refresh.sql` — refresh rematch behavior for reassignment, stale-nulling, `p_since`, and execute permissions

@@ -12,6 +12,7 @@ Implemented so far:
 
 - `B010` initial schema migrations and pgTAP coverage
 - `B011` staging-table refresh path plus fixture-tested OSM segmentization/tagging scripts
+- `B012` reading rematch path for OSM refreshes, including fixture coverage for reassignment, stale nulling, and `p_since` filtering
 
 Local verification:
 
