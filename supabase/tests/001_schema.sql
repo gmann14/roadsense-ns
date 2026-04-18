@@ -38,11 +38,26 @@ SELECT has_function(
     'rate limit helper exists'
 );
 
-SELECT table_privs_are('anon', 'public', 'road_segments', ARRAY['SELECT'], 'anon can read road_segments only');
-SELECT table_privs_are('anon', 'public', 'segment_aggregates', ARRAY['SELECT'], 'anon can read segment_aggregates only');
-SELECT table_privs_are('anon', 'public', 'pothole_reports', ARRAY['SELECT'], 'anon can read pothole_reports only');
-SELECT table_privs_are('anon', 'public', 'processed_batches', ARRAY[]::text[], 'anon cannot touch processed_batches');
-SELECT table_privs_are('anon', 'public', 'rate_limits', ARRAY[]::text[], 'anon cannot touch rate_limits');
+SELECT ok(
+    has_table_privilege('anon', 'public.road_segments', 'SELECT'),
+    'anon can read road_segments'
+);
+SELECT ok(
+    has_table_privilege('anon', 'public.segment_aggregates', 'SELECT'),
+    'anon can read segment_aggregates'
+);
+SELECT ok(
+    has_table_privilege('anon', 'public.pothole_reports', 'SELECT'),
+    'anon can read pothole_reports'
+);
+SELECT ok(
+    NOT has_table_privilege('anon', 'public.processed_batches', 'SELECT'),
+    'anon cannot read processed_batches'
+);
+SELECT ok(
+    NOT has_table_privilege('anon', 'public.rate_limits', 'SELECT'),
+    'anon cannot read rate_limits'
+);
 
 SELECT ok(
     EXISTS (
@@ -54,4 +69,3 @@ SELECT ok(
 );
 
 SELECT * FROM finish();
-

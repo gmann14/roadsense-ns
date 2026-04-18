@@ -5,6 +5,13 @@ ALTER TABLE pothole_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE processed_batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
 
+GRANT SELECT ON road_segments TO anon;
+GRANT SELECT ON segment_aggregates TO anon;
+GRANT SELECT ON pothole_reports TO anon;
+REVOKE ALL ON readings FROM anon;
+REVOKE ALL ON processed_batches FROM anon;
+REVOKE ALL ON rate_limits FROM anon;
+
 DROP POLICY IF EXISTS "anon read aggregates" ON segment_aggregates;
 CREATE POLICY "anon read aggregates"
     ON segment_aggregates
@@ -25,4 +32,3 @@ CREATE POLICY "anon read potholes"
     FOR SELECT
     TO anon
     USING (status = 'active');
-

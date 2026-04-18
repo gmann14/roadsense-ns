@@ -1,21 +1,7 @@
 name: Backend CI
 
 on:
-  pull_request:
-    paths:
-      - "supabase/**"
-      - "scripts/**"
-      - ".github/workflows/backend-ci.yml"
-      - "docs/implementation/02-backend-implementation.md"
-      - "docs/implementation/03-api-contracts.md"
-      - "docs/implementation/04-testing-and-quality.md"
-  push:
-    branches:
-      - main
-    paths:
-      - "supabase/**"
-      - "scripts/**"
-      - ".github/workflows/backend-ci.yml"
+  workflow_dispatch:
 
 jobs:
   backend-check:
@@ -23,6 +9,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: CI mode note
+        run: echo "Manual-only for now to avoid burning GitHub minutes during early scaffolding."
 
       - name: Verify backend scaffold exists
         run: |

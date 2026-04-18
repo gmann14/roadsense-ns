@@ -1,18 +1,7 @@
 name: iOS CI
 
 on:
-  pull_request:
-    paths:
-      - "ios/**"
-      - ".github/workflows/ios-ci.yml"
-      - "docs/implementation/01-ios-implementation.md"
-      - "docs/implementation/04-testing-and-quality.md"
-  push:
-    branches:
-      - main
-    paths:
-      - "ios/**"
-      - ".github/workflows/ios-ci.yml"
+  workflow_dispatch:
 
 jobs:
   scaffold-check:
@@ -20,6 +9,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: CI mode note
+        run: echo "Manual-only for now to avoid burning GitHub macOS minutes during early scaffolding."
 
       - name: Verify iOS scaffold exists
         shell: bash
@@ -35,4 +27,3 @@ jobs:
           else
             echo "No Xcode project yet. Scaffold phase only."
           fi
-
