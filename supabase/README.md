@@ -15,6 +15,7 @@ Implemented so far:
 - `B012` reading rematch path for OSM refreshes, including fixture coverage for reassignment, stale nulling, and `p_since` filtering
 - `B013` batch ingestion RPC with duplicate replay, rejection accounting, and minimal aggregate-fold plumbing
 - `B014` tested incremental aggregate folding and real pothole folding behavior
+- `B015` nightly recompute, pothole expiry, partition maintenance helpers, and cron registration
 
 Local verification:
 

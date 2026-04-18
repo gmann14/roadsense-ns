@@ -529,7 +529,21 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - tests for municipality-first search
   - Playwright tests for potholes mode behavior
 - **GREEN**
-  - implement search and potholes mode
+- implement search and potholes mode
+
+### B110 — Pothole follow-up UX
+
+- **Spec refs:** [01](01-ios-implementation.md), [07](07-web-dashboard-implementation.md)
+- **Depends on:** B050, B021
+- **RED**
+  - UX copy/test plan for expiring “pothole still there?” prompts
+  - contract tests if this becomes a backend endpoint rather than local notification only
+- **GREEN**
+  - implement expiring confirmation prompt similar to Waze incident confirmation
+  - optionally allow photo attachment on manual pothole reports if privacy/storage tradeoffs are explicitly accepted
+- **Acceptance**
+  - follow-up prompts expire automatically and never fire while driving
+  - photo upload remains optional and is not required for pothole confirmation
 - **Acceptance**
   - search resolves municipalities and places correctly
 
