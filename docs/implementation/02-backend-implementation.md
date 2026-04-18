@@ -1622,6 +1622,7 @@ Back the public stats card with a materialized view refreshed every 5 minutes. `
 ```sql
 CREATE MATERIALIZED VIEW public_stats_mv AS
 SELECT
+    1::SMALLINT AS stats_key,
     COALESCE(SUM(rs.length_m) FILTER (WHERE sa.total_readings > 0), 0)::NUMERIC(12,1) / 1000 AS total_km_mapped,
     COALESCE(SUM(sa.total_readings), 0)::BIGINT AS total_readings,
     COUNT(*) FILTER (WHERE sa.total_readings > 0)::BIGINT AS segments_scored,
@@ -1632,27 +1633,22 @@ FROM road_segments rs
 LEFT JOIN segment_aggregates sa ON sa.segment_id = rs.id;
 
 -- Unique index required for REFRESH MATERIALIZED VIEW CONCURRENTLY.
--- Stats MV has a single row; (1) is a stable unique expression.
-CREATE UNIQUE INDEX public_stats_mv_singleton ON public_stats_mv ((1));
-
-CREATE OR REPLACE FUNCTION refresh_public_stats_mv()
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, public
-AS $$
-BEGIN
-    -- CONCURRENTLY avoids the ACCESS EXCLUSIVE lock that would block /stats reads
-    -- during each 5-minute refresh cycle. Requires the unique index above.
-    REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv;
-END;
-$$;
-
-REVOKE EXECUTE ON FUNCTION refresh_public_stats_mv() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION refresh_public_stats_mv() TO service_role;
+-- Use a real singleton column; an expression index on ((1)) is not accepted by
+-- Postgres for concurrent MV refresh.
+CREATE UNIQUE INDEX public_stats_mv_singleton ON public_stats_mv (stats_key);
 ```
 
-The refresh cron for `public_stats_mv` is scheduled in Migration 011 alongside the other MVP cron jobs. `GET /stats` reads `public_stats_mv`. `GET /segments/worst` (Phase 9) reads `public_worst_segments_mv`.
+The refresh cron for `public_stats_mv` is scheduled in Migration 011 alongside the other MVP cron jobs. Schedule the SQL command directly:
+
+```sql
+SELECT cron.schedule(
+    'refresh-public-stats-mv',
+    '2-57/5 * * * *',
+    $$REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv$$
+);
+```
+
+`CONCURRENTLY` cannot live inside a PL/pgSQL function wrapper because Postgres rejects that command inside a transaction block. `GET /stats` reads `public_stats_mv`. `GET /segments/worst` (Phase 9) reads `public_worst_segments_mv`.
 
 ### `GET /functions/v1/segments/worst?municipality=...&limit=...`
 

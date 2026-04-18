@@ -26,6 +26,11 @@ jobs:
         with:
           version: 2.78.1
 
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
       - name: Start local Supabase stack
         run: supabase start
 
@@ -34,6 +39,15 @@ jobs:
 
       - name: Run database tests
         run: supabase test db
+
+      - name: Run Edge Function tests
+        run: |
+          mapfile -t test_files < <(find supabase/functions -type f -name '*_test.ts' | sort)
+          if [ "${#test_files[@]}" -eq 0 ]; then
+            echo "No Deno tests found."
+            exit 0
+          fi
+          deno test -A "${test_files[@]}"
 
       - name: Report scaffold status
         run: |

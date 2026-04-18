@@ -189,11 +189,11 @@ Post-MVP phases:
 - **Depends on:** B014
 - **RED**
   - contract tests for `/segments/{id}`, `/potholes`, `/stats`, `/health`
-  - pgTAP tests for `public_stats_mv` (including the unique index required by `REFRESH ... CONCURRENTLY`) and `db_healthcheck()`
+  - pgTAP tests for `public_stats_mv` (including the singleton-column unique index required by `REFRESH ... CONCURRENTLY`), `get_potholes_in_bbox(...)`, and `db_healthcheck()`
   - scheduled-job integration test that the `refresh-public-stats-mv` cron entry is registered in Migration 011
 - **GREEN**
   - implement the read wrappers and SQL backing views/functions
-  - implement `refresh_public_stats_mv()` using `REFRESH MATERIALIZED VIEW CONCURRENTLY`
+  - implement direct cron refresh of `public_stats_mv` using `REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv`
   - schedule the `refresh-public-stats-mv` cron in Migration 011
 - **Acceptance**
   - all documented read endpoints exist and match spec

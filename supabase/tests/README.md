@@ -18,3 +18,5 @@ Current pgTAP suites:
 - `005_ingest_reading_batch.sql` — happy path, soft-rejection accounting, duplicate replay, malformed payload failure, aggregate folding, and execute permissions
 - `006_aggregate_and_pothole_folding.sql` — weighted average math, confidence/category thresholds, and pothole confirmation/new-cluster behavior
 - `007_nightly_recompute_and_expiry.sql` — nightly recompute math, contributor caps, expiry idempotence, and cron registration checks
+- `008_get_tile.sql` — MVT tile function existence, low-confidence suppression, zoom-floor behavior, and execute permissions
+- `009_public_read_models.sql` — stats MV, pothole bbox RPC, healthcheck function, and stats-refresh cron registration

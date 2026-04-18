@@ -16,11 +16,14 @@ Implemented so far:
 - `B013` batch ingestion RPC with duplicate replay, rejection accounting, and minimal aggregate-fold plumbing
 - `B014` tested incremental aggregate folding and real pothole folding behavior
 - `B015` nightly recompute, pothole expiry, partition maintenance helpers, and cron registration
+- `B020` quality tile RPC plus the first production Edge Function (`tiles`) with pgTAP and Deno contract coverage
+- `B021` read-side stats/health models plus `segments`, `potholes`, `stats`, and `health` Edge Functions
 
 Local verification:
 
 - `supabase start`
 - `supabase db reset`
 - `supabase test db`
+- `deno test -A supabase/functions/*/*_test.ts`
 
 The OSM import scripts are designed for a manual worker or self-hosted runner, not the normal request path. They also depend on external reference geography (`ref.municipalities`) that must be loaded separately before the first import.
