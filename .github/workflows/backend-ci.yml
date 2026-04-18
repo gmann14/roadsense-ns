@@ -1,0 +1,54 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "scripts/**"
+      - ".github/workflows/backend-ci.yml"
+      - "docs/implementation/02-backend-implementation.md"
+      - "docs/implementation/03-api-contracts.md"
+      - "docs/implementation/04-testing-and-quality.md"
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - "scripts/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  backend-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify backend scaffold exists
+        run: |
+          test -d supabase/migrations
+          test -d supabase/functions
+          test -d supabase/tests
+          test -d scripts
+          test -f supabase/README.md
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.78.1
+
+      - name: Start local Supabase stack
+        run: supabase start
+
+      - name: Apply migrations
+        run: supabase db reset
+
+      - name: Run database tests
+        run: supabase test db
+
+      - name: Report scaffold status
+        run: |
+          migration_count="$(find supabase/migrations -maxdepth 1 -type f ! -name 'README.md' | wc -l | tr -d ' ')"
+          function_count="$(find supabase/functions -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+          echo "Migrations: ${migration_count}"
+          echo "Function directories: ${function_count}"

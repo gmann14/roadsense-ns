@@ -1,0 +1,38 @@
+name: iOS CI
+
+on:
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-ci.yml"
+      - "docs/implementation/01-ios-implementation.md"
+      - "docs/implementation/04-testing-and-quality.md"
+  push:
+    branches:
+      - main
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-ci.yml"
+
+jobs:
+  scaffold-check:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify iOS scaffold exists
+        shell: bash
+        run: |
+          test -d ios
+          test -f ios/README.md
+
+      - name: Verify future Xcode entrypoint shape
+        shell: bash
+        run: |
+          if find ios -maxdepth 2 \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) | grep -q .; then
+            echo "Found Xcode project/workspace."
+          else
+            echo "No Xcode project yet. Scaffold phase only."
+          fi
+

@@ -1,0 +1,22 @@
+.DS_Store
+.claude/
+
+# Xcode
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Swift Package Manager
+.build/
+
+# Node / web
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+
+# Supabase local state
+.supabase/
+supabase/.temp/
