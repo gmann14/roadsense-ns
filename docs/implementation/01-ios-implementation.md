@@ -1,6 +1,6 @@
 # 01 — iOS Implementation
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-04-18*
 
 Covers: Xcode project layout, sensor pipeline, scoring, persistence, upload queue, map/UI, background execution, and permissions.
 
@@ -11,7 +11,7 @@ Prereqs from [product-spec.md](../product-spec.md) that we don't re-derive here:
 - **Minimum iOS:** 17.0 — keeps SwiftData simple, covers 95%+ of active iPhones by TestFlight date. Drop to 16 only if a tester hits this.
 - **Language/toolchain:** Swift 5.9+, Xcode 15.3+, SwiftUI primary, UIKit where needed for Mapbox bridging
 - **Package management:** Swift Package Manager only (no CocoaPods, no Carthage)
-- **Bundle ID placeholder:** `ca.roadsense.ios` — update after name decision
+- **Bundle ID:** `ca.roadsense.ios`
 - **Architectures:** `arm64` device only; simulator support for development. No `x86_64` — Rosetta-only dev machines must run Xcode 15 natively.
 
 ## Xcode Project Layout
@@ -79,6 +79,17 @@ RoadSenseNS/
 - `Sensors/` are dumb wrappers around Apple APIs with injectable delegates — they don't know about scoring
 - `Pipeline/` owns the math and the assembly of readings — testable in isolation with replayed CSVs
 - `Persistence/`, `Network/`, `Map/` are infrastructure — each has a protocol in front of it so tests can stub
+
+### Bootstrap Phase Note
+
+Before the full Xcode project is generated, keep the environment/config seam buildable as a plain Swift package under `ios/`. That bootstrap package is allowed to implement:
+
+- `AppEnvironment`
+- `AppConfig`
+- `Endpoints`
+- `RejectedReason`
+
+Those types must stay Foundation-only so `swift test` can validate them without the full app target. Do not pull SwiftUI, Mapbox, or Core Location into the bootstrap package.
 
 ## Dependency Inversion / DI
 
@@ -519,8 +530,8 @@ every queue tick:
              can show per-batch reject breakdowns
          if response.rejected > 0 over a rolling 24h window
              AND rejected / (accepted + rejected) > 0.20
-             AND the top reason is non-recoverable (e.g. `stationary`,
-                 `old_timestamp`, `duplicate_batch_id`):
+             AND the top reason is persistent or user-actionable (e.g. `low_quality`,
+                 `stale_timestamp`, `unpaved`):
              set AppState.ingestHealth = .degraded(reasons: …)
              surface a non-blocking banner in Settings → Uploads
      on 400 (validation error): mark batch failed_permanent, log, stop retrying
@@ -531,26 +542,26 @@ every queue tick:
 
 **Idempotency:** `batch_id` is the dedup key server-side. Client retries send the same batch_id; the server returns 200 with the original `{accepted, rejected, duplicate: true, rejected_reasons}` result on re-submit. The client stores `wasDuplicateOnResubmit` so Diagnostics can distinguish between "server dropped 47 rows" and "we already uploaded this batch and the retry was a no-op."
 
-**Rejected-reason surfacing:** The server's `rejected_reasons` array is a 1:1 map from the API contract's enum (see [03-api-contracts.md](03-api-contracts.md)). The iOS-side mapping lives in `RejectedReason.displayString`:
+**Rejected-reason surfacing:** The server's `rejected_reasons` map is a 1:1 copy of the API contract's emitted enum (see [03-api-contracts.md](03-api-contracts.md)). The iOS-side mapping lives in `RejectedReason.displayString`:
 
 ```swift
 // RejectedReason.swift
 enum RejectedReason: String, Codable {
-    case missingFields        = "missing_fields"
-    case outOfRange           = "out_of_range"
-    case stationary           = "stationary"
-    case oldTimestamp         = "old_timestamp"
-    case duplicateBatchId     = "duplicate_batch_id"
-    case deviceTokenMismatch  = "device_token_mismatch"
+    case outOfBounds      = "out_of_bounds"
+    case noSegmentMatch   = "no_segment_match"
+    case lowQuality       = "low_quality"
+    case futureTimestamp  = "future_timestamp"
+    case staleTimestamp   = "stale_timestamp"
+    case unpaved          = "unpaved"
 
     var displayString: String {
         switch self {
-        case .missingFields:       "Incomplete readings"
-        case .outOfRange:          "Invalid GPS or sensor value"
-        case .stationary:          "Not moving fast enough"
-        case .oldTimestamp:        "Recording too old to accept"
-        case .duplicateBatchId:    "Already uploaded"
-        case .deviceTokenMismatch: "Device token rotated mid-batch"
+        case .outOfBounds:      "Outside Nova Scotia coverage"
+        case .noSegmentMatch:   "No nearby road match"
+        case .lowQuality:       "GPS or motion quality too low"
+        case .futureTimestamp:  "Timestamp was in the future"
+        case .staleTimestamp:   "Recording was too old to accept"
+        case .unpaved:          "Matched an unpaved road"
         }
     }
 }
@@ -684,7 +695,9 @@ The map line colors and SwiftUI legend chips must share these exact tokens so sc
 ### Setup
 
 - Mapbox Maps SDK v11+ via SPM: `https://github.com/mapbox/mapbox-maps-ios.git`
-- API key in `AppConfig`, loaded from a build-time `.xcconfig` that's `.gitignore`'d
+- API key in `AppConfig`, loaded from a build-time `.xcconfig`
+- Commit non-secret base configs in `ios/Config/` so project generation works from a clean checkout
+- Put developer- or CI-only overrides in optional ignored `*.secrets.xcconfig` files
 - Tile source: custom vector tiles from our backend (not Mapbox hosted) — see [02-backend-implementation.md](02-backend-implementation.md)
 
 ### Style Stack

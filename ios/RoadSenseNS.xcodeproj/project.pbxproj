@@ -1,0 +1,943 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */; };
+		1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE870B004546FC93939AF065 /* Endpoints.swift */; };
+		3A12C703A9C25D212D32EECD /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
+		4030CA59DBFD2BD1002A939A /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 911FE323EAA29C4D280E37AB /* Supabase */; };
+		662745AF919AD72F235FBC77 /* RoadSenseNS.app in Resources */ = {isa = PBXBuildFile; fileRef = 9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		6B42654DBC077FAC55F09FD3 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */; };
+		7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */; };
+		7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */; };
+		8D115A4BF690BF1A26B2A326 /* PlaceholderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */; };
+		C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1269DDDE04E2FB4239384BC9 /* ContentView.swift */; };
+		C4EC1C16AF8B9858DC3C9C2A /* Placeholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F90BE8F166D450841DA0B85 /* Placeholder.swift */; };
+		DC0045BD98623446B06CC83F /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = DFBDE19C2B3A05C0840949A5 /* MapboxMaps */; };
+		EB46566139FD4C04A594EA96 /* AppBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06554CA351911A995764AA76 /* AppBootstrap.swift */; };
+		F95AA84B2BCBC6B15BA91532 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BE8F93CE35FA6438817474 /* AppConfig.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		700A1843A43699AA9F94B9D1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 14C4F60F827FD5338ADA3D34 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AB1A93DA517C7F350A9E30F7;
+			remoteInfo = RoadSenseNS;
+		};
+		CC5E637FBB686F1517211A11 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 14C4F60F827FD5338ADA3D34 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AB1A93DA517C7F350A9E30F7;
+			remoteInfo = RoadSenseNS;
+		};
+		CCE545BE634728D6EE1B667B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 14C4F60F827FD5338ADA3D34 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AB1A93DA517C7F350A9E30F7;
+			remoteInfo = RoadSenseNS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		06554CA351911A995764AA76 /* AppBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBootstrap.swift; sourceTree = "<group>"; };
+		0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderTests.swift; sourceTree = "<group>"; };
+		0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderUITests.swift; sourceTree = "<group>"; };
+		1269DDDE04E2FB4239384BC9 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1EFAC01C66B9C992BC2313A7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		33BE8F93CE35FA6438817474 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RejectedReason.swift; sourceTree = "<group>"; };
+		48A050A1F2F270139D92540F /* RoadSenseNS.Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Production.xcconfig; sourceTree = "<group>"; };
+		637B4BB438A6B26C00C8A6E3 /* RoadSenseNS.Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Local.xcconfig; sourceTree = "<group>"; };
+		68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
+		6F90BE8F166D450841DA0B85 /* Placeholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Placeholder.swift; sourceTree = "<group>"; };
+		9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A68D28C0E187AB48C62D0AC3 /* RoadSenseNS.Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Staging.xcconfig; sourceTree = "<group>"; };
+		C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSApp.swift; sourceTree = "<group>"; };
+		C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6D673F19DB713B76E0CDCF0 /* RoadSenseNSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE4B6189F55160E7C0CA0856 /* RoadSenseNSSimHarness.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNSSimHarness.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EE870B004546FC93939AF065 /* Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endpoints.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		7870343A5143E635A24ED237 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DC0045BD98623446B06CC83F /* MapboxMaps in Frameworks */,
+				4030CA59DBFD2BD1002A939A /* Supabase in Frameworks */,
+				3A12C703A9C25D212D32EECD /* Sentry in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		2616872B480318DDB35923E0 /* RoadSenseNSSimHarness */ = {
+			isa = PBXGroup;
+			children = (
+				6F90BE8F166D450841DA0B85 /* Placeholder.swift */,
+			);
+			path = RoadSenseNSSimHarness;
+			sourceTree = "<group>";
+		};
+		4503BF389D677ACEB72B8B7F /* RoadSenseNS */ = {
+			isa = PBXGroup;
+			children = (
+				61BE73AFDBE416B803153AE4 /* App */,
+				5A8CED41DE2A08EAC1E6EC8D /* Resources */,
+			);
+			path = RoadSenseNS;
+			sourceTree = "<group>";
+		};
+		5A8CED41DE2A08EAC1E6EC8D /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				1EFAC01C66B9C992BC2313A7 /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		5DBAB5416F3CFF346DB129D6 /* RoadSenseNSBootstrap */ = {
+			isa = PBXGroup;
+			children = (
+				B61C0DD8F4BF7D0D5233BF1D /* App */,
+				CF5D38DA0C81059E6BD7F80C /* Network */,
+				648A1468144CAA6AD8F3CB29 /* Privacy */,
+			);
+			name = RoadSenseNSBootstrap;
+			path = Sources/RoadSenseNSBootstrap;
+			sourceTree = "<group>";
+		};
+		5EAE958993E58295AD908C5C /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				637B4BB438A6B26C00C8A6E3 /* RoadSenseNS.Local.xcconfig */,
+				48A050A1F2F270139D92540F /* RoadSenseNS.Production.xcconfig */,
+				A68D28C0E187AB48C62D0AC3 /* RoadSenseNS.Staging.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		61BE73AFDBE416B803153AE4 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				06554CA351911A995764AA76 /* AppBootstrap.swift */,
+				1269DDDE04E2FB4239384BC9 /* ContentView.swift */,
+				C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		648A1468144CAA6AD8F3CB29 /* Privacy */ = {
+			isa = PBXGroup;
+			children = (
+				3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */,
+			);
+			path = Privacy;
+			sourceTree = "<group>";
+		};
+		72C8991597F8571C49642375 = {
+			isa = PBXGroup;
+			children = (
+				5EAE958993E58295AD908C5C /* Config */,
+				4503BF389D677ACEB72B8B7F /* RoadSenseNS */,
+				5DBAB5416F3CFF346DB129D6 /* RoadSenseNSBootstrap */,
+				2616872B480318DDB35923E0 /* RoadSenseNSSimHarness */,
+				738AEE105180D9D2D869A4F8 /* RoadSenseNSTests */,
+				EE56D8855F086B71B6EE0CED /* RoadSenseNSUITests */,
+				9E5365CA19BCADC399895BD7 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		738AEE105180D9D2D869A4F8 /* RoadSenseNSTests */ = {
+			isa = PBXGroup;
+			children = (
+				0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */,
+			);
+			path = RoadSenseNSTests;
+			sourceTree = "<group>";
+		};
+		9E5365CA19BCADC399895BD7 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */,
+				DE4B6189F55160E7C0CA0856 /* RoadSenseNSSimHarness.app */,
+				C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */,
+				D6D673F19DB713B76E0CDCF0 /* RoadSenseNSUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B61C0DD8F4BF7D0D5233BF1D /* App */ = {
+			isa = PBXGroup;
+			children = (
+				33BE8F93CE35FA6438817474 /* AppConfig.swift */,
+				68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		CF5D38DA0C81059E6BD7F80C /* Network */ = {
+			isa = PBXGroup;
+			children = (
+				EE870B004546FC93939AF065 /* Endpoints.swift */,
+			);
+			path = Network;
+			sourceTree = "<group>";
+		};
+		EE56D8855F086B71B6EE0CED /* RoadSenseNSUITests */ = {
+			isa = PBXGroup;
+			children = (
+				0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */,
+			);
+			path = RoadSenseNSUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		14C89C9C29065D1BBF8B539B /* RoadSenseNSSimHarness */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F56151FB1DFD849014A320DB /* Build configuration list for PBXNativeTarget "RoadSenseNSSimHarness" */;
+			buildPhases = (
+				E29CC34488BE10CC2A8941C5 /* Sources */,
+				A889CE1D80638DB527BAC1C5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E22A739339AC395F75A2C023 /* PBXTargetDependency */,
+			);
+			name = RoadSenseNSSimHarness;
+			packageProductDependencies = (
+			);
+			productName = RoadSenseNSSimHarness;
+			productReference = DE4B6189F55160E7C0CA0856 /* RoadSenseNSSimHarness.app */;
+			productType = "com.apple.product-type.application";
+		};
+		6C4282FA31560B7A152AC1C4 /* RoadSenseNSUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7E94AABD1240B7DBE9A21530 /* Build configuration list for PBXNativeTarget "RoadSenseNSUITests" */;
+			buildPhases = (
+				D9FE7898AD7C503C376DC2CF /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				ED887E1440FE374AD4AEC292 /* PBXTargetDependency */,
+			);
+			name = RoadSenseNSUITests;
+			packageProductDependencies = (
+			);
+			productName = RoadSenseNSUITests;
+			productReference = D6D673F19DB713B76E0CDCF0 /* RoadSenseNSUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		AB1A93DA517C7F350A9E30F7 /* RoadSenseNS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A8D996C6FFA47E92698C4A1A /* Build configuration list for PBXNativeTarget "RoadSenseNS" */;
+			buildPhases = (
+				F56E3E5C245208990E07B5F2 /* Sources */,
+				7870343A5143E635A24ED237 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RoadSenseNS;
+			packageProductDependencies = (
+				DFBDE19C2B3A05C0840949A5 /* MapboxMaps */,
+				911FE323EAA29C4D280E37AB /* Supabase */,
+				94AD22E714178BC9763D1344 /* Sentry */,
+			);
+			productName = RoadSenseNS;
+			productReference = 9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		F3B73F912150FE5952CCF260 /* RoadSenseNSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 41052F1EC4E64E476887B0AD /* Build configuration list for PBXNativeTarget "RoadSenseNSTests" */;
+			buildPhases = (
+				B5C97A1E42106695D31D6014 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C918A49F5730EFA177B5A394 /* PBXTargetDependency */,
+			);
+			name = RoadSenseNSTests;
+			packageProductDependencies = (
+			);
+			productName = RoadSenseNSTests;
+			productReference = C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		14C4F60F827FD5338ADA3D34 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					14C89C9C29065D1BBF8B539B = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					6C4282FA31560B7A152AC1C4 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+						TestTargetID = AB1A93DA517C7F350A9E30F7;
+					};
+					AB1A93DA517C7F350A9E30F7 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					F3B73F912150FE5952CCF260 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = FD88E246D260D44D56D109A8 /* Build configuration list for PBXProject "RoadSenseNS" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 72C8991597F8571C49642375;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				96F64FC677BF723845031B5B /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
+				FC0B82BB3BA9464D0CAD100E /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
+				6426CEC5A945D2E6A4F75BDE /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 9E5365CA19BCADC399895BD7 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AB1A93DA517C7F350A9E30F7 /* RoadSenseNS */,
+				14C89C9C29065D1BBF8B539B /* RoadSenseNSSimHarness */,
+				F3B73F912150FE5952CCF260 /* RoadSenseNSTests */,
+				6C4282FA31560B7A152AC1C4 /* RoadSenseNSUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A889CE1D80638DB527BAC1C5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				662745AF919AD72F235FBC77 /* RoadSenseNS.app in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B5C97A1E42106695D31D6014 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D9FE7898AD7C503C376DC2CF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8D115A4BF690BF1A26B2A326 /* PlaceholderUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E29CC34488BE10CC2A8941C5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C4EC1C16AF8B9858DC3C9C2A /* Placeholder.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F56E3E5C245208990E07B5F2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EB46566139FD4C04A594EA96 /* AppBootstrap.swift in Sources */,
+				F95AA84B2BCBC6B15BA91532 /* AppConfig.swift in Sources */,
+				6B42654DBC077FAC55F09FD3 /* AppEnvironment.swift in Sources */,
+				C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */,
+				1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */,
+				7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */,
+				7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C918A49F5730EFA177B5A394 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AB1A93DA517C7F350A9E30F7 /* RoadSenseNS */;
+			targetProxy = CCE545BE634728D6EE1B667B /* PBXContainerItemProxy */;
+		};
+		E22A739339AC395F75A2C023 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AB1A93DA517C7F350A9E30F7 /* RoadSenseNS */;
+			targetProxy = CC5E637FBB686F1517211A11 /* PBXContainerItemProxy */;
+		};
+		ED887E1440FE374AD4AEC292 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AB1A93DA517C7F350A9E30F7 /* RoadSenseNS */;
+			targetProxy = 700A1843A43699AA9F94B9D1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		09CB84F4191E1BC488D4DF9B /* Staging Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "RoadSense NS uses motion data to score road roughness and detect potholes.";
+				INFOPLIST_KEY_UIBackgroundModes = (
+					location,
+					processing,
+					fetch,
+				);
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = "Staging Debug";
+		};
+		1517D63E0092D982294F961A /* Production Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoadSenseNS.app/RoadSenseNS";
+			};
+			name = "Production Release";
+		};
+		21F4AD00EFC0C23EAC0D76BE /* Staging Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = RoadSenseNS;
+			};
+			name = "Staging Debug";
+		};
+		250BE1B3E9F55AB7AF02F1BC /* Production Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = RoadSenseNS;
+			};
+			name = "Production Release";
+		};
+		32ABCD53060DF6D0A2A71C85 /* Local Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 637B4BB438A6B26C00C8A6E3 /* RoadSenseNS.Local.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios;
+				PRODUCT_NAME = "RoadSense NS";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = "Local Debug";
+		};
+		5984E61D6E6C0F59FE1CA14C /* Local Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "RoadSense NS uses motion data to score road roughness and detect potholes.";
+				INFOPLIST_KEY_UIBackgroundModes = (
+					location,
+					processing,
+					fetch,
+				);
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = "Local Debug";
+		};
+		6E473532FF4C2BA327C82D03 /* Local Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoadSenseNS.app/RoadSenseNS";
+			};
+			name = "Local Debug";
+		};
+		74F70D4700118E945EEB0686 /* Production Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 48A050A1F2F270139D92540F /* RoadSenseNS.Production.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios;
+				PRODUCT_NAME = "RoadSense NS";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+			};
+			name = "Production Release";
+		};
+		8104D49F7FE4AB95C68455B0 /* Staging Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A68D28C0E187AB48C62D0AC3 /* RoadSenseNS.Staging.xcconfig */;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios;
+				PRODUCT_NAME = "RoadSense NS";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+			};
+			name = "Staging Debug";
+		};
+		97DB7C7ED8F3142DEA36849B /* Production Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "RoadSense NS uses motion data to score road roughness and detect potholes.";
+				INFOPLIST_KEY_UIBackgroundModes = (
+					location,
+					processing,
+					fetch,
+				);
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited)";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = "Production Release";
+		};
+		A9F05147FFE0C541CF64E533 /* Staging Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.simharness;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = "Staging Debug";
+		};
+		B64C2B4DC55673B28B46FF0A /* Local Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.simharness;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = "Local Debug";
+		};
+		CEA14434ACADD8CF3CA33871 /* Local Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.uitests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = RoadSenseNS;
+			};
+			name = "Local Debug";
+		};
+		DCAF18847FAADD08882BE6C6 /* Production Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.simharness;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = "Production Release";
+		};
+		E61C645AC88A3EA6A5603F48 /* Staging Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoadSenseNS.app/RoadSenseNS";
+			};
+			name = "Staging Debug";
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		41052F1EC4E64E476887B0AD /* Build configuration list for PBXNativeTarget "RoadSenseNSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6E473532FF4C2BA327C82D03 /* Local Debug */,
+				1517D63E0092D982294F961A /* Production Release */,
+				E61C645AC88A3EA6A5603F48 /* Staging Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Local Debug";
+		};
+		7E94AABD1240B7DBE9A21530 /* Build configuration list for PBXNativeTarget "RoadSenseNSUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				CEA14434ACADD8CF3CA33871 /* Local Debug */,
+				250BE1B3E9F55AB7AF02F1BC /* Production Release */,
+				21F4AD00EFC0C23EAC0D76BE /* Staging Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Local Debug";
+		};
+		A8D996C6FFA47E92698C4A1A /* Build configuration list for PBXNativeTarget "RoadSenseNS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5984E61D6E6C0F59FE1CA14C /* Local Debug */,
+				97DB7C7ED8F3142DEA36849B /* Production Release */,
+				09CB84F4191E1BC488D4DF9B /* Staging Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Local Debug";
+		};
+		F56151FB1DFD849014A320DB /* Build configuration list for PBXNativeTarget "RoadSenseNSSimHarness" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B64C2B4DC55673B28B46FF0A /* Local Debug */,
+				DCAF18847FAADD08882BE6C6 /* Production Release */,
+				A9F05147FFE0C541CF64E533 /* Staging Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Local Debug";
+		};
+		FD88E246D260D44D56D109A8 /* Build configuration list for PBXProject "RoadSenseNS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				32ABCD53060DF6D0A2A71C85 /* Local Debug */,
+				74F70D4700118E945EEB0686 /* Production Release */,
+				8104D49F7FE4AB95C68455B0 /* Staging Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = "Local Debug";
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6426CEC5A945D2E6A4F75BDE /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.20.0;
+			};
+		};
+		96F64FC677BF723845031B5B /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mapbox/mapbox-maps-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
+		FC0B82BB3BA9464D0CAD100E /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.21.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		911FE323EAA29C4D280E37AB /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6426CEC5A945D2E6A4F75BDE /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		94AD22E714178BC9763D1344 /* Sentry */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FC0B82BB3BA9464D0CAD100E /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
+			productName = Sentry;
+		};
+		DFBDE19C2B3A05C0840949A5 /* MapboxMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96F64FC677BF723845031B5B /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */;
+			productName = MapboxMaps;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 14C4F60F827FD5338ADA3D34 /* Project object */;
+}

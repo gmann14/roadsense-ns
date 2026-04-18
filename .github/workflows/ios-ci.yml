@@ -18,12 +18,37 @@ jobs:
         run: |
           test -d ios
           test -f ios/README.md
+          test -f ios/Package.swift
+          test -f ios/project.yml
+          test -f ios/Config/RoadSenseNS.Local.xcconfig
+          test -f ios/Config/RoadSenseNS.Staging.xcconfig
+          test -f ios/Config/RoadSenseNS.Production.xcconfig
+          test -d ios/Sources/RoadSenseNSBootstrap
+          test -d ios/RoadSenseNS
+          test -d ios/Config/Templates
 
-      - name: Verify future Xcode entrypoint shape
+      - name: Run bootstrap Swift tests
+        shell: bash
+        run: |
+          cd ios
+          swift test
+
+      - name: Install XcodeGen
+        shell: bash
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        shell: bash
+        run: |
+          cd ios
+          xcodegen generate
+
+      - name: Verify Xcode entrypoint shape
         shell: bash
         run: |
           if find ios -maxdepth 2 \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) | grep -q .; then
             echo "Found Xcode project/workspace."
           else
-            echo "No Xcode project yet. Scaffold phase only."
+            echo "Expected generated Xcode project/workspace, but none was found."
+            exit 1
           fi

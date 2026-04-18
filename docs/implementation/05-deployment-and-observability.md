@@ -1,6 +1,6 @@
 # 05 — Deployment & Observability
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-04-18*
 
 Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what to do when something breaks at 11pm" playbook.
 
@@ -30,7 +30,12 @@ Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what 
   - `RoadSenseNS.Local.xcconfig`
   - `RoadSenseNS.Staging.xcconfig`
   - `RoadSenseNS.Production.xcconfig`
-- `.xcconfig` files are `.gitignore`'d — committed templates with placeholders live in `RoadSenseNS/Config/Templates/`
+- Base `.xcconfig` files are committed in `ios/Config/` with non-secret defaults so `xcodegen generate` works from a clean checkout
+- Developer-specific or CI-injected overrides belong in optional ignored files:
+  - `RoadSenseNS.Local.secrets.xcconfig`
+  - `RoadSenseNS.Staging.secrets.xcconfig`
+  - `RoadSenseNS.Production.secrets.xcconfig`
+- Copy/reference templates still live in `ios/Config/Templates/`
 - In CI, `.xcconfig` files written from GitHub Actions secrets at build time
 - No Mapbox **secret** token is shipped to the device in MVP. If post-MVP private Mapbox downloads are ever needed, proxy them through a backend-controlled flow; do not stash a secret on-device.
 
@@ -84,16 +89,20 @@ roadsense-ns/
 
 ## CI/CD Pipelines
 
-### `ios-ci.yml` (every PR)
+### `ios-ci.yml` (every PR once macOS minutes are re-enabled; manual-only during bootstrap)
 
 ```
 1. Checkout
-2. Restore SPM cache
-3. Lint: SwiftLint (fail on warnings)
-4. Write .xcconfig from secrets
-5. Build RoadSenseNS-Staging scheme
-6. xcodebuild test (unit + sim harness)
-7. Upload coverage to Codecov
+2. Verify committed iOS scaffold + base `.xcconfig` files exist
+3. Run `swift test` in `ios/` to validate `AppConfig` / endpoint seams
+4. Install XcodeGen
+5. Run `xcodegen generate`
+6. Restore SPM cache
+7. Lint: SwiftLint (fail on warnings)
+8. Write `.secrets.xcconfig` overrides from GitHub Actions secrets
+9. Build `RoadSenseNS-Staging` scheme
+10. `xcodebuild test` (unit + sim harness)
+11. Upload coverage to Codecov
 ```
 
 Runs on `macos-14` runners. Target: < 15 min.

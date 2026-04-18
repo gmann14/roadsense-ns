@@ -1,6 +1,6 @@
 # 08 — Implementation Backlog
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-04-18*
 
 Covers: the literal execution backlog for implementing the spec set in [00](00-execution-plan.md) through [07](07-web-dashboard-implementation.md).
 
@@ -221,11 +221,17 @@ Post-MVP phases:
 - **RED**
   - CI build target created and failing for missing app code rather than missing project
 - **GREEN**
-  - create Xcode project
+  - bootstrap `ios/` with a Foundation-only Swift package for config/runtime seams
+  - add committed base `.xcconfig` files for local / staging / production
+  - add ignored `.secrets.xcconfig` override convention for developer- or CI-only values
+  - add a generator spec for the real Xcode project
+  - create the actual Xcode project and verify `xcodegen generate` succeeds from a clean checkout
   - add SPM dependencies: Mapbox, Supabase, Sentry
   - set up configs/schemes
 - **Acceptance**
-  - empty shell builds on CI and local machine
+  - bootstrap package tests pass on CI and local machine
+  - empty shell Xcode app target generates successfully from repo state alone
+  - first simulator build is blocked, if at all, by real app/dependency issues rather than missing project/config files
 
 ### B031 — App configuration and environment handling
 

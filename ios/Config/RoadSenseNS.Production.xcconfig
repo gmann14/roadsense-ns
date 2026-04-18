@@ -1,0 +1,9 @@
+APP_ENV = PRODUCTION
+API_BASE_URL = https://roadsense.ca
+MAPBOX_ACCESS_TOKEN = pk.placeholder.production
+SENTRY_DSN =
+APP_GROUP_IDENTIFIER = group.ca.roadsense.ios
+
+# Create RoadSenseNS.Production.secrets.xcconfig for local overrides.
+# This file is optional and ignored by git.
+#include? "RoadSenseNS.Production.secrets.xcconfig"
