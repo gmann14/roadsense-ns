@@ -60,4 +60,9 @@ Current notes:
 - The next milestone is no longer “make it compile”; it is “sign it, install it on a real phone, and validate the runtime path.”
 - The first golden-style harness replay path now uses checked-in `Fixtures/*.csv` and `Fixtures/*.expected.json` resources.
 - `RoadSenseNSSimHarness` now exists as a separate lightweight app target that loads fixture resources, replays them through the real pipeline, and shows the replay summary.
+- `RoadSenseNSTests` now includes first app-target network/uploader coverage, and the app enters an inert in-memory bootstrap path when launched under XCTest so host-based unit tests do not start real sensors, background tasks, or Sentry.
 - The remaining harness step is expanding the fixture corpus beyond the current pothole case and keeping the harness target green in CI.
+
+Additional verification commands:
+
+- `xcodebuild -project ios/RoadSenseNS.xcodeproj -scheme RoadSenseNS -configuration "Local Debug" -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build-for-testing`

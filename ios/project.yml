@@ -27,6 +27,16 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ENABLE_PREVIEWS: YES
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+schemes:
+  RoadSenseNS:
+    build:
+      targets:
+        RoadSenseNS: all
+        RoadSenseNSTests: [test]
+    test:
+      gatherCoverageData: false
+      targets:
+        - name: RoadSenseNSTests
 targets:
   RoadSenseNS:
     type: application
@@ -66,7 +76,11 @@ targets:
       - target: RoadSenseNS
     settings:
       base:
+        PRODUCT_NAME: RoadSenseNSTests
+        PRODUCT_MODULE_NAME: RoadSenseNSTests
         PRODUCT_BUNDLE_IDENTIFIER: ca.roadsense.ios.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/RoadSense NS.app/RoadSense NS"
+        BUNDLE_LOADER: "$(TEST_HOST)"
   RoadSenseNSUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -76,6 +90,8 @@ targets:
       - target: RoadSenseNS
     settings:
       base:
+        PRODUCT_NAME: RoadSenseNSUITests
+        PRODUCT_MODULE_NAME: RoadSenseNSUITests
         PRODUCT_BUNDLE_IDENTIFIER: ca.roadsense.ios.uitests
   RoadSenseNSSimHarness:
     type: application

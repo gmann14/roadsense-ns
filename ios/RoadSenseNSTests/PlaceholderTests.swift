@@ -1,5 +1,5 @@
 import XCTest
-@testable import RoadSenseNS
+@testable import RoadSense_NS
 
 final class PlaceholderTests: XCTestCase {
     func testBootstrapConfigUsesFunctionsBaseURL() throws {

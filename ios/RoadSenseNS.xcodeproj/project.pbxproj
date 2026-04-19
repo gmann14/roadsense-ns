@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0005F6455CB1194DA77528C2 /* ThermalMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38814048A460DD56E42A5706 /* ThermalMonitor.swift */; };
+		01AB046260471C52C02D8C59 /* NetworkAndUploaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */; };
 		08943009043515777FFF00D0 /* DrivingHeuristic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E77758971EB7F44643652E /* DrivingHeuristic.swift */; };
 		0BCFD3D8D47603D464DDD78B /* BackgroundCollectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */; };
 		0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */; };
@@ -17,6 +18,7 @@
 		1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E39073C99FB20D024E79D0 /* MotionMath.swift */; };
 		24EAE00CAF67007A446D2F50 /* UploadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCAA398E4BA72123985282C /* UploadPolicy.swift */; };
 		256FE28742CA77F526CC7022 /* SensorCheckpointStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770EBDB5BF565D5AD7546CA5 /* SensorCheckpointStore.swift */; };
+		269DDA3BBA30325BA96F619C /* TestingRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2D445C6696ED6F082B33288 /* TestingRuntime.swift */; };
 		28550EE5A4D4CD7690CD48EB /* UploadQueueCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCF0439CC9DBD46EB595AA4 /* UploadQueueCore.swift */; };
 		2E1B6D32ED2B5BB95BBBDC7E /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB9B9294F92A70C11D0FB1B /* APIClient.swift */; };
 		3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CE5D67A573F4B606118C23 /* SettingsView.swift */; };
@@ -168,6 +170,7 @@
 		9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingBuilder.swift; sourceTree = "<group>"; };
 		998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenRecord.swift; sourceTree = "<group>"; };
 		9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2D445C6696ED6F082B33288 /* TestingRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestingRuntime.swift; sourceTree = "<group>"; };
 		A4CE5D67A573F4B606118C23 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A68D28C0E187AB48C62D0AC3 /* RoadSenseNS.Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Staging.xcconfig; sourceTree = "<group>"; };
 		A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadEligibilityPolicy.swift; sourceTree = "<group>"; };
@@ -193,6 +196,7 @@
 		E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadBatchJSONCodec.swift; sourceTree = "<group>"; };
 		E68A275BABCEFCE3E1964F10 /* MotionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionService.swift; sourceTree = "<group>"; };
 		E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
+		EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkAndUploaderTests.swift; sourceTree = "<group>"; };
 		EDAC070ACEE2F122C555B0ED /* UserStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStats.swift; sourceTree = "<group>"; };
 		EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngestHealthEvaluator.swift; sourceTree = "<group>"; };
 		EE870B004546FC93939AF065 /* Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endpoints.swift; sourceTree = "<group>"; };
@@ -357,6 +361,7 @@
 				659C7BBB94CC6DB51D4B2730 /* RoadSenseLogger.swift */,
 				C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */,
 				1A63DB84BA5E66CE3F794D25 /* SentryBootstrapper.swift */,
+				A2D445C6696ED6F082B33288 /* TestingRuntime.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -409,6 +414,7 @@
 		738AEE105180D9D2D869A4F8 /* RoadSenseNSTests */ = {
 			isa = PBXGroup;
 			children = (
+				EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */,
 				0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */,
 			);
 			path = RoadSenseNSTests;
@@ -657,6 +663,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				01AB046260471C52C02D8C59 /* NetworkAndUploaderTests.swift in Sources */,
 				0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -756,6 +763,7 @@
 				825EF8A058DF7DA06B8A89CE /* SentryBootstrapper.swift in Sources */,
 				3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */,
 				6CB12F83F061BDDB1FAD352A /* StatsView.swift in Sources */,
+				269DDA3BBA30325BA96F619C /* TestingRuntime.swift in Sources */,
 				0005F6455CB1194DA77528C2 /* ThermalMonitor.swift in Sources */,
 				71B953E564C5532CCA058F32 /* UploadAPIModels.swift in Sources */,
 				94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */,
@@ -830,9 +838,11 @@
 					"@loader_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.tests;
+				PRODUCT_MODULE_NAME = RoadSenseNSTests;
+				PRODUCT_NAME = RoadSenseNSTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoadSenseNS.app/RoadSenseNS";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoadSense NS.app/RoadSense NS";
 			};
 			name = "Production Release";
 		};
@@ -846,6 +856,8 @@
 					"@loader_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.uitests;
+				PRODUCT_MODULE_NAME = RoadSenseNSUITests;
+				PRODUCT_NAME = RoadSenseNSUITests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = RoadSenseNS;
@@ -862,6 +874,8 @@
 					"@loader_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.uitests;
+				PRODUCT_MODULE_NAME = RoadSenseNSUITests;
+				PRODUCT_NAME = RoadSenseNSUITests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = RoadSenseNS;
@@ -981,9 +995,11 @@
 					"@loader_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.tests;
+				PRODUCT_MODULE_NAME = RoadSenseNSTests;
+				PRODUCT_NAME = RoadSenseNSTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoadSenseNS.app/RoadSenseNS";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoadSense NS.app/RoadSense NS";
 			};
 			name = "Local Debug";
 		};
@@ -1199,6 +1215,8 @@
 					"@loader_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.uitests;
+				PRODUCT_MODULE_NAME = RoadSenseNSUITests;
+				PRODUCT_NAME = RoadSenseNSUITests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = RoadSenseNS;
@@ -1232,9 +1250,11 @@
 					"@loader_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = ca.roadsense.ios.tests;
+				PRODUCT_MODULE_NAME = RoadSenseNSTests;
+				PRODUCT_NAME = RoadSenseNSTests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoadSenseNS.app/RoadSenseNS";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RoadSense NS.app/RoadSense NS";
 			};
 			name = "Staging Debug";
 		};

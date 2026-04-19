@@ -7,10 +7,14 @@ struct RoadSenseNSApp: App {
 
     init() {
         let config = AppBootstrap.loadConfig()
-        SentryBootstrapper.bootstrap(config: config)
-        let container = AppContainer.bootstrap(config: config)
-        BackgroundTaskRegistrar.registerAll(logger: container.logger)
-        self.container = container
+        if AppBootstrap.isRunningTests {
+            self.container = AppContainer.bootstrapForTesting(config: config)
+        } else {
+            SentryBootstrapper.bootstrap(config: config)
+            let container = AppContainer.bootstrap(config: config)
+            BackgroundTaskRegistrar.registerAll(logger: container.logger)
+            self.container = container
+        }
     }
 
     var body: some Scene {

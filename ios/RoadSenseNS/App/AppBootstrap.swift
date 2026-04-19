@@ -1,6 +1,10 @@
 import Foundation
 
 enum AppBootstrap {
+    static var isRunningTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
     static func loadConfig(bundle: Bundle = .main) -> AppConfig {
         let keys = [
             "APP_ENV",

@@ -315,7 +315,7 @@ Post-MVP phases:
   - send hardcoded or stubbed readings first, then real assembled readings
 - **Acceptance**
   - iOS can upload a batch and receive a valid response
-- **Current repo note:** `UploadRequestFactory`, `UploadResponseParser`, `APIClient`, and `Uploader` now exist. What remains is app-target integration testing against local/staging and wiring from real assembled readings.
+- **Current repo note:** `UploadRequestFactory`, `UploadResponseParser`, `APIClient`, and `Uploader` now exist. `RoadSenseNSTests` now has first app-target upload-path coverage, and the host app enters an inert in-memory bootstrap mode under XCTest. What remains is a stable local/staging runtime smoke and full wiring from real assembled readings.
 
 ### B042 — End-to-end smoke from phone to map
 
@@ -323,6 +323,7 @@ Post-MVP phases:
 - **Depends on:** B020, B021, B041
 - **RED**
   - staging smoke checklist
+  - scripted API smoke (`./scripts/api-smoke.sh`) for `/health`, `/stats`, and duplicate-safe `/upload-readings`
 - **GREEN**
   - drive or replay data through full path
 - **Acceptance**
