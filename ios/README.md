@@ -33,6 +33,7 @@ Current status:
 - the app target now persists crash-safe checkpoint state via `SensorCheckpointStore` and restores fresh checkpoints on next launch
 - the app target now includes production wrappers for location, motion, driving-activity, thermal-state, background-task registration, and Sentry bootstrapping seams
 - the app target now includes first-pass `StatsView` and `SettingsView`, plus delete-local-data and Always-location-upgrade controls
+- the pure Swift layer now includes a CSV fixture parser and replay runner for simulator-harness style validation
 - queue cleanup, upload eligibility, and ingest-health evaluation now also exist as pure Swift seams with tests
 - base `.xcconfig` files exist under `Config/`
 - optional secret override files can be created as:
@@ -57,3 +58,4 @@ Current notes:
 - The ready shell now exposes start/stop passive monitoring and counts for accepted, privacy-filtered, and pending-upload readings.
 - Background-task identifiers in the project now match the spec (`nightly-cleanup` and `upload-drain`) instead of the earlier placeholder cleanup-only ID.
 - Stats and Settings now exist as real screens even before the Mapbox home screen lands.
+- The first golden-style harness replay test now exists, but real checked-in CSV fixture files are still the next increment.

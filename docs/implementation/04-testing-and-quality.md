@@ -203,6 +203,16 @@ Each fixture has an accompanying `.expected.json` with the assertion targets:
 
 CI runs the harness against every fixture on every PR.
 
+Current repo note:
+
+- The pure Swift layer now includes `SensorFixtureParser` and `SensorFixtureRunner`.
+- A first golden-style replay test now exists in the bootstrap test suite and validates:
+  - CSV parsing
+  - monotonic timestamp rejection
+  - full replay into `ReadingBuilder` / `PotholeDetector` / `ReadingWindowProcessor`
+  - expected window count / pothole flag / RMS range / spike range assertions
+- What still remains is checking in real CSV + `.expected.json` files as reusable resources instead of keeping the current first fixture inline in test code.
+
 ## Integration Tests
 
 ### iOS → Staging backend
