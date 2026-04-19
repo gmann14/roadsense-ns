@@ -4,6 +4,7 @@ import SwiftUI
 
 struct RoadQualityMapView: View {
     let config: AppConfig
+    let pendingDriveCoordinates: [CLLocationCoordinate2D]
     let onSelectSegment: (UUID) -> Void
     let onClearSelection: () -> Void
 
@@ -18,6 +19,7 @@ struct RoadQualityMapView: View {
                 Puck2D()
 
                 RoadQualityMapStyleContent(tileTemplateURL: Endpoints(config: config).tileTemplateURLString)
+                LocalDriveOverlayStyleContent(coordinates: pendingDriveCoordinates)
 
                 TapInteraction(.layer(RoadQualityMapStyleContent.segmentLayerID)) { feature, _ in
                     guard let map = proxy.map,
@@ -53,6 +55,45 @@ struct RoadQualityMapView: View {
                 )
             )
             .ignoresSafeArea()
+        }
+    }
+}
+
+private struct LocalDriveOverlayStyleContent: MapStyleContent {
+    static let sourceID = "roadsense-local-drive-source"
+    static let layerID = "roadsense-local-drive-line"
+
+    let coordinates: [CLLocationCoordinate2D]
+
+    var body: some MapStyleContent {
+        if coordinates.count >= 2 {
+            GeoJSONSource(id: Self.sourceID)
+                .data(localDriveGeoJSON)
+
+            LineLayer(id: Self.layerID, source: Self.sourceID)
+                .lineCap(.round)
+                .lineJoin(.round)
+                .lineColor(StyleColor(Color(roadsenseHex: 0x187E74)))
+                .lineOpacity(0.95)
+                .lineWidth(localDriveWidthExpression)
+                .lineDashArray([2.0, 2.0])
+        }
+    }
+
+    private var localDriveGeoJSON: GeoJSONSourceData {
+        .feature(Feature(geometry: Geometry(LineString(coordinates))))
+    }
+
+    private var localDriveWidthExpression: Exp {
+        Exp(.interpolate) {
+            Exp(.linear)
+            Exp(.zoom)
+            10
+            2.0
+            14
+            3.5
+            18
+            6.5
         }
     }
 }

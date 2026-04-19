@@ -174,7 +174,7 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
 - `BackgroundTaskRegistrar` now registers both documented task identifiers: `ca.roadsense.ios.nightly-cleanup` and `ca.roadsense.ios.upload-drain`. `project.yml` emits `BGTaskSchedulerPermittedIdentifiers` to match them.
 - `SentryBootstrapper` exists as a guarded seam: it becomes active when the Sentry package resolves, but remains a no-op while package resolution is still blocked.
 - `MapScreen` now exists as a product-facing SwiftUI shell with a recording status pill, floating contribution card, stats/settings overlay buttons, and expandable road-quality legend.
-- `RoadQualityMapView` now renders live Mapbox-backed road-quality vector tiles from the backend, shows pothole markers, and supports tap selection using feature-state highlighting.
+- `RoadQualityMapView` now renders live Mapbox-backed road-quality vector tiles from the backend, shows pothole markers, draws a dashed teal overlay for locally collected unuploaded drives, and supports tap selection using feature-state highlighting.
 - `SegmentDetailSheet` now exists as an editorial detail surface that matches the documented response shape and confidence/trend wording, and `MapScreen` now presents it from real segment taps via `GET /segments/{id}`.
 
 ### Current Ready-Shell Behavior
@@ -184,6 +184,7 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
   - a floating contribution card with mapped distance, pending uploads, and one primary next action
   - overlay entrypoints for Stats and Settings
   - a collapsible road-quality legend
+  - a dashed teal local-drive overlay whenever unuploaded, non-privacy-filtered readings exist locally
 - The user can now:
   - open the manual privacy-zone editor from the home shell action or Settings
   - start passive monitoring when it is paused
@@ -191,7 +192,7 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
   - open Stats and Settings sheets
   - force an upload drain through the contribution card action when uploads are pending
 
-This is now credible product UI with the first real live map loop in place. Remaining product work is refinement: local-drive overlays, a map-backed privacy-zone editor, stronger map loading/error states, and real-device validation.
+This is now credible product UI with the first real live map loop in place. Remaining product work is refinement: a map-backed privacy-zone editor, stronger map loading/error states, UI-test coverage around the live map shell, and real-device validation.
 
 ### Current Stats / Settings Surfaces
 

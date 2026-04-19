@@ -16,6 +16,7 @@ struct MapScreen: View {
         ZStack {
             RoadQualityMapView(
                 config: model.config,
+                pendingDriveCoordinates: model.pendingDriveCoordinates,
                 onSelectSegment: { segmentID in
                     Task {
                         await loadSegment(id: segmentID)
@@ -157,6 +158,9 @@ struct MapScreen: View {
         }
         if !model.isPassiveMonitoringEnabled {
             return "Turn passive monitoring back on, then RoadSense NS will start collecting automatically the next time you drive."
+        }
+        if !model.pendingDriveCoordinates.isEmpty {
+            return "Showing your local drive overlay. Upload to blend it into the community road-quality layer."
         }
         if model.userStatsSummary.acceptedReadingCount == 0 {
             return "Drive with RoadSense on to start mapping this area. Your first uploads will appear here after the next successful sync."

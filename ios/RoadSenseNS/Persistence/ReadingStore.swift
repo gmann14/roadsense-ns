@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import SwiftData
 
@@ -67,6 +68,21 @@ final class ReadingStore {
             predicate: #Predicate { $0.droppedByPrivacyZone == true }
         )
         return try context.fetchCount(descriptor)
+    }
+
+    func pendingUploadCoordinates(limit: Int = 500) throws -> [CLLocationCoordinate2D] {
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<ReadingRecord>(
+            predicate: #Predicate {
+                $0.droppedByPrivacyZone == false && $0.uploadedAt == nil
+            },
+            sortBy: [SortDescriptor(\.recordedAt, order: .forward)]
+        )
+        descriptor.fetchLimit = max(limit, 0)
+
+        return try context.fetch(descriptor).map {
+            CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+        }
     }
 
     func deleteAllContributionData() throws {

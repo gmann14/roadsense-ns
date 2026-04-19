@@ -34,6 +34,7 @@ Current status:
 - the app target now includes production wrappers for location, motion, driving-activity, thermal-state, background-task registration, and Sentry bootstrapping seams
 - the app target now includes first-pass `StatsView` and `SettingsView`, plus delete-local-data and Always-location-upgrade controls
 - the app target now includes a real map-style home shell (`MapScreen`) with recording status, floating contribution card, stats/settings chrome, and expandable road-quality legend
+- the app target now overlays locally collected but unuploaded drives as a dashed teal line above the community layer
 - the app target now includes the first editorial `SegmentDetailSheet` plus typed `GET /segments/{id}` endpoint/model/parser/client support
 - the pure Swift layer now includes a CSV fixture parser and replay runner for simulator-harness style validation
 - queue cleanup, upload eligibility, and ingest-health evaluation now also exist as pure Swift seams with tests
@@ -64,7 +65,7 @@ Current notes:
 - `RoadSenseNSSimHarness` now exists as a separate lightweight app target that loads fixture resources, replays them through the real pipeline, and shows the replay summary.
 - `RoadSenseNSTests` now includes first app-target network/uploader coverage, and the app enters an inert in-memory bootstrap path when launched under XCTest so host-based unit tests do not start real sensors, background tasks, or Sentry.
 - The remaining harness step is expanding the fixture corpus beyond the current pothole case and keeping the harness target green in CI.
-- The remaining product-facing iOS steps are local-drive overlays, a map-backed privacy-zone editor, stronger load/error states, and real-device runtime validation.
+- The remaining product-facing iOS steps are a map-backed privacy-zone editor, stronger load/error states, UI-test coverage around the live map shell, and real-device runtime validation.
 
 Additional verification commands:
 

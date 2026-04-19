@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import SwiftData
 import XCTest
 @testable import RoadSense_NS
@@ -240,6 +241,81 @@ final class NetworkAndUploaderTests: XCTestCase {
         XCTAssertEqual(batches.first?.status, .pending)
         XCTAssertEqual(batches.first?.attemptCount, 1)
         XCTAssertEqual(batches.first?.firstErrorMessage, "rate_limited")
+    }
+
+    @MainActor
+    func testReadingStorePendingUploadCoordinatesReturnsOrderedUnuploadedReadings() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let baseTime = Date(timeIntervalSince1970: 1_713_000_000)
+
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6484,
+                longitude: -63.5754,
+                roughnessRMS: 0.9,
+                speedKMH: 42,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: baseTime.addingTimeInterval(30),
+                droppedByPrivacyZone: true
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6486,
+                longitude: -63.5753,
+                roughnessRMS: 1.0,
+                speedKMH: 44,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: baseTime.addingTimeInterval(20),
+                uploadedAt: baseTime.addingTimeInterval(120)
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6488,
+                longitude: -63.5752,
+                roughnessRMS: 1.1,
+                speedKMH: 46,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: baseTime
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6490,
+                longitude: -63.5751,
+                roughnessRMS: 1.2,
+                speedKMH: 48,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: baseTime.addingTimeInterval(10)
+            )
+        )
+        try context.save()
+
+        let store = ReadingStore(container: container)
+        let coordinates = try store.pendingUploadCoordinates()
+
+        XCTAssertEqual(coordinates.count, 2)
+        XCTAssertEqual(
+            coordinates.map { [$0.latitude, $0.longitude] },
+            [
+                [44.6488, -63.5752],
+                [44.6490, -63.5751],
+            ]
+        )
     }
 
     @MainActor

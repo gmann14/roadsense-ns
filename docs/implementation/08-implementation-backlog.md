@@ -385,7 +385,7 @@ Post-MVP phases:
   - implement segment detail fetch
 - **Acceptance**
   - user can tap a segment and see the documented detail sheet
-- **Current repo note:** This slice is now materially implemented: `MapScreen` replaced the debug shell, `RoadQualityMapView` renders live backend vector tiles through Mapbox, potholes render on-map, segment taps highlight via feature-state, and the existing `SegmentDetailSheet` is presented from real `GET /segments/{id}` fetches. Remaining work is UI-test coverage, local-drive overlays, and real-device field validation.
+- **Current repo note:** This slice is now materially implemented: `MapScreen` replaced the debug shell, `RoadQualityMapView` renders live backend vector tiles through Mapbox, potholes render on-map, pending local drives render as a dashed teal overlay, segment taps highlight via feature-state, and the existing `SegmentDetailSheet` is presented from real `GET /segments/{id}` fetches. Remaining work is UI-test coverage and real-device field validation.
 
 ## Phase 7 — Reliability, Observability, And UX Hardening
 
