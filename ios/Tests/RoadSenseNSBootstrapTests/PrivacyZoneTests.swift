@@ -58,6 +58,34 @@ struct PrivacyZoneTests {
 
         #expect(PrivacyZoneFilter.shouldDrop(sample, zones: [zone]) == false)
     }
+
+    @Test("boundary coordinates form a closed ring near the requested radius")
+    func boundaryCoordinatesApproximateRadius() {
+        let center = (latitude: 44.6488, longitude: -63.5752)
+        let coordinates = PrivacyZoneFactory.boundaryCoordinates(
+            centerLatitude: center.latitude,
+            centerLongitude: center.longitude,
+            radiusMeters: 300,
+            vertices: 24
+        )
+
+        #expect(coordinates.count == 25)
+
+        let first = coordinates[0]
+        let last = coordinates[coordinates.count - 1]
+        #expect(first.latitude.isApproximately(equalTo: last.latitude, tolerance: 0.000001))
+        #expect(first.longitude.isApproximately(equalTo: last.longitude, tolerance: 0.000001))
+
+        for coordinate in coordinates.dropLast() {
+            let distance = PrivacyZoneFactory.distanceMeters(
+                fromLatitude: center.latitude,
+                fromLongitude: center.longitude,
+                toLatitude: coordinate.latitude,
+                toLongitude: coordinate.longitude
+            )
+            #expect(distance.isApproximately(equalTo: 300, tolerance: 12))
+        }
+    }
 }
 
 private extension Double {

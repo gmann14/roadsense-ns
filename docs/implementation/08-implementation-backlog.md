@@ -358,7 +358,7 @@ Post-MVP phases:
 - **Acceptance**
   - passive collection cannot silently start without privacy-zone decision
   - server never receives filtered-zone readings
-- **Current repo note:** onboarding is now wired to a real `PrivacyZonesView` + `PrivacyZoneStore`, and saved zones automatically satisfy the gate. The remaining work is a map-backed zone editor and wiring zone filtering into the live sensor pipeline.
+- **Current repo note:** this slice is materially implemented: onboarding is wired to a real `PrivacyZonesView` + `PrivacyZoneStore`, saved zones automatically satisfy the gate, the editor is map-backed, and `SensorCoordinator` applies zone filtering before persistence/upload. Remaining work is UI-test coverage and real-device validation of the privacy flow.
 
 ### B052 — Quality filters and uploader hardening
 

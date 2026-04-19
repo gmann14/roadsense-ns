@@ -5,6 +5,8 @@ import SwiftUI
 struct RoadQualityMapView: View {
     let config: AppConfig
     let pendingDriveCoordinates: [CLLocationCoordinate2D]
+    let onMapLoaded: () -> Void
+    let onMapLoadingError: (String) -> Void
     let onSelectSegment: (UUID) -> Void
     let onClearSelection: () -> Void
 
@@ -54,6 +56,12 @@ struct RoadQualityMapView: View {
                     compass: .init(visibility: .hidden)
                 )
             )
+            .onMapLoaded { _ in
+                onMapLoaded()
+            }
+            .onMapLoadingError { event in
+                onMapLoadingError(event.message)
+            }
             .ignoresSafeArea()
         }
     }

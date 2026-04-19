@@ -11,12 +11,22 @@ struct MapScreen: View {
     @State private var selectedSegment: SegmentDetailResponse?
     @State private var isLoadingSegment = false
     @State private var segmentLoadError: String?
+    @State private var isMapLoaded = false
+    @State private var mapLoadError: String?
 
     var body: some View {
         ZStack {
             RoadQualityMapView(
                 config: model.config,
                 pendingDriveCoordinates: model.pendingDriveCoordinates,
+                onMapLoaded: {
+                    isMapLoaded = true
+                    mapLoadError = nil
+                },
+                onMapLoadingError: { message in
+                    mapLoadError = message
+                    isMapLoaded = false
+                },
                 onSelectSegment: { segmentID in
                     Task {
                         await loadSegment(id: segmentID)
@@ -104,6 +114,26 @@ struct MapScreen: View {
                     .background(.white.opacity(0.14), in: Capsule())
             }
 
+            if let mapLoadError {
+                Label("Map load issue", systemImage: "wifi.exclamationmark")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.96))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.red.opacity(0.35), in: Capsule())
+
+                Text(mapLoadError)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(maxWidth: 320)
+            } else if !isMapLoaded {
+                ProgressView("Loading map…")
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+
             if isLoadingSegment {
                 ProgressView("Loading road details…")
                     .progressViewStyle(.circular)
@@ -155,6 +185,12 @@ struct MapScreen: View {
     private var centerMessage: String {
         if model.readiness.showsPrivacyRiskWarning {
             return "Finish privacy zones before real field testing so home and work areas stay off the map."
+        }
+        if let mapLoadError, !mapLoadError.isEmpty {
+            return "The live map did not finish loading. Your local state is safe, but the community layer needs a retry."
+        }
+        if !isMapLoaded {
+            return "Loading the community road-quality layer and your saved overlays."
         }
         if !model.isPassiveMonitoringEnabled {
             return "Turn passive monitoring back on, then RoadSense NS will start collecting automatically the next time you drive."

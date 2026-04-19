@@ -12,7 +12,7 @@ This directory now contains two layers:
   - persistence/runtime infrastructure under `RoadSenseNS/Persistence/` (`ModelContainerProvider`, `PrivacyZoneStore`, `UploadQueueStore`)
   - network/runtime infrastructure under `RoadSenseNS/Network/` (`APIClient`, `Uploader`)
   - production sensor wrappers under `RoadSenseNS/Sensors/`
-  - a manual privacy-zone management screen under `RoadSenseNS/Features/PrivacyZones/`
+  - a map-backed privacy-zone editor under `RoadSenseNS/Features/PrivacyZones/`
   - committed base `.xcconfig` files under `Config/` so `xcodegen generate` works from a clean checkout
 
 Current status:
@@ -28,7 +28,7 @@ Current status:
 - the app target has a real onboarding shell split from the ready-to-collect home shell
 - the app target now includes first-pass SwiftData models mirroring the implementation spec
 - the app target now includes first-pass persistence adapters (`DeviceTokenStore`, queue mappers, rejected-reason JSON codec)
-- the app target now includes a real model-container provider, queue store, API client, uploader, privacy-zone store, and manual privacy-zone UI
+- the app target now includes a real model-container provider, queue store, API client, uploader, privacy-zone store, and a map-backed privacy-zone editor
 - the app target now includes a first live `SensorCoordinator` plus `ReadingStore`, so accepted readings and privacy-filtered local entries can be persisted before the map UI exists
 - the app target now persists crash-safe checkpoint state via `SensorCheckpointStore` and restores fresh checkpoints on next launch
 - the app target now includes production wrappers for location, motion, driving-activity, thermal-state, background-task registration, and Sentry bootstrapping seams
@@ -65,7 +65,7 @@ Current notes:
 - `RoadSenseNSSimHarness` now exists as a separate lightweight app target that loads fixture resources, replays them through the real pipeline, and shows the replay summary.
 - `RoadSenseNSTests` now includes first app-target network/uploader coverage, and the app enters an inert in-memory bootstrap path when launched under XCTest so host-based unit tests do not start real sensors, background tasks, or Sentry.
 - The remaining harness step is expanding the fixture corpus beyond the current pothole case and keeping the harness target green in CI.
-- The remaining product-facing iOS steps are a map-backed privacy-zone editor, stronger load/error states, UI-test coverage around the live map shell, and real-device runtime validation.
+- The remaining product-facing iOS steps are deeper retry/empty-state handling around the live map, UI-test coverage around the live map shell, broader fixture replay coverage, and real-device runtime validation.
 
 Additional verification commands:
 

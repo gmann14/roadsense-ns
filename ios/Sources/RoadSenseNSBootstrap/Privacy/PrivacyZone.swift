@@ -59,6 +59,33 @@ public enum PrivacyZoneFactory {
         return earthRadiusMeters * c
     }
 
+    public static func boundaryCoordinates(
+        centerLatitude: Double,
+        centerLongitude: Double,
+        radiusMeters: Double,
+        vertices: Int = 48
+    ) -> [(latitude: Double, longitude: Double)] {
+        let resolvedVertices = max(vertices, 8)
+        let resolvedRadius = max(radiusMeters, 1)
+
+        let ring = (0..<resolvedVertices).map { index in
+            let progress = Double(index) / Double(resolvedVertices)
+            let angle = progress * 2 * Double.pi
+            return offsetCoordinate(
+                latitude: centerLatitude,
+                longitude: centerLongitude,
+                angleRadians: angle,
+                distanceMeters: resolvedRadius
+            )
+        }
+
+        guard let first = ring.first else {
+            return []
+        }
+
+        return ring + [first]
+    }
+
     private static func snapToGrid(
         latitude: Double,
         longitude: Double,

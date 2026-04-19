@@ -33,7 +33,7 @@ RoadSenseNS/
 │   │   ├── Map/                       # MapboxMapView wrapper, overlays
 │   │   ├── SegmentDetail/
 │   │   ├── Settings/                  # collection/privacy/data management
-│   │   ├── PrivacyZones/              # manual zone-management form until map-backed editor lands
+│   │   ├── PrivacyZones/              # map-backed zone editor + saved-zone list
 │   │   └── Stats/                     # personal contribution summary
 │   ├── Sensors/
 │   │   ├── DrivingDetector.swift      # CMMotionActivityManager wrapper
@@ -157,7 +157,7 @@ The current app shell is intentionally thin but real:
 - `AppContainer` now also owns the SwiftData `ModelContainer`, `PrivacyZoneStore`, `UploadQueueStore`, `APIClient`, `Uploader`, sensor wrappers, logger, and background-task registrar seam
 - `AppModel` owns the current `PermissionSnapshot`, persists the privacy-zone decision in `UserDefaults`, derives `CollectionReadiness`, and reads actual zone existence from `PrivacyZoneStore` so a saved zone automatically satisfies the onboarding gate
 - `ContentView` routes between onboarding and `MapScreen` using `CollectionReadiness.evaluate(...)`
-- `PrivacyZonesView` is now a real app-target screen. It is intentionally simple and manual for now: label + latitude + longitude + radius. Replace it with a map-backed picker in a later product slice.
+- `PrivacyZonesView` is now a real app-target screen with a map-backed placement flow: the user pans the map to position the center reticle, adjusts the radius with a slider, and saves the resulting zone while reviewing existing saved footprints.
 
 This keeps the permission/privacy gate testable in pure Swift while leaving the Core Location / Core Motion wiring in the app target where it belongs.
 
@@ -176,6 +176,7 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
 - `MapScreen` now exists as a product-facing SwiftUI shell with a recording status pill, floating contribution card, stats/settings overlay buttons, and expandable road-quality legend.
 - `RoadQualityMapView` now renders live Mapbox-backed road-quality vector tiles from the backend, shows pothole markers, draws a dashed teal overlay for locally collected unuploaded drives, and supports tap selection using feature-state highlighting.
 - `SegmentDetailSheet` now exists as an editorial detail surface that matches the documented response shape and confidence/trend wording, and `MapScreen` now presents it from real segment taps via `GET /segments/{id}`.
+- `PrivacyZonesView` now uses Mapbox as well: it renders saved privacy footprints and a live draft radius, lets the user place a zone by panning the map beneath a fixed reticle, and keeps delete/focus actions in the same surface.
 
 ### Current Ready-Shell Behavior
 
@@ -186,13 +187,13 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
   - a collapsible road-quality legend
   - a dashed teal local-drive overlay whenever unuploaded, non-privacy-filtered readings exist locally
 - The user can now:
-  - open the manual privacy-zone editor from the home shell action or Settings
+  - open the map-backed privacy-zone editor from the home shell action or Settings
   - start passive monitoring when it is paused
   - request the Always-location upgrade when background collection is still unavailable
   - open Stats and Settings sheets
   - force an upload drain through the contribution card action when uploads are pending
 
-This is now credible product UI with the first real live map loop in place. Remaining product work is refinement: a map-backed privacy-zone editor, stronger map loading/error states, UI-test coverage around the live map shell, and real-device validation.
+This is now credible product UI with the first real live map loop in place. Remaining product work is refinement: deeper retry/empty-state handling around the live map, UI-test coverage around the live map shell, broader fixture coverage, and real-device validation.
 
 ### Current Stats / Settings Surfaces
 

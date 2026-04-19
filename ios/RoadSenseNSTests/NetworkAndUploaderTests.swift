@@ -319,6 +319,25 @@ final class NetworkAndUploaderTests: XCTestCase {
     }
 
     @MainActor
+    func testPrivacyZoneStorePersistsAndClampsMinimumRadius() throws {
+        let container = try makeInMemoryContainer()
+        let store = PrivacyZoneStore(container: container)
+
+        try store.save(
+            label: "Home",
+            latitude: 44.6488,
+            longitude: -63.5752,
+            radiusM: 180
+        )
+
+        let zones = try store.fetchAll()
+        XCTAssertEqual(zones.count, 1)
+        XCTAssertEqual(zones.first?.label, "Home")
+        XCTAssertEqual(zones.first?.radiusM, 250)
+        XCTAssertTrue(try store.hasConfiguredZones())
+    }
+
+    @MainActor
     private func makeInMemoryContainer() throws -> ModelContainer {
         let schema = Schema([
             ReadingRecord.self,
