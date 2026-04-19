@@ -1655,7 +1655,7 @@ SELECT cron.schedule(
 Thin wrapper over `public_worst_segments_mv` for the web `Worst Roads` report. This endpoint and its backing MV ship with **Phase 9** (web dashboard).
 
 ```sql
--- Phase 9: worst-segments MV + refresh function + cron
+-- Phase 9: worst-segments MV + direct cron refresh
 CREATE MATERIALIZED VIEW public_worst_segments_mv AS
 SELECT
     rs.id AS segment_id,
@@ -1689,28 +1689,16 @@ CREATE INDEX idx_public_worst_segments_mv_municipality_score
 CREATE INDEX idx_public_worst_segments_mv_score
     ON public_worst_segments_mv (avg_roughness_score DESC);
 
-CREATE OR REPLACE FUNCTION refresh_public_worst_segments_mv()
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = pg_catalog, public
-AS $$
-BEGIN
-    REFRESH MATERIALIZED VIEW CONCURRENTLY public_worst_segments_mv;
-END;
-$$;
-
-REVOKE EXECUTE ON FUNCTION refresh_public_worst_segments_mv() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION refresh_public_worst_segments_mv() TO service_role;
-
 -- Worst-segments doesn't need 5-minute freshness; every 15 min is plenty.
 -- Offset from stats refresh to avoid stacking CPU.
 SELECT cron.schedule(
     'refresh-public-worst-segments-mv',
     '7-52/15 * * * *',
-    $$SELECT refresh_public_worst_segments_mv()$$
+    $$REFRESH MATERIALIZED VIEW CONCURRENTLY public_worst_segments_mv$$
 );
 ```
+
+As with `public_stats_mv`, do **not** wrap `REFRESH MATERIALIZED VIEW CONCURRENTLY` in a PL/pgSQL function. Postgres rejects that command inside a transaction block, so the cron entry runs the refresh SQL directly.
 
 Validation rules:
 

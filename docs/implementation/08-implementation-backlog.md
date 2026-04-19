@@ -498,6 +498,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - implement `tiles-coverage` Edge Function
 - **Acceptance**
   - web Coverage mode has a truthful backend surface
+- **Current repo note:** this slice is now implemented: `get_coverage_tile` exists in SQL, `tiles-coverage` serves the public MVT contract through a service-role RPC wrapper, and both pgTAP plus Deno contract tests cover the path.
 
 ### B081 — Worst-roads backend
 
@@ -508,12 +509,12 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - Deno contract tests for `/segments/worst`
 - **GREEN**
   - implement `public_worst_segments_mv` (with a unique index on `segment_id` so `REFRESH ... CONCURRENTLY` is usable)
-  - implement `refresh_public_worst_segments_mv()` using `REFRESH MATERIALIZED VIEW CONCURRENTLY`
   - schedule the `refresh-public-worst-segments-mv` cron (Phase 9 only — the MVP stats refresh is scheduled separately in Migration 011)
   - implement `segments-worst` Edge Function
 - **Acceptance**
   - report page can query ranked rows cheaply and deterministically
   - refreshing `public_worst_segments_mv` does not block reads from `/segments/worst`
+- **Current repo note:** this slice is now implemented: `public_worst_segments_mv` exists with the required unique/indexed shape, the cron refresh runs `REFRESH MATERIALIZED VIEW CONCURRENTLY public_worst_segments_mv` directly, and `segments-worst` now exposes the ranked public report contract through a service-role Edge Function with pgTAP + Deno coverage.
 
 ## Phase 10 — Web Dashboard Frontend
 

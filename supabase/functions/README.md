@@ -32,6 +32,12 @@ Implemented so far:
   - reads `public_stats_mv` and serves the public stats card contract with a 5-minute cache header
 - `health`
   - `verify_jwt = false`; proves DB reachability through `db_healthcheck()` and returns deploy metadata
+- `tiles-coverage`
+  - wraps the service-role `get_coverage_tile` RPC for the public web Coverage mode
+  - mirrors the normal tile HTTP contract, but emits `segment_coverage` semantics instead of published-quality-only roads
+- `segments-worst`
+  - validates `limit` and municipality display names, then reads the ranked `public_worst_segments_mv`
+  - returns the public `Worst Roads` report contract with a 15-minute cache header
 
 Local development note:
 

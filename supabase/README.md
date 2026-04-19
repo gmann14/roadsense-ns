@@ -19,6 +19,8 @@ Implemented so far:
 - `B020` quality tile RPC plus the first production Edge Function (`tiles`) with pgTAP and Deno contract coverage
 - `B021` read-side stats/health models plus `segments`, `potholes`, `stats`, and `health` Edge Functions
 - `B022` upload Edge Function validation, hashing, and rate limiting around the existing ingestion RPC
+- `B080` coverage-tile backend (`get_coverage_tile` + `tiles-coverage`) for the future public web Coverage mode
+- `B081` worst-roads backend (`public_worst_segments_mv` + `segments-worst`) for the future public report surface
 
 Local verification:
 
