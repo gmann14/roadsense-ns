@@ -301,7 +301,7 @@ Post-MVP phases:
   - app can generate uploadable reading batches from replayed fixtures
 - **Current repo note:** The app target now has a first `SensorCoordinator` that runs `ReadingBuilder` against live streams and persists accepted windows through `ReadingStore`. What remains is fixture replay, checkpoint persistence, and app-target validation.
 - **Current repo note:** `SensorCheckpoint` + `SensorCheckpointStore` now exist and the coordinator checkpoints every 60 seconds. What remains is fixture replay and app-target validation.
-- **Current repo note:** `SensorFixtureParser` + `SensorFixtureRunner` now exist in the pure Swift layer, and the bootstrap suite now loads checked-in `Fixtures/*.csv` + `Fixtures/*.expected.json` resources. What remains is wiring the actual `RoadSenseNSSimHarness` UI around them and adding captured-drive fixtures beyond the current pothole case.
+- **Current repo note:** `SensorFixtureParser` + `SensorFixtureRunner` now exist in the pure Swift layer, the bootstrap suite loads checked-in `Fixtures/*.csv` + `Fixtures/*.expected.json` resources, and `RoadSenseNSSimHarness` now replays a selected fixture in a lightweight developer app. What remains is adding captured-drive fixtures beyond the current pothole case and keeping the harness target green in CI.
 
 ### B041 — Stub uploader path
 

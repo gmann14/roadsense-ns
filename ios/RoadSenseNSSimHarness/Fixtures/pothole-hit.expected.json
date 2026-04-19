@@ -1,0 +1,7 @@
+{
+  "fixture": "pothole-hit.csv",
+  "expected_windows": 1,
+  "expected_pothole_flagged": true,
+  "expected_rms_range": [3.5, 5.0],
+  "expected_max_spike_g_range": [2.5, 7.5]
+}

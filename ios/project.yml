@@ -90,8 +90,12 @@ targets:
     platform: iOS
     sources:
       - path: RoadSenseNSSimHarness
-    dependencies:
-      - target: RoadSenseNS
+      - path: Sources/RoadSenseNSBootstrap
+    resources:
+      - path: RoadSenseNSSimHarness/Fixtures
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ca.roadsense.ios.simharness
+        TARGETED_DEVICE_FAMILY: 1
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES

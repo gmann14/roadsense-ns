@@ -212,7 +212,8 @@ Current repo note:
   - full replay into `ReadingBuilder` / `PotholeDetector` / `ReadingWindowProcessor`
   - expected window count / pothole flag / RMS range / spike range assertions
 - The first reusable CSV + `.expected.json` fixture pair is now checked into the bootstrap test target.
-- What still remains is expanding that corpus with real captured drives and wiring the dedicated `RoadSenseNSSimHarness` UI around the same resources.
+- The dedicated `RoadSenseNSSimHarness` app target now loads and replays the same fixture pattern in a simple developer UI.
+- What still remains is expanding that corpus with real captured drives and keeping the harness build green in CI.
 
 ## Integration Tests
 

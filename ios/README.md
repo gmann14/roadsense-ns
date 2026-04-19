@@ -59,4 +59,5 @@ Current notes:
 - Background-task identifiers in the project now match the spec (`nightly-cleanup` and `upload-drain`) instead of the earlier placeholder cleanup-only ID.
 - Stats and Settings now exist as real screens even before the Mapbox home screen lands.
 - The first golden-style harness replay path now uses checked-in `Fixtures/*.csv` and `Fixtures/*.expected.json` resources.
-- The remaining harness step is wiring those reusable fixtures into the dedicated `RoadSenseNSSimHarness` app target.
+- `RoadSenseNSSimHarness` now exists as a separate lightweight app target that loads fixture resources, replays them through the real pipeline, and shows the replay summary.
+- The remaining harness step is expanding the fixture corpus beyond the current pothole case and keeping the harness target green in CI.
