@@ -88,6 +88,7 @@ Before the full Xcode project is generated, keep the environment/config seam bui
 - `AppEnvironment`
 - `AppConfig`
 - `CollectionReadiness`
+- `DrivingHeuristic`
 - `HighPassBiquad`
 - `MotionMath`
 - `MotionSample`
@@ -505,7 +506,7 @@ final class UploadBatch {
 }
 
 @Model
-final class PrivacyZone {
+final class PrivacyZoneRecord {
     @Attribute(.unique) var id: UUID
     var label: String               // "Home", "Work"
     var latitude: Double            // already offset at creation
@@ -533,9 +534,13 @@ final class DeviceTokenRecord {
 }
 ```
 
+`PrivacyZoneRecord` is the app-target SwiftData model. The shared pure-Swift geometry/filtering type keeps the shorter `PrivacyZone` name inside `RoadSenseNSBootstrap`, so the model layer uses the `Record` suffix to avoid a same-module symbol collision.
+
 **Retention:** FIFO-prune `ReadingRecord` where `uploadedAt != nil` and older than 30 days. Separate `BGProcessingTask` enforces 100MB cap.
 
 **Device token rotation:** At app launch, check `DeviceTokenRecord.expiresAt`. If expired, create new one. `APIClient` reads the latest token for the `device_token` field on each request.
+
+Implementation note: the app target can delegate the rotation decision to the pure `DeviceTokenManager` seam and keep the SwiftData-specific fetch/insert logic in a thin `DeviceTokenStore`.
 
 ## Upload Queue
 

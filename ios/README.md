@@ -4,10 +4,11 @@ This directory now contains two layers:
 
 - `Package.swift` + `Sources/RoadSenseNSBootstrap/`
   - Foundation-only bootstrap code we can validate with `swift test`
-  - currently owns `AppEnvironment`, `AppConfig`, `CollectionReadiness`, `Endpoints`, `HighPassBiquad`, `MotionMath`, `PotholeDetector`, `PrivacyZone`, `QualityFilter`, `ReadingBuilder`, `UploadPolicy`, and `RejectedReason`
+  - currently owns `AppEnvironment`, `AppConfig`, `CollectionReadiness`, `DrivingHeuristic`, `Endpoints`, `HighPassBiquad`, `MotionMath`, `PotholeDetector`, `PrivacyZone`, `QualityFilter`, `ReadingBuilder`, `UploadPolicy`, and `RejectedReason`
 - `project.yml` + `RoadSenseNS/`
   - XcodeGen project spec for the real iOS app target
   - app-shell files (`RoadSenseNSApp`, `AppContainer`, `AppModel`, onboarding flow, `PermissionManager`, `Info.plist`, placeholder tests)
+  - SwiftData model scaffolding under `RoadSenseNS/Persistence/Models/`
   - committed base `.xcconfig` files under `Config/` so `xcodegen generate` works from a clean checkout
 
 Current status:
@@ -18,7 +19,10 @@ Current status:
 - reading-window assembly and documented quality-gate logic are implemented in pure Swift with tests
 - upload retry/failure policy is implemented in pure Swift with tests
 - privacy-zone creation/filtering, the high-pass filter, and pothole spike detection are implemented in pure Swift with tests
+- the GPS-only degraded-permission driving heuristic is implemented in pure Swift with tests
 - the app target has a real onboarding shell split from the ready-to-collect home shell
+- the app target now includes first-pass SwiftData models mirroring the implementation spec
+- the app target now includes first-pass persistence adapters (`DeviceTokenStore`, queue mappers, rejected-reason JSON codec)
 - base `.xcconfig` files exist under `Config/`
 - optional secret override files can be created as:
   - `Config/RoadSenseNS.Local.secrets.xcconfig`
