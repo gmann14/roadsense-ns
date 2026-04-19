@@ -4,6 +4,8 @@ import SwiftUI
 struct ContentView: View {
     @State private var model: AppModel
     @State private var isShowingPrivacyZones = false
+    @State private var isShowingStats = false
+    @State private var isShowingSettings = false
 
     init(container: AppContainer) {
         _model = State(initialValue: AppModel(container: container))
@@ -29,6 +31,23 @@ struct ContentView: View {
                     }
                 )
             }
+            .sheet(isPresented: $isShowingStats) {
+                NavigationStack {
+                    StatsView(statsStore: model.userStatsStore)
+                }
+            }
+            .sheet(isPresented: $isShowingSettings, onDismiss: {
+                model.refreshPermissions()
+            }) {
+                NavigationStack {
+                    SettingsView(
+                        model: model,
+                        onManagePrivacyZones: {
+                            isShowingPrivacyZones = true
+                        }
+                    )
+                }
+            }
         }
     }
 
@@ -36,6 +55,19 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Collection shell")
                 .font(.headline)
+
+            HStack {
+                Spacer()
+                Button("Stats") {
+                    isShowingStats = true
+                }
+                .buttonStyle(.bordered)
+
+                Button("Settings") {
+                    isShowingSettings = true
+                }
+                .buttonStyle(.bordered)
+            }
 
             LabeledContent("Environment", value: model.config.environment.displayName)
             LabeledContent("API Base", value: model.config.apiBaseURL.absoluteString)
@@ -138,9 +170,10 @@ private func makePreviewContainer() -> AppContainer {
         mapboxAccessToken: "pk.preview"
     )
     let modelContainer = try! ModelContainerProvider.makeDefault()
-    let privacyZoneStore = PreviewPrivacyZoneStore()
-    let readingStore = ReadingStore(container: modelContainer)
-    let uploadQueueStore = UploadQueueStore(container: modelContainer)
+        let privacyZoneStore = PreviewPrivacyZoneStore()
+        let readingStore = ReadingStore(container: modelContainer)
+        let userStatsStore = UserStatsStore(container: modelContainer)
+        let uploadQueueStore = UploadQueueStore(container: modelContainer)
     let apiClient = APIClient(endpoints: Endpoints(config: config))
     let uploader = Uploader(
         container: modelContainer,
@@ -161,6 +194,7 @@ private func makePreviewContainer() -> AppContainer {
         modelContainer: modelContainer,
         privacyZoneStore: privacyZoneStore,
         readingStore: readingStore,
+        userStatsStore: userStatsStore,
         uploadQueueStore: uploadQueueStore,
         apiClient: apiClient,
         uploader: uploader,

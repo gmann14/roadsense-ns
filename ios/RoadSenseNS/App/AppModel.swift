@@ -6,8 +6,10 @@ import Observation
 final class AppModel {
     let config: AppConfig
     let privacyZoneStore: PrivacyZoneStoring
+    let userStatsStore: UserStatsStore
 
     private let permissions: PermissionManaging
+    private let locationService: LocationServicing
     private let defaults: UserDefaults
     private let privacyZoneDecisionKey = "ca.roadsense.ios.privacy-zone-decision"
     private let readingStore: ReadingStore
@@ -28,9 +30,11 @@ final class AppModel {
     ) {
         self.config = container.config
         self.permissions = container.permissions
+        self.locationService = container.locationService
         self.defaults = defaults
         self.privacyZoneStore = container.privacyZoneStore
         self.readingStore = container.readingStore
+        self.userStatsStore = container.userStatsStore
         self.uploadQueueStore = container.uploadQueueStore
         self.uploader = container.uploader
         self.sensorCoordinator = container.sensorCoordinator
@@ -101,6 +105,20 @@ final class AppModel {
         sensorCoordinator.stopMonitoring()
         isPassiveMonitoringEnabled = false
         refreshCollectionStats()
+    }
+
+    func requestAlwaysLocationUpgrade() {
+        locationService.requestAlwaysUpgrade()
+        refreshPermissions()
+    }
+
+    func deleteLocalContributionData() throws {
+        try readingStore.deleteAllContributionData()
+        refreshCollectionStats()
+    }
+
+    func statsSummary() throws -> UserStatsSummary {
+        try userStatsStore.summary()
     }
 
     private func updatePrivacyZoneDecision(_ state: PrivacyZoneSetupState) {

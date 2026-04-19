@@ -8,6 +8,7 @@ struct AppContainer {
     let modelContainer: ModelContainer
     let privacyZoneStore: PrivacyZoneStoring
     let readingStore: ReadingStore
+    let userStatsStore: UserStatsStore
     let uploadQueueStore: UploadQueueStore
     let apiClient: APIClient
     let uploader: Uploader
@@ -29,6 +30,7 @@ struct AppContainer {
 
         let privacyZoneStore = PrivacyZoneStore(container: modelContainer)
         let readingStore = ReadingStore(container: modelContainer)
+        let userStatsStore = UserStatsStore(container: modelContainer)
         let uploadQueueStore = UploadQueueStore(container: modelContainer)
         let apiClient = APIClient(endpoints: Endpoints(config: config))
         let locationService = LocationService()
@@ -47,6 +49,7 @@ struct AppContainer {
             modelContainer: modelContainer,
             privacyZoneStore: privacyZoneStore,
             readingStore: readingStore,
+            userStatsStore: userStatsStore,
             uploadQueueStore: uploadQueueStore,
             apiClient: apiClient,
             uploader: uploader,

@@ -425,6 +425,7 @@ Post-MVP phases:
   - ensure privacy/freshness/confidence copy matches docs
 - **Acceptance**
   - a new user can find pause, privacy zones, and delete-local-data controls without assistance
+- **Current repo note:** `StatsView` and `SettingsView` now exist, including Always-upgrade, privacy-zone management entrypoint, and delete-local-data controls. What remains is product polish and app-target validation.
 
 ### B063 — Accessibility and Dynamic Type pass
 

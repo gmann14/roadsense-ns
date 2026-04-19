@@ -32,6 +32,7 @@ Current status:
 - the app target now includes a first live `SensorCoordinator` plus `ReadingStore`, so accepted readings and privacy-filtered local entries can be persisted before the map UI exists
 - the app target now persists crash-safe checkpoint state via `SensorCheckpointStore` and restores fresh checkpoints on next launch
 - the app target now includes production wrappers for location, motion, driving-activity, thermal-state, background-task registration, and Sentry bootstrapping seams
+- the app target now includes first-pass `StatsView` and `SettingsView`, plus delete-local-data and Always-location-upgrade controls
 - queue cleanup, upload eligibility, and ingest-health evaluation now also exist as pure Swift seams with tests
 - base `.xcconfig` files exist under `Config/`
 - optional secret override files can be created as:
@@ -55,3 +56,4 @@ Current notes:
 - The app-side upload and privacy-zone management path is now implemented far enough to keep moving while Mapbox remains unresolved.
 - The ready shell now exposes start/stop passive monitoring and counts for accepted, privacy-filtered, and pending-upload readings.
 - Background-task identifiers in the project now match the spec (`nightly-cleanup` and `upload-drain`) instead of the earlier placeholder cleanup-only ID.
+- Stats and Settings now exist as real screens even before the Mapbox home screen lands.

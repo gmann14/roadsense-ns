@@ -69,6 +69,25 @@ final class ReadingStore {
         return try context.fetchCount(descriptor)
     }
 
+    func deleteAllContributionData() throws {
+        let context = ModelContext(container)
+
+        for reading in try context.fetch(FetchDescriptor<ReadingRecord>()) {
+            context.delete(reading)
+        }
+        for batch in try context.fetch(FetchDescriptor<UploadBatch>()) {
+            context.delete(batch)
+        }
+        for stats in try context.fetch(FetchDescriptor<UserStats>()) {
+            context.delete(stats)
+        }
+        for token in try context.fetch(FetchDescriptor<DeviceTokenRecord>()) {
+            context.delete(token)
+        }
+
+        try context.save()
+    }
+
     private func fetchOrCreateStats(in context: ModelContext) throws -> UserStats {
         var descriptor = FetchDescriptor<UserStats>(
             sortBy: [SortDescriptor(\.id, order: .forward)]

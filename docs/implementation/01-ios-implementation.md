@@ -32,9 +32,9 @@ RoadSenseNS/
 │   │   ├── Onboarding/                # views + permission/privacy shell
 │   │   ├── Map/                       # MapboxMapView wrapper, overlays
 │   │   ├── SegmentDetail/
-│   │   ├── Settings/
+│   │   ├── Settings/                  # collection/privacy/data management
 │   │   ├── PrivacyZones/              # manual zone-management form until map-backed editor lands
-│   │   └── Stats/
+│   │   └── Stats/                     # personal contribution summary
 │   ├── Sensors/
 │   │   ├── DrivingDetector.swift      # CMMotionActivityManager wrapper
 │   │   ├── LocationService.swift      # CLLocationManager wrapper
@@ -55,6 +55,7 @@ RoadSenseNS/
 │   │   ├── SensorCheckpointStore.swift
 │   │   ├── PrivacyZoneStore.swift
 │   │   ├── UploadQueueStore.swift
+│   │   └── UserStatsStore.swift
 │   │   ├── Models/                    # @Model types
 │   │   │   ├── ReadingRecord.swift
 │   │   │   ├── UploadBatch.swift
@@ -182,9 +183,30 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
 - The user can now:
   - open the manual privacy-zone editor
   - start/stop passive monitoring
+  - request the Always-location upgrade when background collection is still unavailable
+  - open Stats and Settings sheets
   - force an upload drain
 
 This is still not polished product UI, but it is enough to validate the real lifecycle before Mapbox is in place.
+
+### Current Stats / Settings Surfaces
+
+- `StatsView` now shows:
+  - kilometres mapped
+  - accepted reading count
+  - pending uploads
+  - privacy-filtered local count
+  - segments contributed
+  - potholes flagged
+  - last drive timestamp
+- `SettingsView` now exposes:
+  - passive monitoring on/off
+  - the "Enable background collection" action when the app is still in the `.upgradeRequired` state
+  - privacy-zone management entrypoint
+  - destructive delete-local-data control
+  - plain-language privacy/trust copy
+
+`delete local data` currently clears locally stored readings, upload queue state, user stats, and device token rotation state. It intentionally does **not** remove privacy zones.
 
 ### Sensor Protocol Seam
 
