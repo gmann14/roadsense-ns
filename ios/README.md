@@ -42,7 +42,7 @@ Current status:
   - `Config/RoadSenseNS.Production.secrets.xcconfig`
 - `.xcconfig` templates still exist under `Config/Templates/` as copy/reference material
 - a generator spec exists and can now generate `RoadSenseNS.xcodeproj`
-- the first simulator build is package-resolution limited rather than Xcode-install limited
+- the main `RoadSenseNS` app target now builds for `iphonesimulator` with the current pre-map shell; only Sentry is linked for now
 
 Local verification:
 
@@ -53,11 +53,11 @@ Local verification:
 Current notes:
 
 - Xcode + iOS SDKs are now installed and usable locally.
-- The first full app build will need the real package/dependency path to resolve cleanly, including Mapbox package fetches.
-- The app-side upload and privacy-zone management path is now implemented far enough to keep moving while Mapbox remains unresolved.
+- The current app target links only the SDKs it actually uses today. Mapbox and Supabase SDK wiring are deferred until the map screen or SDK-specific features land.
 - The ready shell now exposes start/stop passive monitoring and counts for accepted, privacy-filtered, and pending-upload readings.
 - Background-task identifiers in the project now match the spec (`nightly-cleanup` and `upload-drain`) instead of the earlier placeholder cleanup-only ID.
-- Stats and Settings now exist as real screens even before the Mapbox home screen lands.
+- Stats and Settings now exist as real screens before the Mapbox home screen lands.
+- The next milestone is no longer “make it compile”; it is “sign it, install it on a real phone, and validate the runtime path.”
 - The first golden-style harness replay path now uses checked-in `Fixtures/*.csv` and `Fixtures/*.expected.json` resources.
 - `RoadSenseNSSimHarness` now exists as a separate lightweight app target that loads fixture resources, replays them through the real pipeline, and shows the replay summary.
 - The remaining harness step is expanding the fixture corpus beyond the current pothole case and keeping the harness target green in CI.

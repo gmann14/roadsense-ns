@@ -170,10 +170,11 @@ private func makePreviewContainer() -> AppContainer {
         mapboxAccessToken: "pk.preview"
     )
     let modelContainer = try! ModelContainerProvider.makeDefault()
-        let privacyZoneStore = PreviewPrivacyZoneStore()
-        let readingStore = ReadingStore(container: modelContainer)
-        let userStatsStore = UserStatsStore(container: modelContainer)
-        let uploadQueueStore = UploadQueueStore(container: modelContainer)
+    let privacyZoneStore = PreviewPrivacyZoneStore()
+    let readingStore = ReadingStore(container: modelContainer)
+    let userStatsStore = UserStatsStore(container: modelContainer)
+    let uploadQueueStore = UploadQueueStore(container: modelContainer)
+    let checkpointStore = SensorCheckpointStore()
     let apiClient = APIClient(endpoints: Endpoints(config: config))
     let uploader = Uploader(
         container: modelContainer,
@@ -206,7 +207,8 @@ private func makePreviewContainer() -> AppContainer {
             privacyZoneStore: privacyZoneStore,
             readingStore: readingStore,
             uploader: uploader,
-            logger: .app
+            logger: .app,
+            checkpointStore: checkpointStore
         ),
         locationService: PreviewLocationService(),
         motionService: PreviewMotionService(),

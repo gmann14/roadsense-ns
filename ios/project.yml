@@ -4,12 +4,6 @@ options:
   deploymentTarget:
     iOS: "17.0"
 packages:
-  MapboxMaps:
-    url: https://github.com/mapbox/mapbox-maps-ios.git
-    from: 11.0.0
-  Supabase:
-    url: https://github.com/supabase/supabase-swift.git
-    from: 2.20.0
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa.git
     from: 8.21.0
@@ -45,8 +39,6 @@ targets:
         excludes:
           - Info.plist
     dependencies:
-      - package: MapboxMaps
-      - package: Supabase
       - package: Sentry
     settings:
       base:

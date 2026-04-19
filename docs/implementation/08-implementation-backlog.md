@@ -270,7 +270,7 @@ Post-MVP phases:
   - implement wrappers around `CMMotionManager`, `CMMotionActivityManager`, and `CLLocationManager`
 - **Acceptance**
   - services are mockable and isolated from pipeline logic
-- **Current repo note:** Production `LocationService`, `MotionService`, `DrivingDetector`, and `ThermalMonitor` wrappers now exist in the app target. Remaining work is orchestration and app-target validation once package resolution finishes.
+- **Current repo note:** Production `LocationService`, `MotionService`, `DrivingDetector`, and `ThermalMonitor` wrappers now exist in the app target, and the main `RoadSenseNS` target now builds for `iphonesimulator` on the trimmed pre-map dependency graph. Remaining work is real-device signing/install validation and then bringing Mapbox back when the home screen lands.
 
 ### B034 — SwiftData local models and queue state
 
@@ -412,7 +412,7 @@ Post-MVP phases:
 - **Acceptance**
   - crashes/errors are visible
   - logs do not include forbidden fields
-- **Current repo note:** `RoadSenseLogger` and a guarded `SentryBootstrapper` now exist. Full SDK validation still depends on package resolution plus manual verification that no forbidden fields are logged.
+- **Current repo note:** `RoadSenseLogger` and a guarded `SentryBootstrapper` now exist. Sentry remains linked; manual verification still needs to confirm that no forbidden fields are logged.
 
 ### B062 — Stats, settings, and trust copy
 

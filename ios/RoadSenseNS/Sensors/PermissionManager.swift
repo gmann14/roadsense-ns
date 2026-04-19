@@ -98,7 +98,7 @@ final class SystemPermissionManager: NSObject, PermissionManaging {
     }
 }
 
-extension SystemPermissionManager: CLLocationManagerDelegate {
+extension SystemPermissionManager: @preconcurrency CLLocationManagerDelegate {
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         guard let continuation = locationAuthorizationContinuation else {
             return

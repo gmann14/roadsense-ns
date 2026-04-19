@@ -47,7 +47,7 @@ final class LocationService: NSObject, LocationServicing {
     }
 }
 
-extension LocationService: CLLocationManagerDelegate {
+extension LocationService: @preconcurrency CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         for location in locations where location.horizontalAccuracy >= 0 {
             let speedKmh = max(location.speed, 0) * 3.6

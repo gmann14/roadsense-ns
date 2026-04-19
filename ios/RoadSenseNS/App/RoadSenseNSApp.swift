@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct RoadSenseNSApp: App {
@@ -15,7 +16,7 @@ struct RoadSenseNSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(container: container)
+                .modelContainer(container.modelContainer)
         }
-        .modelContainer(container.modelContainer)
     }
 }

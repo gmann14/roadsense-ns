@@ -39,21 +39,22 @@ final class MotionService: MotionServicing {
                 return
             }
 
+            let userAcceleration = MotionVector3(
+                x: motion.userAcceleration.x,
+                y: motion.userAcceleration.y,
+                z: motion.userAcceleration.z
+            )
+            let gravity = MotionVector3(
+                x: motion.gravity.x,
+                y: motion.gravity.y,
+                z: motion.gravity.z
+            )
+
             continuation.yield(
                 MotionSample(
                     timestamp: motion.timestamp,
-                    verticalAcceleration: MotionMath.verticalAcceleration(
-                        userAcceleration: MotionVector3(
-                            x: motion.userAcceleration.x,
-                            y: motion.userAcceleration.y,
-                            z: motion.userAcceleration.z
-                        ),
-                        gravity: MotionVector3(
-                            x: motion.gravity.x,
-                            y: motion.gravity.y,
-                            z: motion.gravity.z
-                        )
-                    )
+                    userAcceleration: userAcceleration,
+                    gravity: gravity
                 )
             )
         }

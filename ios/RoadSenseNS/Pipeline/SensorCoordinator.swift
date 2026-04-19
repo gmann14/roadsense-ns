@@ -34,7 +34,7 @@ final class SensorCoordinator {
         readingStore: ReadingStore,
         uploader: Uploader,
         logger: RoadSenseLogger,
-        checkpointStore: SensorCheckpointStore = SensorCheckpointStore()
+        checkpointStore: SensorCheckpointStore
     ) {
         self.locationService = locationService
         self.motionService = motionService

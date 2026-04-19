@@ -37,13 +37,14 @@ struct AppContainer {
         let motionService = MotionService()
         let drivingDetector = DrivingDetector()
         let thermalMonitor = ThermalMonitor()
+        let checkpointStore = SensorCheckpointStore()
         let uploader = Uploader(
             container: modelContainer,
             queueStore: uploadQueueStore,
             client: apiClient,
             logger: .upload
         )
-        AppContainer(
+        return AppContainer(
             config: config,
             permissions: SystemPermissionManager(),
             modelContainer: modelContainer,
@@ -61,7 +62,8 @@ struct AppContainer {
                 privacyZoneStore: privacyZoneStore,
                 readingStore: readingStore,
                 uploader: uploader,
-                logger: logger
+                logger: logger,
+                checkpointStore: checkpointStore
             ),
             locationService: locationService,
             motionService: motionService,

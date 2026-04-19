@@ -112,7 +112,7 @@ final class UploadQueueStore {
     private func fetchExistingPendingBatch(in context: ModelContext) throws -> UploadBatch? {
         let descriptor = FetchDescriptor<UploadBatch>(
             predicate: #Predicate {
-                $0.statusRawValue == UploadStatus.pending.rawValue || $0.statusRawValue == UploadStatus.inFlight.rawValue
+                $0.statusRawValue == "pending" || $0.statusRawValue == "inFlight"
             },
             sortBy: [SortDescriptor(\.createdAt, order: .forward)]
         )
