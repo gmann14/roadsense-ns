@@ -4,7 +4,7 @@ This directory now contains two layers:
 
 - `Package.swift` + `Sources/RoadSenseNSBootstrap/`
   - Foundation-only bootstrap code we can validate with `swift test`
-  - currently owns `AppEnvironment`, `AppConfig`, `CollectionReadiness`, `Endpoints`, `MotionMath`, `QualityFilter`, `ReadingBuilder`, `UploadPolicy`, and `RejectedReason`
+  - currently owns `AppEnvironment`, `AppConfig`, `CollectionReadiness`, `Endpoints`, `HighPassBiquad`, `MotionMath`, `PotholeDetector`, `PrivacyZone`, `QualityFilter`, `ReadingBuilder`, `UploadPolicy`, and `RejectedReason`
 - `project.yml` + `RoadSenseNS/`
   - XcodeGen project spec for the real iOS app target
   - app-shell files (`RoadSenseNSApp`, `AppContainer`, `AppModel`, onboarding flow, `PermissionManager`, `Info.plist`, placeholder tests)
@@ -17,6 +17,7 @@ Current status:
 - gravity-projection math for motion samples is implemented in a pure Swift seam with tests
 - reading-window assembly and documented quality-gate logic are implemented in pure Swift with tests
 - upload retry/failure policy is implemented in pure Swift with tests
+- privacy-zone creation/filtering, the high-pass filter, and pothole spike detection are implemented in pure Swift with tests
 - the app target has a real onboarding shell split from the ready-to-collect home shell
 - base `.xcconfig` files exist under `Config/`
 - optional secret override files can be created as:
