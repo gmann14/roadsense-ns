@@ -88,6 +88,9 @@ Before the full Xcode project is generated, keep the environment/config seam bui
 - `AppEnvironment`
 - `AppConfig`
 - `CollectionReadiness`
+- `MotionMath`
+- `MotionSample`
+- `MotionVector3`
 - `PermissionSnapshot`
 - `Endpoints`
 - `RejectedReason`

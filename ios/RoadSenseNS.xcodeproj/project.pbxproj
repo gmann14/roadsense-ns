@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */; };
 		1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE870B004546FC93939AF065 /* Endpoints.swift */; };
+		1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E39073C99FB20D024E79D0 /* MotionMath.swift */; };
 		3A12C703A9C25D212D32EECD /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
 		4030CA59DBFD2BD1002A939A /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 911FE323EAA29C4D280E37AB /* Supabase */; };
 		5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F9E1A697AF1C0543503C5D /* PermissionManager.swift */; };
@@ -59,6 +60,7 @@
 		1269DDDE04E2FB4239384BC9 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1EFAC01C66B9C992BC2313A7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		27F9E1A697AF1C0543503C5D /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
+		31E39073C99FB20D024E79D0 /* MotionMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionMath.swift; sourceTree = "<group>"; };
 		33BE8F93CE35FA6438817474 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RejectedReason.swift; sourceTree = "<group>"; };
 		48A050A1F2F270139D92540F /* RoadSenseNS.Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Production.xcconfig; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 				B61C0DD8F4BF7D0D5233BF1D /* App */,
 				CF5D38DA0C81059E6BD7F80C /* Network */,
 				648A1468144CAA6AD8F3CB29 /* Privacy */,
+				78B8AD817CC5B828170BEFDF /* Sensors */,
 			);
 			name = RoadSenseNSBootstrap;
 			path = Sources/RoadSenseNSBootstrap;
@@ -187,6 +190,14 @@
 				0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */,
 			);
 			path = RoadSenseNSTests;
+			sourceTree = "<group>";
+		};
+		78B8AD817CC5B828170BEFDF /* Sensors */ = {
+			isa = PBXGroup;
+			children = (
+				31E39073C99FB20D024E79D0 /* MotionMath.swift */,
+			);
+			path = Sensors;
 			sourceTree = "<group>";
 		};
 		9E5365CA19BCADC399895BD7 /* Products */ = {
@@ -424,6 +435,7 @@
 				C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */,
 				C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */,
 				1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */,
+				1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */,
 				ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */,
 				5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */,
 				7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */,
