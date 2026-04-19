@@ -91,6 +91,11 @@ Before the full Xcode project is generated, keep the environment/config seam bui
 - `MotionMath`
 - `MotionSample`
 - `MotionVector3`
+- `LocationSample`
+- `ReadingBuilder`
+- `ReadingWindow`
+- `QualityFilter`
+- `UploadPolicy`
 - `PermissionSnapshot`
 - `Endpoints`
 - `RejectedReason`
