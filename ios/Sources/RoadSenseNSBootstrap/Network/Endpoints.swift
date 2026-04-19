@@ -17,6 +17,12 @@ public struct Endpoints: Equatable, Sendable {
             .appendingPathComponent(id.uuidString.lowercased(), isDirectory: false)
     }
 
+    public var tileTemplateURLString: String {
+        config.functionsBaseURL.absoluteString
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            + "/tiles/{z}/{x}/{y}.mvt"
+    }
+
     public func tileURL(z: Int, x: Int, y: Int, version: Int? = nil) -> URL {
         var url = config.functionsBaseURL
             .appendingPathComponent("tiles", isDirectory: true)

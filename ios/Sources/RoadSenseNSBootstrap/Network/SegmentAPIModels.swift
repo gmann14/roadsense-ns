@@ -1,6 +1,6 @@
 import Foundation
 
-public struct SegmentDetailResponse: Codable, Equatable, Sendable {
+public struct SegmentDetailResponse: Codable, Equatable, Sendable, Identifiable {
     public let id: UUID
     public let roadName: String
     public let roadType: String

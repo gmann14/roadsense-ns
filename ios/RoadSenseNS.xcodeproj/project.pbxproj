@@ -24,6 +24,7 @@
 		2E1B6D32ED2B5BB95BBBDC7E /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB9B9294F92A70C11D0FB1B /* APIClient.swift */; };
 		3651E2DE8B84CAC043133934 /* SegmentAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5510C3BC3010F7CA1DBD337A /* SegmentAPIModels.swift */; };
 		3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CE5D67A573F4B606118C23 /* SettingsView.swift */; };
+		4030CA59DBFD2BD1002A939A /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
 		415EED346262E91866151E11 /* UploadResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */; };
 		4294ED05A035C9695AEE0A7F /* UploadQueueCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCF0439CC9DBD46EB595AA4 /* UploadQueueCore.swift */; };
 		42AFA19B9DFD89C70573617B /* UploadQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F7CA78BA461644E2643371 /* UploadQueueStore.swift */; };
@@ -96,7 +97,7 @@
 		D9A351F9F40DFF896B73D712 /* pothole-hit.csv in Resources */ = {isa = PBXBuildFile; fileRef = 023DE992C5BA96EAB05EF99A /* pothole-hit.csv */; };
 		D9D68063F1304D636E7E2814 /* BackgroundTaskRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B2199FED8B8DBD6F6FD265B /* BackgroundTaskRegistrar.swift */; };
 		DBE9EAA01AE9BA7D8306F7BF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */; };
-		DC0045BD98623446B06CC83F /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
+		DC0045BD98623446B06CC83F /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = DFBDE19C2B3A05C0840949A5 /* MapboxMaps */; };
 		DDCC83C031162D3E518D596B /* QualityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */; };
 		DFB8ADBE97DE5439C2D6429A /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BE8F93CE35FA6438817474 /* AppConfig.swift */; };
 		E0A858EAF54B726D7480CB88 /* DeviceTokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EC0C104BF5658C06ACCBB1 /* DeviceTokenManager.swift */; };
@@ -105,6 +106,7 @@
 		ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */; };
 		F005FBB0C3E992990AEBC2D6 /* IngestHealthEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */; };
 		F196DEC71004CA063E17D458 /* SegmentAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5510C3BC3010F7CA1DBD337A /* SegmentAPIModels.swift */; };
+		F320CE0A988E38F2900ED60A /* RoadQualityMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */; };
 		F3BBDEDC49BACD9ADAFD2A5D /* MotionMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E39073C99FB20D024E79D0 /* MotionMath.swift */; };
 		F3CF0CDC2F7A60CCD3B7CC90 /* PotholeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */; };
 		F95AA84B2BCBC6B15BA91532 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BE8F93CE35FA6438817474 /* AppConfig.swift */; };
@@ -177,6 +179,7 @@
 		851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
 		87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetentionPolicy.swift; sourceTree = "<group>"; };
 		8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeDetector.swift; sourceTree = "<group>"; };
+		8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadQualityMapView.swift; sourceTree = "<group>"; };
 		9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingBuilder.swift; sourceTree = "<group>"; };
 		998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenRecord.swift; sourceTree = "<group>"; };
 		9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -221,7 +224,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DC0045BD98623446B06CC83F /* Sentry in Frameworks */,
+				DC0045BD98623446B06CC83F /* MapboxMaps in Frameworks */,
+				4030CA59DBFD2BD1002A939A /* Sentry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -259,6 +263,7 @@
 			children = (
 				E6E3DAB71C1DA5E5CD179C4B /* MapColorPalette.swift */,
 				1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */,
+				8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */,
 				CA6257F1C7E68CE62C4CCF25 /* SegmentDetailSheet.swift */,
 			);
 			path = Map;
@@ -594,6 +599,7 @@
 			);
 			name = RoadSenseNS;
 			packageProductDependencies = (
+				DFBDE19C2B3A05C0840949A5 /* MapboxMaps */,
 				94AD22E714178BC9763D1344 /* Sentry */,
 			);
 			productName = RoadSenseNS;
@@ -656,6 +662,7 @@
 			mainGroup = 72C8991597F8571C49642375;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				96F64FC677BF723845031B5B /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
 				FC0B82BB3BA9464D0CAD100E /* XCRemoteSwiftPackageReference "sentry-cocoa" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -782,6 +789,7 @@
 				6F4BF681196BA8C52ABFDDD8 /* ReadingWindowProcessor.swift in Sources */,
 				7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */,
 				8147DC66BED1C5411E9FD89D /* RetentionPolicy.swift in Sources */,
+				F320CE0A988E38F2900ED60A /* RoadQualityMapView.swift in Sources */,
 				61C6790E5D041EB25808BAF3 /* RoadSenseLogger.swift in Sources */,
 				7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */,
 				F196DEC71004CA063E17D458 /* SegmentAPIModels.swift in Sources */,
@@ -1346,6 +1354,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		96F64FC677BF723845031B5B /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mapbox/mapbox-maps-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.22.0;
+			};
+		};
 		FC0B82BB3BA9464D0CAD100E /* XCRemoteSwiftPackageReference "sentry-cocoa" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/getsentry/sentry-cocoa.git";
@@ -1361,6 +1377,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FC0B82BB3BA9464D0CAD100E /* XCRemoteSwiftPackageReference "sentry-cocoa" */;
 			productName = Sentry;
+		};
+		DFBDE19C2B3A05C0840949A5 /* MapboxMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 96F64FC677BF723845031B5B /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */;
+			productName = MapboxMaps;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

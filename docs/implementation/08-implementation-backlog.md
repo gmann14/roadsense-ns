@@ -1,6 +1,6 @@
 # 08 — Implementation Backlog
 
-*Last updated: 2026-04-18*
+*Last updated: 2026-04-19*
 
 Covers: the literal execution backlog for implementing the spec set in [00](00-execution-plan.md) through [07](07-web-dashboard-implementation.md).
 
@@ -270,7 +270,7 @@ Post-MVP phases:
   - implement wrappers around `CMMotionManager`, `CMMotionActivityManager`, and `CLLocationManager`
 - **Acceptance**
   - services are mockable and isolated from pipeline logic
-- **Current repo note:** Production `LocationService`, `MotionService`, `DrivingDetector`, and `ThermalMonitor` wrappers now exist in the app target, and the main `RoadSenseNS` target now builds for `iphonesimulator` on the trimmed pre-map dependency graph. A product-style `MapScreen` shell and typed segment-detail client/parser are now in place; remaining work is real-device signing/install validation and then bringing Mapbox back for live tiles and tap selection.
+- **Current repo note:** Production `LocationService`, `MotionService`, `DrivingDetector`, and `ThermalMonitor` wrappers now exist in the app target, and the main `RoadSenseNS` target now builds for `iphonesimulator` with Mapbox and Sentry linked. A product-style `MapScreen`, live Mapbox tile rendering, tap selection, and typed segment-detail fetch/presentation are now in place. Remaining work is real-device signing/install validation and product polish on top of the now-live map shell.
 
 ### B034 — SwiftData local models and queue state
 
@@ -385,7 +385,7 @@ Post-MVP phases:
   - implement segment detail fetch
 - **Acceptance**
   - user can tap a segment and see the documented detail sheet
-- **Current repo note:** The non-Mapbox portion is done: `MapScreen` replaced the debug shell, `SegmentDetailSheet` exists, and `GET /segments/{id}` has typed endpoint/model/parser/client support with test coverage. The remaining work is the live Mapbox surface, tile source, segment hit-testing, and wiring real taps into the existing detail sheet.
+- **Current repo note:** This slice is now materially implemented: `MapScreen` replaced the debug shell, `RoadQualityMapView` renders live backend vector tiles through Mapbox, potholes render on-map, segment taps highlight via feature-state, and the existing `SegmentDetailSheet` is presented from real `GET /segments/{id}` fetches. Remaining work is UI-test coverage, local-drive overlays, and real-device field validation.
 
 ## Phase 7 — Reliability, Observability, And UX Hardening
 

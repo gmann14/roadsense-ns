@@ -8,11 +8,24 @@ struct MapScreen: View {
     let onShowPrivacyZones: () -> Void
 
     @State private var isLegendExpanded = false
+    @State private var selectedSegment: SegmentDetailResponse?
+    @State private var isLoadingSegment = false
+    @State private var segmentLoadError: String?
 
     var body: some View {
         ZStack {
-            MapBackdrop()
-                .ignoresSafeArea()
+            RoadQualityMapView(
+                config: model.config,
+                onSelectSegment: { segmentID in
+                    Task {
+                        await loadSegment(id: segmentID)
+                    }
+                },
+                onClearSelection: {
+                    selectedSegment = nil
+                    segmentLoadError = nil
+                }
+            )
 
             VStack(spacing: 0) {
                 topChrome
@@ -30,6 +43,23 @@ struct MapScreen: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
             }
+        }
+        .sheet(item: $selectedSegment) { segment in
+            SegmentDetailSheet(segment: segment)
+        }
+        .alert("Could not load road details", isPresented: Binding(
+            get: { segmentLoadError != nil },
+            set: { newValue in
+                if !newValue {
+                    segmentLoadError = nil
+                }
+            }
+        )) {
+            Button("OK", role: .cancel) {
+                segmentLoadError = nil
+            }
+        } message: {
+            Text(segmentLoadError ?? "Try again in a moment.")
         }
     }
 
@@ -71,6 +101,13 @@ struct MapScreen: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(.white.opacity(0.14), in: Capsule())
+            }
+
+            if isLoadingSegment {
+                ProgressView("Loading road details…")
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .foregroundStyle(.white.opacity(0.9))
             }
 
             Spacer(minLength: 0)
@@ -195,6 +232,24 @@ struct MapScreen: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    private func loadSegment(id: UUID) async {
+        guard !isLoadingSegment else { return }
+
+        isLoadingSegment = true
+        segmentLoadError = nil
+
+        do {
+            try await Task.sleep(for: .milliseconds(140))
+            let detail = try await model.fetchSegmentDetail(id: id)
+            selectedSegment = detail
+        } catch {
+            selectedSegment = nil
+            segmentLoadError = error.localizedDescription
+        }
+
+        isLoadingSegment = false
     }
 }
 
@@ -328,59 +383,6 @@ private struct ContributionCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .strokeBorder(.white.opacity(0.14), lineWidth: 1)
         )
-    }
-}
-
-private struct MapBackdrop: View {
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        Color(roadsenseHex: 0x0E2A47),
-                        Color(roadsenseHex: 0x16405F),
-                        Color(roadsenseHex: 0x235C68)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-
-                RadialGradient(
-                    colors: [
-                        Color.white.opacity(0.14),
-                        Color.clear
-                    ],
-                    center: .center,
-                    startRadius: 20,
-                    endRadius: geometry.size.width * 0.6
-                )
-
-                Canvas { context, size in
-                    let strokes: [(CGPoint, CGPoint, Color, CGFloat)] = [
-                        (CGPoint(x: size.width * 0.08, y: size.height * 0.22), CGPoint(x: size.width * 0.9, y: size.height * 0.36), Color(roadsenseHex: 0xF4D35E).opacity(0.65), 7),
-                        (CGPoint(x: size.width * 0.15, y: size.height * 0.72), CGPoint(x: size.width * 0.82, y: size.height * 0.58), Color(roadsenseHex: 0x2CB67D).opacity(0.6), 9),
-                        (CGPoint(x: size.width * 0.28, y: size.height * 0.12), CGPoint(x: size.width * 0.38, y: size.height * 0.88), Color.white.opacity(0.18), 5),
-                        (CGPoint(x: size.width * 0.62, y: size.height * 0.08), CGPoint(x: size.width * 0.56, y: size.height * 0.92), Color(roadsenseHex: 0xD64550).opacity(0.45), 6)
-                    ]
-
-                    for stroke in strokes {
-                        var path = Path()
-                        path.move(to: stroke.0)
-                        path.addCurve(
-                            to: stroke.1,
-                            control1: CGPoint(x: stroke.0.x + 40, y: stroke.0.y + 30),
-                            control2: CGPoint(x: stroke.1.x - 60, y: stroke.1.y - 20)
-                        )
-                        context.stroke(
-                            path,
-                            with: .color(stroke.2),
-                            style: StrokeStyle(lineWidth: stroke.3, lineCap: .round, lineJoin: .round)
-                        )
-                    }
-                }
-                .opacity(0.9)
-            }
-        }
     }
 }
 

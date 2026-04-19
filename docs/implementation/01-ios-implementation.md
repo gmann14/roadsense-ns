@@ -157,7 +157,7 @@ The current app shell is intentionally thin but real:
 - `AppContainer` now also owns the SwiftData `ModelContainer`, `PrivacyZoneStore`, `UploadQueueStore`, `APIClient`, `Uploader`, sensor wrappers, logger, and background-task registrar seam
 - `AppModel` owns the current `PermissionSnapshot`, persists the privacy-zone decision in `UserDefaults`, derives `CollectionReadiness`, and reads actual zone existence from `PrivacyZoneStore` so a saved zone automatically satisfies the onboarding gate
 - `ContentView` routes between onboarding and `MapScreen` using `CollectionReadiness.evaluate(...)`
-- `PrivacyZonesView` is now a real app-target screen. It is intentionally simple and manual for now: label + latitude + longitude + radius. Replace it with a map-backed picker after Mapbox resolves.
+- `PrivacyZonesView` is now a real app-target screen. It is intentionally simple and manual for now: label + latitude + longitude + radius. Replace it with a map-backed picker in a later product slice.
 
 This keeps the permission/privacy gate testable in pure Swift while leaving the Core Location / Core Motion wiring in the app target where it belongs.
 
@@ -173,8 +173,9 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
 - `SensorCheckpointStore` now writes `SensorCheckpoint.json` in Application Support and restores it if it is newer than 30 minutes. The checkpoint includes the in-progress `ReadingBuilder` state, `PotholeDetector` history, recent pothole candidates, and latest location.
 - `BackgroundTaskRegistrar` now registers both documented task identifiers: `ca.roadsense.ios.nightly-cleanup` and `ca.roadsense.ios.upload-drain`. `project.yml` emits `BGTaskSchedulerPermittedIdentifiers` to match them.
 - `SentryBootstrapper` exists as a guarded seam: it becomes active when the Sentry package resolves, but remains a no-op while package resolution is still blocked.
-- `MapScreen` now exists as a product-facing SwiftUI shell with a recording status pill, floating contribution card, stats/settings overlay buttons, and expandable road-quality legend. Its background is still a SwiftUI placeholder rather than a live Mapbox view.
-- `SegmentDetailSheet` now exists as an editorial detail surface that matches the documented response shape and confidence/trend wording.
+- `MapScreen` now exists as a product-facing SwiftUI shell with a recording status pill, floating contribution card, stats/settings overlay buttons, and expandable road-quality legend.
+- `RoadQualityMapView` now renders live Mapbox-backed road-quality vector tiles from the backend, shows pothole markers, and supports tap selection using feature-state highlighting.
+- `SegmentDetailSheet` now exists as an editorial detail surface that matches the documented response shape and confidence/trend wording, and `MapScreen` now presents it from real segment taps via `GET /segments/{id}`.
 
 ### Current Ready-Shell Behavior
 
@@ -190,7 +191,7 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
   - open Stats and Settings sheets
   - force an upload drain through the contribution card action when uploads are pending
 
-This is now credible product UI, but the map surface is still a placeholder until live Mapbox tiles and selection wiring land.
+This is now credible product UI with the first real live map loop in place. Remaining product work is refinement: local-drive overlays, a map-backed privacy-zone editor, stronger map loading/error states, and real-device validation.
 
 ### Current Stats / Settings Surfaces
 

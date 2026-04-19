@@ -12,6 +12,7 @@ final class AppModel {
     private let locationService: LocationServicing
     private let defaults: UserDefaults
     private let privacyZoneDecisionKey = "ca.roadsense.ios.privacy-zone-decision"
+    private let apiClient: APIClient
     private let readingStore: ReadingStore
     private let uploadQueueStore: UploadQueueStore
     private let uploader: Uploader
@@ -34,6 +35,7 @@ final class AppModel {
         self.locationService = container.locationService
         self.defaults = defaults
         self.privacyZoneStore = container.privacyZoneStore
+        self.apiClient = container.apiClient
         self.readingStore = container.readingStore
         self.userStatsStore = container.userStatsStore
         self.uploadQueueStore = container.uploadQueueStore
@@ -121,6 +123,10 @@ final class AppModel {
 
     func statsSummary() throws -> UserStatsSummary {
         try userStatsStore.summary()
+    }
+
+    func fetchSegmentDetail(id: UUID) async throws -> SegmentDetailResponse {
+        try await apiClient.fetchSegmentDetail(id: id)
     }
 
     private func updatePrivacyZoneDecision(_ state: PrivacyZoneSetupState) {
