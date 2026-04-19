@@ -25,12 +25,15 @@ RoadSenseNS/
 │   │   ├── AppBootstrap.swift         # loads build settings from Info.plist
 │   │   ├── AppContainer.swift         # root dependency graph
 │   │   └── AppModel.swift             # launch/onboarding shell state
+│   │   ├── BackgroundTaskRegistrar.swift
+│   │   ├── RoadSenseLogger.swift
+│   │   └── SentryBootstrapper.swift
 │   ├── Features/
 │   │   ├── Onboarding/                # views + permission/privacy shell
 │   │   ├── Map/                       # MapboxMapView wrapper, overlays
 │   │   ├── SegmentDetail/
 │   │   ├── Settings/
-│   │   ├── PrivacyZones/
+│   │   ├── PrivacyZones/              # manual zone-management form until map-backed editor lands
 │   │   └── Stats/
 │   ├── Sensors/
 │   │   ├── DrivingDetector.swift      # CMMotionActivityManager wrapper
@@ -47,6 +50,8 @@ RoadSenseNS/
 │   │   └── QualityFilter.swift        # speed/accuracy gates
 │   ├── Persistence/
 │   │   ├── ModelContainerProvider.swift
+│   │   ├── PrivacyZoneStore.swift
+│   │   ├── UploadQueueStore.swift
 │   │   ├── Models/                    # @Model types
 │   │   │   ├── ReadingRecord.swift
 │   │   │   ├── UploadBatch.swift
@@ -103,8 +108,14 @@ Before the full Xcode project is generated, keep the environment/config seam bui
 - `ReadingWindow`
 - `RetentionPolicy`
 - `QualityFilter`
+- `BackgroundCollectionPolicy`
 - `UploadEligibilityPolicy`
+- `UploadReadingPayload`
+- `UploadReadingsRequest`
+- `UploadReadingsResponse`
 - `UploadPolicy`
+- `UploadRequestFactory`
+- `UploadResponseParser`
 - `UploadQueueCore`
 - `PermissionSnapshot`
 - `Endpoints`
@@ -136,11 +147,21 @@ struct AppContainer {
 The current app shell is intentionally thin but real:
 
 - `AppBootstrap` reads `APP_ENV`, `API_BASE_URL`, `MAPBOX_ACCESS_TOKEN`, `SENTRY_DSN`, and `APP_GROUP_IDENTIFIER` from `Info.plist`
-- `AppContainer` owns the top-level `PermissionManaging` dependency
-- `AppModel` owns the current `PermissionSnapshot`, persists the privacy-zone decision in `UserDefaults`, and derives `CollectionReadiness`
+- `AppContainer` now also owns the SwiftData `ModelContainer`, `PrivacyZoneStore`, `UploadQueueStore`, `APIClient`, `Uploader`, sensor wrappers, logger, and background-task registrar seam
+- `AppModel` owns the current `PermissionSnapshot`, persists the privacy-zone decision in `UserDefaults`, derives `CollectionReadiness`, and reads actual zone existence from `PrivacyZoneStore` so a saved zone automatically satisfies the onboarding gate
 - `ContentView` routes between onboarding and the ready-to-collect shell using `CollectionReadiness.evaluate(...)`
+- `PrivacyZonesView` is now a real app-target screen. It is intentionally simple and manual for now: label + latitude + longitude + radius. Replace it with a map-backed picker after Mapbox resolves.
 
 This keeps the permission/privacy gate testable in pure Swift while leaving the Core Location / Core Motion wiring in the app target where it belongs.
+
+### Current Implemented App-Target Infrastructure
+
+- `LocationService`, `MotionService`, `DrivingDetector`, and `ThermalMonitor` now exist as production wrappers around Apple APIs. They are not yet orchestrated into full collection, but the DI seam is now real instead of hypothetical.
+- `ModelContainerProvider` creates the persistent SwiftData container for `ReadingRecord`, `UploadBatch`, `PrivacyZoneRecord`, `UserStats`, and `DeviceTokenRecord`.
+- `UploadQueueStore` persists batch assignment / success / failure state using `UploadQueueCore`.
+- `APIClient` + `Uploader` now implement the first real app-side upload drain path against `POST /upload-readings`.
+- `BackgroundTaskRegistrar` registers the cleanup task identifier `ca.roadsense.ios.cleanup`, and `project.yml` now emits `BGTaskSchedulerPermittedIdentifiers` to match it.
+- `SentryBootstrapper` exists as a guarded seam: it becomes active when the Sentry package resolves, but remains a no-op while package resolution is still blocked.
 
 ### Sensor Protocol Seam
 

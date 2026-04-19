@@ -2,11 +2,20 @@ import SwiftUI
 
 @main
 struct RoadSenseNSApp: App {
-    private let container = AppContainer.bootstrap(config: AppBootstrap.loadConfig())
+    private let container: AppContainer
+
+    init() {
+        let config = AppBootstrap.loadConfig()
+        SentryBootstrapper.bootstrap(config: config)
+        let container = AppContainer.bootstrap(config: config)
+        BackgroundTaskRegistrar.registerAll(logger: container.logger)
+        self.container = container
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView(container: container)
         }
+        .modelContainer(container.modelContainer)
     }
 }

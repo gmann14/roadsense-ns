@@ -61,6 +61,8 @@ targets:
           - location
           - processing
           - fetch
+        INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers:
+          - ca.roadsense.ios.cleanup
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: $(inherited)
   RoadSenseNSTests:
     type: bundle.unit-test

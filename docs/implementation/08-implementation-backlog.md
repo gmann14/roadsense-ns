@@ -270,6 +270,7 @@ Post-MVP phases:
   - implement wrappers around `CMMotionManager`, `CMMotionActivityManager`, and `CLLocationManager`
 - **Acceptance**
   - services are mockable and isolated from pipeline logic
+- **Current repo note:** Production `LocationService`, `MotionService`, `DrivingDetector`, and `ThermalMonitor` wrappers now exist in the app target. Remaining work is orchestration and app-target validation once package resolution finishes.
 
 ### B034 — SwiftData local models and queue state
 
@@ -282,6 +283,7 @@ Post-MVP phases:
   - implement local queue and cleanup policies
 - **Acceptance**
   - app can persist pending upload state across relaunch
+- **Current repo note:** `ModelContainerProvider`, `PrivacyZoneStore`, and `UploadQueueStore` now land this slice beyond just model definitions. Relauch persistence still needs app-target validation.
 
 ## Phase 5 — End-To-End Stub Loop
 
@@ -310,6 +312,7 @@ Post-MVP phases:
   - send hardcoded or stubbed readings first, then real assembled readings
 - **Acceptance**
   - iOS can upload a batch and receive a valid response
+- **Current repo note:** `UploadRequestFactory`, `UploadResponseParser`, `APIClient`, and `Uploader` now exist. What remains is app-target integration testing against local/staging and wiring from real assembled readings.
 
 ### B042 — End-to-end smoke from phone to map
 
@@ -349,6 +352,7 @@ Post-MVP phases:
 - **Acceptance**
   - passive collection cannot silently start without privacy-zone decision
   - server never receives filtered-zone readings
+- **Current repo note:** onboarding is now wired to a real `PrivacyZonesView` + `PrivacyZoneStore`, and saved zones automatically satisfy the gate. The remaining work is a map-backed zone editor and wiring zone filtering into the live sensor pipeline.
 
 ### B052 — Quality filters and uploader hardening
 
@@ -388,6 +392,7 @@ Post-MVP phases:
   - implement SLC bootstrap and safe background behavior
 - **Acceptance**
   - app survives documented background scenarios short of user force-quit
+- **Current repo note:** `BackgroundCollectionPolicy` and `BackgroundTaskRegistrar` now exist, and the project emits `BGTaskSchedulerPermittedIdentifiers`. Significant-location-change orchestration and real-device validation remain.
 
 ### B061 — Sentry, structured logs, and ops metrics
 
@@ -402,6 +407,7 @@ Post-MVP phases:
 - **Acceptance**
   - crashes/errors are visible
   - logs do not include forbidden fields
+- **Current repo note:** `RoadSenseLogger` and a guarded `SentryBootstrapper` now exist. Full SDK validation still depends on package resolution plus manual verification that no forbidden fields are logged.
 
 ### B062 — Stats, settings, and trust copy
 

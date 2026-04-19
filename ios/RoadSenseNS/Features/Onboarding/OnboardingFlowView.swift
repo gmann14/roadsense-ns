@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OnboardingFlowView: View {
     @Bindable var model: AppModel
+    @State private var isShowingPrivacyZones = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -22,6 +23,16 @@ struct OnboardingFlowView: View {
             Spacer()
         }
         .padding(24)
+        .sheet(isPresented: $isShowingPrivacyZones, onDismiss: {
+            model.refreshPrivacyZones()
+        }) {
+            PrivacyZonesView(
+                store: model.privacyZoneStore,
+                onChange: {
+                    model.refreshPrivacyZones()
+                }
+            )
+        }
     }
 
     private var permissionIntro: some View {
@@ -75,8 +86,8 @@ struct OnboardingFlowView: View {
             Text("RoadSense NS filters readings near home and work on-device. Configure at least one privacy zone, or explicitly accept the risk before you continue.")
                 .foregroundStyle(.secondary)
 
-            Button("I configured my privacy zones") {
-                model.markPrivacyZonesConfigured()
+            Button("Manage privacy zones") {
+                isShowingPrivacyZones = true
             }
             .buttonStyle(.borderedProminent)
 
