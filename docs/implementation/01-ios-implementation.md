@@ -193,7 +193,13 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
   - open Stats and Settings sheets
   - force an upload drain through the contribution card action when uploads are pending
 
-This is now credible product UI with the first real live map loop in place. Remaining product work is refinement: deeper retry/empty-state handling around the live map, UI-test coverage around the live map shell, broader fixture coverage, and real-device validation.
+This is now credible product UI with the first real live map loop in place. The app target also now has deterministic UI-test launch scenarios:
+
+- `ROAD_SENSE_TEST_SCENARIO=default` starts in the privacy-gate path
+- `ROAD_SENSE_TEST_SCENARIO=ready-shell` seeds an in-memory ready state with one saved privacy zone, a few local readings, and user stats
+- Under XCTest, the home shell uses a lightweight non-Mapbox testing surface so simulator UI tests validate our app flow rather than third-party map startup
+
+Remaining product work is refinement: deeper retry/empty-state handling around the live map, broader fixture coverage, and real-device validation.
 
 ### Current Stats / Settings Surfaces
 

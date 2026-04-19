@@ -36,10 +36,12 @@ schemes:
       targets:
         RoadSenseNS: all
         RoadSenseNSTests: [test]
+        RoadSenseNSUITests: [test]
     test:
       gatherCoverageData: false
       targets:
         - name: RoadSenseNSTests
+        - name: RoadSenseNSUITests
 targets:
   RoadSenseNS:
     type: application

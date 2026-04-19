@@ -53,8 +53,8 @@
 		867513AB7BB41CE72BCFDBC8 /* QualityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */; };
 		88254277AF3BF19D3FD07EC8 /* QueueModelMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */; };
 		886A7E16B1112529B6004302 /* SensorFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026DC5F95328D7091BC8482E /* SensorFixture.swift */; };
+		88F7FD030231687D31CA394B /* AppFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7648F667665CDF25B279C81 /* AppFlowUITests.swift */; };
 		8AF51647C5DCF2AD6C785D47 /* SensorCheckpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */; };
-		8D115A4BF690BF1A26B2A326 /* PlaceholderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */; };
 		91A2DEC04A7C99EFBE8B392C /* MapColorPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E3DAB71C1DA5E5CD179C4B /* MapColorPalette.swift */; };
 		93499EAF4872315D0197908C /* ReadingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92672E8E369B06AFF5F25AF /* ReadingStore.swift */; };
 		94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */; };
@@ -139,7 +139,6 @@
 		06C075253EF1F1E69FC89030 /* SegmentDetailResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentDetailResponseParser.swift; sourceTree = "<group>"; };
 		0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderTests.swift; sourceTree = "<group>"; };
 		0AFFFE8ED069250BF48A1547 /* UploadAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadAPIModels.swift; sourceTree = "<group>"; };
-		0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderUITests.swift; sourceTree = "<group>"; };
 		10D40F3275A4DDC565E3DD2E /* PrivacyZoneRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyZoneRecord.swift; sourceTree = "<group>"; };
 		1269DDDE04E2FB4239384BC9 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueModelMapper.swift; sourceTree = "<group>"; };
@@ -216,6 +215,7 @@
 		EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngestHealthEvaluator.swift; sourceTree = "<group>"; };
 		EE870B004546FC93939AF065 /* Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endpoints.swift; sourceTree = "<group>"; };
 		F70A04456020333C21483C47 /* HighPassBiquad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighPassBiquad.swift; sourceTree = "<group>"; };
+		F7648F667665CDF25B279C81 /* AppFlowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFlowUITests.swift; sourceTree = "<group>"; };
 		F92672E8E369B06AFF5F25AF /* ReadingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -530,7 +530,7 @@
 		EE56D8855F086B71B6EE0CED /* RoadSenseNSUITests */ = {
 			isa = PBXGroup;
 			children = (
-				0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */,
+				F7648F667665CDF25B279C81 /* AppFlowUITests.swift */,
 			);
 			path = RoadSenseNSUITests;
 			sourceTree = "<group>";
@@ -704,7 +704,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8D115A4BF690BF1A26B2A326 /* PlaceholderUITests.swift in Sources */,
+				88F7FD030231687D31CA394B /* AppFlowUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

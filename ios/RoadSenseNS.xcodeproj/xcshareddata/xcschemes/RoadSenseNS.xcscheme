@@ -34,6 +34,20 @@
                ReferencedContainer = "container:RoadSenseNS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "6C4282FA31560B7A152AC1C4"
+               BuildableName = "RoadSenseNSUITests.xctest"
+               BlueprintName = "RoadSenseNSUITests"
+               ReferencedContainer = "container:RoadSenseNS.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -59,6 +73,16 @@
                BlueprintIdentifier = "F3B73F912150FE5952CCF260"
                BuildableName = "RoadSenseNSTests.xctest"
                BlueprintName = "RoadSenseNSTests"
+               ReferencedContainer = "container:RoadSenseNS.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "6C4282FA31560B7A152AC1C4"
+               BuildableName = "RoadSenseNSUITests.xctest"
+               BlueprintName = "RoadSenseNSUITests"
                ReferencedContainer = "container:RoadSenseNS.xcodeproj">
             </BuildableReference>
          </TestableReference>

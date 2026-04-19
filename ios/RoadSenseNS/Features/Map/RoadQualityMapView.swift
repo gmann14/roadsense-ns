@@ -16,6 +16,19 @@ struct RoadQualityMapView: View {
     )
 
     var body: some View {
+        Group {
+            if AppBootstrap.isRunningTests {
+                TestingRoadQualityMapView(
+                    pendingDriveCoordinates: pendingDriveCoordinates,
+                    onMapLoaded: onMapLoaded
+                )
+            } else {
+                liveMap
+            }
+        }
+    }
+
+    private var liveMap: some View {
         MapReader { proxy in
             Map(viewport: $viewport) {
                 Puck2D()
@@ -63,6 +76,51 @@ struct RoadQualityMapView: View {
                 onMapLoadingError(event.message)
             }
             .ignoresSafeArea()
+        }
+    }
+}
+
+private struct TestingRoadQualityMapView: View {
+    let pendingDriveCoordinates: [CLLocationCoordinate2D]
+    let onMapLoaded: () -> Void
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(roadsenseHex: 0x0E2A36),
+                    Color(roadsenseHex: 0x1B4D59),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            VStack(spacing: 14) {
+                Image(systemName: "map.fill")
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+
+                Text("Testing map surface")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                Text(
+                    pendingDriveCoordinates.isEmpty
+                        ? "UI tests run against a deterministic non-Mapbox map shell."
+                        : "Pending local drive overlay data is present in the test shell."
+                )
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.82))
+                .frame(maxWidth: 280)
+            }
+            .padding(24)
+            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
+        .ignoresSafeArea()
+        .accessibilityIdentifier("map.testing-surface")
+        .task {
+            onMapLoaded()
         }
     }
 }

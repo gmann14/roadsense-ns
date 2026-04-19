@@ -21,11 +21,13 @@ struct SettingsView: View {
                         model.startPassiveMonitoring()
                     }
                 }
+                .accessibilityIdentifier("settings.toggle-monitoring")
 
                 if model.readiness.backgroundCollection == .upgradeRequired {
                     Button("Enable background collection") {
                         model.requestAlwaysLocationUpgrade()
                     }
+                    .accessibilityIdentifier("settings.enable-background")
                 }
             }
 
@@ -34,6 +36,7 @@ struct SettingsView: View {
                     dismiss()
                     onManagePrivacyZones()
                 }
+                .accessibilityIdentifier("settings.manage-privacy-zones")
 
                 Text("Privacy zones are enforced on-device. Filtered readings never leave your phone.")
                     .foregroundStyle(.secondary)
@@ -50,6 +53,7 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(isDeleting)
+                .accessibilityIdentifier("settings.delete-local-data")
 
                 Text("This clears locally stored readings, upload queue state, and stats. It does not remove your privacy zones.")
                     .foregroundStyle(.secondary)

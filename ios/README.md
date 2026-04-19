@@ -62,10 +62,12 @@ Current notes:
 - Stats and Settings now exist as real screens off the home-shell overlay buttons.
 - The next milestone is no longer “make it compile”; it is “sign it, install it on a real phone, and validate the runtime path.”
 - The first golden-style harness replay path now uses checked-in `Fixtures/*.csv` and `Fixtures/*.expected.json` resources.
+- The harness suite now auto-discovers every checked-in `.expected.json` resource, so new fixtures join the deterministic replay suite without extra test boilerplate.
 - `RoadSenseNSSimHarness` now exists as a separate lightweight app target that loads fixture resources, replays them through the real pipeline, and shows the replay summary.
+- The app target now supports explicit XCTest launch scenarios via `ROAD_SENSE_TEST_SCENARIO=default|ready-shell`, and UI tests use a deterministic non-Mapbox testing surface so simulator automation can validate app flows without waiting on live map startup.
 - `RoadSenseNSTests` now includes first app-target network/uploader coverage, and the app enters an inert in-memory bootstrap path when launched under XCTest so host-based unit tests do not start real sensors, background tasks, or Sentry.
-- The remaining harness step is expanding the fixture corpus beyond the current pothole case and keeping the harness target green in CI.
-- The remaining product-facing iOS steps are deeper retry/empty-state handling around the live map, UI-test coverage around the live map shell, broader fixture replay coverage, and real-device runtime validation.
+- The remaining harness step is expanding the fixture corpus beyond the current pothole and smooth-cruise cases and keeping the harness target green in CI.
+- The remaining product-facing iOS steps are deeper retry/empty-state handling around the live map, broader fixture replay coverage, richer map-selection UI testing, and real-device runtime validation.
 
 Additional verification commands:
 

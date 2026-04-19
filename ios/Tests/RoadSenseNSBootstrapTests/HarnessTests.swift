@@ -33,24 +33,34 @@ struct HarnessTests {
     }
 
     @Test
-    func replaysFixtureAndMatchesExpectedEnvelope() throws {
-        let fixtureData = try #require(Bundle.module.url(forResource: "pothole-hit", withExtension: "csv"))
-        let expectedData = try #require(Bundle.module.url(forResource: "pothole-hit.expected", withExtension: "json"))
+    func replaysAllFixturesAndMatchesExpectedEnvelopes() throws {
+        let resourceURL = try #require(Bundle.module.resourceURL)
+        let expectedFiles = try FileManager.default.contentsOfDirectory(
+            at: resourceURL,
+            includingPropertiesForKeys: nil
+        )
+            .filter { $0.lastPathComponent.hasSuffix(".expected.json") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
-        let csv = try String(contentsOf: fixtureData, encoding: .utf8)
-        let expected = try decoder.decode(SensorFixtureExpected.self, from: Data(contentsOf: expectedData))
-        let fixture = try SensorFixtureParser.parse(csv: csv)
-        let result = SensorFixtureRunner.replay(fixture: fixture)
+        #expect(expectedFiles.isEmpty == false)
 
-        #expect(result.emittedReadings.count == expected.expectedWindows)
-        #expect(result.emittedReadings.contains { $0.isPothole } == expected.expectedPotholeFlagged)
+        for expectedURL in expectedFiles {
+            let expected = try decoder.decode(SensorFixtureExpected.self, from: Data(contentsOf: expectedURL))
+            let fixtureURL = try #require(Bundle.module.url(forResource: expected.fixture.replacingOccurrences(of: ".csv", with: ""), withExtension: "csv"))
+            let csv = try String(contentsOf: fixtureURL, encoding: .utf8)
+            let fixture = try SensorFixtureParser.parse(csv: csv)
+            let result = SensorFixtureRunner.replay(fixture: fixture)
 
-        let rms = try #require(result.emittedReadings.first?.roughnessRMS)
-        #expect(rms >= expected.expectedRmsRange[0])
-        #expect(rms <= expected.expectedRmsRange[1])
+            #expect(result.emittedReadings.count == expected.expectedWindows)
+            #expect(result.emittedReadings.contains { $0.isPothole } == expected.expectedPotholeFlagged)
 
-        let maxSpike = try #require(result.maxPotholeMagnitudeG)
-        #expect(maxSpike >= expected.expectedMaxSpikeGRange[0])
-        #expect(maxSpike <= expected.expectedMaxSpikeGRange[1])
+            let rms = try #require(result.emittedReadings.first?.roughnessRMS)
+            #expect(rms >= expected.expectedRmsRange[0])
+            #expect(rms <= expected.expectedRmsRange[1])
+
+            let maxSpike = result.maxPotholeMagnitudeG ?? 0
+            #expect(maxSpike >= expected.expectedMaxSpikeGRange[0])
+            #expect(maxSpike <= expected.expectedMaxSpikeGRange[1])
+        }
     }
 }

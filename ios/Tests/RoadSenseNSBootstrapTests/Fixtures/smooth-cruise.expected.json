@@ -1,0 +1,7 @@
+{
+  "fixture": "smooth-cruise.csv",
+  "expected_windows": 1,
+  "expected_pothole_flagged": false,
+  "expected_rms_range": [0.4, 1.1],
+  "expected_max_spike_g_range": [0.0, 0.0]
+}

@@ -2,7 +2,9 @@ import Foundation
 
 enum AppBootstrap {
     static var isRunningTests: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let environment = ProcessInfo.processInfo.environment
+        return environment["XCTestConfigurationFilePath"] != nil
+            || environment["ROAD_SENSE_UI_TESTS"] == "1"
     }
 
     static func loadConfig(bundle: Bundle = .main) -> AppConfig {

@@ -301,7 +301,7 @@ Post-MVP phases:
   - app can generate uploadable reading batches from replayed fixtures
 - **Current repo note:** The app target now has a first `SensorCoordinator` that runs `ReadingBuilder` against live streams and persists accepted windows through `ReadingStore`. What remains is fixture replay, checkpoint persistence, and app-target validation.
 - **Current repo note:** `SensorCheckpoint` + `SensorCheckpointStore` now exist and the coordinator checkpoints every 60 seconds. What remains is fixture replay and app-target validation.
-- **Current repo note:** `SensorFixtureParser` + `SensorFixtureRunner` now exist in the pure Swift layer, the bootstrap suite loads checked-in `Fixtures/*.csv` + `Fixtures/*.expected.json` resources, and `RoadSenseNSSimHarness` now replays a selected fixture in a lightweight developer app. What remains is adding captured-drive fixtures beyond the current pothole case and keeping the harness target green in CI.
+- **Current repo note:** `SensorFixtureParser` + `SensorFixtureRunner` now exist in the pure Swift layer, the bootstrap suite auto-discovers checked-in `Fixtures/*.csv` + `Fixtures/*.expected.json` resources, and `RoadSenseNSSimHarness` now replays the same fixture pattern in a lightweight developer app. What remains is adding more captured-drive fixtures and keeping the harness target green in CI.
 
 ### B041 — Stub uploader path
 
@@ -358,7 +358,7 @@ Post-MVP phases:
 - **Acceptance**
   - passive collection cannot silently start without privacy-zone decision
   - server never receives filtered-zone readings
-- **Current repo note:** this slice is materially implemented: onboarding is wired to a real `PrivacyZonesView` + `PrivacyZoneStore`, saved zones automatically satisfy the gate, the editor is map-backed, and `SensorCoordinator` applies zone filtering before persistence/upload. Remaining work is UI-test coverage and real-device validation of the privacy flow.
+- **Current repo note:** this slice is materially implemented: onboarding is wired to a real `PrivacyZonesView` + `PrivacyZoneStore`, saved zones automatically satisfy the gate, the editor is map-backed, `SensorCoordinator` applies zone filtering before persistence/upload, and simulator UI smokes now cover the first-run privacy path via a deterministic test scenario. Remaining work is real-device validation of the privacy flow.
 
 ### B052 — Quality filters and uploader hardening
 
@@ -385,7 +385,7 @@ Post-MVP phases:
   - implement segment detail fetch
 - **Acceptance**
   - user can tap a segment and see the documented detail sheet
-- **Current repo note:** This slice is now materially implemented: `MapScreen` replaced the debug shell, `RoadQualityMapView` renders live backend vector tiles through Mapbox, potholes render on-map, pending local drives render as a dashed teal overlay, segment taps highlight via feature-state, and the existing `SegmentDetailSheet` is presented from real `GET /segments/{id}` fetches. Remaining work is UI-test coverage and real-device field validation.
+- **Current repo note:** This slice is now materially implemented: `MapScreen` replaced the debug shell, `RoadQualityMapView` renders live backend vector tiles through Mapbox, potholes render on-map, pending local drives render as a dashed teal overlay, segment taps highlight via feature-state, the existing `SegmentDetailSheet` is presented from real `GET /segments/{id}` fetches, and simulator UI smokes cover shell/settings/privacy-editor navigation through a deterministic non-Mapbox testing surface. Remaining work is deeper drawer-selection UI coverage and real-device field validation.
 
 ## Phase 7 — Reliability, Observability, And UX Hardening
 
@@ -429,7 +429,7 @@ Post-MVP phases:
   - ensure privacy/freshness/confidence copy matches docs
 - **Acceptance**
   - a new user can find pause, privacy zones, and delete-local-data controls without assistance
-- **Current repo note:** `StatsView` and `SettingsView` now exist, including Always-upgrade, privacy-zone management entrypoint, and delete-local-data controls. What remains is product polish and app-target validation.
+- **Current repo note:** `StatsView` and `SettingsView` now exist, including Always-upgrade, privacy-zone management entrypoint, and delete-local-data controls. Simulator UI smokes now exercise the Settings -> Privacy Zones path from a seeded ready shell. What remains is product polish and broader app-target validation.
 
 ### B063 — Accessibility and Dynamic Type pass
 

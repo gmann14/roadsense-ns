@@ -211,9 +211,11 @@ Current repo note:
   - monotonic timestamp rejection
   - full replay into `ReadingBuilder` / `PotholeDetector` / `ReadingWindowProcessor`
   - expected window count / pothole flag / RMS range / spike range assertions
-- The first reusable CSV + `.expected.json` fixture pair is now checked into the bootstrap test target.
+- Reusable CSV + `.expected.json` fixture pairs are now checked into the bootstrap test target, including both a pothole case and a smooth-cruise baseline.
 - The dedicated `RoadSenseNSSimHarness` app target now loads and replays the same fixture pattern in a simple developer UI.
-- What still remains is expanding that corpus with real captured drives and keeping the harness build green in CI.
+- The bootstrap harness test now auto-discovers every checked-in `.expected.json` resource and replays the matching CSV fixture, so new fixtures join the deterministic suite automatically.
+- App-hosted UI smoke tests now launch against explicit in-memory scenarios (`default`, `ready-shell`) and use a non-Mapbox testing surface so simulator automation stays deterministic.
+- What still remains is expanding that corpus with real captured drives and keeping the harness/UI-test targets green in CI.
 
 ## Integration Tests
 

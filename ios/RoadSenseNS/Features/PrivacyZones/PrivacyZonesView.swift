@@ -83,6 +83,7 @@ struct PrivacyZonesView: View {
             .padding(.top, 14)
             .padding(.horizontal, 14)
         }
+        .accessibilityIdentifier("privacy-zones.map")
     }
 
     private var draftPanel: some View {
@@ -125,6 +126,7 @@ struct PrivacyZonesView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(Color(roadsenseHex: 0x187E74))
                     .disabled(draftLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("privacy-zones.save")
                 }
                 .padding(18)
                 .background(.background, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -136,6 +138,7 @@ struct PrivacyZonesView: View {
                     if zones.isEmpty {
                         Text("No privacy zones yet. Add at least one before passive collection starts.")
                             .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("privacy-zones.empty")
                     } else {
                         ForEach(zones, id: \.id) { zone in
                             savedZoneRow(zone)
@@ -175,6 +178,7 @@ struct PrivacyZonesView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(zone.label)
                         .font(.subheadline.weight(.semibold))
+                        .accessibilityIdentifier("privacy-zone.\(zone.label)")
                     Text("\(zone.latitude.formatted(.number.precision(.fractionLength(4)))), \(zone.longitude.formatted(.number.precision(.fractionLength(4))))")
                         .font(.footnote.monospacedDigit())
                         .foregroundStyle(.secondary)

@@ -85,8 +85,16 @@ struct MapScreen: View {
             Spacer(minLength: 12)
 
             HStack(spacing: 10) {
-                overlayButton(systemName: "chart.bar.fill", action: onShowStats)
-                overlayButton(systemName: "gearshape.fill", action: onShowSettings)
+                overlayButton(
+                    systemName: "chart.bar.fill",
+                    accessibilityID: "map.stats-button",
+                    action: onShowStats
+                )
+                overlayButton(
+                    systemName: "gearshape.fill",
+                    accessibilityID: "map.settings-button",
+                    action: onShowSettings
+                )
             }
         }
     }
@@ -98,6 +106,7 @@ struct MapScreen: View {
             Text("Road quality map")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.white)
+                .accessibilityIdentifier("map.title")
 
             Text(centerMessage)
                 .font(.subheadline)
@@ -112,6 +121,7 @@ struct MapScreen: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(.white.opacity(0.14), in: Capsule())
+                    .accessibilityIdentifier("map.pending-uploads")
             }
 
             if let mapLoadError {
@@ -274,6 +284,11 @@ struct MapScreen: View {
         .buttonStyle(.plain)
     }
 
+    private func overlayButton(systemName: String, accessibilityID: String, action: @escaping () -> Void) -> some View {
+        overlayButton(systemName: systemName, action: action)
+            .accessibilityIdentifier(accessibilityID)
+    }
+
     private func loadSegment(id: UUID) async {
         guard !isLoadingSegment else { return }
 
@@ -416,6 +431,7 @@ private struct ContributionCard: View {
             Button(actionTitle, action: onAction)
                 .buttonStyle(.borderedProminent)
                 .tint(Color(roadsenseHex: 0x2CB67D))
+                .accessibilityIdentifier("map.primary-action")
         }
         .padding(18)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
