@@ -94,15 +94,10 @@ roadsense-ns/
 ```
 1. Checkout
 2. Verify committed iOS scaffold + base `.xcconfig` files exist
-3. Run `swift test` in `ios/` to validate `AppConfig` / endpoint seams
+3. Run `swift test` in `ios/` to validate bootstrap seams
 4. Install XcodeGen
 5. Run `xcodegen generate`
-6. Restore SPM cache
-7. Lint: SwiftLint (fail on warnings)
-8. Write `.secrets.xcconfig` overrides from GitHub Actions secrets
-9. Build `RoadSenseNS-Staging` scheme
-10. `xcodebuild test` (unit + sim harness)
-11. Upload coverage to Codecov
+6. `xcodebuild build-for-testing` for the `RoadSenseNS` scheme on iPhone simulator
 ```
 
 Runs on `macos-14` runners. Target: < 15 min.
@@ -111,14 +106,18 @@ Runs on `macos-14` runners. Target: < 15 min.
 
 ```
 1. Checkout
-2. supabase start (boots Postgres + Deno locally)
-3. supabase db reset (applies migrations)
-4. supabase test db (pgTAP)
-5. For each function: deno test
-6. Lint migrations: sqlfluff dialect=postgres
+2. Write local Edge Function `.env` with CI-only `TOKEN_PEPPER`
+3. supabase start (boots Postgres + Deno locally)
+4. supabase db reset (applies migrations)
+5. supabase test db (pgTAP)
+6. For each function: deno test
+7. Run `./scripts/api-smoke.sh`
+8. Run `./scripts/seeded-e2e-smoke.sh`
 ```
 
 Runs on `ubuntu-22.04`. Target: < 10 min.
+
+Current bootstrap reality: both workflows are still `workflow_dispatch` only to avoid burning minutes on every commit, but a manual run should execute the exact steps above.
 
 ### `web-ci.yml` (Phase 2, every PR touching `apps/web/**`)
 

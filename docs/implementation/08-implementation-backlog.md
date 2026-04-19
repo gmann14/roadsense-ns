@@ -324,6 +324,7 @@ Post-MVP phases:
 - **RED**
   - staging smoke checklist
   - scripted API smoke (`./scripts/api-smoke.sh`) for `/health`, `/stats`, and duplicate-safe `/upload-readings`
+  - seeded backend smoke (`./scripts/seeded-e2e-smoke.sh`) proving upload → aggregate → segment detail → tile on a synthetic paved segment
 - **GREEN**
   - drive or replay data through full path
 - **Acceptance**

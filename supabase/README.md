@@ -27,6 +27,7 @@ Local verification:
 - `supabase test db`
 - `deno test -A supabase/functions/*/*_test.ts`
 - `SUPABASE_ANON_KEY=... FUNCTIONS_BASE_URL=http://127.0.0.1:54321/functions/v1 ./scripts/api-smoke.sh`
+- `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres SUPABASE_ANON_KEY=... FUNCTIONS_BASE_URL=http://127.0.0.1:54321/functions/v1 ./scripts/seeded-e2e-smoke.sh`
 
 For local Edge Function secrets such as `TOKEN_PEPPER`, use `supabase/functions/.env` during development. The local edge runtime reliably picks that file up; shell-exporting secrets before `supabase start` is not enough on this machine.
 

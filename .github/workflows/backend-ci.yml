@@ -31,6 +31,12 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Write local Edge Function secrets
+        run: |
+          cat > supabase/functions/.env <<'EOF'
+          TOKEN_PEPPER=ci-local-pepper
+          EOF
+
       - name: Start local Supabase stack
         run: supabase start
 
@@ -48,6 +54,18 @@ jobs:
             exit 0
           fi
           deno test -A "${test_files[@]}"
+
+      - name: Run API smoke scripts
+        shell: bash
+        run: |
+          eval "$(supabase status -o env)"
+          export FUNCTIONS_BASE_URL="${API_URL}/functions/v1"
+          export SUPABASE_ANON_KEY="${ANON_KEY}"
+          export DATABASE_URL="${DB_URL}"
+          bash -n ./scripts/api-smoke.sh
+          bash -n ./scripts/seeded-e2e-smoke.sh
+          ./scripts/api-smoke.sh
+          ./scripts/seeded-e2e-smoke.sh
 
       - name: Report scaffold status
         run: |

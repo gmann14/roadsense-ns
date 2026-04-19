@@ -52,3 +52,16 @@ jobs:
             echo "Expected generated Xcode project/workspace, but none was found."
             exit 1
           fi
+
+      - name: Build for testing
+        shell: bash
+        run: |
+          cd ios
+          xcodebuild build-for-testing \
+            -project RoadSenseNS.xcodeproj \
+            -scheme RoadSenseNS \
+            -configuration "Local Debug" \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            ENABLE_PREVIEWS=NO

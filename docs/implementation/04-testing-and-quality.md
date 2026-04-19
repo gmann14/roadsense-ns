@@ -221,6 +221,11 @@ Current repo note:
 
 Per-PR on merge to main: a "staging smoke" job runs the simulator harness end-to-end with uploads pointed at staging Supabase.
 
+Before a real drive or simulator-harness replay is required, keep one deterministic backend smoke in the loop:
+
+- `./scripts/api-smoke.sh` validates the public contract surface (`/health`, `/stats`, duplicate-safe `/upload-readings`)
+- `./scripts/seeded-e2e-smoke.sh` validates a seeded synthetic segment all the way through upload, aggregate update, segment detail, stats refresh, and non-empty tile emission
+
 - Upload → 200
 - Query `segment_aggregates` for the segment → new reading_count matches
 - Query tile endpoint → MVT contains the segment
