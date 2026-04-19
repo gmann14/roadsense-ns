@@ -4,6 +4,6 @@ MAPBOX_ACCESS_TOKEN = pk.placeholder.local
 SENTRY_DSN =
 APP_GROUP_IDENTIFIER = group.ca.roadsense.ios.local
 
-# Create RoadSenseNS.Local.secrets.xcconfig for local overrides.
-# This file is optional and ignored by git.
+// Create RoadSenseNS.Local.secrets.xcconfig for local overrides.
+// This file is optional and ignored by git.
 #include? "RoadSenseNS.Local.secrets.xcconfig"

@@ -58,4 +58,5 @@ Current notes:
 - The ready shell now exposes start/stop passive monitoring and counts for accepted, privacy-filtered, and pending-upload readings.
 - Background-task identifiers in the project now match the spec (`nightly-cleanup` and `upload-drain`) instead of the earlier placeholder cleanup-only ID.
 - Stats and Settings now exist as real screens even before the Mapbox home screen lands.
-- The first golden-style harness replay test now exists, but real checked-in CSV fixture files are still the next increment.
+- The first golden-style harness replay path now uses checked-in `Fixtures/*.csv` and `Fixtures/*.expected.json` resources.
+- The remaining harness step is wiring those reusable fixtures into the dedicated `RoadSenseNSSimHarness` app target.

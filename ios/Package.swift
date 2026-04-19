@@ -21,7 +21,10 @@ let package = Package(
         .testTarget(
             name: "RoadSenseNSBootstrapTests",
             dependencies: ["RoadSenseNSBootstrap"],
-            path: "Tests/RoadSenseNSBootstrapTests"
+            path: "Tests/RoadSenseNSBootstrapTests",
+            resources: [
+                .process("Fixtures"),
+            ]
         ),
     ]
 )

@@ -211,7 +211,8 @@ Current repo note:
   - monotonic timestamp rejection
   - full replay into `ReadingBuilder` / `PotholeDetector` / `ReadingWindowProcessor`
   - expected window count / pothole flag / RMS range / spike range assertions
-- What still remains is checking in real CSV + `.expected.json` files as reusable resources instead of keeping the current first fixture inline in test code.
+- The first reusable CSV + `.expected.json` fixture pair is now checked into the bootstrap test target.
+- What still remains is expanding that corpus with real captured drives and wiring the dedicated `RoadSenseNSSimHarness` UI around the same resources.
 
 ## Integration Tests
 

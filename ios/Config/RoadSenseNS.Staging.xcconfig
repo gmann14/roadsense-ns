@@ -4,6 +4,6 @@ MAPBOX_ACCESS_TOKEN = pk.placeholder.staging
 SENTRY_DSN =
 APP_GROUP_IDENTIFIER = group.ca.roadsense.ios.staging
 
-# Create RoadSenseNS.Staging.secrets.xcconfig for local overrides.
-# This file is optional and ignored by git.
+// Create RoadSenseNS.Staging.secrets.xcconfig for local overrides.
+// This file is optional and ignored by git.
 #include? "RoadSenseNS.Staging.secrets.xcconfig"
