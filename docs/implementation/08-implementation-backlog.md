@@ -299,6 +299,7 @@ Post-MVP phases:
   - produce POINT reading payloads from sensor streams
 - **Acceptance**
   - app can generate uploadable reading batches from replayed fixtures
+- **Current repo note:** The app target now has a first `SensorCoordinator` that runs `ReadingBuilder` against live streams and persists accepted windows through `ReadingStore`. What remains is fixture replay, checkpoint persistence, and app-target validation.
 
 ### B041 — Stub uploader path
 
@@ -339,6 +340,7 @@ Post-MVP phases:
   - implement `PotholeDetector`
 - **Acceptance**
   - scores are stable under fixture replay
+- **Current repo note:** `PotholeDetector` is now wired into the live `SensorCoordinator` path, but `RoughnessScorer` still needs to replace the current direct-RMS placeholder once fixture calibration work starts.
 
 ### B051 — Client-side privacy zones
 

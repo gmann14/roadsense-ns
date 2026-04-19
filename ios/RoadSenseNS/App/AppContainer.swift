@@ -7,9 +7,11 @@ struct AppContainer {
     let permissions: PermissionManaging
     let modelContainer: ModelContainer
     let privacyZoneStore: PrivacyZoneStoring
+    let readingStore: ReadingStore
     let uploadQueueStore: UploadQueueStore
     let apiClient: APIClient
     let uploader: Uploader
+    let sensorCoordinator: SensorCoordinator
     let locationService: LocationServicing
     let motionService: MotionServicing
     let drivingDetector: DrivingDetecting
@@ -26,25 +28,42 @@ struct AppContainer {
         }
 
         let privacyZoneStore = PrivacyZoneStore(container: modelContainer)
+        let readingStore = ReadingStore(container: modelContainer)
         let uploadQueueStore = UploadQueueStore(container: modelContainer)
         let apiClient = APIClient(endpoints: Endpoints(config: config))
+        let locationService = LocationService()
+        let motionService = MotionService()
+        let drivingDetector = DrivingDetector()
+        let thermalMonitor = ThermalMonitor()
+        let uploader = Uploader(
+            container: modelContainer,
+            queueStore: uploadQueueStore,
+            client: apiClient,
+            logger: .upload
+        )
         AppContainer(
             config: config,
             permissions: SystemPermissionManager(),
             modelContainer: modelContainer,
             privacyZoneStore: privacyZoneStore,
+            readingStore: readingStore,
             uploadQueueStore: uploadQueueStore,
             apiClient: apiClient,
-            uploader: Uploader(
-                container: modelContainer,
-                queueStore: uploadQueueStore,
-                client: apiClient,
-                logger: .upload
+            uploader: uploader,
+            sensorCoordinator: SensorCoordinator(
+                locationService: locationService,
+                motionService: motionService,
+                drivingDetector: drivingDetector,
+                thermalMonitor: thermalMonitor,
+                privacyZoneStore: privacyZoneStore,
+                readingStore: readingStore,
+                uploader: uploader,
+                logger: logger
             ),
-            locationService: LocationService(),
-            motionService: MotionService(),
-            drivingDetector: DrivingDetector(),
-            thermalMonitor: ThermalMonitor(),
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: thermalMonitor,
             logger: logger
         )
     }

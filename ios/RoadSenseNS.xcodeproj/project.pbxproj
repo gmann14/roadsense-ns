@@ -30,6 +30,7 @@
 		662745AF919AD72F235FBC77 /* RoadSenseNS.app in Resources */ = {isa = PBXBuildFile; fileRef = 9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6A4D3994F6D6782ACB98445F /* UploadRequestFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9553FFA21CB22675B92971 /* UploadRequestFactory.swift */; };
 		6B42654DBC077FAC55F09FD3 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */; };
+		6F4BF681196BA8C52ABFDDD8 /* ReadingWindowProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */; };
 		71B953E564C5532CCA058F32 /* UploadAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AFFFE8ED069250BF48A1547 /* UploadAPIModels.swift */; };
 		7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */; };
 		7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */; };
@@ -37,6 +38,7 @@
 		825EF8A058DF7DA06B8A89CE /* SentryBootstrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A63DB84BA5E66CE3F794D25 /* SentryBootstrapper.swift */; };
 		88254277AF3BF19D3FD07EC8 /* QueueModelMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */; };
 		8D115A4BF690BF1A26B2A326 /* PlaceholderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */; };
+		93499EAF4872315D0197908C /* ReadingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92672E8E369B06AFF5F25AF /* ReadingStore.swift */; };
 		94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */; };
 		982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70A04456020333C21483C47 /* HighPassBiquad.swift */; };
 		9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC86C13C16A0385D36E47FD /* AppContainer.swift */; };
@@ -55,6 +57,7 @@
 		CE11AD6DFDAB5C71982687C4 /* UploadStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A148A1535E38E0F509C75CB /* UploadStatus.swift */; };
 		D341480EFFBE39FDAF32552F /* ReadingBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */; };
 		D4C185705B6C67577E3128F9 /* PrivacyZonesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 583510BB6B1BABFA95ACB79D /* PrivacyZonesView.swift */; };
+		D6B093D0428291818D29B050 /* SensorCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A83AAFA6806FFC7DA4C2528 /* SensorCoordinator.swift */; };
 		D936E8CAA7F8D74C012BB1D8 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A2FE63800512FAB4319A1A /* LocationService.swift */; };
 		D9D68063F1304D636E7E2814 /* BackgroundTaskRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B2199FED8B8DBD6F6FD265B /* BackgroundTaskRegistrar.swift */; };
 		DBE9EAA01AE9BA7D8306F7BF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */; };
@@ -124,6 +127,7 @@
 		68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
 		6F90BE8F166D450841DA0B85 /* Placeholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Placeholder.swift; sourceTree = "<group>"; };
 		777A503AFECA80F0A49C3096 /* DrivingDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingDetector.swift; sourceTree = "<group>"; };
+		7A83AAFA6806FFC7DA4C2528 /* SensorCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorCoordinator.swift; sourceTree = "<group>"; };
 		7DCAA398E4BA72123985282C /* UploadPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPolicy.swift; sourceTree = "<group>"; };
 		851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
 		87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetentionPolicy.swift; sourceTree = "<group>"; };
@@ -141,6 +145,7 @@
 		C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSApp.swift; sourceTree = "<group>"; };
 		C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CEC86C13C16A0385D36E47FD /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
+		D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingWindowProcessor.swift; sourceTree = "<group>"; };
 		D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadResponseParser.swift; sourceTree = "<group>"; };
 		D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionReadiness.swift; sourceTree = "<group>"; };
 		D6D673F19DB713B76E0CDCF0 /* RoadSenseNSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -154,6 +159,7 @@
 		EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngestHealthEvaluator.swift; sourceTree = "<group>"; };
 		EE870B004546FC93939AF065 /* Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endpoints.swift; sourceTree = "<group>"; };
 		F70A04456020333C21483C47 /* HighPassBiquad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighPassBiquad.swift; sourceTree = "<group>"; };
+		F92672E8E369B06AFF5F25AF /* ReadingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -177,12 +183,21 @@
 				28F035620621F3107CCB6E6D /* ModelContainerProvider.swift */,
 				DB54690AD1B0B14F43315BE6 /* PrivacyZoneStore.swift */,
 				155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */,
+				F92672E8E369B06AFF5F25AF /* ReadingStore.swift */,
 				E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */,
 				43F7CA78BA461644E2643371 /* UploadQueueStore.swift */,
 				5A148A1535E38E0F509C75CB /* UploadStatus.swift */,
 				2A2AFDB3E79FE47BF9D5CA9A /* Models */,
 			);
 			path = Persistence;
+			sourceTree = "<group>";
+		};
+		1A09BD3973D04017D455F835 /* Pipeline */ = {
+			isa = PBXGroup;
+			children = (
+				7A83AAFA6806FFC7DA4C2528 /* SensorCoordinator.swift */,
+			);
+			path = Pipeline;
 			sourceTree = "<group>";
 		};
 		2616872B480318DDB35923E0 /* RoadSenseNSSimHarness */ = {
@@ -224,6 +239,7 @@
 				FDA53F96E3D07F8598FC53E6 /* Features */,
 				4CDED683C0261506DF4DE51D /* Network */,
 				028BC5F2F6B3161D91329D20 /* Persistence */,
+				1A09BD3973D04017D455F835 /* Pipeline */,
 				5A8CED41DE2A08EAC1E6EC8D /* Resources */,
 				3DA5CFEE591201A217A46DF1 /* Sensors */,
 			);
@@ -301,6 +317,7 @@
 				8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */,
 				569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */,
 				9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */,
+				D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */,
 			);
 			path = Pipeline;
 			sourceTree = "<group>";
@@ -622,10 +639,13 @@
 				88254277AF3BF19D3FD07EC8 /* QueueModelMapper.swift in Sources */,
 				D341480EFFBE39FDAF32552F /* ReadingBuilder.swift in Sources */,
 				B2E6DF647ED4515D3A700282 /* ReadingRecord.swift in Sources */,
+				93499EAF4872315D0197908C /* ReadingStore.swift in Sources */,
+				6F4BF681196BA8C52ABFDDD8 /* ReadingWindowProcessor.swift in Sources */,
 				7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */,
 				8147DC66BED1C5411E9FD89D /* RetentionPolicy.swift in Sources */,
 				61C6790E5D041EB25808BAF3 /* RoadSenseLogger.swift in Sources */,
 				7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */,
+				D6B093D0428291818D29B050 /* SensorCoordinator.swift in Sources */,
 				825EF8A058DF7DA06B8A89CE /* SentryBootstrapper.swift in Sources */,
 				0005F6455CB1194DA77528C2 /* ThermalMonitor.swift in Sources */,
 				71B953E564C5532CCA058F32 /* UploadAPIModels.swift in Sources */,

@@ -41,6 +41,9 @@ struct ContentView: View {
             LabeledContent("API Base", value: model.config.apiBaseURL.absoluteString)
             LabeledContent("Functions Base", value: model.config.functionsBaseURL.absoluteString)
             LabeledContent("Background collection", value: model.readiness.backgroundCollection.displayName)
+            LabeledContent("Passive monitoring", value: model.isPassiveMonitoringEnabled ? "Enabled" : "Disabled")
+            LabeledContent("Accepted readings", value: "\(model.acceptedReadingCount)")
+            LabeledContent("Privacy-filtered", value: "\(model.privacyFilteredCount)")
             LabeledContent("Pending uploads", value: "\(model.pendingUploadCount)")
 
             if model.readiness.showsPrivacyRiskWarning {
@@ -50,6 +53,15 @@ struct ContentView: View {
 
             Button("Manage privacy zones") {
                 isShowingPrivacyZones = true
+            }
+            .buttonStyle(.bordered)
+
+            Button(model.isPassiveMonitoringEnabled ? "Stop passive monitoring" : "Start passive monitoring") {
+                if model.isPassiveMonitoringEnabled {
+                    model.stopPassiveMonitoring()
+                } else {
+                    model.startPassiveMonitoring()
+                }
             }
             .buttonStyle(.bordered)
 
@@ -67,53 +79,7 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(
-        container: AppContainer(
-            config: AppConfig(
-                environment: .local,
-                apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
-                mapboxAccessToken: "pk.preview"
-            ),
-            permissions: PreviewPermissionManager(
-                snapshot: PermissionSnapshot(
-                    location: .whenInUse,
-                    motion: .authorized,
-                    privacyZones: .configured
-                )
-            ),
-            modelContainer: try! ModelContainerProvider.makeDefault(),
-            privacyZoneStore: PreviewPrivacyZoneStore(),
-            uploadQueueStore: UploadQueueStore(container: try! ModelContainerProvider.makeDefault()),
-            apiClient: APIClient(
-                endpoints: Endpoints(
-                    config: AppConfig(
-                        environment: .local,
-                        apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
-                        mapboxAccessToken: "pk.preview"
-                    )
-                )
-            ),
-            uploader: Uploader(
-                container: try! ModelContainerProvider.makeDefault(),
-                queueStore: UploadQueueStore(container: try! ModelContainerProvider.makeDefault()),
-                client: APIClient(
-                    endpoints: Endpoints(
-                        config: AppConfig(
-                            environment: .local,
-                            apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
-                            mapboxAccessToken: "pk.preview"
-                        )
-                    )
-                ),
-                logger: .upload
-            ),
-            locationService: PreviewLocationService(),
-            motionService: PreviewMotionService(),
-            drivingDetector: PreviewDrivingDetector(),
-            thermalMonitor: ThermalMonitor(),
-            logger: .app
-        )
-    )
+    ContentView(container: makePreviewContainer())
 }
 
 @MainActor
@@ -162,4 +128,56 @@ private struct PreviewDrivingDetector: DrivingDetecting {
     var events: AsyncStream<Bool> { AsyncStream { _ in } }
     func start() {}
     func stop() {}
+}
+
+@MainActor
+private func makePreviewContainer() -> AppContainer {
+    let config = AppConfig(
+        environment: .local,
+        apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
+        mapboxAccessToken: "pk.preview"
+    )
+    let modelContainer = try! ModelContainerProvider.makeDefault()
+    let privacyZoneStore = PreviewPrivacyZoneStore()
+    let readingStore = ReadingStore(container: modelContainer)
+    let uploadQueueStore = UploadQueueStore(container: modelContainer)
+    let apiClient = APIClient(endpoints: Endpoints(config: config))
+    let uploader = Uploader(
+        container: modelContainer,
+        queueStore: uploadQueueStore,
+        client: apiClient,
+        logger: .upload
+    )
+
+    return AppContainer(
+        config: config,
+        permissions: PreviewPermissionManager(
+            snapshot: PermissionSnapshot(
+                location: .whenInUse,
+                motion: .authorized,
+                privacyZones: .configured
+            )
+        ),
+        modelContainer: modelContainer,
+        privacyZoneStore: privacyZoneStore,
+        readingStore: readingStore,
+        uploadQueueStore: uploadQueueStore,
+        apiClient: apiClient,
+        uploader: uploader,
+        sensorCoordinator: SensorCoordinator(
+            locationService: PreviewLocationService(),
+            motionService: PreviewMotionService(),
+            drivingDetector: PreviewDrivingDetector(),
+            thermalMonitor: ThermalMonitor(),
+            privacyZoneStore: privacyZoneStore,
+            readingStore: readingStore,
+            uploader: uploader,
+            logger: .app
+        ),
+        locationService: PreviewLocationService(),
+        motionService: PreviewMotionService(),
+        drivingDetector: PreviewDrivingDetector(),
+        thermalMonitor: ThermalMonitor(),
+        logger: .app
+    )
 }

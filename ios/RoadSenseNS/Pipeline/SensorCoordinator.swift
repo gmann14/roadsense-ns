@@ -1,0 +1,246 @@
+import Foundation
+
+@MainActor
+final class SensorCoordinator {
+    private let locationService: LocationServicing
+    private let motionService: MotionServicing
+    private let drivingDetector: DrivingDetecting
+    private let thermalMonitor: ThermalMonitoring
+    private let privacyZoneStore: PrivacyZoneStoring
+    private let readingStore: ReadingStore
+    private let uploader: Uploader
+    private let logger: RoadSenseLogger
+
+    private var drivingTask: Task<Void, Never>?
+    private var locationTask: Task<Void, Never>?
+    private var motionTask: Task<Void, Never>?
+
+    private var readingBuilder = ReadingBuilder()
+    private var potholeDetector = PotholeDetector()
+    private var activePrivacyZones: [PrivacyZone] = []
+    private var latestLocation: LocationSample?
+    private var recentPotholes: [PotholeCandidate] = []
+    private var isMonitoring = false
+    private var isCollecting = false
+
+    init(
+        locationService: LocationServicing,
+        motionService: MotionServicing,
+        drivingDetector: DrivingDetecting,
+        thermalMonitor: ThermalMonitoring,
+        privacyZoneStore: PrivacyZoneStoring,
+        readingStore: ReadingStore,
+        uploader: Uploader,
+        logger: RoadSenseLogger
+    ) {
+        self.locationService = locationService
+        self.motionService = motionService
+        self.drivingDetector = drivingDetector
+        self.thermalMonitor = thermalMonitor
+        self.privacyZoneStore = privacyZoneStore
+        self.readingStore = readingStore
+        self.uploader = uploader
+        self.logger = logger
+    }
+
+    func startMonitoring() {
+        guard !isMonitoring else {
+            return
+        }
+
+        do {
+            activePrivacyZones = try privacyZoneStore.fetchAll().map {
+                PrivacyZone(
+                    latitude: $0.latitude,
+                    longitude: $0.longitude,
+                    radiusMeters: $0.radiusM
+                )
+            }
+        } catch {
+            logger.error("failed to load privacy zones: \(error.localizedDescription)")
+            activePrivacyZones = []
+        }
+
+        isMonitoring = true
+        drivingDetector.start()
+
+        locationTask = Task { [weak self] in
+            guard let self else { return }
+            for await sample in locationService.samples {
+                await self.handleLocationSample(sample)
+            }
+        }
+
+        motionTask = Task { [weak self] in
+            guard let self else { return }
+            for await sample in motionService.samples {
+                await self.handleMotionSample(sample)
+            }
+        }
+
+        drivingTask = Task { [weak self] in
+            guard let self else { return }
+            for await isDriving in drivingDetector.events {
+                if isDriving {
+                    await self.startCollection()
+                } else {
+                    await self.stopCollection()
+                }
+            }
+        }
+
+        logger.info("sensor monitoring started")
+    }
+
+    func stopMonitoring() {
+        isMonitoring = false
+        drivingTask?.cancel()
+        locationTask?.cancel()
+        motionTask?.cancel()
+        drivingTask = nil
+        locationTask = nil
+        motionTask = nil
+        drivingDetector.stop()
+        stopServicesAndReset()
+        logger.info("sensor monitoring stopped")
+    }
+
+    func refreshPrivacyZones() {
+        do {
+            activePrivacyZones = try privacyZoneStore.fetchAll().map {
+                PrivacyZone(
+                    latitude: $0.latitude,
+                    longitude: $0.longitude,
+                    radiusMeters: $0.radiusM
+                )
+            }
+        } catch {
+            logger.error("failed to refresh privacy zones: \(error.localizedDescription)")
+        }
+    }
+
+    var monitoringState: (isMonitoring: Bool, isCollecting: Bool) {
+        (isMonitoring, isCollecting)
+    }
+
+    private func startCollection() async {
+        guard isMonitoring, !isCollecting else {
+            return
+        }
+
+        do {
+            try locationService.start()
+            try motionService.start(hz: 50)
+            isCollecting = true
+            logger.info("sensor collection started")
+        } catch {
+            logger.error("failed to start collection: \(error.localizedDescription)")
+            stopServicesAndReset()
+        }
+    }
+
+    private func stopCollection() async {
+        guard isCollecting else {
+            return
+        }
+
+        stopServicesAndReset()
+        logger.info("sensor collection stopped")
+    }
+
+    private func stopServicesAndReset() {
+        locationService.stop()
+        motionService.stop()
+        isCollecting = false
+        readingBuilder = ReadingBuilder()
+        potholeDetector = PotholeDetector()
+        recentPotholes = []
+        latestLocation = nil
+    }
+
+    private func handleLocationSample(_ sample: LocationSample) async {
+        guard isCollecting else {
+            return
+        }
+
+        latestLocation = sample
+
+        if PrivacyZoneFilter.shouldDrop(sample, zones: activePrivacyZones) {
+            do {
+                try readingStore.savePrivacyFilteredSample(sample)
+            } catch {
+                logger.error("failed to persist privacy-filtered sample: \(error.localizedDescription)")
+            }
+            readingBuilder = ReadingBuilder()
+            potholeDetector = PotholeDetector()
+            recentPotholes = []
+            return
+        }
+
+        guard let window = readingBuilder.addLocationSample(sample) else {
+            return
+        }
+
+        let deviceState = DeviceCollectionState(
+            thermalState: map(thermalMonitor.currentState),
+            isLowPowerModeEnabled: ProcessInfo.processInfo.isLowPowerModeEnabled
+        )
+
+        let windowEnd = window.startedAt + window.durationSeconds
+        let potholesInWindow = recentPotholes.filter {
+            $0.timestamp >= window.startedAt && $0.timestamp <= windowEnd
+        }
+
+        switch ReadingWindowProcessor.process(
+            window: window,
+            deviceState: deviceState,
+            potholeCandidates: potholesInWindow
+        ) {
+        case let .accepted(candidate):
+            do {
+                try readingStore.saveAccepted(candidate)
+                await uploader.drainOnce()
+            } catch {
+                logger.error("failed to persist accepted reading: \(error.localizedDescription)")
+            }
+        case let .rejected(reason):
+            logger.info("reading window rejected: \(String(describing: reason))")
+        }
+
+        recentPotholes.removeAll { $0.timestamp <= windowEnd }
+    }
+
+    private func handleMotionSample(_ sample: MotionSample) async {
+        guard isCollecting else {
+            return
+        }
+
+        readingBuilder.addMotionSample(sample)
+
+        guard let latestLocation else {
+            return
+        }
+
+        if let candidate = potholeDetector.ingest(
+            verticalAccelerationG: sample.verticalAcceleration,
+            currentLocation: latestLocation
+        ) {
+            recentPotholes.append(candidate)
+        }
+    }
+
+    private func map(_ state: ProcessInfo.ThermalState) -> ThermalCollectionState {
+        switch state {
+        case .nominal:
+            return .nominal
+        case .fair:
+            return .fair
+        case .serious:
+            return .serious
+        case .critical:
+            return .critical
+        @unknown default:
+            return .serious
+        }
+    }
+}

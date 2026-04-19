@@ -44,12 +44,14 @@ RoadSenseNS/
 │   ├── Pipeline/
 │   │   ├── SensorCoordinator.swift    # orchestrates driving lifecycle
 │   │   ├── ReadingBuilder.swift       # assembles 50m-of-travel windows
+│   │   ├── ReadingWindowProcessor.swift
 │   │   ├── RoughnessScorer.swift      # signal processing → rms
 │   │   ├── PotholeDetector.swift      # spike detection
 │   │   ├── PrivacyZoneFilter.swift    # on-device reading drop
 │   │   └── QualityFilter.swift        # speed/accuracy gates
 │   ├── Persistence/
 │   │   ├── ModelContainerProvider.swift
+│   │   ├── ReadingStore.swift
 │   │   ├── PrivacyZoneStore.swift
 │   │   ├── UploadQueueStore.swift
 │   │   ├── Models/                    # @Model types
@@ -105,6 +107,8 @@ Before the full Xcode project is generated, keep the environment/config seam bui
 - `PrivacyZone`
 - `PrivacyZoneFilter`
 - `ReadingBuilder`
+- `ReadingWindowProcessor`
+- `PersistedReadingCandidate`
 - `ReadingWindow`
 - `RetentionPolicy`
 - `QualityFilter`
@@ -158,10 +162,26 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
 
 - `LocationService`, `MotionService`, `DrivingDetector`, and `ThermalMonitor` now exist as production wrappers around Apple APIs. They are not yet orchestrated into full collection, but the DI seam is now real instead of hypothetical.
 - `ModelContainerProvider` creates the persistent SwiftData container for `ReadingRecord`, `UploadBatch`, `PrivacyZoneRecord`, `UserStats`, and `DeviceTokenRecord`.
+- `ReadingStore` persists accepted readings, privacy-filtered local-only entries, and updates `UserStats`.
 - `UploadQueueStore` persists batch assignment / success / failure state using `UploadQueueCore`.
 - `APIClient` + `Uploader` now implement the first real app-side upload drain path against `POST /upload-readings`.
+- `SensorCoordinator` now orchestrates the first real passive-collection loop: it listens to `DrivingDetector`, starts/stops `LocationService` + `MotionService`, applies `PrivacyZoneFilter`, runs `ReadingBuilder` and `ReadingWindowProcessor`, persists accepted readings through `ReadingStore`, and opportunistically drains uploads.
 - `BackgroundTaskRegistrar` registers the cleanup task identifier `ca.roadsense.ios.cleanup`, and `project.yml` now emits `BGTaskSchedulerPermittedIdentifiers` to match it.
 - `SentryBootstrapper` exists as a guarded seam: it becomes active when the Sentry package resolves, but remains a no-op while package resolution is still blocked.
+
+### Current Ready-Shell Behavior
+
+- The ready shell now shows:
+  - passive monitoring enabled/disabled state
+  - accepted reading count
+  - privacy-filtered local count
+  - pending upload count
+- The user can now:
+  - open the manual privacy-zone editor
+  - start/stop passive monitoring
+  - force an upload drain
+
+This is still not polished product UI, but it is enough to validate the real lifecycle before Mapbox is in place.
 
 ### Sensor Protocol Seam
 
