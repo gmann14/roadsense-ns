@@ -33,6 +33,8 @@ Current status:
 - the app target now persists crash-safe checkpoint state via `SensorCheckpointStore` and restores fresh checkpoints on next launch
 - the app target now includes production wrappers for location, motion, driving-activity, thermal-state, background-task registration, and Sentry bootstrapping seams
 - the app target now includes first-pass `StatsView` and `SettingsView`, plus delete-local-data and Always-location-upgrade controls
+- the app target now includes a real map-style home shell (`MapScreen`) with recording status, floating contribution card, stats/settings chrome, and expandable road-quality legend
+- the app target now includes the first editorial `SegmentDetailSheet` plus typed `GET /segments/{id}` endpoint/model/parser/client support
 - the pure Swift layer now includes a CSV fixture parser and replay runner for simulator-harness style validation
 - queue cleanup, upload eligibility, and ingest-health evaluation now also exist as pure Swift seams with tests
 - base `.xcconfig` files exist under `Config/`
@@ -53,15 +55,16 @@ Local verification:
 Current notes:
 
 - Xcode + iOS SDKs are now installed and usable locally.
-- The current app target links only the SDKs it actually uses today. Mapbox and Supabase SDK wiring are deferred until the map screen or SDK-specific features land.
-- The ready shell now exposes start/stop passive monitoring and counts for accepted, privacy-filtered, and pending-upload readings.
+- The current app target links only the SDKs it actually uses today. Mapbox and Supabase SDK wiring are still deferred until the live road layer and SDK-specific features land.
+- The home screen is now a product-style map shell rather than a debug panel, but its map surface is still a SwiftUI placeholder until Mapbox tile rendering returns.
 - Background-task identifiers in the project now match the spec (`nightly-cleanup` and `upload-drain`) instead of the earlier placeholder cleanup-only ID.
-- Stats and Settings now exist as real screens before the Mapbox home screen lands.
+- Stats and Settings now exist as real screens off the home-shell overlay buttons.
 - The next milestone is no longer “make it compile”; it is “sign it, install it on a real phone, and validate the runtime path.”
 - The first golden-style harness replay path now uses checked-in `Fixtures/*.csv` and `Fixtures/*.expected.json` resources.
 - `RoadSenseNSSimHarness` now exists as a separate lightweight app target that loads fixture resources, replays them through the real pipeline, and shows the replay summary.
 - `RoadSenseNSTests` now includes first app-target network/uploader coverage, and the app enters an inert in-memory bootstrap path when launched under XCTest so host-based unit tests do not start real sensors, background tasks, or Sentry.
 - The remaining harness step is expanding the fixture corpus beyond the current pothole case and keeping the harness target green in CI.
+- The remaining product-facing iOS step is reintroducing Mapbox for real tiles, segment selection, and live `GET /segments/{id}` sheet presentation.
 
 Additional verification commands:
 

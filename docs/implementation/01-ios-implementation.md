@@ -156,7 +156,7 @@ The current app shell is intentionally thin but real:
 - `AppBootstrap` reads `APP_ENV`, `API_BASE_URL`, `MAPBOX_ACCESS_TOKEN`, `SENTRY_DSN`, and `APP_GROUP_IDENTIFIER` from `Info.plist`
 - `AppContainer` now also owns the SwiftData `ModelContainer`, `PrivacyZoneStore`, `UploadQueueStore`, `APIClient`, `Uploader`, sensor wrappers, logger, and background-task registrar seam
 - `AppModel` owns the current `PermissionSnapshot`, persists the privacy-zone decision in `UserDefaults`, derives `CollectionReadiness`, and reads actual zone existence from `PrivacyZoneStore` so a saved zone automatically satisfies the onboarding gate
-- `ContentView` routes between onboarding and the ready-to-collect shell using `CollectionReadiness.evaluate(...)`
+- `ContentView` routes between onboarding and `MapScreen` using `CollectionReadiness.evaluate(...)`
 - `PrivacyZonesView` is now a real app-target screen. It is intentionally simple and manual for now: label + latitude + longitude + radius. Replace it with a map-backed picker after Mapbox resolves.
 
 This keeps the permission/privacy gate testable in pure Swift while leaving the Core Location / Core Motion wiring in the app target where it belongs.
@@ -168,26 +168,29 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
 - `ReadingStore` persists accepted readings, privacy-filtered local-only entries, and updates `UserStats`.
 - `UploadQueueStore` persists batch assignment / success / failure state using `UploadQueueCore`.
 - `APIClient` + `Uploader` now implement the first real app-side upload drain path against `POST /upload-readings`.
+- `Endpoints`, `SegmentAPIModels`, `SegmentDetailResponseParser`, and `APIClient.fetchSegmentDetail(...)` now implement the typed `GET /segments/{id}` read seam, even though live tap-to-sheet wiring is still waiting on the actual map layer.
 - `SensorCoordinator` now orchestrates the first real passive-collection loop: it listens to `DrivingDetector`, starts/stops `LocationService` + `MotionService`, applies `PrivacyZoneFilter`, runs `ReadingBuilder` and `ReadingWindowProcessor`, persists accepted readings through `ReadingStore`, and opportunistically drains uploads.
 - `SensorCheckpointStore` now writes `SensorCheckpoint.json` in Application Support and restores it if it is newer than 30 minutes. The checkpoint includes the in-progress `ReadingBuilder` state, `PotholeDetector` history, recent pothole candidates, and latest location.
 - `BackgroundTaskRegistrar` now registers both documented task identifiers: `ca.roadsense.ios.nightly-cleanup` and `ca.roadsense.ios.upload-drain`. `project.yml` emits `BGTaskSchedulerPermittedIdentifiers` to match them.
 - `SentryBootstrapper` exists as a guarded seam: it becomes active when the Sentry package resolves, but remains a no-op while package resolution is still blocked.
+- `MapScreen` now exists as a product-facing SwiftUI shell with a recording status pill, floating contribution card, stats/settings overlay buttons, and expandable road-quality legend. Its background is still a SwiftUI placeholder rather than a live Mapbox view.
+- `SegmentDetailSheet` now exists as an editorial detail surface that matches the documented response shape and confidence/trend wording.
 
 ### Current Ready-Shell Behavior
 
 - The ready shell now shows:
-  - passive monitoring enabled/disabled state
-  - accepted reading count
-  - privacy-filtered local count
-  - pending upload count
+  - recording / paused / needs-background-collection state
+  - a floating contribution card with mapped distance, pending uploads, and one primary next action
+  - overlay entrypoints for Stats and Settings
+  - a collapsible road-quality legend
 - The user can now:
-  - open the manual privacy-zone editor
-  - start/stop passive monitoring
+  - open the manual privacy-zone editor from the home shell action or Settings
+  - start passive monitoring when it is paused
   - request the Always-location upgrade when background collection is still unavailable
   - open Stats and Settings sheets
-  - force an upload drain
+  - force an upload drain through the contribution card action when uploads are pending
 
-This is still not polished product UI, but it is enough to validate the real lifecycle before Mapbox is in place.
+This is now credible product UI, but the map surface is still a placeholder until live Mapbox tiles and selection wiring land.
 
 ### Current Stats / Settings Surfaces
 

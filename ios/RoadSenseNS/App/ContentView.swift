@@ -52,61 +52,18 @@ struct ContentView: View {
     }
 
     private var readyShell: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Collection shell")
-                .font(.headline)
-
-            HStack {
-                Spacer()
-                Button("Stats") {
-                    isShowingStats = true
-                }
-                .buttonStyle(.bordered)
-
-                Button("Settings") {
-                    isShowingSettings = true
-                }
-                .buttonStyle(.bordered)
-            }
-
-            LabeledContent("Environment", value: model.config.environment.displayName)
-            LabeledContent("API Base", value: model.config.apiBaseURL.absoluteString)
-            LabeledContent("Functions Base", value: model.config.functionsBaseURL.absoluteString)
-            LabeledContent("Background collection", value: model.readiness.backgroundCollection.displayName)
-            LabeledContent("Passive monitoring", value: model.isPassiveMonitoringEnabled ? "Enabled" : "Disabled")
-            LabeledContent("Accepted readings", value: "\(model.acceptedReadingCount)")
-            LabeledContent("Privacy-filtered", value: "\(model.privacyFilteredCount)")
-            LabeledContent("Pending uploads", value: "\(model.pendingUploadCount)")
-
-            if model.readiness.showsPrivacyRiskWarning {
-                Text("Privacy zones are still skipped. Configure them before real field testing.")
-                    .foregroundStyle(.orange)
-            }
-
-            Button("Manage privacy zones") {
+        MapScreen(
+            model: model,
+            onShowStats: {
+                isShowingStats = true
+            },
+            onShowSettings: {
+                isShowingSettings = true
+            },
+            onShowPrivacyZones: {
                 isShowingPrivacyZones = true
             }
-            .buttonStyle(.bordered)
-
-            Button(model.isPassiveMonitoringEnabled ? "Stop passive monitoring" : "Start passive monitoring") {
-                if model.isPassiveMonitoringEnabled {
-                    model.stopPassiveMonitoring()
-                } else {
-                    model.startPassiveMonitoring()
-                }
-            }
-            .buttonStyle(.bordered)
-
-            Button("Upload pending data") {
-                Task {
-                    await model.uploadPendingData()
-                }
-            }
-            .buttonStyle(.borderedProminent)
-
-            Spacer()
-        }
-        .padding(24)
+        )
     }
 }
 
@@ -163,7 +120,7 @@ private struct PreviewDrivingDetector: DrivingDetecting {
 }
 
 @MainActor
-private func makePreviewContainer() -> AppContainer {
+func makePreviewContainer() -> AppContainer {
     let config = AppConfig(
         environment: .local,
         apiBaseURL: URL(string: "http://127.0.0.1:54321")!,

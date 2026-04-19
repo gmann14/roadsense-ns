@@ -270,7 +270,7 @@ Post-MVP phases:
   - implement wrappers around `CMMotionManager`, `CMMotionActivityManager`, and `CLLocationManager`
 - **Acceptance**
   - services are mockable and isolated from pipeline logic
-- **Current repo note:** Production `LocationService`, `MotionService`, `DrivingDetector`, and `ThermalMonitor` wrappers now exist in the app target, and the main `RoadSenseNS` target now builds for `iphonesimulator` on the trimmed pre-map dependency graph. Remaining work is real-device signing/install validation and then bringing Mapbox back when the home screen lands.
+- **Current repo note:** Production `LocationService`, `MotionService`, `DrivingDetector`, and `ThermalMonitor` wrappers now exist in the app target, and the main `RoadSenseNS` target now builds for `iphonesimulator` on the trimmed pre-map dependency graph. A product-style `MapScreen` shell and typed segment-detail client/parser are now in place; remaining work is real-device signing/install validation and then bringing Mapbox back for live tiles and tap selection.
 
 ### B034 — SwiftData local models and queue state
 
@@ -385,6 +385,7 @@ Post-MVP phases:
   - implement segment detail fetch
 - **Acceptance**
   - user can tap a segment and see the documented detail sheet
+- **Current repo note:** The non-Mapbox portion is done: `MapScreen` replaced the debug shell, `SegmentDetailSheet` exists, and `GET /segments/{id}` has typed endpoint/model/parser/client support with test coverage. The remaining work is the live Mapbox surface, tile source, segment hit-testing, and wiring real taps into the existing detail sheet.
 
 ## Phase 7 — Reliability, Observability, And UX Hardening
 

@@ -23,6 +23,7 @@ final class AppModel {
     private(set) var pendingUploadCount = 0
     private(set) var acceptedReadingCount = 0
     private(set) var privacyFilteredCount = 0
+    private(set) var userStatsSummary = UserStatsSummary.zero
 
     init(
         container: AppContainer,
@@ -48,6 +49,7 @@ final class AppModel {
         self.pendingUploadCount = (try? container.uploadQueueStore.pendingReadingCount()) ?? 0
         self.acceptedReadingCount = (try? container.readingStore.acceptedReadingCount()) ?? 0
         self.privacyFilteredCount = (try? container.readingStore.privacyFilteredReadingCount()) ?? 0
+        self.userStatsSummary = (try? container.userStatsStore.summary()) ?? .zero
     }
 
     var readiness: CollectionReadiness {
@@ -130,6 +132,7 @@ final class AppModel {
         pendingUploadCount = (try? uploadQueueStore.pendingReadingCount()) ?? 0
         acceptedReadingCount = (try? readingStore.acceptedReadingCount()) ?? 0
         privacyFilteredCount = (try? readingStore.privacyFilteredReadingCount()) ?? 0
+        userStatsSummary = (try? userStatsStore.summary()) ?? .zero
         isPassiveMonitoringEnabled = sensorCoordinator.monitoringState.isMonitoring
     }
 

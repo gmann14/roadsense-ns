@@ -11,6 +11,12 @@ public struct Endpoints: Equatable, Sendable {
         config.functionsBaseURL.appendingPathComponent("upload-readings", isDirectory: false)
     }
 
+    public func segmentDetailURL(id: UUID) -> URL {
+        config.functionsBaseURL
+            .appendingPathComponent("segments", isDirectory: true)
+            .appendingPathComponent(id.uuidString.lowercased(), isDirectory: false)
+    }
+
     public func tileURL(z: Int, x: Int, y: Int, version: Int? = nil) -> URL {
         var url = config.functionsBaseURL
             .appendingPathComponent("tiles", isDirectory: true)

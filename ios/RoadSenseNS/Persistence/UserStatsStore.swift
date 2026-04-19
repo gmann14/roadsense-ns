@@ -9,6 +9,16 @@ struct UserStatsSummary: Equatable {
     let acceptedReadingCount: Int
     let privacyFilteredCount: Int
     let pendingUploadCount: Int
+
+    static let zero = UserStatsSummary(
+        totalKmRecorded: 0,
+        totalSegmentsContributed: 0,
+        lastDriveAt: nil,
+        potholesReported: 0,
+        acceptedReadingCount: 0,
+        privacyFilteredCount: 0,
+        pendingUploadCount: 0
+    )
 }
 
 @MainActor
