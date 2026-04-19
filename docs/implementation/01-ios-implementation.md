@@ -88,8 +88,10 @@ Before the full Xcode project is generated, keep the environment/config seam bui
 - `AppEnvironment`
 - `AppConfig`
 - `CollectionReadiness`
+- `DeviceTokenManager`
 - `DrivingHeuristic`
 - `HighPassBiquad`
+- `IngestHealthEvaluator`
 - `MotionMath`
 - `MotionSample`
 - `MotionVector3`
@@ -99,8 +101,11 @@ Before the full Xcode project is generated, keep the environment/config seam bui
 - `PrivacyZoneFilter`
 - `ReadingBuilder`
 - `ReadingWindow`
+- `RetentionPolicy`
 - `QualityFilter`
+- `UploadEligibilityPolicy`
 - `UploadPolicy`
+- `UploadQueueCore`
 - `PermissionSnapshot`
 - `Endpoints`
 - `RejectedReason`

@@ -16,6 +16,7 @@
 		4030CA59DBFD2BD1002A939A /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 911FE323EAA29C4D280E37AB /* Supabase */; };
 		4294ED05A035C9695AEE0A7F /* UploadQueueCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCF0439CC9DBD46EB595AA4 /* UploadQueueCore.swift */; };
 		4E08F2DAC6BCB52420AA8BB2 /* PotholeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */; };
+		55AA7CEAC78F98938B1505DB /* UploadEligibilityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */; };
 		58D2BBBAABD2C950BE180973 /* PrivacyZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */; };
 		5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F9E1A697AF1C0543503C5D /* PermissionManager.swift */; };
 		63608FF99D0642C8081C5D41 /* DeviceTokenRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */; };
@@ -23,6 +24,7 @@
 		6B42654DBC077FAC55F09FD3 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */; };
 		7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */; };
 		7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */; };
+		8147DC66BED1C5411E9FD89D /* RetentionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */; };
 		88254277AF3BF19D3FD07EC8 /* QueueModelMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */; };
 		8D115A4BF690BF1A26B2A326 /* PlaceholderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */; };
 		94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */; };
@@ -30,6 +32,7 @@
 		9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC86C13C16A0385D36E47FD /* AppContainer.swift */; };
 		A1474D058AA8DD8A7886BF8B /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */; };
 		A460A833459B34A6941B6DE9 /* UserStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDAC070ACEE2F122C555B0ED /* UserStats.swift */; };
+		AFEE1434CB9A30B9D66A33DC /* IngestHealthEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */; };
 		B2E6DF647ED4515D3A700282 /* ReadingRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A96B8343D20095BCEF65D89C /* ReadingRecord.swift */; };
 		B84C0C037E20BD97BD457AB5 /* UploadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCAA398E4BA72123985282C /* UploadPolicy.swift */; };
 		C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */; };
@@ -95,11 +98,13 @@
 		6F90BE8F166D450841DA0B85 /* Placeholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Placeholder.swift; sourceTree = "<group>"; };
 		7DCAA398E4BA72123985282C /* UploadPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPolicy.swift; sourceTree = "<group>"; };
 		851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
+		87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetentionPolicy.swift; sourceTree = "<group>"; };
 		8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeDetector.swift; sourceTree = "<group>"; };
 		9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingBuilder.swift; sourceTree = "<group>"; };
 		998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenRecord.swift; sourceTree = "<group>"; };
 		9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A68D28C0E187AB48C62D0AC3 /* RoadSenseNS.Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Staging.xcconfig; sourceTree = "<group>"; };
+		A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadEligibilityPolicy.swift; sourceTree = "<group>"; };
 		A96B8343D20095BCEF65D89C /* ReadingRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingRecord.swift; sourceTree = "<group>"; };
 		B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyZone.swift; sourceTree = "<group>"; };
 		C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSApp.swift; sourceTree = "<group>"; };
@@ -112,6 +117,7 @@
 		E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadBatchJSONCodec.swift; sourceTree = "<group>"; };
 		E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		EDAC070ACEE2F122C555B0ED /* UserStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStats.swift; sourceTree = "<group>"; };
+		EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IngestHealthEvaluator.swift; sourceTree = "<group>"; };
 		EE870B004546FC93939AF065 /* Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endpoints.swift; sourceTree = "<group>"; };
 		F70A04456020333C21483C47 /* HighPassBiquad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighPassBiquad.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -249,6 +255,8 @@
 			isa = PBXGroup;
 			children = (
 				53EC0C104BF5658C06ACCBB1 /* DeviceTokenManager.swift */,
+				EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */,
+				87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */,
 				3DCF0439CC9DBD46EB595AA4 /* UploadQueueCore.swift */,
 			);
 			path = Persistence;
@@ -318,6 +326,7 @@
 			isa = PBXGroup;
 			children = (
 				EE870B004546FC93939AF065 /* Endpoints.swift */,
+				A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */,
 				7DCAA398E4BA72123985282C /* UploadPolicy.swift */,
 			);
 			path = Network;
@@ -526,6 +535,7 @@
 				1780B2A4E897E484A5BB3C0D /* DrivingHeuristic.swift in Sources */,
 				1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */,
 				982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */,
+				AFEE1434CB9A30B9D66A33DC /* IngestHealthEvaluator.swift in Sources */,
 				1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */,
 				ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */,
 				5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */,
@@ -537,9 +547,11 @@
 				D341480EFFBE39FDAF32552F /* ReadingBuilder.swift in Sources */,
 				B2E6DF647ED4515D3A700282 /* ReadingRecord.swift in Sources */,
 				7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */,
+				8147DC66BED1C5411E9FD89D /* RetentionPolicy.swift in Sources */,
 				7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */,
 				94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */,
 				13F02CBE3FA2D19A992E0016 /* UploadBatchJSONCodec.swift in Sources */,
+				55AA7CEAC78F98938B1505DB /* UploadEligibilityPolicy.swift in Sources */,
 				B84C0C037E20BD97BD457AB5 /* UploadPolicy.swift in Sources */,
 				4294ED05A035C9695AEE0A7F /* UploadQueueCore.swift in Sources */,
 				CE11AD6DFDAB5C71982687C4 /* UploadStatus.swift in Sources */,
