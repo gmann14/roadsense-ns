@@ -22,10 +22,11 @@ RoadSenseNS/
 ├── RoadSenseNS/                       # app target
 │   ├── App/
 │   │   ├── RoadSenseNSApp.swift       # @main, DI wiring
-│   │   ├── AppDelegate.swift          # only for bg launch + silent notif
-│   │   └── AppConfig.swift            # env-injected config (API URL, Mapbox key)
+│   │   ├── AppBootstrap.swift         # loads build settings from Info.plist
+│   │   ├── AppContainer.swift         # root dependency graph
+│   │   └── AppModel.swift             # launch/onboarding shell state
 │   ├── Features/
-│   │   ├── Onboarding/                # views + viewmodel
+│   │   ├── Onboarding/                # views + permission/privacy shell
 │   │   ├── Map/                       # MapboxMapView wrapper, overlays
 │   │   ├── SegmentDetail/
 │   │   ├── Settings/
@@ -86,6 +87,8 @@ Before the full Xcode project is generated, keep the environment/config seam bui
 
 - `AppEnvironment`
 - `AppConfig`
+- `CollectionReadiness`
+- `PermissionSnapshot`
 - `Endpoints`
 - `RejectedReason`
 
@@ -109,6 +112,17 @@ struct AppContainer {
 ```
 
 `Sensor*` / `Persist*` / `Uploading` are protocols; production types conform. Test container swaps in fakes. Keep DI boring.
+
+### Launch Shell
+
+The current app shell is intentionally thin but real:
+
+- `AppBootstrap` reads `APP_ENV`, `API_BASE_URL`, `MAPBOX_ACCESS_TOKEN`, `SENTRY_DSN`, and `APP_GROUP_IDENTIFIER` from `Info.plist`
+- `AppContainer` owns the top-level `PermissionManaging` dependency
+- `AppModel` owns the current `PermissionSnapshot`, persists the privacy-zone decision in `UserDefaults`, and derives `CollectionReadiness`
+- `ContentView` routes between onboarding and the ready-to-collect shell using `CollectionReadiness.evaluate(...)`
+
+This keeps the permission/privacy gate testable in pure Swift while leaving the Core Location / Core Motion wiring in the app target where it belongs.
 
 ### Sensor Protocol Seam
 

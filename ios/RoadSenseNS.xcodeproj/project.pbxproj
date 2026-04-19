@@ -11,15 +11,20 @@
 		1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE870B004546FC93939AF065 /* Endpoints.swift */; };
 		3A12C703A9C25D212D32EECD /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
 		4030CA59DBFD2BD1002A939A /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 911FE323EAA29C4D280E37AB /* Supabase */; };
+		5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F9E1A697AF1C0543503C5D /* PermissionManager.swift */; };
 		662745AF919AD72F235FBC77 /* RoadSenseNS.app in Resources */ = {isa = PBXBuildFile; fileRef = 9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6B42654DBC077FAC55F09FD3 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */; };
 		7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */; };
 		7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */; };
 		8D115A4BF690BF1A26B2A326 /* PlaceholderUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */; };
+		9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC86C13C16A0385D36E47FD /* AppContainer.swift */; };
+		C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */; };
 		C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1269DDDE04E2FB4239384BC9 /* ContentView.swift */; };
 		C4EC1C16AF8B9858DC3C9C2A /* Placeholder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F90BE8F166D450841DA0B85 /* Placeholder.swift */; };
+		DBE9EAA01AE9BA7D8306F7BF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */; };
 		DC0045BD98623446B06CC83F /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = DFBDE19C2B3A05C0840949A5 /* MapboxMaps */; };
 		EB46566139FD4C04A594EA96 /* AppBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06554CA351911A995764AA76 /* AppBootstrap.swift */; };
+		ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */; };
 		F95AA84B2BCBC6B15BA91532 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BE8F93CE35FA6438817474 /* AppConfig.swift */; };
 /* End PBXBuildFile section */
 
@@ -53,6 +58,7 @@
 		0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderUITests.swift; sourceTree = "<group>"; };
 		1269DDDE04E2FB4239384BC9 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1EFAC01C66B9C992BC2313A7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		27F9E1A697AF1C0543503C5D /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		33BE8F93CE35FA6438817474 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
 		3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RejectedReason.swift; sourceTree = "<group>"; };
 		48A050A1F2F270139D92540F /* RoadSenseNS.Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Production.xcconfig; sourceTree = "<group>"; };
@@ -63,8 +69,12 @@
 		A68D28C0E187AB48C62D0AC3 /* RoadSenseNS.Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Staging.xcconfig; sourceTree = "<group>"; };
 		C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSApp.swift; sourceTree = "<group>"; };
 		C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CEC86C13C16A0385D36E47FD /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
+		D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionReadiness.swift; sourceTree = "<group>"; };
 		D6D673F19DB713B76E0CDCF0 /* RoadSenseNSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DE4B6189F55160E7C0CA0856 /* RoadSenseNSSimHarness.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNSSimHarness.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		EE870B004546FC93939AF065 /* Endpoints.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Endpoints.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -90,11 +100,21 @@
 			path = RoadSenseNSSimHarness;
 			sourceTree = "<group>";
 		};
+		3DA5CFEE591201A217A46DF1 /* Sensors */ = {
+			isa = PBXGroup;
+			children = (
+				27F9E1A697AF1C0543503C5D /* PermissionManager.swift */,
+			);
+			path = Sensors;
+			sourceTree = "<group>";
+		};
 		4503BF389D677ACEB72B8B7F /* RoadSenseNS */ = {
 			isa = PBXGroup;
 			children = (
 				61BE73AFDBE416B803153AE4 /* App */,
+				FDA53F96E3D07F8598FC53E6 /* Features */,
 				5A8CED41DE2A08EAC1E6EC8D /* Resources */,
+				3DA5CFEE591201A217A46DF1 /* Sensors */,
 			);
 			path = RoadSenseNS;
 			sourceTree = "<group>";
@@ -132,6 +152,8 @@
 			isa = PBXGroup;
 			children = (
 				06554CA351911A995764AA76 /* AppBootstrap.swift */,
+				CEC86C13C16A0385D36E47FD /* AppContainer.swift */,
+				E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */,
 				1269DDDE04E2FB4239384BC9 /* ContentView.swift */,
 				C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */,
 			);
@@ -178,11 +200,20 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		A055F6FAB38CBD5786C00779 /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
 		B61C0DD8F4BF7D0D5233BF1D /* App */ = {
 			isa = PBXGroup;
 			children = (
 				33BE8F93CE35FA6438817474 /* AppConfig.swift */,
 				68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */,
+				D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -201,6 +232,14 @@
 				0E043D7C7485C50A7AA9E049 /* PlaceholderUITests.swift */,
 			);
 			path = RoadSenseNSUITests;
+			sourceTree = "<group>";
+		};
+		FDA53F96E3D07F8598FC53E6 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				A055F6FAB38CBD5786C00779 /* Onboarding */,
+			);
+			path = Features;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -379,9 +418,14 @@
 			files = (
 				EB46566139FD4C04A594EA96 /* AppBootstrap.swift in Sources */,
 				F95AA84B2BCBC6B15BA91532 /* AppConfig.swift in Sources */,
+				9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */,
 				6B42654DBC077FAC55F09FD3 /* AppEnvironment.swift in Sources */,
+				DBE9EAA01AE9BA7D8306F7BF /* AppModel.swift in Sources */,
+				C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */,
 				C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */,
 				1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */,
+				ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */,
+				5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */,
 				7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */,
 				7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */,
 			);

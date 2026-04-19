@@ -4,15 +4,17 @@ This directory now contains two layers:
 
 - `Package.swift` + `Sources/RoadSenseNSBootstrap/`
   - Foundation-only bootstrap code we can validate with `swift test`
-  - currently owns `AppEnvironment`, `AppConfig`, `Endpoints`, and `RejectedReason`
+  - currently owns `AppEnvironment`, `AppConfig`, `CollectionReadiness`, `Endpoints`, and `RejectedReason`
 - `project.yml` + `RoadSenseNS/`
   - XcodeGen project spec for the real iOS app target
-  - minimal app-shell files (`RoadSenseNSApp`, `ContentView`, `Info.plist`, placeholder tests)
+  - app-shell files (`RoadSenseNSApp`, `AppContainer`, `AppModel`, onboarding flow, `PermissionManager`, `Info.plist`, placeholder tests)
   - committed base `.xcconfig` files under `Config/` so `xcodegen generate` works from a clean checkout
 
 Current status:
 
 - config/runtime seams are implemented in real Swift code
+- permission/onboarding gating is implemented as a pure Swift state machine with `swift test` coverage
+- the app target has a real onboarding shell split from the ready-to-collect home shell
 - base `.xcconfig` files exist under `Config/`
 - optional secret override files can be created as:
   - `Config/RoadSenseNS.Local.secrets.xcconfig`
