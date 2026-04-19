@@ -10,6 +10,7 @@ final class SensorCoordinator {
     private let readingStore: ReadingStore
     private let uploader: Uploader
     private let logger: RoadSenseLogger
+    private let checkpointStore: SensorCheckpointStore
 
     private var drivingTask: Task<Void, Never>?
     private var locationTask: Task<Void, Never>?
@@ -22,6 +23,7 @@ final class SensorCoordinator {
     private var recentPotholes: [PotholeCandidate] = []
     private var isMonitoring = false
     private var isCollecting = false
+    private var lastCheckpointAt: Date?
 
     init(
         locationService: LocationServicing,
@@ -31,7 +33,8 @@ final class SensorCoordinator {
         privacyZoneStore: PrivacyZoneStoring,
         readingStore: ReadingStore,
         uploader: Uploader,
-        logger: RoadSenseLogger
+        logger: RoadSenseLogger,
+        checkpointStore: SensorCheckpointStore = SensorCheckpointStore()
     ) {
         self.locationService = locationService
         self.motionService = motionService
@@ -41,6 +44,7 @@ final class SensorCoordinator {
         self.readingStore = readingStore
         self.uploader = uploader
         self.logger = logger
+        self.checkpointStore = checkpointStore
     }
 
     func startMonitoring() {
@@ -60,6 +64,8 @@ final class SensorCoordinator {
             logger.error("failed to load privacy zones: \(error.localizedDescription)")
             activePrivacyZones = []
         }
+
+        restoreCheckpointIfAvailable()
 
         isMonitoring = true
         drivingDetector.start()
@@ -102,6 +108,7 @@ final class SensorCoordinator {
         motionTask = nil
         drivingDetector.stop()
         stopServicesAndReset()
+        try? checkpointStore.clear()
         logger.info("sensor monitoring stopped")
     }
 
@@ -156,6 +163,7 @@ final class SensorCoordinator {
         potholeDetector = PotholeDetector()
         recentPotholes = []
         latestLocation = nil
+        lastCheckpointAt = nil
     }
 
     private func handleLocationSample(_ sample: LocationSample) async {
@@ -174,6 +182,7 @@ final class SensorCoordinator {
             readingBuilder = ReadingBuilder()
             potholeDetector = PotholeDetector()
             recentPotholes = []
+            persistCheckpointIfNeeded(force: true)
             return
         }
 
@@ -208,6 +217,7 @@ final class SensorCoordinator {
         }
 
         recentPotholes.removeAll { $0.timestamp <= windowEnd }
+        persistCheckpointIfNeeded(force: false)
     }
 
     private func handleMotionSample(_ sample: MotionSample) async {
@@ -227,6 +237,7 @@ final class SensorCoordinator {
         ) {
             recentPotholes.append(candidate)
         }
+        persistCheckpointIfNeeded(force: false)
     }
 
     private func map(_ state: ProcessInfo.ThermalState) -> ThermalCollectionState {
@@ -241,6 +252,47 @@ final class SensorCoordinator {
             return .critical
         @unknown default:
             return .serious
+        }
+    }
+
+    private func restoreCheckpointIfAvailable() {
+        do {
+            guard let checkpoint = try checkpointStore.load(maxAge: 30 * 60) else {
+                return
+            }
+
+            readingBuilder = ReadingBuilder(snapshot: checkpoint.readingBuilder)
+            potholeDetector = PotholeDetector(snapshot: checkpoint.potholeDetector)
+            latestLocation = checkpoint.latestLocation
+            recentPotholes = checkpoint.recentPotholes
+            isCollecting = checkpoint.wasCollecting
+            lastCheckpointAt = checkpoint.savedAt
+            logger.info("restored fresh sensor checkpoint")
+        } catch {
+            logger.error("failed to restore sensor checkpoint: \(error.localizedDescription)")
+        }
+    }
+
+    private func persistCheckpointIfNeeded(force: Bool) {
+        let now = Date()
+        if !force, let lastCheckpointAt, now.timeIntervalSince(lastCheckpointAt) < 60 {
+            return
+        }
+
+        let checkpoint = SensorCheckpoint(
+            savedAt: now,
+            wasCollecting: isCollecting,
+            latestLocation: latestLocation,
+            recentPotholes: recentPotholes,
+            readingBuilder: readingBuilder.snapshot(),
+            potholeDetector: potholeDetector.snapshot()
+        )
+
+        do {
+            try checkpointStore.save(checkpoint)
+            lastCheckpointAt = now
+        } catch {
+            logger.error("failed to save sensor checkpoint: \(error.localizedDescription)")
         }
     }
 }

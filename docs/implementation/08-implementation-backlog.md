@@ -300,6 +300,7 @@ Post-MVP phases:
 - **Acceptance**
   - app can generate uploadable reading batches from replayed fixtures
 - **Current repo note:** The app target now has a first `SensorCoordinator` that runs `ReadingBuilder` against live streams and persists accepted windows through `ReadingStore`. What remains is fixture replay, checkpoint persistence, and app-target validation.
+- **Current repo note:** `SensorCheckpoint` + `SensorCheckpointStore` now exist and the coordinator checkpoints every 60 seconds. What remains is fixture replay and app-target validation.
 
 ### B041 — Stub uploader path
 
@@ -395,6 +396,7 @@ Post-MVP phases:
 - **Acceptance**
   - app survives documented background scenarios short of user force-quit
 - **Current repo note:** `BackgroundCollectionPolicy` and `BackgroundTaskRegistrar` now exist, and the project emits `BGTaskSchedulerPermittedIdentifiers`. Significant-location-change orchestration and real-device validation remain.
+- **Current repo note:** Background task IDs are now aligned with the spec (`nightly-cleanup`, `upload-drain`). Significant-location-change orchestration and real-device validation still remain.
 
 ### B061 — Sentry, structured logs, and ops metrics
 

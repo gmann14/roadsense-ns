@@ -1,6 +1,6 @@
 import Foundation
 
-public struct LocationSample: Equatable, Sendable {
+public struct LocationSample: Equatable, Sendable, Codable {
     public let timestamp: TimeInterval
     public let latitude: Double
     public let longitude: Double
@@ -25,7 +25,7 @@ public struct LocationSample: Equatable, Sendable {
     }
 }
 
-public struct ReadingWindow: Equatable, Sendable {
+public struct ReadingWindow: Equatable, Sendable, Codable {
     public let latitude: Double
     public let longitude: Double
     public let roughnessRMS: Double
@@ -66,6 +66,34 @@ public struct ReadingWindow: Equatable, Sendable {
 }
 
 public struct ReadingBuilder: Sendable {
+    public struct Snapshot: Equatable, Sendable, Codable {
+        public let targetDistanceMeters: Double
+        public let maxDurationSeconds: TimeInterval
+        public let maxHorizontalAccuracyMeters: Double
+        public let maxHeadingVarianceDegrees: Double
+        public let minimumSampleCount: Int
+        public let locationSamples: [LocationSample]
+        public let motionSamples: [MotionSample]
+
+        public init(
+            targetDistanceMeters: Double,
+            maxDurationSeconds: TimeInterval,
+            maxHorizontalAccuracyMeters: Double,
+            maxHeadingVarianceDegrees: Double,
+            minimumSampleCount: Int,
+            locationSamples: [LocationSample],
+            motionSamples: [MotionSample]
+        ) {
+            self.targetDistanceMeters = targetDistanceMeters
+            self.maxDurationSeconds = maxDurationSeconds
+            self.maxHorizontalAccuracyMeters = maxHorizontalAccuracyMeters
+            self.maxHeadingVarianceDegrees = maxHeadingVarianceDegrees
+            self.minimumSampleCount = minimumSampleCount
+            self.locationSamples = locationSamples
+            self.motionSamples = motionSamples
+        }
+    }
+
     public var targetDistanceMeters: Double = 40
     public var maxDurationSeconds: TimeInterval = 15
     public var maxHorizontalAccuracyMeters: Double = 20
@@ -76,6 +104,16 @@ public struct ReadingBuilder: Sendable {
     private var motionSamples: [MotionSample] = []
 
     public init() {}
+
+    public init(snapshot: Snapshot) {
+        self.targetDistanceMeters = snapshot.targetDistanceMeters
+        self.maxDurationSeconds = snapshot.maxDurationSeconds
+        self.maxHorizontalAccuracyMeters = snapshot.maxHorizontalAccuracyMeters
+        self.maxHeadingVarianceDegrees = snapshot.maxHeadingVarianceDegrees
+        self.minimumSampleCount = snapshot.minimumSampleCount
+        self.locationSamples = snapshot.locationSamples
+        self.motionSamples = snapshot.motionSamples
+    }
 
     public mutating func addMotionSample(_ sample: MotionSample) {
         motionSamples.append(sample)
@@ -130,6 +168,18 @@ public struct ReadingBuilder: Sendable {
 
         reset(startingWith: sample)
         return reading
+    }
+
+    public func snapshot() -> Snapshot {
+        Snapshot(
+            targetDistanceMeters: targetDistanceMeters,
+            maxDurationSeconds: maxDurationSeconds,
+            maxHorizontalAccuracyMeters: maxHorizontalAccuracyMeters,
+            maxHeadingVarianceDegrees: maxHeadingVarianceDegrees,
+            minimumSampleCount: minimumSampleCount,
+            locationSamples: locationSamples,
+            motionSamples: motionSamples
+        )
     }
 
     private mutating func reset(startingWith sample: LocationSample? = nil) {

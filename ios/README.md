@@ -30,6 +30,7 @@ Current status:
 - the app target now includes first-pass persistence adapters (`DeviceTokenStore`, queue mappers, rejected-reason JSON codec)
 - the app target now includes a real model-container provider, queue store, API client, uploader, privacy-zone store, and manual privacy-zone UI
 - the app target now includes a first live `SensorCoordinator` plus `ReadingStore`, so accepted readings and privacy-filtered local entries can be persisted before the map UI exists
+- the app target now persists crash-safe checkpoint state via `SensorCheckpointStore` and restores fresh checkpoints on next launch
 - the app target now includes production wrappers for location, motion, driving-activity, thermal-state, background-task registration, and Sentry bootstrapping seams
 - queue cleanup, upload eligibility, and ingest-health evaluation now also exist as pure Swift seams with tests
 - base `.xcconfig` files exist under `Config/`
@@ -53,3 +54,4 @@ Current notes:
 - The first full app build will need the real package/dependency path to resolve cleanly, including Mapbox package fetches.
 - The app-side upload and privacy-zone management path is now implemented far enough to keep moving while Mapbox remains unresolved.
 - The ready shell now exposes start/stop passive monitoring and counts for accepted, privacy-filtered, and pending-upload readings.
+- Background-task identifiers in the project now match the spec (`nightly-cleanup` and `upload-drain`) instead of the earlier placeholder cleanup-only ID.

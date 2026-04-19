@@ -14,11 +14,13 @@
 		1780B2A4E897E484A5BB3C0D /* DrivingHeuristic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E77758971EB7F44643652E /* DrivingHeuristic.swift */; };
 		1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE870B004546FC93939AF065 /* Endpoints.swift */; };
 		1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E39073C99FB20D024E79D0 /* MotionMath.swift */; };
+		256FE28742CA77F526CC7022 /* SensorCheckpointStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770EBDB5BF565D5AD7546CA5 /* SensorCheckpointStore.swift */; };
 		2E1B6D32ED2B5BB95BBBDC7E /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB9B9294F92A70C11D0FB1B /* APIClient.swift */; };
 		3A12C703A9C25D212D32EECD /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
 		4030CA59DBFD2BD1002A939A /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 911FE323EAA29C4D280E37AB /* Supabase */; };
 		4294ED05A035C9695AEE0A7F /* UploadQueueCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCF0439CC9DBD46EB595AA4 /* UploadQueueCore.swift */; };
 		42AFA19B9DFD89C70573617B /* UploadQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F7CA78BA461644E2643371 /* UploadQueueStore.swift */; };
+		435DC685A77E3EC29BF2E26A /* SensorCheckpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */; };
 		4E08F2DAC6BCB52420AA8BB2 /* PotholeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */; };
 		55AA7CEAC78F98938B1505DB /* UploadEligibilityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */; };
 		58D2BBBAABD2C950BE180973 /* PrivacyZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */; };
@@ -126,6 +128,7 @@
 		659C7BBB94CC6DB51D4B2730 /* RoadSenseLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseLogger.swift; sourceTree = "<group>"; };
 		68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
 		6F90BE8F166D450841DA0B85 /* Placeholder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Placeholder.swift; sourceTree = "<group>"; };
+		770EBDB5BF565D5AD7546CA5 /* SensorCheckpointStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorCheckpointStore.swift; sourceTree = "<group>"; };
 		777A503AFECA80F0A49C3096 /* DrivingDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingDetector.swift; sourceTree = "<group>"; };
 		7A83AAFA6806FFC7DA4C2528 /* SensorCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorCoordinator.swift; sourceTree = "<group>"; };
 		7DCAA398E4BA72123985282C /* UploadPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadPolicy.swift; sourceTree = "<group>"; };
@@ -142,6 +145,7 @@
 		B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundCollectionPolicy.swift; sourceTree = "<group>"; };
 		B41B92DA7CA8EB765BCFC11A /* Uploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Uploader.swift; sourceTree = "<group>"; };
 		B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyZone.swift; sourceTree = "<group>"; };
+		C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorCheckpoint.swift; sourceTree = "<group>"; };
 		C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSApp.swift; sourceTree = "<group>"; };
 		C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		CEC86C13C16A0385D36E47FD /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
@@ -184,6 +188,7 @@
 				DB54690AD1B0B14F43315BE6 /* PrivacyZoneStore.swift */,
 				155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */,
 				F92672E8E369B06AFF5F25AF /* ReadingStore.swift */,
+				770EBDB5BF565D5AD7546CA5 /* SensorCheckpointStore.swift */,
 				E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */,
 				43F7CA78BA461644E2643371 /* UploadQueueStore.swift */,
 				5A148A1535E38E0F509C75CB /* UploadStatus.swift */,
@@ -318,6 +323,7 @@
 				569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */,
 				9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */,
 				D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */,
+				C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */,
 			);
 			path = Pipeline;
 			sourceTree = "<group>";
@@ -645,6 +651,8 @@
 				8147DC66BED1C5411E9FD89D /* RetentionPolicy.swift in Sources */,
 				61C6790E5D041EB25808BAF3 /* RoadSenseLogger.swift in Sources */,
 				7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */,
+				435DC685A77E3EC29BF2E26A /* SensorCheckpoint.swift in Sources */,
+				256FE28742CA77F526CC7022 /* SensorCheckpointStore.swift in Sources */,
 				D6B093D0428291818D29B050 /* SensorCoordinator.swift in Sources */,
 				825EF8A058DF7DA06B8A89CE /* SentryBootstrapper.swift in Sources */,
 				0005F6455CB1194DA77528C2 /* ThermalMonitor.swift in Sources */,
@@ -691,7 +699,8 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
 				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = (
-					ca.roadsense.ios.cleanup,
+					"ca.roadsense.ios.nightly-cleanup",
+					"ca.roadsense.ios.upload-drain",
 				);
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
@@ -841,7 +850,8 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
 				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = (
-					ca.roadsense.ios.cleanup,
+					"ca.roadsense.ios.nightly-cleanup",
+					"ca.roadsense.ios.upload-drain",
 				);
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
@@ -1024,7 +1034,8 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
 				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = (
-					ca.roadsense.ios.cleanup,
+					"ca.roadsense.ios.nightly-cleanup",
+					"ca.roadsense.ios.upload-drain",
 				);
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct MotionVector3: Equatable, Sendable {
+public struct MotionVector3: Equatable, Sendable, Codable {
     public let x: Double
     public let y: Double
     public let z: Double
@@ -12,7 +12,7 @@ public struct MotionVector3: Equatable, Sendable {
     }
 }
 
-public struct MotionSample: Equatable, Sendable {
+public struct MotionSample: Equatable, Sendable, Codable {
     public let timestamp: TimeInterval
     public let userAcceleration: MotionVector3
     public let gravity: MotionVector3

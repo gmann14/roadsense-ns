@@ -52,6 +52,7 @@ RoadSenseNS/
 │   ├── Persistence/
 │   │   ├── ModelContainerProvider.swift
 │   │   ├── ReadingStore.swift
+│   │   ├── SensorCheckpointStore.swift
 │   │   ├── PrivacyZoneStore.swift
 │   │   ├── UploadQueueStore.swift
 │   │   ├── Models/                    # @Model types
@@ -109,6 +110,7 @@ Before the full Xcode project is generated, keep the environment/config seam bui
 - `ReadingBuilder`
 - `ReadingWindowProcessor`
 - `PersistedReadingCandidate`
+- `SensorCheckpoint`
 - `ReadingWindow`
 - `RetentionPolicy`
 - `QualityFilter`
@@ -166,7 +168,8 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
 - `UploadQueueStore` persists batch assignment / success / failure state using `UploadQueueCore`.
 - `APIClient` + `Uploader` now implement the first real app-side upload drain path against `POST /upload-readings`.
 - `SensorCoordinator` now orchestrates the first real passive-collection loop: it listens to `DrivingDetector`, starts/stops `LocationService` + `MotionService`, applies `PrivacyZoneFilter`, runs `ReadingBuilder` and `ReadingWindowProcessor`, persists accepted readings through `ReadingStore`, and opportunistically drains uploads.
-- `BackgroundTaskRegistrar` registers the cleanup task identifier `ca.roadsense.ios.cleanup`, and `project.yml` now emits `BGTaskSchedulerPermittedIdentifiers` to match it.
+- `SensorCheckpointStore` now writes `SensorCheckpoint.json` in Application Support and restores it if it is newer than 30 minutes. The checkpoint includes the in-progress `ReadingBuilder` state, `PotholeDetector` history, recent pothole candidates, and latest location.
+- `BackgroundTaskRegistrar` now registers both documented task identifiers: `ca.roadsense.ios.nightly-cleanup` and `ca.roadsense.ios.upload-drain`. `project.yml` emits `BGTaskSchedulerPermittedIdentifiers` to match them.
 - `SentryBootstrapper` exists as a guarded seam: it becomes active when the Sentry package resolves, but remains a no-op while package resolution is still blocked.
 
 ### Current Ready-Shell Behavior
