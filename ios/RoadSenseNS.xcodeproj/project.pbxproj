@@ -55,7 +55,8 @@
 		886A7E16B1112529B6004302 /* SensorFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026DC5F95328D7091BC8482E /* SensorFixture.swift */; };
 		88F7FD030231687D31CA394B /* AppFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7648F667665CDF25B279C81 /* AppFlowUITests.swift */; };
 		8AF51647C5DCF2AD6C785D47 /* SensorCheckpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */; };
-		91A2DEC04A7C99EFBE8B392C /* MapColorPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E3DAB71C1DA5E5CD179C4B /* MapColorPalette.swift */; };
+		DE51C047000000000000AA01 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE51C047000000000000AA02 /* DesignTokens.swift */; };
+		DE51C047000000000000AA04 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DE51C047000000000000AA05 /* Assets.xcassets */; };
 		93499EAF4872315D0197908C /* ReadingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92672E8E369B06AFF5F25AF /* ReadingStore.swift */; };
 		94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */; };
 		982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70A04456020333C21483C47 /* HighPassBiquad.swift */; };
@@ -208,7 +209,8 @@
 		E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadBatchJSONCodec.swift; sourceTree = "<group>"; };
 		E68A275BABCEFCE3E1964F10 /* MotionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionService.swift; sourceTree = "<group>"; };
-		E6E3DAB71C1DA5E5CD179C4B /* MapColorPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapColorPalette.swift; sourceTree = "<group>"; };
+		DE51C047000000000000AA02 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		DE51C047000000000000AA05 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkAndUploaderTests.swift; sourceTree = "<group>"; };
 		EDAC070ACEE2F122C555B0ED /* UserStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStats.swift; sourceTree = "<group>"; };
@@ -261,12 +263,19 @@
 		1345EEAF9D9B0ED9D1BCB755 /* Map */ = {
 			isa = PBXGroup;
 			children = (
-				E6E3DAB71C1DA5E5CD179C4B /* MapColorPalette.swift */,
 				1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */,
 				8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */,
 				CA6257F1C7E68CE62C4CCF25 /* SegmentDetailSheet.swift */,
 			);
 			path = Map;
+			sourceTree = "<group>";
+		};
+		DE51C047000000000000AA03 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				DE51C047000000000000AA02 /* DesignTokens.swift */,
+			);
+			path = DesignSystem;
 			sourceTree = "<group>";
 		};
 		1A09BD3973D04017D455F835 /* Pipeline */ = {
@@ -347,6 +356,7 @@
 		5A8CED41DE2A08EAC1E6EC8D /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				DE51C047000000000000AA05 /* Assets.xcassets */,
 				1EFAC01C66B9C992BC2313A7 /* Info.plist */,
 			);
 			path = Resources;
@@ -538,6 +548,7 @@
 		FDA53F96E3D07F8598FC53E6 /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				DE51C047000000000000AA03 /* DesignSystem */,
 				1345EEAF9D9B0ED9D1BCB755 /* Map */,
 				A055F6FAB38CBD5786C00779 /* Onboarding */,
 				7A9157B62ED71B02C9AFF8BC /* PrivacyZones */,
@@ -592,6 +603,7 @@
 			buildPhases = (
 				F56E3E5C245208990E07B5F2 /* Sources */,
 				7870343A5143E635A24ED237 /* Frameworks */,
+				DE51C047000000000000AA06 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -688,6 +700,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DE51C047000000000000AA06 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DE51C047000000000000AA04 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -769,7 +789,7 @@
 				982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */,
 				AFEE1434CB9A30B9D66A33DC /* IngestHealthEvaluator.swift in Sources */,
 				D936E8CAA7F8D74C012BB1D8 /* LocationService.swift in Sources */,
-				91A2DEC04A7C99EFBE8B392C /* MapColorPalette.swift in Sources */,
+				DE51C047000000000000AA01 /* DesignTokens.swift in Sources */,
 				D3654C639B341A125F6F764E /* MapScreen.swift in Sources */,
 				CAFAF51DC3E1A3AF7854919C /* ModelContainerProvider.swift in Sources */,
 				1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */,

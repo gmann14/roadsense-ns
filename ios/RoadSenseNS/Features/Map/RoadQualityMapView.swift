@@ -88,8 +88,8 @@ private struct TestingRoadQualityMapView: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(roadsenseHex: 0x0E2A36),
-                    Color(roadsenseHex: 0x1B4D59),
+                    DesignTokens.Palette.deepInk,
+                    DesignTokens.Palette.deep,
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -139,7 +139,7 @@ private struct LocalDriveOverlayStyleContent: MapStyleContent {
             LineLayer(id: Self.layerID, source: Self.sourceID)
                 .lineCap(.round)
                 .lineJoin(.round)
-                .lineColor(StyleColor(Color(roadsenseHex: 0x187E74)))
+                .lineColor(StyleColor(DesignTokens.Palette.signal))
                 .lineOpacity(0.95)
                 .lineWidth(localDriveWidthExpression)
                 .lineDashArray([2.0, 2.0])
@@ -216,13 +216,13 @@ private struct RoadQualityMapStyleContent: MapStyleContent {
             Exp(.linear)
             Exp(.get) { "roughness_score" }
             0.3
-            UIColor(Color(roadsenseHex: 0x2CB67D))
+            UIColor(DesignTokens.Palette.smooth)
             0.6
-            UIColor(Color(roadsenseHex: 0xF4D35E))
+            UIColor(DesignTokens.Palette.fair)
             1.0
-            UIColor(Color(roadsenseHex: 0xF28C28))
+            UIColor(DesignTokens.Palette.rough)
             1.5
-            UIColor(Color(roadsenseHex: 0xD64550))
+            UIColor(DesignTokens.Palette.veryRough)
         }
     }
 

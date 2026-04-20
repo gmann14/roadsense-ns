@@ -106,7 +106,7 @@ struct PrivacyZonesView: View {
                                 .foregroundStyle(.secondary)
                         }
                         Slider(value: $draftRadiusM, in: 250...600, step: 25)
-                            .tint(Color(roadsenseHex: 0x187E74))
+                            .tint(DesignTokens.Palette.deep)
                     }
 
                     HStack(spacing: 12) {
@@ -124,7 +124,7 @@ struct PrivacyZonesView: View {
                         saveZone()
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(Color(roadsenseHex: 0x187E74))
+                    .tint(DesignTokens.Palette.deep)
                     .disabled(draftLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("privacy-zones.save")
                 }
@@ -188,10 +188,10 @@ struct PrivacyZonesView: View {
 
                 Text("\(Int(zone.radiusM)) m")
                     .font(.footnote.weight(.medium))
-                    .foregroundStyle(Color(roadsenseHex: 0x187E74))
+                    .foregroundStyle(DesignTokens.Palette.deep)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color(roadsenseHex: 0x187E74).opacity(0.12), in: Capsule())
+                    .background(DesignTokens.Palette.deep.opacity(0.12), in: Capsule())
             }
 
             HStack(spacing: 10) {
@@ -309,7 +309,7 @@ private struct DraftReticle: View {
                 .frame(width: 14, height: 14)
                 .overlay(
                     Circle()
-                        .stroke(Color(roadsenseHex: 0x187E74), lineWidth: 3)
+                        .stroke(DesignTokens.Palette.deep, lineWidth: 3)
                 )
 
             Rectangle()
@@ -331,24 +331,24 @@ private struct PrivacyZoneMapContent: MapContent {
 
     var body: some MapContent {
         PolygonAnnotation(polygon: draftPolygon)
-            .fillColor(UIColor(Color(roadsenseHex: 0x187E74).opacity(0.18)))
-            .fillOutlineColor(UIColor(Color(roadsenseHex: 0x187E74)))
+            .fillColor(UIColor(DesignTokens.Palette.deep.opacity(0.18)))
+            .fillOutlineColor(UIColor(DesignTokens.Palette.deep))
 
         CircleAnnotation(centerCoordinate: draftCenter)
-            .circleColor(UIColor(Color(roadsenseHex: 0x187E74)))
+            .circleColor(UIColor(DesignTokens.Palette.deep))
             .circleStrokeColor(.white)
             .circleStrokeWidth(2)
             .circleRadius(6)
 
         PolygonAnnotationGroup(zones) { zone in
             PolygonAnnotation(polygon: polygon(for: zone))
-                .fillColor(UIColor(Color(roadsenseHex: 0x2C6E91).opacity(0.12)))
-                .fillOutlineColor(UIColor(Color(roadsenseHex: 0x2C6E91)))
+                .fillColor(UIColor(DesignTokens.Palette.inkMuted.opacity(0.12)))
+                .fillOutlineColor(UIColor(DesignTokens.Palette.inkMuted))
         }
 
         CircleAnnotationGroup(zones) { zone in
             CircleAnnotation(centerCoordinate: CLLocationCoordinate2D(latitude: zone.latitude, longitude: zone.longitude))
-                .circleColor(UIColor(Color(roadsenseHex: 0x2C6E91)))
+                .circleColor(UIColor(DesignTokens.Palette.inkMuted))
                 .circleStrokeColor(.white)
                 .circleStrokeWidth(2)
                 .circleRadius(5)

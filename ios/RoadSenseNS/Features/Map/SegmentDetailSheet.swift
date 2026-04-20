@@ -91,18 +91,7 @@ struct SegmentDetailSheet: View {
     }
 
     private var categoryTint: Color {
-        switch segment.aggregate.category {
-        case "smooth":
-            return Color(roadsenseHex: 0x2CB67D)
-        case "fair":
-            return Color(roadsenseHex: 0xF4D35E)
-        case "rough":
-            return Color(roadsenseHex: 0xF28C28)
-        case "very_rough":
-            return Color(roadsenseHex: 0xD64550)
-        default:
-            return .secondary
-        }
+        DesignTokens.rampColor(for: segment.aggregate.category)
     }
 
     private var updatedLabel: String {

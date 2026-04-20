@@ -393,10 +393,10 @@ private struct RoadLegendCard: View {
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 8) {
-                    legendRow(color: Color(roadsenseHex: 0x2CB67D), label: "Smooth")
-                    legendRow(color: Color(roadsenseHex: 0xF4D35E), label: "Fair")
-                    legendRow(color: Color(roadsenseHex: 0xF28C28), label: "Rough")
-                    legendRow(color: Color(roadsenseHex: 0xD64550), label: "Very rough")
+                    legendRow(color: DesignTokens.Palette.smooth, label: "Smooth")
+                    legendRow(color: DesignTokens.Palette.fair, label: "Fair")
+                    legendRow(color: DesignTokens.Palette.rough, label: "Rough")
+                    legendRow(color: DesignTokens.Palette.veryRough, label: "Very rough")
 
                     Text("Confidence explains how much community data is behind a score.")
                         .font(.caption)
@@ -456,7 +456,7 @@ private struct ContributionCard: View {
 
             Button(actionTitle, action: onAction)
                 .buttonStyle(.borderedProminent)
-                .tint(Color(roadsenseHex: 0x2CB67D))
+                .tint(DesignTokens.Palette.signal)
                 .accessibilityIdentifier("map.primary-action")
         }
         .padding(18)

@@ -116,7 +116,7 @@ extension DesignTokens {
 // MARK: - Color conveniences
 
 extension Color {
-    /// Solid color from a hex literal. Preferred over `Color(roadsenseHex:)`.
+    /// Solid color from a hex literal.
     init(hex: UInt32, alpha: Double = 1) {
         self.init(
             .sRGB,
@@ -148,13 +148,3 @@ extension UIColor {
     }
 }
 
-// MARK: - Legacy shim
-
-/// Temporary bridge so any remaining `Color(roadsenseHex: ...)` call sites keep compiling
-/// while we migrate to `DesignTokens.Palette.*`. Do not introduce new call sites.
-@available(*, deprecated, message: "Use DesignTokens.Palette.* instead of hex literals.")
-extension Color {
-    init(roadsenseHex hex: UInt32) {
-        self.init(hex: hex)
-    }
-}
