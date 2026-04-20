@@ -6,7 +6,7 @@ Implemented so far:
 
 - `B090` web shell and routing scaffold
 - `B091` quality-map explorer and live segment drawer groundwork
-- `B092` municipality jump search and pothole drawer feed
+- `B092` municipality/place search and pothole drawer feed
 - `B093` coverage mode and live worst-roads report
 - `B094` accessibility/deploy hardening groundwork
 - static municipality manifest
@@ -41,9 +41,9 @@ Environment:
 Current scope note:
 
 - Quality mode is now wired to the public vector-tile and segment-detail contracts.
-- Municipality-first search/jump is live against the static manifest.
+- Municipality-first search/jump is live against the static manifest, including alias matching and ranked suggestions.
+- An optional Nova Scotia-scoped Mapbox place-search fallback now activates when there is no municipality match.
 - Potholes mode isolates active markers and fetches a viewport-bounded pothole list.
 - Coverage mode is wired to the dedicated coverage tile contract.
 - `Worst Roads` now uses the live ranked-report endpoint.
-- The main remaining web gap is search polish beyond municipality-first jump behavior, plus richer browser-level verification and accessibility hardening.
-- The main remaining web gap is search polish beyond municipality-first jump behavior, plus deeper accessibility/performance auditing rather than missing core product surfaces.
+- The main remaining web gap is stronger pothole/search interaction polish, broader accessibility/performance auditing, and real deployment linking rather than missing core product surfaces.

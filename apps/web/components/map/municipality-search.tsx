@@ -1,9 +1,10 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { startTransition, useDeferredValue, useEffect, useState } from "react";
 
-import { getMunicipalityByName, municipalityManifest } from "@/lib/municipality-manifest";
+import { getMunicipalityByName, municipalityManifest, searchMunicipalities } from "@/lib/municipality-manifest";
+import { searchPlaces, type PlaceSearchResult } from "@/lib/search/mapbox-geocoding";
 import { withUpdatedRouteState, type MapMode } from "@/lib/url-state";
 
 type MunicipalitySearchProps = {
@@ -11,9 +12,78 @@ type MunicipalitySearchProps = {
   currentQuery: string | null;
 };
 
+type SearchSuggestion =
+  | {
+      id: string;
+      type: "municipality";
+      label: string;
+      detail: string;
+      target: string;
+    }
+  | {
+      id: string;
+      type: "place";
+      label: string;
+      detail: string;
+      target: string;
+    };
+
 export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySearchProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [value, setValue] = useState(currentQuery ?? "");
+  const [placeResults, setPlaceResults] = useState<PlaceSearchResult[]>([]);
+  const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
+  const deferredValue = useDeferredValue(value);
+  const municipalityResults = searchMunicipalities(deferredValue).slice(0, 5);
+
+  useEffect(() => {
+    if (municipalityResults.length > 0 || deferredValue.trim().length < 3) {
+      setPlaceResults([]);
+      setIsLoadingPlaces(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsLoadingPlaces(true);
+
+    void searchPlaces(deferredValue, controller.signal)
+      .then((results) => {
+        if (!controller.signal.aborted) {
+          setPlaceResults(results);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setPlaceResults([]);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoadingPlaces(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [deferredValue, municipalityResults.length]);
+
+  const navigate = (target: string) => {
+    startTransition(() => {
+      router.push(target, { scroll: false });
+    });
+  };
+
+  const buildPlaceTarget = (result: PlaceSearchResult) =>
+    `${pathname}?${withUpdatedRouteState(new URLSearchParams(), {
+      mode: activeMode,
+      lat: result.center[1],
+      lng: result.center[0],
+      z: result.zoom,
+      q: result.label,
+      segment: null,
+    }).toString()}`;
 
   const navigateToSelection = () => {
     const municipality = getMunicipalityByName(value.trim());
@@ -23,7 +93,13 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
         mode: activeMode,
         q: municipality.name,
       });
-      window.location.assign(`/municipality/${municipality.slug}?${params.toString()}`);
+      navigate(`/municipality/${municipality.slug}?${params.toString()}`);
+      return;
+    }
+
+    const firstPlace = placeResults[0];
+    if (firstPlace) {
+      navigate(buildPlaceTarget(firstPlace));
       return;
     }
 
@@ -31,9 +107,32 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
       const params = withUpdatedRouteState(new URLSearchParams(), {
         mode: activeMode,
       });
-      window.location.assign(`/?${params.toString()}`);
+      navigate(`/?${params.toString()}`);
     }
   };
+
+  const suggestions: SearchSuggestion[] = [
+    ...municipalityResults.map((result) => ({
+      id: result.municipality.slug,
+      type: "municipality" as const,
+      label: result.municipality.name,
+      detail:
+        result.matchedOn === result.municipality.name
+          ? "Municipality"
+          : `Matched via ${result.matchedOn}`,
+      target: `/municipality/${result.municipality.slug}?${withUpdatedRouteState(new URLSearchParams(), {
+        mode: activeMode,
+        q: result.municipality.name,
+      }).toString()}`,
+    })),
+    ...placeResults.map((result) => ({
+      id: result.id,
+      type: "place" as const,
+      label: result.label,
+      detail: result.placeName,
+      target: buildPlaceTarget(result),
+    })),
+  ].slice(0, 6);
 
   return (
     <form
@@ -44,12 +143,14 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
       }}
     >
       <label style={{ display: "grid", gap: 6 }}>
-        <span className="eyebrow">Jump to municipality</span>
+        <span className="eyebrow">Search municipalities or places</span>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <input
             className="search-input"
             list="municipality-options"
             placeholder="Halifax, Truro, Kentville…"
+            aria-label="Search municipalities or places"
+            aria-describedby="municipality-search-help"
             value={value}
             onChange={(event) => setValue(event.target.value)}
           />
@@ -58,6 +159,35 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
           </button>
         </div>
       </label>
+      <span id="municipality-search-help" className="lede" style={{ margin: 0, fontSize: "0.92rem" }}>
+        Municipality matches route to dedicated pages first. If no municipality matches, place search can pan the current map.
+      </span>
+      {suggestions.length > 0 ? (
+        <div className="search-results" role="listbox" aria-label="Search suggestions">
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.id}
+              type="button"
+              className="search-result-button"
+              onClick={() => navigate(suggestion.target)}
+            >
+              <strong>{suggestion.label}</strong>
+              <span className="lede" style={{ margin: 0, fontSize: "0.92rem" }}>
+                {suggestion.type === "municipality" ? suggestion.detail : `Place · ${suggestion.detail}`}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : isLoadingPlaces ? (
+        <div className="search-results">
+          <div className="search-result-button" aria-live="polite">
+            <strong>Searching Nova Scotia places…</strong>
+            <span className="lede" style={{ margin: 0, fontSize: "0.92rem" }}>
+              Falling back to Mapbox geocoding because there was no municipality match.
+            </span>
+          </div>
+        </div>
+      ) : null}
       <datalist id="municipality-options">
         {municipalityManifest.map((municipality) => (
           <option key={municipality.slug} value={municipality.name} />

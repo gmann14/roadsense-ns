@@ -5,6 +5,7 @@ import { ModeSwitcher } from "@/components/map/mode-switcher";
 import { MunicipalitySearch } from "@/components/map/municipality-search";
 import { SegmentDrawerPanel } from "@/components/map/segment-drawer";
 import type { SegmentDetail } from "@/lib/api/client";
+import { searchMunicipalities } from "@/lib/municipality-manifest";
 
 afterEach(() => {
   cleanup();
@@ -16,6 +17,10 @@ vi.mock("next/navigation", () => ({
     push: vi.fn(),
     replace: vi.fn(),
   }),
+}));
+
+vi.mock("@/lib/search/mapbox-geocoding", () => ({
+  searchPlaces: vi.fn(async () => []),
 }));
 
 describe("map mode switcher", () => {
@@ -31,11 +36,25 @@ describe("map mode switcher", () => {
 });
 
 describe("municipality search", () => {
+  it("matches municipalities by alias as well as canonical name", () => {
+    expect(searchMunicipalities("HRM")[0]?.municipality.slug).toBe("halifax");
+    expect(searchMunicipalities("cape breton")[0]?.municipality.slug).toBe(
+      "cape-breton-regional-municipality",
+    );
+  });
+
   it("renders a municipality-first quick-jump input", () => {
     render(<MunicipalitySearch activeMode="quality" currentQuery="Halifax" />);
 
     expect(screen.getByPlaceholderText(/halifax, truro, kentville/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue("Halifax")).toBeInTheDocument();
+  });
+
+  it("renders ranked municipality suggestions for partial matches", () => {
+    render(<MunicipalitySearch activeMode="quality" currentQuery="Cape" />);
+
+    expect(screen.getByRole("listbox", { name: /search suggestions/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /cape breton regional municipality/i })).toBeInTheDocument();
   });
 });
 

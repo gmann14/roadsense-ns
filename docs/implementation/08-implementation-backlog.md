@@ -553,8 +553,8 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - tests for municipality-first search
   - Playwright tests for potholes mode behavior
 - **GREEN**
-- implement search and potholes mode
-- **Current repo note:** this slice is partially implemented under `apps/web/`: a municipality-first jump search is live against the static manifest, and `Potholes` mode now isolates the pothole layer plus a viewport-bounded pothole drawer feed. The remaining work is richer place search, stronger pothole-specific interaction polish, and browser-level end-to-end verification.
+  - implement search and potholes mode
+- **Current repo note:** this slice is now materially implemented under `apps/web/`: municipality-first search is live against the static manifest, including alias matching and ranked suggestions, an optional Nova Scotia-scoped Mapbox place-search fallback is available when there is no municipality match, and `Potholes` mode isolates the pothole layer plus a viewport-bounded pothole drawer feed. Browser-level end-to-end verification is already in place; the remaining work is stronger pothole-specific interaction polish and deeper search-result UX refinement rather than missing core behavior.
 
 ### B110 — Pothole follow-up UX
 

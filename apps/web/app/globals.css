@@ -214,6 +214,23 @@ button {
   color: var(--rs-text);
 }
 
+.search-results {
+  display: grid;
+  gap: 8px;
+}
+
+.search-result-button {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--rs-border);
+  background: var(--rs-surface-strong);
+  color: var(--rs-text);
+}
+
 .map-canvas-shell {
   position: relative;
   min-height: 520px;
