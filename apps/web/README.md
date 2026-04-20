@@ -1,0 +1,42 @@
+# RoadSense NS Web
+
+Next.js App Router frontend for the future public RoadSense NS dashboard.
+
+Implemented so far:
+
+- `B090` web shell and routing scaffold
+- `B091` quality-map explorer and live segment drawer groundwork
+- `B092` municipality jump search and pothole drawer feed
+- `B093` coverage mode and live worst-roads report
+- static municipality manifest
+- typed URL-state parsing
+- client-side route-state sync for `mode`, `segment`, and viewport params
+- route shells for:
+  - `/`
+  - `/municipality/[slug]`
+  - `/reports/worst-roads`
+  - `/methodology`
+  - `/privacy`
+- unit test coverage for route shells, manifest/url helpers, and drawer/mode-switcher states
+
+Commands:
+
+- `npm install`
+- `npm test`
+- `npm run build`
+
+Environment:
+
+- `NEXT_PUBLIC_MAPBOX_TOKEN` — required for the live map canvas
+- `NEXT_PUBLIC_MAPBOX_STYLE_ID` or `NEXT_PUBLIC_MAPBOX_STYLE_URL` — optional Mapbox style override
+- `NEXT_PUBLIC_API_BASE_URL` — defaults to local Supabase Edge Functions
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — anon key for public read endpoints
+
+Current scope note:
+
+- Quality mode is now wired to the public vector-tile and segment-detail contracts.
+- Municipality-first search/jump is live against the static manifest.
+- Potholes mode isolates active markers and fetches a viewport-bounded pothole list.
+- Coverage mode is wired to the dedicated coverage tile contract.
+- `Worst Roads` now uses the live ranked-report endpoint.
+- The main remaining web gap is search polish beyond municipality-first jump behavior, plus richer browser-level verification and accessibility hardening.

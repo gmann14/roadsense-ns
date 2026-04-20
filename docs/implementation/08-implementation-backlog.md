@@ -529,6 +529,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - implement app shell, design tokens, route skeletons, municipality manifest
 - **Acceptance**
   - route shells render without client-side waterfalls
+- **Current repo note:** this slice is now implemented under `apps/web/`: Next.js App Router route shells exist for `/`, `/municipality/[slug]`, `/reports/worst-roads`, `/methodology`, and `/privacy`; the static municipality manifest and URL-state helpers are in place; and unit tests plus `next build` validate the shell without a client-side waterfall.
 
 ### B091 — Quality map and segment drawer
 
@@ -542,6 +543,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - implement drawer and route-state sync
 - **Acceptance**
   - public web map can show quality data and segment detail
+- **Current repo note:** this slice is now materially implemented under `apps/web/`: the public explorer uses a client-side route-state shell, the quality mode renders through Mapbox GL JS and the backend vector-tile endpoint when `NEXT_PUBLIC_MAPBOX_TOKEN` is configured, the drawer fetches live `GET /segments/{id}` detail, and component tests plus `next build` validate the mode-switcher, drawer states, and route integration. `Potholes` and `Coverage` route-state affordances are present but their dedicated map sources remain queued for `B092`/`B093`.
 
 ### B092 — Search and potholes mode
 
@@ -552,6 +554,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - Playwright tests for potholes mode behavior
 - **GREEN**
 - implement search and potholes mode
+- **Current repo note:** this slice is partially implemented under `apps/web/`: a municipality-first jump search is live against the static manifest, and `Potholes` mode now isolates the pothole layer plus a viewport-bounded pothole drawer feed. The remaining work is richer place search, stronger pothole-specific interaction polish, and browser-level end-to-end verification.
 
 ### B110 — Pothole follow-up UX
 
@@ -580,6 +583,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - implement `Worst Roads` page
 - **Acceptance**
   - both web-only surfaces run on real backend data
+- **Current repo note:** this slice is now materially implemented under `apps/web/`: Coverage mode swaps the map to the dedicated `GET /tiles/coverage/{z}/{x}/{y}.mvt` source, and `/reports/worst-roads` fetches live `GET /segments/worst` data with municipality and row-limit filtering. The remaining gap is richer search/pothole UX polish, not the underlying coverage/report data path.
 
 ### B094 — Methodology, privacy, accessibility, and deployment hardening
 
