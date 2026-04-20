@@ -1,0 +1,42 @@
+name: Web CI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  web-check:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: CI mode note
+        run: echo "Manual-only for now to avoid burning GitHub minutes during early web implementation."
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build Next app
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:54321/functions/v1
+        run: npm run build
+
+      - name: Run browser smoke tests
+        run: npm run test:e2e

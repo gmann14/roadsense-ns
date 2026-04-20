@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { getMunicipalityByName, municipalityManifest } from "@/lib/municipality-manifest";
@@ -12,32 +12,35 @@ type MunicipalitySearchProps = {
 };
 
 export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySearchProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const [value, setValue] = useState(currentQuery ?? "");
+
+  const navigateToSelection = () => {
+    const municipality = getMunicipalityByName(value.trim());
+
+    if (municipality) {
+      const params = withUpdatedRouteState(new URLSearchParams(), {
+        mode: activeMode,
+        q: municipality.name,
+      });
+      window.location.assign(`/municipality/${municipality.slug}?${params.toString()}`);
+      return;
+    }
+
+    if (value.trim().length === 0 && pathname !== "/") {
+      const params = withUpdatedRouteState(new URLSearchParams(), {
+        mode: activeMode,
+      });
+      window.location.assign(`/?${params.toString()}`);
+    }
+  };
 
   return (
     <form
       className="municipality-search"
       onSubmit={(event) => {
         event.preventDefault();
-        const municipality = getMunicipalityByName(value.trim());
-
-        if (municipality) {
-          const params = withUpdatedRouteState(new URLSearchParams(), {
-            mode: activeMode,
-            q: municipality.name,
-          });
-          router.push(`/municipality/${municipality.slug}?${params.toString()}`, { scroll: false });
-          return;
-        }
-
-        if (value.trim().length === 0 && pathname !== "/") {
-          const params = withUpdatedRouteState(new URLSearchParams(), {
-            mode: activeMode,
-          });
-          router.push(`/?${params.toString()}`, { scroll: false });
-        }
+        navigateToSelection();
       }}
     >
       <label style={{ display: "grid", gap: 6 }}>

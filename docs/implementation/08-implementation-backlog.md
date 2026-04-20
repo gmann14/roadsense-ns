@@ -599,6 +599,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - wire Vercel preview/production config
 - **Acceptance**
   - web app meets the documented accessibility, privacy, and deploy requirements
+- **Current repo note:** this slice is materially implemented under `apps/web/`: methodology/privacy pages have explicit content tests, the app now has skip-link and focus-visible affordances plus a text legend, manual `web-ci.yml` runs unit/build/browser-smoke checks, Playwright smoke coverage exists for the core public routes, and `apps/web/vercel.json` sets baseline response headers. Remaining work is broader accessibility/performance auditing and deployment linking, not the absence of a web verify/deploy scaffold.
 
 ## Phase 11 — Post-MVP Operational Procedures
 

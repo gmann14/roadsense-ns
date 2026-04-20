@@ -8,6 +8,7 @@ Implemented so far:
 - `B091` quality-map explorer and live segment drawer groundwork
 - `B092` municipality jump search and pothole drawer feed
 - `B093` coverage mode and live worst-roads report
+- `B094` accessibility/deploy hardening groundwork
 - static municipality manifest
 - typed URL-state parsing
 - client-side route-state sync for `mode`, `segment`, and viewport params
@@ -25,6 +26,11 @@ Commands:
 - `npm test`
 - `npm run build`
 
+Manual CI / deploy scaffolding:
+
+- `.github/workflows/web-ci.yml` runs unit tests, production build, and Playwright browser smoke on demand
+- `vercel.json` adds baseline response headers for deployed environments
+
 Environment:
 
 - `NEXT_PUBLIC_MAPBOX_TOKEN` — required for the live map canvas
@@ -40,3 +46,4 @@ Current scope note:
 - Coverage mode is wired to the dedicated coverage tile contract.
 - `Worst Roads` now uses the live ranked-report endpoint.
 - The main remaining web gap is search polish beyond municipality-first jump behavior, plus richer browser-level verification and accessibility hardening.
+- The main remaining web gap is search polish beyond municipality-first jump behavior, plus deeper accessibility/performance auditing rather than missing core product surfaces.

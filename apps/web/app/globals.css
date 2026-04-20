@@ -45,6 +45,14 @@ a {
   text-decoration: none;
 }
 
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(22, 90, 114, 0.28);
+  outline-offset: 3px;
+}
+
 button,
 input,
 select {
@@ -59,6 +67,22 @@ button {
   width: min(1360px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 20px 0 48px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  transform: translateY(-200%);
+  background: var(--rs-accent);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 999px;
+  z-index: 1000;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 .card {
@@ -283,6 +307,50 @@ button {
   color: var(--rs-text);
   border-radius: 999px;
   padding: 10px 14px;
+}
+
+.map-legend {
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+
+.legend-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.legend-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.legend-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  margin-top: 2px;
+}
+
+.legend-swatch.smooth {
+  background: var(--rs-smooth);
+}
+
+.legend-swatch.fair {
+  background: var(--rs-fair);
+}
+
+.legend-swatch.rough {
+  background: var(--rs-rough);
+}
+
+.legend-swatch.very-rough {
+  background: var(--rs-very-rough);
 }
 
 @media (max-width: 980px) {

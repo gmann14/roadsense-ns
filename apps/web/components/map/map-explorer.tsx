@@ -15,6 +15,7 @@ import {
 
 import { ModeSwitcher } from "./mode-switcher";
 import { MunicipalitySearch } from "./municipality-search";
+import { MapLegend } from "./map-legend";
 import { RoadQualityMapView } from "./road-quality-map-view";
 import { SegmentDrawer } from "./segment-drawer";
 
@@ -128,12 +129,15 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
         </div>
       </div>
 
-      <SegmentDrawer
-        mode={routeState.mode}
-        selectedSegmentId={routeState.segment}
-        visibleBbox={visibleBbox}
-        onClearSelection={handleClearSelection}
-      />
+      <div style={{ display: "grid", gap: 18, alignContent: "start" }}>
+        <SegmentDrawer
+          mode={routeState.mode}
+          selectedSegmentId={routeState.segment}
+          visibleBbox={visibleBbox}
+          onClearSelection={handleClearSelection}
+        />
+        <MapLegend />
+      </div>
     </section>
   );
 }

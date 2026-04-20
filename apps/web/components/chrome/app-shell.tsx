@@ -24,7 +24,7 @@ export function AppShell({
         municipalitiesCovered={municipalitiesCovered}
         freshness={freshness}
       />
-      {children}
+      <main id="main-content">{children}</main>
     </div>
   );
 }
