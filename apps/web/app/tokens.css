@@ -1,0 +1,99 @@
+/*
+ * RoadSense NS — design tokens.
+ * Source of truth: docs/design-tokens.md.
+ * Never hardcode a color, radius, duration, or size elsewhere.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surface & ink */
+  --rs-canvas: #f6f1e8;
+  --rs-canvas-sunken: #ece5d5;
+  --rs-surface: #fffcf5;
+  --rs-surface-elevated: #ffffff;
+  --rs-ink: #0f1e26;
+  --rs-ink-muted: #55707d;
+  --rs-ink-faint: #8fa3ab;
+  --rs-border: rgba(15, 30, 38, 0.1);
+  --rs-border-strong: rgba(15, 30, 38, 0.18);
+
+  /* Brand */
+  --rs-deep: #0e3b4a;
+  --rs-deep-ink: #07222c;
+  --rs-signal: #e9a23b;
+  --rs-signal-soft: #f7dfb1;
+
+  /* Legacy-compatible accent (now aliased to brand deep) */
+  --rs-accent: var(--rs-deep);
+  --rs-accent-soft: rgba(14, 59, 74, 0.1);
+
+  /* Roughness ramp */
+  --rs-smooth: #2f8f6d;
+  --rs-fair: #e2b341;
+  --rs-rough: #d97636;
+  --rs-very-rough: #c04242;
+  --rs-unpaved: #8a9aa2;
+  --rs-unscored: #8a9aa2;
+
+  /* Coverage (derived from ramp + brand) */
+  --rs-coverage-none: #d9d3c5;
+  --rs-coverage-emerging: #a5c2ca;
+  --rs-coverage-published: #3f7d92;
+  --rs-coverage-strong: #0e3b4a;
+
+  /* Semantic */
+  --rs-success: #2f8f6d;
+  --rs-warning: #d97636;
+  --rs-danger: #c04242;
+
+  /* Radius */
+  --rs-radius-xs: 8px;
+  --rs-radius-sm: 14px;
+  --rs-radius-md: 20px;
+  --rs-radius-lg: 28px;
+  --rs-radius-pill: 999px;
+
+  /* Elevation */
+  --rs-shadow-soft: 0 8px 24px -8px rgba(14, 59, 74, 0.18);
+  --rs-shadow-hard: 0 20px 60px -16px rgba(14, 59, 74, 0.24);
+
+  /* Legacy shadow alias */
+  --rs-shadow: var(--rs-shadow-soft);
+
+  /* Motion */
+  --rs-motion-standard: 220ms cubic-bezier(0.2, 0, 0, 1);
+  --rs-motion-enter: 360ms cubic-bezier(0.16, 1, 0.3, 1);
+  --rs-motion-map: 600ms linear;
+
+  /* Space (exposed for inline consistency — prefer numeric values in layout) */
+  --rs-space-xxs: 4px;
+  --rs-space-xs: 8px;
+  --rs-space-sm: 12px;
+  --rs-space-md: 16px;
+  --rs-space-lg: 20px;
+  --rs-space-xl: 24px;
+  --rs-space-xxl: 32px;
+  --rs-space-xxxl: 48px;
+  --rs-space-huge: 64px;
+
+  /* Type */
+  --rs-font-display: var(--font-serif), "Fraunces", "Iowan Old Style", Georgia, serif;
+  --rs-font-ui: var(--font-sans), "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --rs-font-mono: var(--font-mono), "IBM Plex Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+
+  /* Legacy — kept so unchanged consumers still compile; alias to the unified tokens. */
+  --rs-bg: var(--rs-canvas);
+  --rs-text: var(--rs-ink);
+  --rs-text-muted: var(--rs-ink-muted);
+  --rs-surface-strong: var(--rs-surface);
+  --rs-radius-xl: var(--rs-radius-lg);
+  --rs-radius-lg-alias: var(--rs-radius-md);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: light;
+    /* Dark mode tokens available but web defaults to light for MVP parity with spec. */
+  }
+}

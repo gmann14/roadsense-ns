@@ -544,6 +544,100 @@ CREATE INDEX idx_potholes_status ON pothole_reports (status);
 
 ---
 
+## Design System v2 (planning — 2026-04-20)
+
+> Full audit + rationale: [.context/design-audit.md](../.context/design-audit.md). This section captures the *contract* for implementation. The audit captures the *why*.
+
+**North star:** *Apple-grade clarity with the quiet authority of a public-infrastructure tool.* Simple, clear, beautiful — the map is the hero, chrome yields to content, and contribution moments are quietly celebrated.
+
+### Brand tokens (single source of truth)
+
+A token map lives in `docs/design-tokens.md` (to be generated) and is consumed by both iOS (`Resources/DesignTokens.swift`) and web (`apps/web/app/tokens.css`). The existing duplicated palette (`MapColorPalette.swift` hexes + `globals.css` CSS vars) will be replaced with generated files so iOS and web can never drift.
+
+**Color**
+| Token | Light | Dark |
+|---|---|---|
+| `canvas` | `#F6F1E8` | `#0B1419` |
+| `ink` | `#0F1E26` | `#EEF2F4` |
+| `muted` | `#55707D` | `#90A4AE` |
+| `deep` (brand) | `#0E3B4A` | `#0E3B4A` |
+| `signal` (accent, user moments) | `#E9A23B` | `#E9A23B` |
+
+**Roughness ramp (unified iOS + web, colour-blind tested)**
+| Category | Color |
+|---|---|
+| Smooth | `#2F8F6D` |
+| Fair | `#E2B341` |
+| Rough | `#D97636` |
+| Very rough | `#C04242` |
+| Unpaved / unscored | `#8A9AA2` |
+
+**Typography**
+- Web: **Fraunces** (display), **Manrope** (UI), **IBM Plex Mono** (numerals).
+- iOS: **SF Pro Rounded** (display numerals), **SF Pro** (UI), **SF Mono** (tabular data).
+- Scale: `display 40/44`, `title 28/32`, `headline 20/26`, `body 16/24`, `callout 15/20`, `caption 13/16`, `eyebrow 11/14 uppercase +0.12em`, `number-lg 48` (monospaced).
+
+**Space / radius**
+- Spacing: `4 · 8 · 12 · 16 · 20 · 24 · 32 · 48` — no other values.
+- Radii: `8 · 14 · 20 · 28`.
+
+**Motion**
+- `standard` — cubic-bezier(0.2, 0, 0, 1) @ 220 ms (UI state changes).
+- `enter` — cubic-bezier(0.16, 1, 0.3, 1) @ 360 ms (sheets, drawers).
+- `map` — linear @ 600 ms (map data settle).
+- Celebration pulse — 900 ms spring on the Signal accent, fires only on personal-contribution moments. All motion collapses to cross-fade under Reduce Motion.
+
+**Iconography**
+- Phase 1: SF Symbols (iOS) + inline SVGs (web), mapped to a shared 16-name vocabulary.
+- Phase 2 (post Apple approval): custom 24×24 / 1.5px-stroke set.
+
+### Screen redesign scope (v2)
+
+**iOS**
+1. **Map (home)** — remove center-screen overlay; replace three-panel glass chrome with one bottom card (peek / expanded), compact top bar, `…` menu, "my drives" toggle.
+2. **Segment detail** — editorial infographic: hero score tile, real 6-month sparkline (driven by `scoreLast30D` / `score30To60D`), confidence filled-dots, promoted primary CTA.
+3. **Onboarding** — 4-card `TabView` flow (welcome → permissions → privacy zones → ready) with illustration, progress dots, primary + secondary actions.
+4. **Settings** — grouped card sections with inline status chips (recording, zone count, sync); "Your data" mini-dashboard.
+5. **Stats** — contribution hero: km-mapped medallion, 14-day bar strip, milestones list with progress, shareable card stub.
+6. **Privacy zones** — full-screen Mapbox surface with detented bottom sheet (20 / 60 / 100%), FAB to add, slider at spec-defined 250 / 500 / 1000 / 2000 m ticks, haptic tick on radius change.
+
+**Web**
+1. **Home / Explorer** — editorial header *above* the map (headline + lede + inline trust strip + mode switcher + search); map becomes full-width hero; legend floats as a collapsible chip; segment drawer slides in as an overlay (does not shrink the map); URL state preserved.
+2. **Worst Roads** — editorial ranked list with mini bar chart per row, large rank numbers, methodology as bottom banner, CSV export button.
+3. **Municipality page** — adds a municipality hero above the shared explorer (km, roads scored, most improved / worsened).
+4. **Methodology / Privacy** — long-form editorial with numbered sections, inline diagrams, serif-led typography.
+
+### Accessibility guardrails (must not regress)
+
+- Every text-on-tint combo ≥ 4.5:1 contrast; ramp colors verified against `canvas` and `deep` backgrounds.
+- Existing `dynamicTypeSize.isAccessibilitySize` branching preserved and extended to new cards.
+- Sparklines, medallions, and bars expose an `accessibilityLabel` sentence summary.
+- `prefers-reduced-motion` collapses every spring / slide to a ≤ 200 ms fade on both platforms.
+- Web maintains skip-link and focus-visible behaviour; iOS maintains current `accessibilityIdentifier` coverage for UI tests.
+
+### Performance guardrails
+
+- Map rendering continues to use vector tiles only (no GeoJSON overlays added for visuals).
+- First-run illustration ships as an SVG ≤ 8 KB (iOS) / inline SVG (web).
+- Web LCP element remains server-rendered (the editorial header); the map hydrates after.
+- Token CSS is inlined in `<head>` for zero-flash styling.
+
+### Implementation sequence
+
+1. **Phase A — Tokens & foundation** (iOS + web in parallel): write `docs/design-tokens.md`; generate iOS `DesignTokens.swift` and web `tokens.css`; swap all hardcoded hex usages.
+2. **Phase B — iOS screens** in order: Map → Onboarding → Segment detail → Stats → Settings → Privacy zones.
+3. **Phase C — Web screens** in order: Home/Explorer → Worst Roads → Municipality → Methodology/Privacy.
+4. **Phase D — Polish**: motion, empty states & first-run illustrations, cross-platform screenshot QA, accessibility audit, and a final rewrite of the UI/UX Design section below to match shipped state.
+
+### Open questions (resolve before Phase B)
+
+- Confirm unified roughness ramp (both platforms shift slightly; field-test users will see colors change).
+- Scope of "Signal" accent celebration (any milestone, or km/segments only).
+- App icon redesign — in this pass or later.
+- Custom icon set — now (blocks Phase B finish) or post-launch.
+
+---
+
 ## UI/UX Design
 
 The app should feel **simple, beautiful, and modern** — approachable for non-technical users. Think Strava's polish applied to civic tech. Use the `frontend-design` skill for implementation.
