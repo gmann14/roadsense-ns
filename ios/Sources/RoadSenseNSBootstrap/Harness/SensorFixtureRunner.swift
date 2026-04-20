@@ -20,11 +20,26 @@ public struct SensorFixtureReplayResult: Equatable, Sendable {
 }
 
 public struct SensorFixtureExpected: Codable, Equatable, Sendable {
+    public struct PrivacyZoneExpectation: Codable, Equatable, Sendable {
+        public let latitude: Double
+        public let longitude: Double
+        public let radiusMeters: Double
+
+        enum CodingKeys: String, CodingKey {
+            case latitude
+            case longitude
+            case radiusMeters = "radius_meters"
+        }
+    }
+
     public let fixture: String
     public let expectedWindows: Int
     public let expectedPotholeFlagged: Bool
-    public let expectedRmsRange: [Double]
-    public let expectedMaxSpikeGRange: [Double]
+    public let expectedRmsRange: [Double]?
+    public let expectedMaxSpikeGRange: [Double]?
+    public let expectedPrivacyFilteredCount: Int?
+    public let expectedRejectedCount: Int?
+    public let privacyZone: PrivacyZoneExpectation?
 
     enum CodingKeys: String, CodingKey {
         case fixture
@@ -32,6 +47,9 @@ public struct SensorFixtureExpected: Codable, Equatable, Sendable {
         case expectedPotholeFlagged = "expected_pothole_flagged"
         case expectedRmsRange = "expected_rms_range"
         case expectedMaxSpikeGRange = "expected_max_spike_g_range"
+        case expectedPrivacyFilteredCount = "expected_privacy_filtered_count"
+        case expectedRejectedCount = "expected_rejected_count"
+        case privacyZone = "privacy_zone"
     }
 }
 

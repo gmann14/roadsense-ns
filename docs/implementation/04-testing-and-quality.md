@@ -1,6 +1,6 @@
 # 04 — Testing & Quality
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-04-20*
 
 How we verify each part of the system works, stays working, and that the roughness data we publish is trustworthy. Sensor apps fail in subtle ways (small drift, bad in edge cases, fine in simulator); this doc is biased toward catching those failures.
 
@@ -211,10 +211,19 @@ Current repo note:
   - monotonic timestamp rejection
   - full replay into `ReadingBuilder` / `PotholeDetector` / `ReadingWindowProcessor`
   - expected window count / pothole flag / RMS range / spike range assertions
-- Reusable CSV + `.expected.json` fixture pairs are now checked into the bootstrap test target, including both a pothole case and a smooth-cruise baseline.
+- Reusable CSV + `.expected.json` fixture pairs are now checked into the bootstrap test target, covering:
+  - pothole hit
+  - smooth-cruise baseline
+  - privacy-zone recovery
+  - thermal rejection
 - The dedicated `RoadSenseNSSimHarness` app target now loads and replays the same fixture pattern in a simple developer UI.
 - The bootstrap harness test now auto-discovers every checked-in `.expected.json` resource and replays the matching CSV fixture, so new fixtures join the deterministic suite automatically.
 - App-hosted UI smoke tests now launch against explicit in-memory scenarios (`default`, `ready-shell`) and use a non-Mapbox testing surface so simulator automation stays deterministic.
+- UI smoke coverage now exercises:
+  - first-run privacy gating
+  - ready-shell Settings -> Privacy Zones navigation
+  - seeded stats rendering
+  - delete-local-data behavior from Settings
 - What still remains is expanding that corpus with real captured drives and keeping the harness/UI-test targets green in CI.
 
 ## Integration Tests

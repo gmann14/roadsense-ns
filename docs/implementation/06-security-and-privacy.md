@@ -1,6 +1,6 @@
 # 06 — Security & Privacy
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-04-20*
 
 Covers: PIPEDA compliance checklist, threat model, abuse mitigation, App Store privacy labels, and incident response for privacy-impacting issues.
 
@@ -202,6 +202,7 @@ Contact form at `https://roadsense.ca/privacy#contact` (or a simple `mailto:`). 
 - [ ] Jailbreak detection: out of scope for MVP (too much false-positive noise for a civic app)
 - [ ] No PII in `os_log` or Sentry breadcrumbs
 - [ ] Privacy-zone coords are written with the offset already applied — un-offset coords never hit disk
+- [ ] Signed-build verification run against the checklist in [05-deployment-and-observability.md](05-deployment-and-observability.md#observability-verification-checklist)
 
 ### Backend
 
@@ -216,6 +217,7 @@ Contact form at `https://roadsense.ca/privacy#contact` (or a simple `mailto:`). 
 - [ ] `.github/CODEOWNERS` lists Graham for sensitive paths (migrations, functions, Info.plist)
 - [ ] Dependabot enabled for SPM + npm + deno deps
 - [ ] Secret scanning enabled (GitHub default); pre-commit gitleaks hook for local catches
+- [ ] One manual staging log review confirms no raw token, IP, or exact coordinate leakage in structured logs
 
 ### Infrastructure
 

@@ -8,7 +8,12 @@ struct ContentView: View {
     @State private var isShowingSettings = false
 
     init(container: AppContainer) {
-        _model = State(initialValue: AppModel(container: container))
+        _model = State(
+            initialValue: AppModel(
+                container: container,
+                defaults: AppBootstrap.defaultsForCurrentProcess()
+            )
+        )
     }
 
     var body: some View {

@@ -1,6 +1,6 @@
 # 05 — Deployment & Observability
 
-*Last updated: 2026-04-18*
+*Last updated: 2026-04-20*
 
 Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what to do when something breaks at 11pm" playbook.
 
@@ -179,6 +179,47 @@ Requires an explicit GitHub Environment approval from Graham before it runs. Sam
 ```
 
 Target: < 30min end-to-end. Done by the human on release day.
+
+## Observability Verification Checklist
+
+Before inviting wider testers, run this checklist once against a signed build and once against staging/backend logs.
+
+### iOS
+
+- confirm Sentry initializes only outside XCTest / simulator test bootstrap
+- force one handled error and one non-fatal upload failure in a controlled environment
+- verify events arrive in Sentry with:
+  - app version
+  - environment
+  - request ID if present
+  - no raw latitude / longitude
+  - no raw device token
+  - no IP address
+  - no free-form user-entered text
+- confirm `os_log` lines use coarse counters / IDs only
+
+### Backend
+
+- confirm `upload-readings` logs include:
+  - `batch_id`
+  - accepted / rejected counts
+  - duration
+  - app version if present
+- confirm backend logs do **not** include:
+  - raw `device_token`
+  - full `device_token_hash`
+  - IP address
+  - exact coordinates
+  - full request payload dumps
+- confirm at least one forced 5xx reaches backend Sentry
+- confirm rate-limit events still avoid raw token/IP leakage
+
+### Web
+
+- confirm no browser analytics or session replay is enabled
+- confirm browser errors, if captured later, redact query text and route-state values that could encode sensitive places
+
+Use [09-internal-field-test-pack.md](09-internal-field-test-pack.md) as the human execution layer on top of this observability checklist.
 
 ## TestFlight Distribution Tiers
 

@@ -1,0 +1,14 @@
+{
+  "fixture": "privacy-zone-recovery.csv",
+  "expected_windows": 1,
+  "expected_pothole_flagged": false,
+  "expected_rms_range": [0.4, 1.1],
+  "expected_max_spike_g_range": [0.0, 0.0],
+  "expected_privacy_filtered_count": 1,
+  "expected_rejected_count": 0,
+  "privacy_zone": {
+    "latitude": 44.6488,
+    "longitude": -63.5752,
+    "radius_meters": 250
+  }
+}

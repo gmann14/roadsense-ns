@@ -112,6 +112,19 @@ struct SimHarnessView: View {
             return
         }
 
-        lastResult = SensorFixtureRunner.replay(fixture: loadedFixture.fixture)
+        let privacyZones = loadedFixture.expected.privacyZone.map {
+            [
+                PrivacyZone(
+                    latitude: $0.latitude,
+                    longitude: $0.longitude,
+                    radiusMeters: $0.radiusMeters
+                )
+            ]
+        } ?? []
+
+        lastResult = SensorFixtureRunner.replay(
+            fixture: loadedFixture.fixture,
+            privacyZones: privacyZones
+        )
     }
 }

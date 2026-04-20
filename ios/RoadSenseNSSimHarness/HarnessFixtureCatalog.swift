@@ -19,6 +19,21 @@ enum HarnessFixtureCatalog {
             title: "Pothole Hit",
             summary: "Single driving window with one pothole spike and one accepted reading."
         ),
+        HarnessFixtureDefinition(
+            id: "privacy-zone-recovery",
+            title: "Privacy Zone Recovery",
+            summary: "Starts inside a filtered zone, then recovers into one accepted window outside the zone."
+        ),
+        HarnessFixtureDefinition(
+            id: "thermal-reject",
+            title: "Thermal Reject",
+            summary: "Produces a valid driving window that is rejected because the device enters a serious thermal state."
+        ),
+        HarnessFixtureDefinition(
+            id: "smooth-cruise",
+            title: "Smooth Cruise",
+            summary: "Single accepted window with low roughness and no pothole spike."
+        ),
     ]
 
     static func load(_ definition: HarnessFixtureDefinition) throws -> LoadedHarnessFixture {

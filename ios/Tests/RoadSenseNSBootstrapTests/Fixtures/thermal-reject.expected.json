@@ -1,0 +1,9 @@
+{
+  "fixture": "thermal-reject.csv",
+  "expected_windows": 0,
+  "expected_pothole_flagged": false,
+  "expected_rms_range": null,
+  "expected_max_spike_g_range": null,
+  "expected_privacy_filtered_count": 0,
+  "expected_rejected_count": 1
+}

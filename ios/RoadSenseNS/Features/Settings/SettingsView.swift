@@ -72,6 +72,14 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+                .accessibilityIdentifier("settings.close")
+            }
+        }
     }
 
     private func deleteLocalData() {

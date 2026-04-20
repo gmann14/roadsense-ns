@@ -49,18 +49,44 @@ struct HarnessTests {
             let fixtureURL = try #require(Bundle.module.url(forResource: expected.fixture.replacingOccurrences(of: ".csv", with: ""), withExtension: "csv"))
             let csv = try String(contentsOf: fixtureURL, encoding: .utf8)
             let fixture = try SensorFixtureParser.parse(csv: csv)
-            let result = SensorFixtureRunner.replay(fixture: fixture)
+            let privacyZones = expected.privacyZone.map {
+                [
+                    PrivacyZone(
+                        latitude: $0.latitude,
+                        longitude: $0.longitude,
+                        radiusMeters: $0.radiusMeters
+                    )
+                ]
+            } ?? []
+            let result = SensorFixtureRunner.replay(
+                fixture: fixture,
+                privacyZones: privacyZones
+            )
 
             #expect(result.emittedReadings.count == expected.expectedWindows)
             #expect(result.emittedReadings.contains { $0.isPothole } == expected.expectedPotholeFlagged)
+            if let expectedPrivacyFilteredCount = expected.expectedPrivacyFilteredCount {
+                #expect(result.privacyFilteredCount == expectedPrivacyFilteredCount)
+            }
+            if let expectedRejectedCount = expected.expectedRejectedCount {
+                #expect(result.rejectedCount == expectedRejectedCount)
+            }
 
-            let rms = try #require(result.emittedReadings.first?.roughnessRMS)
-            #expect(rms >= expected.expectedRmsRange[0])
-            #expect(rms <= expected.expectedRmsRange[1])
+            if let expectedRmsRange = expected.expectedRmsRange {
+                let rms = try #require(result.emittedReadings.first?.roughnessRMS)
+                #expect(rms >= expectedRmsRange[0])
+                #expect(rms <= expectedRmsRange[1])
+            } else {
+                #expect(result.emittedReadings.isEmpty)
+            }
 
-            let maxSpike = result.maxPotholeMagnitudeG ?? 0
-            #expect(maxSpike >= expected.expectedMaxSpikeGRange[0])
-            #expect(maxSpike <= expected.expectedMaxSpikeGRange[1])
+            if let expectedMaxSpikeGRange = expected.expectedMaxSpikeGRange {
+                let maxSpike = result.maxPotholeMagnitudeG ?? 0
+                #expect(maxSpike >= expectedMaxSpikeGRange[0])
+                #expect(maxSpike <= expectedMaxSpikeGRange[1])
+            } else {
+                #expect(result.maxPotholeMagnitudeG == nil)
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct StatsView: View {
     let statsStore: UserStatsStore
 
+    @Environment(\.dismiss) private var dismiss
     @State private var summary = UserStatsSummary(
         totalKmRecorded: 0,
         totalSegmentsContributed: 0,
@@ -17,20 +18,52 @@ struct StatsView: View {
     var body: some View {
         List {
             Section("Your contribution") {
-                LabeledContent("Kilometres mapped", value: summary.totalKmRecorded.formatted(.number.precision(.fractionLength(1))))
-                LabeledContent("Accepted readings", value: "\(summary.acceptedReadingCount)")
-                LabeledContent("Pending uploads", value: "\(summary.pendingUploadCount)")
-                LabeledContent("Privacy-filtered", value: "\(summary.privacyFilteredCount)")
+                statsRow(
+                    title: "Kilometres mapped",
+                    value: summary.totalKmRecorded.formatted(.number.precision(.fractionLength(1))),
+                    accessibilityID: "stats.kilometres-mapped"
+                )
+                statsRow(
+                    title: "Accepted readings",
+                    value: "\(summary.acceptedReadingCount)",
+                    accessibilityID: "stats.accepted-readings"
+                )
+                statsRow(
+                    title: "Pending uploads",
+                    value: "\(summary.pendingUploadCount)",
+                    accessibilityID: "stats.pending-uploads"
+                )
+                statsRow(
+                    title: "Privacy-filtered",
+                    value: "\(summary.privacyFilteredCount)",
+                    accessibilityID: "stats.privacy-filtered"
+                )
             }
 
             Section("What it affected") {
-                LabeledContent("Segments contributed", value: "\(summary.totalSegmentsContributed)")
-                LabeledContent("Potholes flagged", value: "\(summary.potholesReported)")
+                statsRow(
+                    title: "Segments contributed",
+                    value: "\(summary.totalSegmentsContributed)",
+                    accessibilityID: "stats.segments-contributed"
+                )
+                statsRow(
+                    title: "Potholes flagged",
+                    value: "\(summary.potholesReported)",
+                    accessibilityID: "stats.potholes-flagged"
+                )
 
                 if let lastDriveAt = summary.lastDriveAt {
-                    LabeledContent("Last drive", value: lastDriveAt.formatted(date: .abbreviated, time: .shortened))
+                    statsRow(
+                        title: "Last drive",
+                        value: lastDriveAt.formatted(date: .abbreviated, time: .shortened),
+                        accessibilityID: "stats.last-drive"
+                    )
                 } else {
-                    LabeledContent("Last drive", value: "No drives yet")
+                    statsRow(
+                        title: "Last drive",
+                        value: "No drives yet",
+                        accessibilityID: "stats.last-drive"
+                    )
                 }
             }
 
@@ -47,8 +80,23 @@ struct StatsView: View {
             }
         }
         .navigationTitle("Stats")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+                .accessibilityIdentifier("stats.close")
+            }
+        }
         .task {
             loadSummary()
+        }
+    }
+
+    private func statsRow(title: String, value: String, accessibilityID: String) -> some View {
+        LabeledContent(title) {
+            Text(value)
+                .accessibilityIdentifier(accessibilityID)
         }
     }
 

@@ -199,7 +199,7 @@ This is now credible product UI with the first real live map loop in place. The 
 - `ROAD_SENSE_TEST_SCENARIO=ready-shell` seeds an in-memory ready state with one saved privacy zone, a few local readings, and user stats
 - Under XCTest, the home shell uses a lightweight non-Mapbox testing surface so simulator UI tests validate our app flow rather than third-party map startup
 
-Remaining product work is refinement: deeper retry/empty-state handling around the live map, broader fixture coverage, and real-device validation.
+Remaining product work is refinement: deeper retry/empty-state handling around the live map, richer selection-state/UI coverage, more captured-drive fixture coverage, and real-device validation.
 
 ### Current Stats / Settings Surfaces
 
@@ -217,6 +217,7 @@ Remaining product work is refinement: deeper retry/empty-state handling around t
   - privacy-zone management entrypoint
   - destructive delete-local-data control
   - plain-language privacy/trust copy
+  - explicit modal close affordance for simulator/device usability and deterministic UI testing
 
 `delete local data` currently clears locally stored readings, upload queue state, user stats, and device token rotation state. It intentionally does **not** remove privacy zones.
 

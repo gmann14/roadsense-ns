@@ -17,6 +17,7 @@ These docs translate [product-spec.md](../product-spec.md) into concrete, action
 | 06 | [Security & Privacy](06-security-and-privacy.md) | PIPEDA checklist, threat model, abuse mitigation, incident response |
 | 07 | [Web Dashboard Implementation](07-web-dashboard-implementation.md) | Future public + municipal web UX, IA, visual system, data presentation patterns |
 | 08 | [Implementation Backlog](08-implementation-backlog.md) | Literal task order, dependencies, red/green plan, and acceptance criteria |
+| 09 | [Internal Field-Test Pack](09-internal-field-test-pack.md) | Operational checklist for signed-device dogfooding and evidence capture |
 
 ## Conventions Used Across Specs
 

@@ -26,4 +26,18 @@ enum AppBootstrap {
             fatalError("Invalid app configuration: \(error.localizedDescription)")
         }
     }
+
+    static func defaultsForCurrentProcess() -> UserDefaults {
+        guard isRunningTests else {
+            return .standard
+        }
+
+        let environment = ProcessInfo.processInfo.environment
+        let scenario = environment["ROAD_SENSE_TEST_SCENARIO"] ?? "default"
+        let suiteName = "ca.roadsense.ios.tests.\(scenario)"
+        let defaults = UserDefaults(suiteName: suiteName) ?? .standard
+        defaults.removePersistentDomain(forName: suiteName)
+        defaults.synchronize()
+        return defaults
+    }
 }
