@@ -339,8 +339,9 @@ export function RoadQualityMapView({
       ) : null}
       {mode === "potholes" ? (
         <div className="map-overlay-banner" style={{ bottom: 24, top: "auto" }}>
-          <strong>Potholes mode is live at the map layer, with the fuller list/search UX still queued next.</strong>
-          This view isolates active pothole markers; richer list and search behavior lands in the next slice.
+          <strong>Potholes mode is live.</strong>
+          This view isolates active pothole markers and keeps the side drawer focused on recent community-confirmed
+          impacts inside the current viewport.
         </div>
       ) : null}
       {mode === "coverage" ? (

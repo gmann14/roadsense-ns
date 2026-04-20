@@ -19,8 +19,19 @@ struct RoadSenseNSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView(container: container)
-                .modelContainer(container.modelContainer)
+            rootView
+        }
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+        let baseView = ContentView(container: container)
+            .modelContainer(container.modelContainer)
+
+        if let dynamicTypeSize = AppBootstrap.dynamicTypeSizeOverride() {
+            baseView.dynamicTypeSize(dynamicTypeSize)
+        } else {
+            baseView
         }
     }
 }

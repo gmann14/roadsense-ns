@@ -45,6 +45,28 @@ a {
   text-decoration: none;
 }
 
+nav a[aria-current="page"] {
+  color: var(--rs-accent);
+  font-weight: 700;
+}
+
+.top-nav-brand {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 0;
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.top-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 4px;
+}
+
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
@@ -231,6 +253,11 @@ button {
   color: var(--rs-text);
 }
 
+.search-result-button:hover {
+  border-color: rgba(22, 90, 114, 0.26);
+  background: rgba(22, 90, 114, 0.06);
+}
+
 .map-canvas-shell {
   position: relative;
   min-height: 520px;
@@ -319,6 +346,7 @@ button {
 
 .secondary-button {
   width: fit-content;
+  min-height: 44px;
   border: 1px solid var(--rs-border);
   background: var(--rs-surface-strong);
   color: var(--rs-text);
@@ -411,5 +439,16 @@ button {
   .mode-switcher-button {
     flex: 1;
     justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -24,6 +24,7 @@ describe("web route shells", () => {
     const markup = renderToStaticMarkup(await HomePage());
     expect(markup).toContain("Community road quality");
     expect(markup).toContain("RoadSense NS");
+    expect(markup).toContain('aria-current="page"');
   });
 
   it("renders a municipality-focused shell for a valid slug", async () => {

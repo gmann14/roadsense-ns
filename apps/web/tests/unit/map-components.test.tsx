@@ -19,8 +19,12 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
+const { searchPlacesMock } = vi.hoisted(() => ({
+  searchPlacesMock: vi.fn(async () => []),
+}));
+
 vi.mock("@/lib/search/mapbox-geocoding", () => ({
-  searchPlaces: vi.fn(async () => []),
+  searchPlaces: searchPlacesMock,
 }));
 
 describe("map mode switcher", () => {
@@ -32,6 +36,24 @@ describe("map mode switcher", () => {
     fireEvent.click(screen.getByRole("button", { name: /coverage/i }));
     expect(onSelect).toHaveBeenCalledWith("coverage");
     expect(screen.getByRole("button", { name: /quality/i })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("segment drawer accessibility", () => {
+  it("marks the drawer busy while loading", () => {
+    render(
+      <SegmentDrawerPanel
+        mode="quality"
+        selectedSegmentId="seg-loading"
+        detail={null}
+        potholes={[]}
+        isLoading
+        errorMessage={null}
+        onClearSelection={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("complementary")).toHaveAttribute("aria-busy", "true");
   });
 });
 
@@ -55,6 +77,15 @@ describe("municipality search", () => {
 
     expect(screen.getByRole("listbox", { name: /search suggestions/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /cape breton regional municipality/i })).toBeInTheDocument();
+  });
+
+  it("shows a recoverable no-results state when neither municipalities nor places match", async () => {
+    searchPlacesMock.mockResolvedValueOnce([]);
+
+    render(<MunicipalitySearch activeMode="quality" currentQuery="zzzzzz" />);
+
+    expect(await screen.findByText(/no municipality or place match/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /clear/i })).toBeInTheDocument();
   });
 });
 

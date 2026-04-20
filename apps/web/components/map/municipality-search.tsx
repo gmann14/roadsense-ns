@@ -133,6 +133,8 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
       target: buildPlaceTarget(result),
     })),
   ].slice(0, 6);
+  const trimmedValue = value.trim();
+  const showNoResults = trimmedValue.length >= 3 && !isLoadingPlaces && suggestions.length === 0;
 
   return (
     <form
@@ -154,6 +156,19 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
             value={value}
             onChange={(event) => setValue(event.target.value)}
           />
+          {trimmedValue.length > 0 ? (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setValue("");
+                setPlaceResults([]);
+                setIsLoadingPlaces(false);
+              }}
+            >
+              Clear
+            </button>
+          ) : null}
           <button type="submit" className="secondary-button">
             Go
           </button>
@@ -184,6 +199,15 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
             <strong>Searching Nova Scotia places…</strong>
             <span className="lede" style={{ margin: 0, fontSize: "0.92rem" }}>
               Falling back to Mapbox geocoding because there was no municipality match.
+            </span>
+          </div>
+        </div>
+      ) : showNoResults ? (
+        <div className="search-results">
+          <div className="search-result-button" aria-live="polite">
+            <strong>No municipality or place match for “{trimmedValue}”.</strong>
+            <span className="lede" style={{ margin: 0, fontSize: "0.92rem" }}>
+              Try a municipality name first, or clear the query and zoom the map before searching again.
             </span>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 test("home route loads with trust framing and map controls", async ({ page }) => {
   await page.goto("/");
@@ -31,6 +31,15 @@ test("municipality jump search routes correctly", async ({ page }) => {
   await expect(page.locator("#main-content").getByText("Halifax").first()).toBeVisible();
 });
 
+test("search exposes a recoverable no-results state", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByPlaceholder("Halifax, Truro, Kentville…").fill("zzzzzz");
+  await expect(page.getByText(/no municipality or place match/i)).toBeVisible();
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByPlaceholder("Halifax, Truro, Kentville…")).toHaveValue("");
+});
+
 test("worst roads report filter round-trips through the URL", async ({ page }) => {
   await page.goto("/reports/worst-roads");
 
@@ -49,3 +58,49 @@ test("methodology and privacy pages expose trust copy", async ({ page }) => {
   await page.goto("/privacy");
   await expect(page.getByText(/does not use ad trackers or session replay tools/i)).toBeVisible();
 });
+
+test("keyboard users can reach skip link, nav, mode controls, and search", async ({ page }) => {
+  await page.goto("/");
+
+  await tabUntilFocused(page, page.getByRole("link", { name: "Skip to content" }));
+  await tabUntilFocused(page, page.getByRole("link", { name: "RoadSense NS" }));
+  await tabUntilFocused(page, page.getByRole("link", { name: "Map" }));
+  await tabUntilFocused(page, page.getByRole("button", { name: "Quality" }));
+  await tabUntilFocused(page, page.getByRole("button", { name: "Potholes" }));
+  await tabUntilFocused(page, page.getByRole("button", { name: "Coverage" }));
+  await tabUntilFocused(page, page.getByPlaceholder("Halifax, Truro, Kentville…"));
+});
+
+test.describe("mobile", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("home route remains usable on a phone-sized viewport", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByText("Community road quality")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Coverage" })).toBeVisible();
+    await expect(page.getByLabel("Road quality legend")).toBeVisible();
+  });
+
+  test("worst roads report remains filterable on a phone-sized viewport", async ({ page }) => {
+    await page.goto("/reports/worst-roads");
+
+    await expect(page.locator("#main-content").getByText("Worst Roads")).toBeVisible();
+    await page.getByLabel("Municipality").selectOption("Truro");
+    await page.getByRole("button", { name: "Update report" }).click();
+
+    await expect(page).toHaveURL(/municipality=Truro/);
+  });
+});
+
+async function tabUntilFocused(page: Page, locator: Locator, maxTabs = 12) {
+  for (let index = 0; index < maxTabs; index += 1) {
+    if (await locator.evaluate((element) => element === document.activeElement)) {
+      return;
+    }
+
+    await page.keyboard.press("Tab");
+  }
+
+  await expect(locator).toBeFocused();
+}

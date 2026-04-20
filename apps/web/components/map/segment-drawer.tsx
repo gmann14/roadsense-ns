@@ -199,7 +199,8 @@ export function SegmentDrawerPanel({
             <span className="eyebrow">Pothole list</span>
             <strong>No active potholes are published in this view yet.</strong>
             <span className="lede">
-              Pan the map or zoom into an area with more recent community reports to populate the hazard list.
+              Pan or zoom the map to refresh the viewport. This list updates from recent community-confirmed impacts,
+              not municipal work orders.
             </span>
           </div>
         );
@@ -211,7 +212,8 @@ export function SegmentDrawerPanel({
             <span className="eyebrow">Pothole list</span>
             <strong>Active community potholes in this view</strong>
             <span className="lede">
-              These markers represent recent community-confirmed impacts, not a government maintenance queue.
+              Showing the strongest recent reports in the current viewport. These markers represent community-confirmed
+              impacts, not a government maintenance queue.
             </span>
           </div>
 
@@ -291,7 +293,7 @@ export function SegmentDrawerPanel({
   };
 
   return (
-    <aside className="card map-drawer" aria-live="polite">
+    <aside className="card map-drawer" aria-live="polite" aria-busy={isLoading} role="complementary">
       {renderBody()}
     </aside>
   );

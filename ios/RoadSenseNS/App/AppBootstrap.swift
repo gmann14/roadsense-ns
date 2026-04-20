@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum AppBootstrap {
     static var isRunningTests: Bool {
@@ -39,5 +40,42 @@ enum AppBootstrap {
         defaults.removePersistentDomain(forName: suiteName)
         defaults.synchronize()
         return defaults
+    }
+
+    static func dynamicTypeSizeOverride() -> DynamicTypeSize? {
+        let environment = ProcessInfo.processInfo.environment
+        guard let rawValue = environment["ROAD_SENSE_DYNAMIC_TYPE_SIZE"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawValue.isEmpty else {
+            return nil
+        }
+
+        switch rawValue.lowercased() {
+        case "xsmall":
+            return .xSmall
+        case "small":
+            return .small
+        case "medium":
+            return .medium
+        case "large":
+            return .large
+        case "xlarge":
+            return .xLarge
+        case "xxlarge":
+            return .xxLarge
+        case "xxxlarge":
+            return .xxxLarge
+        case "accessibility1":
+            return .accessibility1
+        case "accessibility2":
+            return .accessibility2
+        case "accessibility3":
+            return .accessibility3
+        case "accessibility4":
+            return .accessibility4
+        case "accessibility5":
+            return .accessibility5
+        default:
+            return nil
+        }
     }
 }

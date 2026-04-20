@@ -18,6 +18,7 @@ node_modules/
 coverage/
 playwright-report/
 test-results/
+.lighthouseci/
 
 # Supabase local state
 .supabase/

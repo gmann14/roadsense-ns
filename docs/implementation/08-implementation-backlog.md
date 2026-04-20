@@ -1,6 +1,6 @@
 # 08 — Implementation Backlog
 
-*Last updated: 2026-04-19*
+*Last updated: 2026-04-20*
 
 Covers: the literal execution backlog for implementing the spec set in [00](00-execution-plan.md) through [07](07-web-dashboard-implementation.md).
 
@@ -442,6 +442,7 @@ Post-MVP phases:
   - adjust layouts for onboarding, map chrome, segment drawer, stats, and settings
 - **Acceptance**
   - core flows remain usable at large text sizes
+- **Current repo note:** this slice is now materially implemented in the simulator path: `OnboardingFlowView` is scroll-safe at large sizes, the app accepts a deterministic `ROAD_SENSE_DYNAMIC_TYPE_SIZE` override for UI automation, and UI smokes now verify privacy-gate plus stats/settings usability at `accessibility5`. Remaining work is VoiceOver and real-device validation, not the absence of a large-text test path.
 
 ## Phase 8 — TestFlight Readiness
 
@@ -555,7 +556,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - Playwright tests for potholes mode behavior
 - **GREEN**
   - implement search and potholes mode
-- **Current repo note:** this slice is now materially implemented under `apps/web/`: municipality-first search is live against the static manifest, including alias matching and ranked suggestions, an optional Nova Scotia-scoped Mapbox place-search fallback is available when there is no municipality match, and `Potholes` mode isolates the pothole layer plus a viewport-bounded pothole drawer feed. Browser-level end-to-end verification is already in place; the remaining work is stronger pothole-specific interaction polish and deeper search-result UX refinement rather than missing core behavior.
+- **Current repo note:** this slice is now materially implemented under `apps/web/`: municipality-first search is live against the static manifest, including alias matching and ranked suggestions, an optional Nova Scotia-scoped Mapbox place-search fallback is available when there is no municipality match, recoverable no-results and clear-search behavior are in place, and `Potholes` mode isolates the pothole layer plus a viewport-bounded pothole drawer feed with explicit trust/empty-state copy. Browser-level end-to-end verification is already in place; the remaining work is hosted-environment validation rather than missing core behavior.
 
 ### B110 — Pothole follow-up UX
 
@@ -584,7 +585,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - implement `Worst Roads` page
 - **Acceptance**
   - both web-only surfaces run on real backend data
-- **Current repo note:** this slice is now materially implemented under `apps/web/`: Coverage mode swaps the map to the dedicated `GET /tiles/coverage/{z}/{x}/{y}.mvt` source, and `/reports/worst-roads` fetches live `GET /segments/worst` data with municipality and row-limit filtering. The remaining gap is richer search/pothole UX polish, not the underlying coverage/report data path.
+- **Current repo note:** this slice is now materially implemented under `apps/web/`: Coverage mode swaps the map to the dedicated `GET /tiles/coverage/{z}/{x}/{y}.mvt` source, and `/reports/worst-roads` fetches live `GET /segments/worst` data with municipality and row-limit filtering. The remaining gap is hosted deployment/performance validation, not the underlying coverage/report data path.
 
 ### B094 — Methodology, privacy, accessibility, and deployment hardening
 
@@ -600,7 +601,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - wire Vercel preview/production config
 - **Acceptance**
   - web app meets the documented accessibility, privacy, and deploy requirements
-- **Current repo note:** this slice is materially implemented under `apps/web/`: methodology/privacy pages have explicit content tests, the app now has skip-link and focus-visible affordances plus a text legend, manual `web-ci.yml` runs unit/build/browser-smoke checks, Playwright smoke coverage exists for the core public routes, and `apps/web/vercel.json` sets baseline response headers. Remaining work is broader accessibility/performance auditing and deployment linking, not the absence of a web verify/deploy scaffold.
+- **Current repo note:** this slice is materially implemented under `apps/web/`: methodology/privacy pages have explicit content tests, the app now has skip-link and focus-visible affordances plus a text legend, manual `web-ci.yml` runs unit/build/Lighthouse/browser-smoke checks, Playwright smoke coverage exists for the core public routes, recoverable search and drawer states are covered in automated tests, `apps/web/vercel.json` sets baseline response headers, keyboard-only navigation is covered by browser smoke, phone-sized viewport coverage is now explicit, and repo-side Lighthouse checks enforce the trust-page accessibility/CLS budget. Remaining work is Vercel account/project linking plus hosted-environment perf validation for the live map surface, not the absence of a repo-side web verify/deploy scaffold.
 
 ## Phase 11 — Post-MVP Operational Procedures
 

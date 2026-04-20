@@ -25,6 +25,7 @@ Commands:
 - `npm install`
 - `npm test`
 - `npm run build`
+- `npm run test:lighthouse`
 
 Manual CI / deploy scaffolding:
 
@@ -42,8 +43,10 @@ Current scope note:
 
 - Quality mode is now wired to the public vector-tile and segment-detail contracts.
 - Municipality-first search/jump is live against the static manifest, including alias matching and ranked suggestions.
-- An optional Nova Scotia-scoped Mapbox place-search fallback now activates when there is no municipality match.
-- Potholes mode isolates active markers and fetches a viewport-bounded pothole list.
+- An optional Nova Scotia-scoped Mapbox place-search fallback now activates when there is no municipality match, including a recoverable no-results state and clear-search path.
+- Potholes mode isolates active markers and fetches a viewport-bounded pothole list with explicit trust/empty-state framing in the drawer.
 - Coverage mode is wired to the dedicated coverage tile contract.
 - `Worst Roads` now uses the live ranked-report endpoint.
-- The main remaining web gap is stronger pothole/search interaction polish, broader accessibility/performance auditing, and real deployment linking rather than missing core product surfaces.
+- Browser smoke now covers keyboard-only navigation and phone-sized viewport behavior, and the CSS honors reduced-motion preferences.
+- Repo-side Lighthouse checks now enforce accessibility and CLS budgets for the methodology/privacy trust pages.
+- The main remaining web gap is real deployment linking plus hosted-environment performance validation for the live map surface rather than missing core product surfaces.

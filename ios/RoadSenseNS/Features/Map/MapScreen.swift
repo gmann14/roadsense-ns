@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MapScreen: View {
     @Bindable var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let onShowStats: () -> Void
     let onShowSettings: () -> Void
@@ -75,26 +76,51 @@ struct MapScreen: View {
     }
 
     private var topChrome: some View {
-        HStack(alignment: .top, spacing: 12) {
-            StatusPill(
-                title: recordingTitle,
-                subtitle: recordingSubtitle,
-                tint: recordingTint
-            )
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 12) {
+                    StatusPill(
+                        title: recordingTitle,
+                        subtitle: recordingSubtitle,
+                        tint: recordingTint
+                    )
 
-            Spacer(minLength: 12)
+                    HStack(spacing: 10) {
+                        overlayButton(
+                            systemName: "chart.bar.fill",
+                            accessibilityID: "map.stats-button",
+                            action: onShowStats
+                        )
+                        overlayButton(
+                            systemName: "gearshape.fill",
+                            accessibilityID: "map.settings-button",
+                            action: onShowSettings
+                        )
+                    }
+                }
+            } else {
+                HStack(alignment: .top, spacing: 12) {
+                    StatusPill(
+                        title: recordingTitle,
+                        subtitle: recordingSubtitle,
+                        tint: recordingTint
+                    )
 
-            HStack(spacing: 10) {
-                overlayButton(
-                    systemName: "chart.bar.fill",
-                    accessibilityID: "map.stats-button",
-                    action: onShowStats
-                )
-                overlayButton(
-                    systemName: "gearshape.fill",
-                    accessibilityID: "map.settings-button",
-                    action: onShowSettings
-                )
+                    Spacer(minLength: 12)
+
+                    HStack(spacing: 10) {
+                        overlayButton(
+                            systemName: "chart.bar.fill",
+                            accessibilityID: "map.stats-button",
+                            action: onShowStats
+                        )
+                        overlayButton(
+                            systemName: "gearshape.fill",
+                            accessibilityID: "map.settings-button",
+                            action: onShowSettings
+                        )
+                    }
+                }
             }
         }
     }

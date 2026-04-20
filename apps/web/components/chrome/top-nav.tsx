@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function TopNav() {
+  const pathname = usePathname();
+
   return (
     <>
       <a href="#main-content" className="skip-link">
@@ -19,7 +24,7 @@ export function TopNav() {
       >
         <div style={{ display: "grid", gap: 2 }}>
           <span className="eyebrow">Nova Scotia road quality</span>
-          <Link href="/" style={{ fontWeight: 800, fontSize: "1.05rem" }}>
+          <Link href="/" className="top-nav-brand">
             RoadSense NS
           </Link>
         </div>
@@ -34,10 +39,22 @@ export function TopNav() {
             fontSize: "0.95rem",
           }}
         >
-          <Link href="/">Map</Link>
-          <Link href="/reports/worst-roads">Worst Roads</Link>
-          <Link href="/methodology">Methodology</Link>
-          <Link href="/privacy">Privacy</Link>
+          <Link href="/" className="top-nav-link" aria-current={pathname === "/" ? "page" : undefined}>
+            Map
+          </Link>
+          <Link
+            href="/reports/worst-roads"
+            className="top-nav-link"
+            aria-current={pathname === "/reports/worst-roads" ? "page" : undefined}
+          >
+            Worst Roads
+          </Link>
+          <Link href="/methodology" className="top-nav-link" aria-current={pathname === "/methodology" ? "page" : undefined}>
+            Methodology
+          </Link>
+          <Link href="/privacy" className="top-nav-link" aria-current={pathname === "/privacy" ? "page" : undefined}>
+            Privacy
+          </Link>
         </nav>
       </header>
     </>

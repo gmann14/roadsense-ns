@@ -199,7 +199,7 @@ This is now credible product UI with the first real live map loop in place. The 
 - `ROAD_SENSE_TEST_SCENARIO=ready-shell` seeds an in-memory ready state with one saved privacy zone, a few local readings, and user stats
 - Under XCTest, the home shell uses a lightweight non-Mapbox testing surface so simulator UI tests validate our app flow rather than third-party map startup
 
-Remaining product work is refinement: deeper retry/empty-state handling around the live map, richer selection-state/UI coverage, more captured-drive fixture coverage, and real-device validation.
+Remaining product work is refinement: deeper retry/empty-state handling around the live map, richer selection-state/UI coverage, additional captured-drive fixtures beyond the current simulator corpus, and real-device validation.
 
 ### Current Stats / Settings Surfaces
 

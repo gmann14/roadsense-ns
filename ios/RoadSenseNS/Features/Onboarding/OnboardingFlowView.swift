@@ -5,24 +5,25 @@ struct OnboardingFlowView: View {
     @State private var isShowingPrivacyZones = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("RoadSense NS")
-                .font(.largeTitle.bold())
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("RoadSense NS")
+                    .font(.largeTitle.bold())
 
-            switch model.readiness.stage {
-            case .permissionsRequired:
-                permissionIntro
-            case .permissionHelp:
-                permissionHelp
-            case .privacyZonesRequired:
-                privacyZoneDecision
-            case .ready:
-                readyState
+                switch model.readiness.stage {
+                case .permissionsRequired:
+                    permissionIntro
+                case .permissionHelp:
+                    permissionHelp
+                case .privacyZonesRequired:
+                    privacyZoneDecision
+                case .ready:
+                    readyState
+                }
             }
-
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
         }
-        .padding(24)
         .sheet(isPresented: $isShowingPrivacyZones, onDismiss: {
             model.refreshPrivacyZones()
         }) {
@@ -58,6 +59,7 @@ struct OnboardingFlowView: View {
             }
             .buttonStyle(.borderedProminent)
             .disabled(model.isRequestingPermissions)
+            .accessibilityIdentifier("onboarding.continue")
         }
     }
 
@@ -75,6 +77,7 @@ struct OnboardingFlowView: View {
                 model.refreshPermissions()
             }
             .buttonStyle(.bordered)
+            .accessibilityIdentifier("onboarding.refresh-status")
         }
     }
 
@@ -90,12 +93,14 @@ struct OnboardingFlowView: View {
                 isShowingPrivacyZones = true
             }
             .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("onboarding.manage-privacy-zones")
 
             Button("Skip for now and accept the risk") {
                 model.skipPrivacyZonesForNow()
             }
             .buttonStyle(.bordered)
             .tint(.orange)
+            .accessibilityIdentifier("onboarding.skip-privacy-risk")
         }
     }
 

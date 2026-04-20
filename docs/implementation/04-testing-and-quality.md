@@ -106,10 +106,11 @@ Tests live in `apps/web/tests/`. Use:
 |---|---|
 | Home map shell | legend, trust strip, and mode switcher render before client-side data settles |
 | Segment drawer | skeleton → resolved content, bad `segment` query param fails gracefully |
-| Search | municipality route transition, place search pans map without mutating mode |
+| Search | municipality route transition, place search pans map without mutating mode, keyboard-only search and mode navigation, recoverable no-results state |
 | Potholes mode | bbox requests debounced and skipped outside potholes mode |
 | Coverage mode | legend explicitly explains that coverage is not road condition |
 | Worst Roads page | caveat header, municipality filtering, stable rank ordering |
+| Trust pages | Lighthouse accessibility and CLS budgets on methodology/privacy |
 
 #### What gets end-to-end tested
 
@@ -309,7 +310,7 @@ Simulate system termination / memory pressure mid-drive without user swipe-killi
 Not an afterthought. Included in week 5's polish pass.
 
 - VoiceOver: every interactive element has a descriptive label; map has a "Roads list" accessibility alternative
-- Dynamic Type: tested at largest sizes in `Environment(\.sizeCategory, .accessibilityExtraExtraExtraLarge)`
+- Dynamic Type: tested at largest sizes via deterministic simulator/UI-test override (`ROAD_SENSE_DYNAMIC_TYPE_SIZE=accessibility5`) across onboarding, stats, and settings flows
 - Color contrast: WCAG AA minimum for all text and map overlays (check against both light and dark base maps)
 - Reduce Motion respected: `@Environment(\.accessibilityReduceMotion)` disables the subtle score-update animations
 

@@ -72,8 +72,9 @@ Current notes:
 - The app target now supports explicit XCTest launch scenarios via `ROAD_SENSE_TEST_SCENARIO=default|ready-shell`, and UI tests use a deterministic non-Mapbox testing surface so simulator automation can validate app flows without waiting on live map startup.
 - `RoadSenseNSTests` now includes first app-target network/uploader coverage, and the app enters an inert in-memory bootstrap path when launched under XCTest so host-based unit tests do not start real sensors, background tasks, or Sentry.
 - `StatsView` and `SettingsView` now expose explicit close affordances in modal presentation, and simulator UI tests cover seeded stats plus delete-local-data behavior in addition to the privacy flow.
+- The app target now supports deterministic large-text simulator runs via `ROAD_SENSE_DYNAMIC_TYPE_SIZE`, and UI tests cover privacy-gate plus stats/settings usability at `accessibility5`.
 - The remaining harness step is expanding the fixture corpus with real captured drives beyond the current synthetic/smoke cases and keeping the harness target green in CI.
-- The remaining product-facing iOS steps are deeper retry/empty-state handling around the live map, richer map-selection UI testing, and real-device runtime validation.
+- The remaining product-facing iOS steps are deeper retry/empty-state handling around the live map, richer map-selection UI testing, VoiceOver/manual accessibility validation, and real-device runtime validation.
 
 Additional verification commands:
 

@@ -85,12 +85,12 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
   };
 
   return (
-    <section className="map-layout">
+    <section className="map-layout" aria-labelledby="map-explorer-title">
       <div className="card map-stage">
         <div className="map-stage-header">
           <div style={{ display: "grid", gap: 8 }}>
             <span className="eyebrow">{municipality ? municipality.name : "Nova Scotia overview"}</span>
-            <div className="headline" style={{ fontSize: "clamp(2rem, 4vw, 3.4rem)" }}>
+            <div id="map-explorer-title" className="headline" style={{ fontSize: "clamp(2rem, 4vw, 3.4rem)" }}>
               Community road quality
             </div>
             <p className="lede" style={{ margin: 0, maxWidth: 58 + "ch" }}>
@@ -120,7 +120,9 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
                 ? "Active pothole markers"
                 : "Coverage tiers"}
           </div>
-          <span>{mapError ?? (mapReady ? "Map loaded." : "Loading map surface…")}</span>
+          <span role="status" aria-live="polite">
+            {mapError ?? (mapReady ? "Map loaded." : "Loading map surface…")}
+          </span>
           <span>
             {stats
               ? `${stats.total_km_mapped.toFixed(1)} km mapped province-wide`
