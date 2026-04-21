@@ -8,6 +8,7 @@ type AppShellProps = {
   totalKmMapped?: string;
   municipalitiesCovered?: string;
   freshness?: string;
+  hideTrust?: boolean;
 };
 
 export function AppShell({
@@ -15,15 +16,18 @@ export function AppShell({
   totalKmMapped = "Loading…",
   municipalitiesCovered = "Loading…",
   freshness = "Loading…",
+  hideTrust = false,
 }: AppShellProps) {
   return (
     <div className="page-shell">
       <TopNav />
-      <TrustStrip
-        totalKmMapped={totalKmMapped}
-        municipalitiesCovered={municipalitiesCovered}
-        freshness={freshness}
-      />
+      {hideTrust ? null : (
+        <TrustStrip
+          totalKmMapped={totalKmMapped}
+          municipalitiesCovered={municipalitiesCovered}
+          freshness={freshness}
+        />
+      )}
       <main id="main-content">{children}</main>
     </div>
   );

@@ -314,6 +314,26 @@ nav a[aria-current="page"] {
   background: rgba(14, 59, 74, 0.08);
 }
 
+/* === Trust strip === */
+
+.trust-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+.trust-strip__metric {
+  display: grid;
+  gap: 4px;
+}
+
+.trust-strip__metric strong {
+  font-size: 1.2rem;
+  letter-spacing: -0.02em;
+}
+
 /* === Editorial header === */
 
 .page-header {
@@ -448,6 +468,11 @@ nav a[aria-current="page"] {
 
 /* === Map stage (full-width hero) === */
 
+.map-explorer {
+  display: grid;
+  gap: 22px;
+}
+
 .map-stage-hero {
   position: relative;
   border-radius: var(--rs-radius-lg);
@@ -458,6 +483,11 @@ nav a[aria-current="page"] {
   border: 1px solid rgba(14, 59, 74, 0.2);
   min-height: 620px;
   box-shadow: var(--rs-shadow-hard);
+}
+
+.map-canvas-shell {
+  position: absolute;
+  inset: 0;
 }
 
 .map-canvas {
@@ -586,6 +616,11 @@ nav a[aria-current="page"] {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.drawer-state {
+  display: grid;
+  gap: 6px;
 }
 
 .drawer-close {

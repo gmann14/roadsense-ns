@@ -12,11 +12,7 @@ export default async function HomePage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
 
   return (
-    <AppShell
-      totalKmMapped={stats ? `${stats.total_km_mapped.toFixed(1)} km` : "Stats pending"}
-      municipalitiesCovered={stats ? String(stats.municipalities_covered) : "Pending"}
-      freshness={stats?.generated_at ?? "Awaiting backend"}
-    >
+    <AppShell hideTrust>
       <MapShell stats={stats} searchParams={resolvedSearchParams} />
     </AppShell>
   );

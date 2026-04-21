@@ -10,17 +10,7 @@ export function TrustStrip({
   freshness,
 }: TrustStripProps) {
   return (
-    <section
-      className="card"
-      aria-label="Trust summary"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-        gap: 14,
-        padding: 18,
-        marginBottom: 18,
-      }}
-    >
+    <section className="card trust-strip" aria-label="Trust summary">
       <TrustMetric label="Mapped distance" value={totalKmMapped} />
       <TrustMetric label="Municipalities covered" value={municipalitiesCovered} />
       <TrustMetric label="Last refresh" value={freshness} />
@@ -30,9 +20,9 @@ export function TrustStrip({
 
 function TrustMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: "grid", gap: 4 }}>
+    <div className="trust-strip__metric">
       <span className="eyebrow">{label}</span>
-      <strong style={{ fontSize: "1.15rem" }}>{value}</strong>
+      <strong className="num">{value}</strong>
     </div>
   );
 }

@@ -29,9 +29,15 @@ const modeSummaryCopy: Record<MapMode, string> = {
   quality:
     "Published community road-quality segments render live here. Click a road to open the detail drawer.",
   potholes:
-    "Potholes mode isolates active markers so the public can inspect hazard clusters without mixing them into the quality ramp.",
+    "Potholes mode isolates active markers so the public can inspect hazard clusters without the quality ramp.",
   coverage:
-    "Coverage mode answers where RoadSense has enough contributor density to publish reliable road-quality signal.",
+    "Coverage mode shows where RoadSense has enough contributor density to publish reliable road-quality signal.",
+};
+
+const modeLabel: Record<MapMode, string> = {
+  quality: "Published quality layer",
+  potholes: "Active pothole markers",
+  coverage: "Coverage tiers",
 };
 
 export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplorerProps) {
@@ -43,17 +49,17 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
   const [visibleBbox, setVisibleBbox] = useState<Bbox | null>(null);
 
   const baseSearchParams =
-    liveSearchParams.size > 0 ? new URLSearchParams(liveSearchParams) : searchParamRecordToUrlSearchParams(searchParams);
+    liveSearchParams.size > 0
+      ? new URLSearchParams(liveSearchParams)
+      : searchParamRecordToUrlSearchParams(searchParams);
   const routeState = parseViewportState(baseSearchParams);
 
   const navigate = (nextParams: URLSearchParams, action: "push" | "replace") => {
     const nextUrl = nextParams.toString().length > 0 ? `${pathname}?${nextParams.toString()}` : pathname;
-
     if (action === "push") {
       router.push(nextUrl, { scroll: false });
       return;
     }
-
     router.replace(nextUrl, { scroll: false });
   };
 
@@ -84,23 +90,43 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
     navigate(withUpdatedRouteState(baseSearchParams, { segment: null }), "push");
   };
 
-  return (
-    <section className="map-layout" aria-labelledby="map-explorer-title">
-      <div className="card map-stage">
-        <div className="map-stage-header">
-          <div style={{ display: "grid", gap: 8 }}>
-            <span className="eyebrow">{municipality ? municipality.name : "Nova Scotia overview"}</span>
-            <div id="map-explorer-title" className="headline" style={{ fontSize: "clamp(2rem, 4vw, 3.4rem)" }}>
-              Community road quality
-            </div>
-            <p className="lede" style={{ margin: 0, maxWidth: 58 + "ch" }}>
-              {modeSummaryCopy[routeState.mode]}
-            </p>
-            <MunicipalitySearch activeMode={routeState.mode} currentQuery={routeState.q} />
-          </div>
-          <ModeSwitcher activeMode={routeState.mode} onSelect={handleModeSelect} />
-        </div>
+  const drawerOpen = routeState.mode === "potholes" || Boolean(routeState.segment);
+  const statusMessage = mapError ?? (mapReady ? "Map loaded." : "Loading map surface…");
+  const statsSummary = stats
+    ? `${stats.total_km_mapped.toFixed(1)} km mapped · ${stats.municipalities_covered} municipalities`
+    : "Stats loading";
 
+  return (
+    <section className="map-explorer" aria-labelledby="map-explorer-title">
+      <header className="page-header">
+        <span className="eyebrow page-header__eyebrow">
+          {municipality ? municipality.name : "Nova Scotia overview"}
+        </span>
+        <h1 id="map-explorer-title" className="headline">
+          Community road quality
+        </h1>
+        <p className="page-header__lede">{modeSummaryCopy[routeState.mode]}</p>
+        <div className="trust-line" aria-label="Dataset snapshot">
+          <span>
+            <strong>{stats ? `${stats.total_km_mapped.toFixed(1)} km` : "—"}</strong> mapped
+          </span>
+          <span className="trust-line-divider" aria-hidden="true" />
+          <span>
+            <strong>{stats ? stats.municipalities_covered : "—"}</strong> municipalities
+          </span>
+          <span className="trust-line-divider" aria-hidden="true" />
+          <span>
+            Refreshed <strong>{stats?.generated_at ?? "pending"}</strong>
+          </span>
+        </div>
+      </header>
+
+      <div className="explorer-controls">
+        <MunicipalitySearch activeMode={routeState.mode} currentQuery={routeState.q} />
+        <ModeSwitcher activeMode={routeState.mode} onSelect={handleModeSelect} />
+      </div>
+
+      <div className="map-stage-hero">
         <RoadQualityMapView
           municipality={municipality}
           mode={routeState.mode}
@@ -111,35 +137,30 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
           onMapErrorChange={setMapError}
         />
 
-        <div className="map-stage-footer">
+        <div className="map-status-strip" role="status" aria-live="polite">
           <div className="pill">
             <span className={`mode-dot ${routeState.mode}`} />
-            {routeState.mode === "quality"
-              ? "Published quality layer"
-              : routeState.mode === "potholes"
-                ? "Active pothole markers"
-                : "Coverage tiers"}
+            {modeLabel[routeState.mode]}
           </div>
-          <span role="status" aria-live="polite">
-            {mapError ?? (mapReady ? "Map loaded." : "Loading map surface…")}
-          </span>
-          <span>
-            {stats
-              ? `${stats.total_km_mapped.toFixed(1)} km mapped province-wide`
-              : "Global stats still loading"}
-          </span>
+          <div className="pill pill-soft" aria-hidden="true">
+            {statsSummary}
+          </div>
+          <div className="pill pill-soft" aria-hidden="true">
+            {statusMessage}
+          </div>
         </div>
-      </div>
 
-      <div style={{ display: "grid", gap: 18, alignContent: "start" }}>
-        <SegmentDrawer
-          mode={routeState.mode}
-          selectedSegmentId={routeState.segment}
-          visibleBbox={visibleBbox}
-          onClearSelection={handleClearSelection}
-        />
         <MapLegend />
       </div>
+
+      <SegmentDrawer
+        mode={routeState.mode}
+        selectedSegmentId={routeState.segment}
+        visibleBbox={visibleBbox}
+        onClearSelection={handleClearSelection}
+        isOpen={drawerOpen}
+        onClose={handleClearSelection}
+      />
     </section>
   );
 }

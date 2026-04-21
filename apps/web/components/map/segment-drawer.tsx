@@ -10,6 +10,8 @@ type SegmentDrawerProps = {
   selectedSegmentId: string | null;
   visibleBbox: Bbox | null;
   onClearSelection: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 };
 
 type SegmentDrawerPanelProps = {
@@ -20,6 +22,8 @@ type SegmentDrawerPanelProps = {
   isLoading: boolean;
   errorMessage: string | null;
   onClearSelection: () => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 };
 
 const categoryLabel: Record<SegmentDetail["aggregate"]["category"], string> = {
@@ -47,6 +51,8 @@ export function SegmentDrawer({
   selectedSegmentId,
   visibleBbox,
   onClearSelection,
+  isOpen,
+  onClose,
 }: SegmentDrawerProps) {
   const [detail, setDetail] = useState<SegmentDetail | null>(null);
   const [potholes, setPotholes] = useState<PotholeRow[]>([]);
@@ -143,6 +149,15 @@ export function SegmentDrawer({
     };
   }, [mode, visibleBbox]);
 
+  const resolvedIsOpen = isOpen ?? Boolean(selectedSegmentId || mode === "potholes");
+  const handleClose = () => {
+    if (onClose) {
+      onClose();
+      return;
+    }
+    onClearSelection();
+  };
+
   return (
     <SegmentDrawerPanel
       mode={mode}
@@ -152,6 +167,8 @@ export function SegmentDrawer({
       isLoading={isLoading}
       errorMessage={errorMessage}
       onClearSelection={onClearSelection}
+      isOpen={resolvedIsOpen}
+      onClose={handleClose}
     />
   );
 }
@@ -164,7 +181,10 @@ export function SegmentDrawerPanel({
   isLoading,
   errorMessage,
   onClearSelection,
+  isOpen = true,
+  onClose,
 }: SegmentDrawerPanelProps) {
+  const handleClose = onClose ?? onClearSelection;
   const renderBody = () => {
     if (isLoading) {
       return (
@@ -185,9 +205,6 @@ export function SegmentDrawerPanel({
         <div className="drawer-state">
           <span className="eyebrow">{mode === "potholes" ? "Potholes unavailable" : "Segment unavailable"}</span>
           <strong>{errorMessage}</strong>
-          <button type="button" className="secondary-button" onClick={onClearSelection}>
-            {mode === "potholes" ? "Reset map focus" : "Clear selection"}
-          </button>
         </div>
       );
     }
@@ -282,20 +299,57 @@ export function SegmentDrawerPanel({
             Aggregates are refreshed nightly and may continue to evolve as more contributors drive this segment.
           </span>
         </div>
-
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button type="button" className="secondary-button" onClick={onClearSelection}>
-            Clear selection
-          </button>
-        </div>
       </>
     );
   };
 
+  const headingLabel =
+    mode === "potholes"
+      ? "Pothole viewport"
+      : detail?.road_name ?? (selectedSegmentId ? "Loading segment" : "Segment detail");
+
   return (
-    <aside className="card map-drawer" aria-live="polite" aria-busy={isLoading} role="complementary">
-      {renderBody()}
-    </aside>
+    <>
+      <div
+        className="drawer-backdrop"
+        data-open={isOpen}
+        aria-hidden={!isOpen}
+        onClick={onClose}
+      />
+      <aside
+        className="drawer"
+        data-open={isOpen}
+        aria-hidden={!isOpen}
+        aria-live="polite"
+        aria-busy={isLoading}
+        role="complementary"
+      >
+        <div className="drawer__header">
+          <div style={{ display: "grid", gap: 2 }}>
+            <span className="eyebrow">
+              {mode === "potholes" ? "Potholes mode" : detail?.municipality ?? "Segment"}
+            </span>
+            <strong style={{ fontSize: "1.05rem", lineHeight: 1.2 }}>{headingLabel}</strong>
+          </div>
+          <button
+            type="button"
+            className="drawer-close"
+            onClick={handleClose}
+            aria-label="Close segment detail drawer"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="drawer__body">{renderBody()}</div>
+
+        <div className="drawer__footer">
+          <button type="button" className="secondary-button" onClick={onClearSelection}>
+            {mode === "potholes" ? "Reset map focus" : "Clear selection"}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }
 

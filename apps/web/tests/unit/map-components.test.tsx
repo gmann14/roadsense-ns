@@ -145,7 +145,7 @@ describe("segment drawer panel", () => {
       />,
     );
 
-    expect(screen.getByText("Barrington Street")).toBeInTheDocument();
+    expect(screen.getAllByText("Barrington Street").length).toBeGreaterThan(0);
     expect(screen.getByText(/high confidence/i)).toBeInTheDocument();
     expect(screen.getByText("137")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
