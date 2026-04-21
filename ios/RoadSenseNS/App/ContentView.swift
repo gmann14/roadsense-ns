@@ -21,11 +21,12 @@ struct ContentView: View {
             Group {
                 if model.readiness.stage == .ready {
                     readyShell
+                        .toolbar(.hidden, for: .navigationBar)
                 } else {
                     OnboardingFlowView(model: model)
+                        .toolbar(.hidden, for: .navigationBar)
                 }
             }
-            .navigationTitle("RoadSense NS")
             .sheet(isPresented: $isShowingPrivacyZones, onDismiss: {
                 model.refreshPrivacyZones()
             }) {

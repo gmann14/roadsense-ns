@@ -9,7 +9,6 @@ struct MapScreen: View {
     let onShowPrivacyZones: () -> Void
 
     @State private var isCardExpanded = true
-    @State private var isMyDrivesHighlighted = false
     @State private var selectedSegment: SegmentDetailResponse?
     @State private var isLoadingSegment = false
     @State private var segmentLoadError: String?
@@ -87,13 +86,6 @@ struct MapScreen: View {
             Spacer(minLength: DesignTokens.Space.sm)
 
             HStack(spacing: DesignTokens.Space.xs) {
-                toggleChip(
-                    systemName: "person.crop.circle.dashed",
-                    isOn: isMyDrivesHighlighted,
-                    label: "My drives",
-                    accessibilityID: "map.my-drives-toggle",
-                    action: { isMyDrivesHighlighted.toggle() }
-                )
                 chromeButton(
                     systemName: "chart.bar.fill",
                     accessibilityID: "map.stats-button",
@@ -123,32 +115,6 @@ struct MapScreen: View {
         .accessibilityIdentifier(accessibilityID)
     }
 
-    private func toggleChip(
-        systemName: String,
-        isOn: Bool,
-        label: String,
-        accessibilityID: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(isOn ? DesignTokens.Palette.deepInk : .white)
-                .frame(width: 40, height: 40)
-                .background(
-                    (isOn ? DesignTokens.Palette.signal : Color.black.opacity(0.32)),
-                    in: Circle()
-                )
-                .overlay(
-                    Circle().strokeBorder(.white.opacity(isOn ? 0.0 : 0.14), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(accessibilityID)
-        .accessibilityLabel(label)
-        .accessibilityValue(isOn ? "on" : "off")
-    }
-
     // MARK: - Bottom card
 
     private var bottomCard: some View {
@@ -161,10 +127,6 @@ struct MapScreen: View {
                 legendChips
 
                 metaRow
-
-                if model.pendingUploadCount > 0 {
-                    pendingUploadsPill
-                }
 
                 if let mapLoadError {
                     mapLoadBanner(message: mapLoadError)
@@ -203,6 +165,7 @@ struct MapScreen: View {
                         .font(.caption)
                         .foregroundStyle(.white.opacity(0.78))
                         .lineLimit(1)
+                        .accessibilityIdentifier("map.pending-uploads")
                 }
 
                 Spacer(minLength: DesignTokens.Space.xs)
@@ -262,16 +225,6 @@ struct MapScreen: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var pendingUploadsPill: some View {
-        Label("\(model.pendingUploadCount) uploads waiting", systemImage: "arrow.triangle.2.circlepath")
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(.white.opacity(0.94))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.white.opacity(0.14), in: Capsule())
-            .accessibilityIdentifier("map.pending-uploads")
     }
 
     private func mapLoadBanner(message: String) -> some View {
@@ -387,7 +340,6 @@ struct MapScreen: View {
         if model.readiness.showsPrivacyRiskWarning { return "Set privacy zones" }
         if model.readiness.backgroundCollection == .upgradeRequired { return "Enable background collection" }
         if !model.isPassiveMonitoringEnabled { return "Resume monitoring" }
-        if model.pendingUploadCount > 0 { return "Upload now" }
         return "View stats"
     }
 
@@ -398,8 +350,6 @@ struct MapScreen: View {
             model.requestAlwaysLocationUpgrade()
         } else if !model.isPassiveMonitoringEnabled {
             model.startPassiveMonitoring()
-        } else if model.pendingUploadCount > 0 {
-            Task { await model.uploadPendingData() }
         } else {
             onShowStats()
         }
