@@ -24,13 +24,26 @@ struct SimHarnessView: View {
                                 .foregroundStyle(.secondary)
                             Text("Expected windows: \(loadedFixture.expected.expectedWindows)")
                             Text("Expected pothole: \(loadedFixture.expected.expectedPotholeFlagged ? "yes" : "no")")
-                            Text(
-                                String(
-                                    format: "Expected RMS range: %.2f - %.2f",
-                                    loadedFixture.expected.expectedRmsRange[0],
-                                    loadedFixture.expected.expectedRmsRange[1]
+                            if let rmsRange = loadedFixture.expected.expectedRmsRange,
+                               rmsRange.count >= 2 {
+                                Text(
+                                    String(
+                                        format: "Expected RMS range: %.2f - %.2f",
+                                        rmsRange[0],
+                                        rmsRange[1]
+                                    )
                                 )
-                            )
+                            }
+                            if let spikeRange = loadedFixture.expected.expectedMaxSpikeGRange,
+                               spikeRange.count >= 2 {
+                                Text(
+                                    String(
+                                        format: "Expected max spike: %.2f - %.2f g",
+                                        spikeRange[0],
+                                        spikeRange[1]
+                                    )
+                                )
+                            }
                         }
                     }
 
