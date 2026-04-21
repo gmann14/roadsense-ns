@@ -103,9 +103,31 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
           {municipality ? municipality.name : "Nova Scotia overview"}
         </span>
         <h1 id="map-explorer-title" className="headline">
-          Community road quality
+          {municipality ? `Road quality in ${municipality.name}` : "Community road quality"}
         </h1>
         <p className="page-header__lede">{modeSummaryCopy[routeState.mode]}</p>
+        {municipality ? (
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              marginTop: 6,
+              alignItems: "center",
+            }}
+            aria-label={`Quick actions for ${municipality.name}`}
+          >
+            <a
+              href={`/reports/worst-roads?municipality=${encodeURIComponent(municipality.name)}`}
+              className="secondary-button"
+            >
+              Worst roads in {municipality.name}
+            </a>
+            <a href="/" className="secondary-button" aria-label="Switch to province-wide view">
+              Province-wide view
+            </a>
+          </div>
+        ) : null}
         <div className="trust-line" aria-label="Dataset snapshot">
           <span>
             <strong>{stats ? `${stats.total_km_mapped.toFixed(1)} km` : "—"}</strong> mapped

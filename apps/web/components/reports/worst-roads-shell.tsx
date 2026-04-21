@@ -86,6 +86,12 @@ export function WorstRoadsShell({ municipalityName, limit, result }: WorstRoadsS
                   municipality
                     ? `/municipality/${municipality.slug}?mode=quality&segment=${row.segment_id}`
                     : `/?mode=quality&segment=${row.segment_id}`;
+                const trendTint =
+                  row.trend === "worsening"
+                    ? "var(--rs-very-rough)"
+                    : row.trend === "improving"
+                      ? "var(--rs-smooth)"
+                      : "var(--rs-text-muted)";
 
                 return (
                   <article
@@ -100,19 +106,27 @@ export function WorstRoadsShell({ municipalityName, limit, result }: WorstRoadsS
                       background: row.rank === 1 ? "rgba(214,108,53,0.09)" : "var(--rs-surface-strong)",
                     }}
                   >
-                    <strong style={{ fontSize: "1.4rem" }}>#{row.rank}</strong>
-                    <div style={{ display: "grid", gap: 6 }}>
-                      <strong>{row.road_name ?? "Unnamed road"}</strong>
-                      <span style={{ color: "var(--rs-text-muted)" }}>
-                        {row.municipality ?? "Nova Scotia"} · {categoryLabel[row.category] ?? row.category} ·{" "}
-                        {confidenceLabel[row.confidence] ?? row.confidence} · {row.trend}
+                    <div style={{ display: "grid", gap: 4, justifyItems: "start" }}>
+                      <strong style={{ fontSize: "1.4rem", lineHeight: 1 }}>#{row.rank}</strong>
+                      <span className="ramp-chip" data-category={row.category} style={{ fontSize: "0.65rem" }}>
+                        {categoryLabel[row.category] ?? row.category}
                       </span>
-                      <span style={{ color: "var(--rs-text-muted)" }}>
-                        Score {row.avg_roughness_score.toFixed(2)} · {row.pothole_count} potholes ·{" "}
-                        {row.total_readings} readings
+                    </div>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                        <strong style={{ fontSize: "1.05rem" }}>{row.road_name ?? "Unnamed road"}</strong>
+                        <span style={{ fontFamily: "var(--rs-font-mono)", fontSize: "0.95rem", color: "var(--rs-ink)" }}>
+                          {row.avg_roughness_score.toFixed(2)}
+                        </span>
+                      </div>
+                      <span style={{ color: "var(--rs-text-muted)", fontSize: "0.9rem" }}>
+                        {row.municipality ?? "Nova Scotia"} · {confidenceLabel[row.confidence] ?? row.confidence} ·{" "}
+                        <span style={{ color: trendTint, fontWeight: 600 }}>{row.trend}</span>
                       </span>
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        <Link href={locateHref} className="secondary-button">
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={pillStyle}>{row.pothole_count} potholes</span>
+                        <span style={pillStyle}>{row.total_readings} readings</span>
+                        <Link href={locateHref} className="secondary-button" style={{ marginLeft: "auto" }}>
                           Locate on map
                         </Link>
                       </div>
@@ -150,6 +164,17 @@ export function WorstRoadsShell({ municipalityName, limit, result }: WorstRoadsS
     </section>
   );
 }
+
+const pillStyle = {
+  display: "inline-block",
+  padding: "4px 10px",
+  borderRadius: 999,
+  border: "1px solid var(--rs-border)",
+  background: "var(--rs-surface)",
+  color: "var(--rs-text-muted)",
+  fontSize: "0.8rem",
+  fontWeight: 600,
+};
 
 const selectStyle = {
   minWidth: 220,
