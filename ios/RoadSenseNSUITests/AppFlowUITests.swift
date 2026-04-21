@@ -5,7 +5,7 @@ final class AppFlowUITests: XCTestCase {
         let app = makeApp(scenario: "default")
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Set up privacy protection before collection starts."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Protect home and work before collection starts."].waitForExistence(timeout: 5))
 
         app.buttons["Manage privacy zones"].tap()
 
@@ -57,6 +57,11 @@ final class AppFlowUITests: XCTestCase {
 
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 5))
         app.buttons["settings.delete-local-data"].tap()
+
+        let confirmDelete = app.buttons["Delete"]
+        XCTAssertTrue(confirmDelete.waitForExistence(timeout: 5))
+        confirmDelete.tap()
+
         app.buttons["settings.close"].tap()
 
         XCTAssertTrue(app.buttons["map.stats-button"].waitForExistence(timeout: 5))

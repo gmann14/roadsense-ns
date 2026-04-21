@@ -27,7 +27,7 @@ struct StatsView: View {
             .padding(.bottom, DesignTokens.Space.xxxl)
         }
         .background(backgroundGradient.ignoresSafeArea())
-        .navigationTitle("Your contribution")
+        .navigationTitle("Stats")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -100,8 +100,6 @@ struct StatsView: View {
                     .accessibilityIdentifier("stats.segments-contributed")
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Segments contributed: \(summary.totalSegmentsContributed)")
     }
 
     private var contributionCard: some View {
