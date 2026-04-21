@@ -39,3 +39,5 @@ These are real product needs, but punted past MVP launch to keep the critical pa
 - User-reported "road repaired" flow — MVP is fully passive
 - Vehicle-type calibration factors — crowdsourced averaging absorbs this at MVP scale
 - Supabase Row-Level Security beyond basic read-only public aggregates — no authenticated users in MVP
+- Pothole photo capture (spec'd in [01 §Pothole Photo Capture](01-ios-implementation.md) + [02 §Pothole Photo Moderation](02-backend-implementation.md), not built)
+- My Drives list (spec'd in [01 §My Drives List](01-ios-implementation.md), not built)

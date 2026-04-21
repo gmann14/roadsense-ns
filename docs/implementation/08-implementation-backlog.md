@@ -603,6 +603,127 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
   - web app meets the documented accessibility, privacy, and deploy requirements
 - **Current repo note:** this slice is materially implemented under `apps/web/`: methodology/privacy pages have explicit content tests, the app now has skip-link and focus-visible affordances plus a text legend, manual `web-ci.yml` runs unit/build/Lighthouse/browser-smoke checks, Playwright smoke coverage exists for the core public routes, recoverable search and drawer states are covered in automated tests, `apps/web/vercel.json` sets baseline response headers, keyboard-only navigation is covered by browser smoke, phone-sized viewport coverage is now explicit, and repo-side Lighthouse checks enforce the trust-page accessibility/CLS budget. Remaining work is Vercel account/project linking plus hosted-environment perf validation for the live map surface, not the absence of a repo-side web verify/deploy scaffold.
 
+## Phase 11a — Upload execution (ship-blocking for internal TestFlight)
+
+These tasks finish the background-upload loop that today is partially stubbed. They block internal TestFlight but not necessarily the first signed build for team testing.
+
+### B070 — Wire real `upload-drain` background task handler
+
+- **Spec refs:** [01](01-ios-implementation.md#upload-execution--triggers-background-foreground)
+- **Depends on:** B060-range iOS foundation tasks
+- **RED**
+  - XCTest-level test that the registered handler posts an `UploaderDidDrain` notification when given a fake uploader with pending batches
+  - assertion that the handler calls `setTaskCompleted(success: true)` even if `Uploader.drain()` throws
+- **GREEN**
+  - replace `BackgroundTaskRegistrar.upload-drain` stub with real call to `AppContainer.uploader.drain()`
+  - wire `expirationHandler` to cancel the drain task and still complete the `BGAppRefreshTask`
+  - chain `BGTaskScheduler.shared.submit(...)` for the next drain after successful completion
+- **Acceptance**
+  - Xcode → Debug → Simulate Background Fetch triggers the real drain path on a signed build
+  - drains surface progress in Settings → Uploads → Diagnostics on a device where they previously stalled
+
+### B071 — Drive-end + foreground drain triggers
+
+- **Spec refs:** [01](01-ios-implementation.md#upload-execution--triggers-background-foreground)
+- **Depends on:** B070
+- **RED**
+  - unit test: on `DrivingDetector.events -> false`, `SensorCoordinator` calls `scheduleNextUploadDrain(earliestBegin: now + 15m)`
+  - scene-phase test asserting foreground transition calls `Uploader.drain()` exactly once per activation
+- **GREEN**
+  - add `scheduleNextUploadDrain` helper on `BackgroundTaskRegistrar`
+  - observe `scenePhase` in `RoadSenseNSApp` with a debounce so quick foreground/background toggles do not stack drain calls
+- **Acceptance**
+  - a simulated drive on device results in a queued `BGAppRefreshTaskRequest` in Xcode → Debug → Background Tasks
+
+### B072 — Cellular/Wi-Fi toggle per upload kind
+
+- **Spec refs:** [01](01-ios-implementation.md#data-volume--wi-fi-strategy)
+- **Depends on:** B071
+- **RED**
+  - `UploadPolicy` unit tests covering the matrix from the Wi-Fi Strategy table
+- **GREEN**
+  - promote the current single `allowCellularUpload` UserDefault into a pair: `allowCellularUploadReadings` (default true), `allowCellularUploadPhotos` (default false)
+  - Settings → Uploads renders both toggles with the documented footnote copy
+- **Acceptance**
+  - toggling Wi-Fi-only for readings prevents a batch from attempting upload while `NWPathMonitor.isExpensive == true`, and resumes when path becomes non-expensive
+
+## Phase 11b — Pothole photo capture (post-MVP feature)
+
+### B073 — Photo capture client surface
+
+- **Spec refs:** [01](01-ios-implementation.md#pothole-photo-capture-post-mvp)
+- **Depends on:** B070, B072
+- **RED**
+  - UI test that the `Report a pothole` button is hidden when `DrivingDetector.last == true`
+  - unit test that photos captured inside a privacy zone are deleted and never enqueued
+  - unit test that EXIF fields (GPS, TIFF, Exif dicts) are absent from the final uploaded bytes
+- **GREEN**
+  - add `PotholeCameraView` (AVFoundation) with confirm + retake flow
+  - add `PotholeReportRecord` SwiftData model
+  - integrate with upload queue; photos are a separate `UploadKind.photo`
+- **Acceptance**
+  - end-to-end test against a local Supabase: tap shutter → confirm → server receives the photo → row lands in `pothole_photos` as `pending_moderation`
+
+### B074 — Photo upload backend
+
+- **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp), [03](03-api-contracts.md)
+- **Depends on:** B010-range backend foundation
+- **RED**
+  - pgTAP tests for `pothole_photos` schema + RLS + rate-limit bucket isolation
+  - Deno tests for `POST /pothole-photos` happy path, 409 duplicate, 429 rate limit, and content-SHA mismatch
+- **GREEN**
+  - migration for `pothole_photos` + `pothole_photo_status` enum
+  - Edge Function `pothole-photos/index.ts` issuing signed PUT URLs with 5-minute TTL
+  - Storage bucket provisioning with byte-size + content-type restrictions
+  - Storage webhook or cron that promotes uploaded objects from `pending/` to `pending_moderation/`
+- **Acceptance**
+  - E2E contract tests pass against a preview Supabase project
+
+### B075 — Photo moderation queue + publishing
+
+- **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp)
+- **Depends on:** B074
+- **RED**
+  - pgTAP tests for `approve_pothole_photo()` and `reject_pothole_photo()` stored procedures (status transition, storage path move, `pothole_reports` fold-in)
+- **GREEN**
+  - approve/reject stored procedures; Storage move on approve; Storage delete on reject
+  - Supabase Studio view with approve/reject actions bound to those procedures
+  - pothole-folding logic extension so approved photos participate in the 20m-cluster merge with `pothole_reports`
+- **Acceptance**
+  - an approved photo appears on the public pothole layer within one tile-cache TTL
+
+## Phase 11c — My Drives list (post-MVP feature)
+
+### B076 — DriveSession persistence and lifecycle
+
+- **Spec refs:** [01](01-ios-implementation.md#my-drives-list-post-mvp)
+- **Depends on:** B070
+- **RED**
+  - unit test: `DrivingDetector.events -> true` creates a `DriveSessionRecord`, `-> false` seals it
+  - unit test: stale in-progress drives (> 2h open) are force-sealed on foreground
+  - unit test: a fully-privacy-filtered drive has `readingCount == 0 && privacyFilteredCount > 0`
+- **GREEN**
+  - add `DriveSessionRecord` SwiftData model, relationship on `ReadingRecord`
+  - extend `SensorCoordinator` to stamp readings with the active drive
+  - add foreground-cleanup pass for stale drives
+- **Acceptance**
+  - a simulated drive produces exactly one `DriveSessionRecord` with accurate distance and counters
+
+### B077 — Drives list and detail UI
+
+- **Spec refs:** [01](01-ios-implementation.md#my-drives-list-post-mvp)
+- **Depends on:** B076
+- **RED**
+  - UI test that the Drives list renders grouped sections (Today, Yesterday, Earlier this week)
+  - UI test that a 100%-privacy-filtered drive shows the `Inside a privacy zone` treatment
+  - UI test that `Delete this drive` shows the "already uploaded data stays public" confirmation copy verbatim
+- **GREEN**
+  - `DrivesListView` accessible from Stats → Recent drives
+  - `DriveDetailView` with mini-map polyline, counters, and delete action
+  - `Open on main map` action that centers the map to the drive's bounding box
+- **Acceptance**
+  - VoiceOver labels match the documented script; Dynamic Type Accessibility 1+ reflows rows vertically
+
 ## Phase 11 — Post-MVP Operational Procedures
 
 These tasks ship **after** MVP TestFlight launch. They exist on a quarterly cadence (OSM changes slowly) and should not block any release. Picking them up mid-MVP just because the import pipeline looks adjacent is a common cause of scope creep — don't.

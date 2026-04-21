@@ -432,6 +432,68 @@ These are in the spec but not in MVP. Listing them here so the shape is ready wh
 - `GET /coverage?municipality=<name>` — coverage % by municipality
 - `GET /contributors/me` — personal stats authenticated via device token (requires token-signing flow, out of scope for MVP)
 
+### `POST /pothole-photos` (post-MVP — photo capture)
+
+Two-step signed-URL upload for pothole photos. Matches [01-ios-implementation.md §Pothole Photo Capture](01-ios-implementation.md) and [02-backend-implementation.md §Pothole Photo Moderation](02-backend-implementation.md).
+
+**Request**
+
+```json
+{
+    "report_id": "c2f1a4b3-1234-4c5d-8e9f-112233445566",
+    "device_token": "a78f9e2b-4c6d-11ec-81d3-0242ac130003",
+    "client_sent_at": "2026-04-21T18:22:05Z",
+    "client_app_version": "0.2.0 (78)",
+    "client_os_version": "iOS 17.4.1",
+    "lat": 44.6488,
+    "lng": -63.5752,
+    "accuracy_m": 6.8,
+    "captured_at": "2026-04-21T18:22:00Z",
+    "content_type": "image/jpeg",
+    "byte_size": 312840,
+    "sha256": "9b74c9897bac770ffc029102a200c5de"
+}
+```
+
+**Notes**
+
+- `report_id` is a client-generated UUIDv4 and is the idempotency key. Retrying the call with the same `report_id` returns the original signed URL (or 409 if the previous upload already succeeded).
+- `content_type` must be `image/jpeg` (only accepted value in MVP).
+- `byte_size` must be ≤ 1,500,000. Client target is ≤ 400 KB.
+- `sha256` is the hex-encoded SHA-256 of the exact bytes the client will PUT.
+- `lat` / `lng` MUST already be offset-randomized by the client (same 50–100m randomization as privacy zone centers).
+
+**Response — 200 OK**
+
+```json
+{
+    "report_id": "c2f1a4b3-1234-4c5d-8e9f-112233445566",
+    "upload_url": "https://...supabase.co/storage/v1/object/sign/pothole-photos/pending/c2f1a4b3-...jpg?token=...",
+    "upload_expires_at": "2026-04-21T18:27:05Z",
+    "expected_object_path": "pending/c2f1a4b3-....jpg"
+}
+```
+
+Client then `PUT`s the JPEG bytes to `upload_url` directly. The Storage service enforces byte size, content type, and path pattern. The client sends `Content-SHA256: <hex>` so the server can reject a corrupted upload.
+
+**Response — 409 already_uploaded**
+
+```json
+{
+    "error": "already_uploaded",
+    "message": "This report_id has already been submitted.",
+    "request_id": "01H9Z..."
+}
+```
+
+Client treats this as success (report is on the server, local cleanup can proceed).
+
+**Response — 429 rate_limited**
+
+Photo submissions have a dedicated bucket: 20 / 24h per device token hash, 40 / 1h per IP. See [02-backend-implementation.md §Pothole Photo Moderation](02-backend-implementation.md).
+
+**No `GET /pothole-photos/{id}` in MVP.** The client does not need to poll status. Approved photos appear on the public pothole layer automatically; rejected photos are invisible to the submitter by design (see moderation policy).
+
 ## Deferred Contract Work
 
 - `/segments/{id}` stays single-segment in MVP and Phase-2 web. If route continuity ever matters, add a dedicated adjacent-segments or corridor endpoint rather than overloading this one.

@@ -1971,3 +1971,97 @@ Run `EXPLAIN ANALYZE` on the ingestion match query after first 100k readings exi
 - **Do not add a Halifax-only tile materialized view unless measurement proves it is needed.**
 - **Do not migrate to Martin preemptively.** Follow the documented latency/error trigger first.
 - **Do not add a monthly salt to `device_token_hash`.** The current constant-pepper approach is the correct tradeoff for weekly per-device caps and monthly client-side rotation.
+
+## Pothole Photo Moderation (Post-MVP)
+
+*Status: not implemented. Client-side spec lives in [01-ios-implementation.md §Pothole Photo Capture](01-ios-implementation.md).*
+
+This section covers the server half of the photo capture feature: storage, moderation queue, and publishing flow.
+
+### Storage Bucket
+
+One Supabase Storage bucket, `pothole-photos`, with:
+
+- **Access:** private by default. Reads go through a dedicated `GET /pothole-photos/{id}/image` Edge Function that enforces moderation status and emits signed read URLs with a short TTL (60s).
+- **Write path:** signed PUT URLs issued by `POST /pothole-photos` (see [03-api-contracts.md](03-api-contracts.md)). Signed URLs expire after 5 minutes and can only write to `pending/{report_id}.jpg`.
+- **Max object size:** 1.5 MB enforced at the bucket level. Client target is ≤ 400 KB; the extra headroom tolerates compression variance. Anything larger is a bug or abuse.
+- **Content-Type allowlist:** `image/jpeg` only. HEIC is converted to JPEG client-side before upload.
+
+On successful upload, a Storage webhook (or a one-minute `pg_cron` scan if webhooks are unavailable) promotes the row from `pending_upload` to `pending_moderation` and moves the object to `pending_moderation/{report_id}.jpg`. Approved objects move to `published/{report_id}.jpg`; rejected objects are deleted.
+
+### Migration 017 — `pothole_photos`
+
+```sql
+CREATE TYPE pothole_photo_status AS ENUM (
+    'pending_upload',     -- row created, object not yet in storage
+    'pending_moderation', -- object in storage, awaiting human review
+    'approved',           -- visible on the map
+    'rejected',           -- failed moderation, object deleted
+    'expired'             -- auto-expired after 90d without confirmation (same rules as pothole_reports)
+);
+
+CREATE TABLE pothole_photos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    report_id UUID NOT NULL UNIQUE,               -- client-generated, used in URLs and idempotency
+    device_token_hash BYTEA NOT NULL,
+    segment_id UUID REFERENCES road_segments(id) ON DELETE SET NULL,
+    pothole_report_id UUID REFERENCES pothole_reports(id) ON DELETE SET NULL,
+    geom GEOMETRY(POINT, 4326) NOT NULL,          -- already offset-randomized by client
+    accuracy_m NUMERIC(5,2),
+    captured_at TIMESTAMPTZ NOT NULL,
+    submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    uploaded_at TIMESTAMPTZ,
+    reviewed_at TIMESTAMPTZ,
+    reviewed_by TEXT,                             -- moderator identifier, null until reviewed
+    status pothole_photo_status NOT NULL DEFAULT 'pending_upload',
+    storage_object_path TEXT NOT NULL,            -- e.g., pending_moderation/{report_id}.jpg
+    content_sha256 BYTEA NOT NULL,                -- supplied by client, verified server-side on object write
+    byte_size INTEGER NOT NULL,
+    rejection_reason TEXT
+);
+
+CREATE INDEX idx_pothole_photos_geom   ON pothole_photos USING GIST (geom);
+CREATE INDEX idx_pothole_photos_status ON pothole_photos (status);
+CREATE INDEX idx_pothole_photos_device ON pothole_photos (device_token_hash, submitted_at DESC);
+```
+
+**Relationship to `pothole_reports`:** an approved photo that matches (or creates) a nearby pothole cluster links back via `pothole_report_id`. The existing pothole folding logic (see Migration 012) is extended: a photo's `geom` participates in the same 20m-radius cluster merge as accelerometer-detected pothole points, and the resulting `pothole_reports` row carries `has_photo = true`.
+
+### Moderation Tooling
+
+MVP moderation is deliberately low-tech: a private Retool / Supabase Studio view showing the `pending_moderation` queue sorted by `submitted_at ASC`, with:
+
+- the image (fetched via signed read URL)
+- the reported lat/lng pinned on a small map
+- approve / reject buttons wired to a stored procedure
+
+No ML classifier in MVP. The moderation policy (spec-driven, not code-driven) is:
+
+| Keep if | Reject if |
+|---|---|
+| Image clearly shows road damage | Image contains faces, license plates, house numbers in close-up |
+| Location in Nova Scotia | Image is indoors, not a road, or is obviously a joke/test |
+| No people identifiable | Image is blurred to the point of being unreadable |
+
+Rejections delete the storage object immediately. The client is not told why.
+
+### Rate Limits
+
+Photo submissions get their own rate-limit bucket (separate from reading batches so a spammy reporter does not poison readings uploads):
+
+- **Per device token hash:** 20 photo submissions / 24h
+- **Per IP:** 40 photo submissions / 1h
+
+Both buckets reuse the existing `rate_limits` table and `check_and_bump_rate_limit` RPC with keys `photo-device:<hash>` and `photo-ip:<ip>`.
+
+### RLS
+
+- Anon can read `status = 'approved'` rows only.
+- No anon writes; only the `/functions/v1/pothole-photos` Edge Function (service role) inserts and updates.
+- Moderators use the service role key via the Supabase Studio UI; there is no moderator user auth flow in MVP. Rotate the service role key if a moderator leaves.
+
+### Not In MVP
+
+- Automatic image classification (CLIP / dedicated pothole classifier). Human moderation is fine for TestFlight volume (< 200 photos/week).
+- Reverse geocoding display names on the server. The client already knows the road name from the nearest segment.
+- Per-municipality moderator assignment. Single moderator queue for the beta.

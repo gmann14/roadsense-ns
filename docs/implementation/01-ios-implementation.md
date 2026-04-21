@@ -688,6 +688,88 @@ This is intentional — the user should see exactly what the server saw, in plai
 
 **Batch size:** 1000 readings max per request (matches API contract). For ~50m-per-reading, that's ~50km of driving per batch.
 
+### Upload Execution — Triggers, Background, Foreground
+
+*Status: partially implemented. `BackgroundTaskRegistrar` today registers both identifiers but the `upload-drain` handler only calls `setTaskCompleted(success: true)`. This section is the contract for wiring it to the real `Uploader`.*
+
+The user should never have to think about uploading. There is no "Upload now" button; there is no spinner the user has to wait on. Uploads happen opportunistically and quietly. The four triggers below cover every realistic case; none of them block the user.
+
+```
+trigger                              | who submits it                 | task type
+-------------------------------------|--------------------------------|------------------------
+app foreground                       | RoadSenseNSApp scenePhase      | Task { await uploader.drain() }
+drive end (DrivingDetector false)    | SensorCoordinator              | BGAppRefreshTask in ~15m
+app backgrounded with pending >= 100 | RoadSenseNSApp scenePhase      | BGAppRefreshTask in ~15m
+nightly maintenance                  | AppDelegate on launch + BG     | BGProcessingTask daily
+```
+
+**Concrete wiring.** `AppModel` gains an `uploadDrainCoordinator` seam that the `UploadDrainTask` handler on `BackgroundTaskRegistrar` actually calls:
+
+```swift
+// BackgroundTaskRegistrar.swift — replacement for the current stub
+BGTaskScheduler.shared.register(
+    forTaskWithIdentifier: uploadDrainTaskIdentifier,
+    using: nil
+) { task in
+    let refreshTask = task as! BGAppRefreshTask
+    let op = Task {
+        await self.uploader.drain()
+    }
+    refreshTask.expirationHandler = { op.cancel() }
+    Task {
+        _ = await op.value
+        refreshTask.setTaskCompleted(success: true)
+        // chain the next one so iOS keeps the slot warm
+        self.scheduleNextUploadDrain(earliestBegin: .now + 15 * 60)
+    }
+}
+```
+
+`scheduleNextUploadDrain` wraps `BGTaskScheduler.shared.submit(BGAppRefreshTaskRequest(...))`. iOS decides when to actually fire — our job is to keep asking.
+
+**Drive-end submit.** When `DrivingDetector` emits `false`, `SensorCoordinator` calls `scheduleNextUploadDrain(earliestBegin: .now + 15 * 60)`. 15 minutes is a compromise: long enough that iOS considers the device "idle", short enough that a commuter's data is normally on the server by the time they're done parking and walking inside.
+
+**Foreground drain.** In `RoadSenseNSApp.body`, observe `scenePhase` and call `uploader.drain()` on `.active` transitions, gated so we don't double-fire across quick backgrounding.
+
+**No user-triggered manual upload.** The stale "Upload now" button has been removed from the `MapScreen` contribution card. The only surfaced affordance is a passive count (`"3 uploads waiting"`) and a **Diagnostics → Retry failed batches** row in Settings → Uploads, used only when the queue is in `.failedPermanent` state.
+
+### Data Volume & Wi-Fi Strategy
+
+The Wi-Fi question has two different answers because we have two different upload shapes.
+
+**Readings (every user, every drive).**
+
+- One reading ≈ 10 numeric fields + one ISO timestamp ≈ **~180–220 bytes of JSON**.
+- With gzip (we enable `Content-Encoding: gzip` on `POST /upload-readings`), the batch compresses to **~70–90 bytes per reading** — timestamps and floats compress well because adjacent readings look similar.
+- One reading covers ~50m of travel. At a realistic mixed-speed average of 50 km/h, that's **~1000 readings per hour of driving** ≈ **~80 KB/hour uploaded**.
+- A median Nova Scotia commuter drives ~45 min/day (Stats Canada 2021). That's **~2 MB/month** uploaded.
+- A heavy driver (2 hrs/day, every day) tops out around **~10 MB/month**.
+
+Conclusion: readings are not remotely a concern for cellular data. Blocking them on Wi-Fi would trade off coverage (drives happen outside of Wi-Fi ranges, sometimes for hours) against a sub-1% monthly data-plan cost.
+
+**Pothole photos (post-MVP, opt-in per report).**
+
+- Target: **≤ 400 KB per photo** after on-device JPEG resize (1600px longest edge, quality 0.8) and EXIF strip.
+- 5 reports per week from an engaged user = **~8 MB/month** — enough that a user on a 500 MB plan cares.
+
+**Decision:**
+
+| Upload type | Cellular default | Wi-Fi-only toggle | Rationale |
+|---|---|---|---|
+| Readings | **Allowed** | Available, OFF by default | ~2 MB/month is negligible; coverage suffers if we wait for Wi-Fi. |
+| Photos | **Deferred to Wi-Fi** | Available, ON by default, user can opt into cellular | Photos are ~100× bigger and less time-sensitive. |
+
+Settings → Uploads wording:
+
+- `Upload drive data over cellular` — default ON. Footnote: "Typical usage is under 5 MB/month."
+- `Upload pothole photos over cellular` — default OFF. Footnote: "Photos are larger. Wi-Fi keeps this from using your data plan."
+
+The `NWPathMonitor.isExpensive` check becomes per-upload-kind: readings ignore the flag unless the user flipped the toggle off; photos honour it unless the user flipped it on.
+
+### Retention & Cleanup
+
+Already specified above: prune uploaded `ReadingRecord` after 30 days, enforced by the `nightly-cleanup` `BGProcessingTask`. The task handler is real but the pruning SQL is stubbed — tracked as a separate backlog item.
+
 ## Privacy Zone Implementation
 
 ### Zone Creation
@@ -1020,3 +1102,247 @@ Cross-screen state (recording status, pending upload count, stats) lives on a si
 - **Privacy-zone onboarding is mandatory before passive collection starts.** The user must either configure at least one privacy zone or explicitly confirm a high-visibility "skip for now" warning sheet that explains home/work exposure risk. Do not bury this behind a later settings screen for first-time family/friends testers.
 - **Dynamic Type coverage scope is broad, not selective.** Test onboarding, map chrome, segment drawer, stats, and settings at large accessibility sizes. The question was simply how much of the UI must be exercised at large text sizes; answer: all core user-facing flows, not just one or two screens.
 - **No pothole haptics in MVP.** Passive collection should stay quiet in the background; revisit only if a future explicit "active drive mode" exists.
+
+## Pothole Photo Capture (Post-MVP)
+
+*Status: not implemented. This section is the spec; no code yet.*
+
+The passive pipeline already detects and reports pothole *events* via accelerometer spikes, but that signal has weaknesses: it cannot describe severity, cannot distinguish potholes from utility cuts, and gives municipalities nothing to act on visually. The photo capture feature adds a low-friction way for a pedestrian or stopped driver to submit a geotagged photo of a specific pothole.
+
+Product-spec Open Question #3 already said "no pothole button in MVP" for driver safety; this feature is explicitly designed for the **stopped-or-walking** case (passenger, pedestrian, someone who noticed a pothole while getting out of their car) and gates the capture behind a low-speed check.
+
+### User Flow (target: ≤ 4 taps from app open)
+
+1. User opens the app.
+2. On the map, a secondary floating button (below the contribution card) reads `Report a pothole`. (Icon: `camera.viewfinder`.)
+3. Tap → full-screen camera sheet (`AVFoundation`, not `UIImagePickerController` — we need to strip metadata before the user sees a confirm screen).
+4. User frames the pothole, taps shutter. (Optional: enable device-side AF/AE lock during capture for sharper hand-held shots.)
+5. Confirm screen shows the photo + `📍 Near Quinpool Road, Halifax` + two buttons: `Submit` / `Retake`.
+6. Tap `Submit` → success toast (`Thanks — a moderator will review this report`) → return to map. Photo queues for upload like readings.
+
+No moderation happens client-side. No AI classification client-side. The user does not name the pothole, rate the pothole, or describe the pothole — those are moderation concerns.
+
+### Entry Points
+
+- **Map screen:** secondary floating button as above.
+- **Segment detail sheet:** tapping on a segment that already has pothole flags shows a `Report another pothole here` row that opens the camera pre-scoped to that segment ID.
+- **Settings → About:** no entry point. The feature is discoverable from the map, not buried.
+
+### Safety Gates
+
+```
+state: camera-sheet-presenting
+  precondition:
+    - NOT driving (DrivingDetector.last == false) OR
+    - speed < 5 km/h (from last LocationSample)
+
+  if preconditions fail:
+    show sheet "Pull over first — the report tool is only available when you're stopped."
+    [OK] dismisses. No photo is captured.
+```
+
+Re-check preconditions every 500ms while the camera sheet is presented. If the user starts moving again, dismiss with a warning (do not capture silently).
+
+### Privacy
+
+Photos are categorically more sensitive than readings. The photo pipeline MUST:
+
+1. **Strip all EXIF metadata before upload.** Use `CGImageDestination` with `kCGImagePropertyExifDictionary: nil, kCGImagePropertyGPSDictionary: nil, kCGImagePropertyTIFFDictionary: nil`. Camera metadata (lens, ISO, phone model, original GPS) is discarded before the image ever touches the upload queue.
+2. **Use `LocationService.latestSample`, not EXIF GPS, for geotagging.** This keeps the geotag in the privacy-zone pipeline. Any photo whose GPS coords fall in a privacy zone gets **rejected at the client** with a sheet: "This spot is inside one of your privacy zones. The report was not sent. (You can adjust your zones in Settings.)" The photo file is deleted immediately.
+3. **Apply the same 50–100m random offset to the uploaded lat/lng** that privacy zones use for their center. This prevents the server from reconstructing a precise "here is my house" pattern from repeated photo uploads.
+4. **Resize to ≤ 1600px longest edge, JPEG quality 0.8** before upload. Typical output: 250–400 KB. Raw HEIC off the camera is 3–5 MB and contains too much incidental detail (faces, license plates, house numbers in the background).
+5. **Do not store photos permanently on-device.** Photos live in the upload queue until a 200 comes back from the server, then are deleted from disk. There is no "my reports" photo gallery.
+
+### Data Model
+
+```swift
+// Persistence/Models/PotholeReportRecord.swift
+@Model
+final class PotholeReportRecord {
+    @Attribute(.unique) var id: UUID
+    var photoFileURL: URL           // points into AppSupport/pothole-photos/{id}.jpg
+    var latitude: Double            // already offset-randomized
+    var longitude: Double           // already offset-randomized
+    var accuracyM: Double
+    var capturedAt: Date
+    var uploadStatus: UploadStatus  // reuse the existing enum
+    var uploadAttemptCount: Int
+    var lastAttemptAt: Date?
+    var serverReportID: String?     // populated on 200
+}
+```
+
+The on-disk photo file is written once, never rewritten. Deletion is the only allowed lifecycle event after creation.
+
+### Upload
+
+Two-step, signed-URL pattern (the readings endpoint is fine for point JSON; photos are too big for an Edge Function body):
+
+1. `POST /pothole-photos` — small JSON metadata request. Body:
+   ```json
+   {
+     "report_id": "uuid",
+     "device_token": "uuid",
+     "lat": 44.6488,
+     "lng": -63.5752,
+     "captured_at": "2026-04-21T18:22:00Z",
+     "content_type": "image/jpeg",
+     "byte_size": 312840,
+     "sha256": "hex..."
+   }
+   ```
+   Server validates, creates a `pothole_photos` row in `pending_moderation` status, allocates a Supabase Storage object path, returns a signed PUT URL + expected object path.
+2. `PUT <signed-url>` — direct upload of the JPEG bytes to Supabase Storage. The app computes and sends `Content-SHA256` so the server can reject a corrupted upload.
+3. Server watcher (trigger or cron) on the Storage bucket flips the row to `awaiting_review` once the file lands. Client polls `GET /pothole-photos/{id}` once on next foreground to surface a toast: `"Your pothole photo was uploaded. A moderator will review it."`
+
+Pothole photos upload on **Wi-Fi by default** (see Data Volume & Wi-Fi Strategy above). A user who wants to submit on cellular flips the `Upload pothole photos over cellular` toggle.
+
+### Moderation
+
+Explicitly server-side, out of scope for this doc except for the client contract:
+
+- Photos that pass moderation are published to the map as a new `pothole_reports` row with a `has_photo: true` flag.
+- Photos that fail moderation are deleted server-side; the client never learns why.
+- The client does not show pending/rejected state to the submitter — the UX is "you reported it; thanks". Post-MVP we can add a "my reports" screen, but adding visibility into the moderation queue early creates an abuse vector (submitters tuning to bypass filters).
+
+See [02-backend-implementation.md §Pothole Photo Moderation](02-backend-implementation.md) for schema, Storage bucket config, and moderation tooling.
+
+### Accessibility & Failure Modes
+
+- Camera permission denied → inline sheet with `Open Settings` button (same pattern as location).
+- Low-light capture → no flash; we'd rather have no report than a flash-blinded one that crashes the classifier. Show inline hint: "Tap to focus. Daylight works best."
+- Out-of-bounds coords (outside Nova Scotia) → client-side rejection with sheet: "Reports are limited to Nova Scotia roads right now."
+- Upload 400 / 413 / 429 → same state as readings (`failedPermanent` after 5 attempts). The photo is preserved locally and surfaced in Settings → Uploads → Diagnostics with a `Retry` action.
+
+### UI Accessibility
+
+- VoiceOver: camera sheet announces "Pothole camera. Tap center to take photo."; confirm screen announces `"Photo of pothole near Quinpool Road, Halifax. Double-tap Submit to send."`
+- Dynamic Type: all text in the confirm screen respects `Text.font(DesignTokens.TypeStyle.body)` and allows wrapping — we do not layout-constrain the address line.
+
+### Not In This Version
+
+- Rating the pothole ("how bad?"). Server-side aggregation from photo + nearby accelerometer hits is a better signal than user rating.
+- Editing the geotag location. If the device GPS is off by more than the privacy offset, the report is wrong; better to reject it at `accuracyM > 20` client-side than let a user hand-move a pin.
+- Comment field. Zero value, unlimited abuse surface.
+- Video. 10× the bandwidth, 1.1× the signal.
+
+## My Drives List (Post-MVP)
+
+*Status: not implemented. Partial infrastructure exists via the teal local-overlay.*
+
+### Is This Feature Necessary?
+
+Right now the app shows an aggregate local overlay (the dashed teal `Local only` styling on yet-to-upload segments) and a single `Kilometres mapped` count on the Stats screen. A per-drive list is a different promise: "here is what you drove on Monday, tap it to see the map, long-press to delete it."
+
+**Worth building?** Yes, but post-MVP. Three reasons:
+
+1. **Trust.** "Prove what you have of mine" is the other half of "give me a delete button." Today the delete-local-data button nukes everything; a per-drive delete lets a user remove, say, a single trip to a therapist's office without losing months of mapped commutes.
+2. **Debuggability.** When a tester says "the app didn't seem to record yesterday," a Drives list immediately answers whether the app tried and failed, vs. never noticed the drive.
+3. **Delight.** Seeing a personal history of "Tuesday morning, 12.4 km, 4 new segments" rewards contribution in a way that a single aggregated number does not.
+
+The reason it's post-MVP: the aggregate overlay already does the "proof of contribution" job well enough for Halifax beta, and a drives list adds a non-trivial amount of UI surface (list screen + detail screen + delete confirmation + empty state + sync states) that we'd rather not defend against Dynamic Type / VoiceOver / edge cases while chasing a TestFlight ship date.
+
+### Data Model
+
+Introduce `DriveSessionRecord` as a first-class SwiftData model, upstream of `ReadingRecord`:
+
+```swift
+@Model
+final class DriveSessionRecord {
+    @Attribute(.unique) var id: UUID
+    var startedAt: Date
+    var endedAt: Date?                   // nil = in progress
+    var totalDistanceM: Double
+    var readingCount: Int
+    var privacyFilteredCount: Int
+    var potholesDetected: Int
+    var uploadStatus: DriveUploadStatus  // .local, .partiallyUploaded, .fullyUploaded
+    var deletedByUser: Bool              // tombstone for local UI; never uploaded
+
+    @Relationship(deleteRule: .cascade, inverse: \ReadingRecord.drive)
+    var readings: [ReadingRecord]
+}
+```
+
+`ReadingRecord` gains a `var drive: DriveSessionRecord?` back-reference.
+
+### Session Lifecycle
+
+```
+DrivingDetector.events -> true:
+    create DriveSessionRecord(startedAt: now, endedAt: nil)
+    SensorCoordinator tags every emitted ReadingRecord with this drive
+
+DrivingDetector.events -> false:
+    seal(drive): set endedAt, finalize counters
+
+stale cleanup (every foreground):
+    any drive where endedAt == nil && startedAt < now - 2h is force-sealed
+    (handles the "phone crashed mid-drive" case — the seal just writes a truthful endedAt)
+```
+
+The seal operation is idempotent. If the device reboots mid-drive and the checkpoint system restores in-progress state, we reuse the existing drive ID; otherwise we start fresh and the last drive gets force-sealed on next launch.
+
+### Server Side
+
+**None.** The drives list is purely local. The server only ever sees reading-level records; grouping into drives is a personal view. There is no `/drives/me` endpoint, no drive-level upload, no drive-level delete. This keeps the feature simple and keeps the server ignorant of "this cluster of readings came from a single user-visible session."
+
+An uploaded reading that belongs to a drive retains its `drive` relationship locally. Pruning uploaded readings after 30 days (existing retention rule) leaves the parent drive row intact — the drive keeps its counters (distance, reading count) so the list can still show "Apr 3 · 8.2 km · 12 segments" after the raw readings are gone.
+
+### UI
+
+Reached from `Stats → Recent drives` (new row, below the existing hero). Separate screen, not a sheet, because the list can get long.
+
+```
+[ Drives screen ]
+Navigation title: Drives
+
+[Today]
+- 9:12 am · Home → Work · 12.4 km · Uploaded
+- 5:40 pm · Work → Home · 11.8 km · Uploaded
+
+[Yesterday]
+- 2:17 pm · 3.2 km · Local only    <-- has the teal local pill
+
+[Earlier this week]
+- Monday · 9:05 am · 12.6 km · Uploaded
+```
+
+Tapping a row → `DriveDetailScreen`:
+
+- Hero strip: distance, duration, segments touched, potholes detected.
+- Mini-map: the drive's path, zoomed to fit, rendered as a single polyline. **No road-quality styling** — this is your personal path, not the community map. If the drive is fully uploaded, the polyline is a muted dark line; if it's still local, it's the same teal styling used on the main map overlay.
+- Footer actions: `Open on main map` (centers the MapScreen on the drive's bounding box), `Delete this drive`.
+
+`Delete this drive` triggers a confirmation dialog: "This removes this drive from your device. Any data that was already uploaded stays on the public map — use Delete all local data in Settings to stop contributing going forward."
+
+The dialog wording is intentional: the user deserves to know that deleting locally does not retroactively scrub what was already aggregated into segment averages. See [06-security-and-privacy.md](06-security-and-privacy.md) for the legal framing.
+
+### Empty State
+
+If the user has never driven with the app on, the `Drives` screen shows:
+
+> Drive with RoadSense on to start mapping.  
+> Your trips will show up here once you do — no account needed.
+
+Do not show a fake example drive, do not show a "Try a simulated drive" button, do not auto-open the map.
+
+### Privacy Zones Interaction
+
+Drives that are 100% privacy-filtered (`readingCount == 0 && privacyFilteredCount > 0`) still appear in the list with a distinct row treatment:
+
+> 4:22 pm · ~2 km · Inside a privacy zone — nothing was uploaded
+
+This is important: it proves the zone is working. The counter `~2 km` is itself approximate (rounded to the nearest km and drawn only from odometer-style CLLocation distance updates, never from filtered readings) so the row doesn't leak a precise home-route trace.
+
+### Accessibility
+
+- VoiceOver row label: `"April 3rd, 9:12 AM drive. 12.4 kilometres. Uploaded. Double-tap to view route."`
+- Dynamic Type: rows reflow vertically at Accessibility 1+ sizes; timestamp stacks above the metadata.
+- Delete is not a swipe-only action — it's a button in the detail screen. Swipe-to-delete on the list view is an additive shortcut, never the only path.
+
+### Not In This Version
+
+- Naming drives ("Mom's house", "Grocery run"). Encourages labeling of sensitive locations. Skip.
+- Sharing drives. Out of scope; adds a whole sharing surface and is not in the public-interest story for the app.
+- Drive-level stats page. The existing Stats screen is about aggregate contribution. A single drive does not need its own "how you compare to other drivers today" frame.
