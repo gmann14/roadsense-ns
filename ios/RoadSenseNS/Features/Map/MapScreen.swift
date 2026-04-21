@@ -8,7 +8,8 @@ struct MapScreen: View {
     let onShowSettings: () -> Void
     let onShowPrivacyZones: () -> Void
 
-    @State private var isLegendExpanded = false
+    @State private var isCardExpanded = true
+    @State private var isMyDrivesHighlighted = false
     @State private var selectedSegment: SegmentDetailResponse?
     @State private var isLoadingSegment = false
     @State private var segmentLoadError: String?
@@ -16,7 +17,7 @@ struct MapScreen: View {
     @State private var mapLoadError: String?
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             RoadQualityMapView(
                 config: model.config,
                 pendingDriveCoordinates: model.pendingDriveCoordinates,
@@ -29,9 +30,7 @@ struct MapScreen: View {
                     isMapLoaded = false
                 },
                 onSelectSegment: { segmentID in
-                    Task {
-                        await loadSegment(id: segmentID)
-                    }
+                    Task { await loadSegment(id: segmentID) }
                 },
                 onClearSelection: {
                     selectedSegment = nil
@@ -40,20 +39,26 @@ struct MapScreen: View {
             )
 
             VStack(spacing: 0) {
-                topChrome
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                topBar
+                    .padding(.horizontal, DesignTokens.Space.md)
+                    .padding(.top, DesignTokens.Space.sm)
 
-                Spacer()
+                Spacer(minLength: 0)
 
-                centerState
-                    .padding(.horizontal, 20)
+                if showsFirstRunIllustration {
+                    firstRunIllustration
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                }
 
-                Spacer()
+                Spacer(minLength: 0)
 
-                bottomChrome
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                bottomCard
+                    .padding(.horizontal, DesignTokens.Space.md)
+                    .padding(.bottom, DesignTokens.Space.md)
+            }
+
+            if isLoadingSegment {
+                loadingVeil
             }
         }
         .sheet(item: $selectedSegment) { segment in
@@ -61,221 +66,328 @@ struct MapScreen: View {
         }
         .alert("Could not load road details", isPresented: Binding(
             get: { segmentLoadError != nil },
-            set: { newValue in
-                if !newValue {
-                    segmentLoadError = nil
-                }
-            }
+            set: { if !$0 { segmentLoadError = nil } }
         )) {
-            Button("OK", role: .cancel) {
-                segmentLoadError = nil
-            }
+            Button("OK", role: .cancel) { segmentLoadError = nil }
         } message: {
             Text(segmentLoadError ?? "Try again in a moment.")
         }
     }
 
-    private var topChrome: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 12) {
-                    StatusPill(
-                        title: recordingTitle,
-                        subtitle: recordingSubtitle,
-                        tint: recordingTint
-                    )
+    // MARK: - Top bar
 
-                    HStack(spacing: 10) {
-                        overlayButton(
-                            systemName: "chart.bar.fill",
-                            accessibilityID: "map.stats-button",
-                            action: onShowStats
-                        )
-                        overlayButton(
-                            systemName: "gearshape.fill",
-                            accessibilityID: "map.settings-button",
-                            action: onShowSettings
-                        )
-                    }
-                }
-            } else {
-                HStack(alignment: .top, spacing: 12) {
-                    StatusPill(
-                        title: recordingTitle,
-                        subtitle: recordingSubtitle,
-                        tint: recordingTint
-                    )
-
-                    Spacer(minLength: 12)
-
-                    HStack(spacing: 10) {
-                        overlayButton(
-                            systemName: "chart.bar.fill",
-                            accessibilityID: "map.stats-button",
-                            action: onShowStats
-                        )
-                        overlayButton(
-                            systemName: "gearshape.fill",
-                            accessibilityID: "map.settings-button",
-                            action: onShowSettings
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private var centerState: some View {
-        VStack(spacing: 16) {
-            Spacer(minLength: 0)
-
-            Text("Road quality map")
-                .font(.title3.weight(.semibold))
+    private var topBar: some View {
+        HStack(alignment: .center, spacing: DesignTokens.Space.sm) {
+            Text("RoadSense NS")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 1)
                 .accessibilityIdentifier("map.title")
 
-            Text(centerMessage)
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.82))
-                .frame(maxWidth: 320)
+            Spacer(minLength: DesignTokens.Space.sm)
 
-            if model.pendingUploadCount > 0 {
-                Label("\(model.pendingUploadCount) uploads waiting", systemImage: "arrow.triangle.2.circlepath")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.92))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.white.opacity(0.14), in: Capsule())
-                    .accessibilityIdentifier("map.pending-uploads")
+            HStack(spacing: DesignTokens.Space.xs) {
+                toggleChip(
+                    systemName: "person.crop.circle.dashed",
+                    isOn: isMyDrivesHighlighted,
+                    label: "My drives",
+                    accessibilityID: "map.my-drives-toggle",
+                    action: { isMyDrivesHighlighted.toggle() }
+                )
+                chromeButton(
+                    systemName: "chart.bar.fill",
+                    accessibilityID: "map.stats-button",
+                    action: onShowStats
+                )
+                chromeButton(
+                    systemName: "gearshape.fill",
+                    accessibilityID: "map.settings-button",
+                    action: onShowSettings
+                )
             }
-
-            if let mapLoadError {
-                Label("Map load issue", systemImage: "wifi.exclamationmark")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.96))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.red.opacity(0.35), in: Capsule())
-
-                Text(mapLoadError)
-                    .font(.caption)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.82))
-                    .frame(maxWidth: 320)
-            } else if !isMapLoaded {
-                ProgressView("Loading map…")
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .foregroundStyle(.white.opacity(0.9))
-            }
-
-            if isLoadingSegment {
-                ProgressView("Loading road details…")
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .foregroundStyle(.white.opacity(0.9))
-            }
-
-            Spacer(minLength: 0)
         }
     }
 
-    private var bottomChrome: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            RoadLegendCard(isExpanded: $isLegendExpanded)
-            ContributionCard(
-                title: "Your contribution",
-                distanceText: contributionDistanceText,
-                pendingText: pendingUploadsText,
-                secondaryText: secondaryContributionText,
-                actionTitle: primaryActionTitle,
-                onAction: handlePrimaryAction
-            )
+    private func chromeButton(systemName: String, accessibilityID: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(.black.opacity(0.32), in: Circle())
+                .overlay(
+                    Circle().strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                )
         }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityID)
+    }
+
+    private func toggleChip(
+        systemName: String,
+        isOn: Bool,
+        label: String,
+        accessibilityID: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(isOn ? DesignTokens.Palette.deepInk : .white)
+                .frame(width: 40, height: 40)
+                .background(
+                    (isOn ? DesignTokens.Palette.signal : Color.black.opacity(0.32)),
+                    in: Circle()
+                )
+                .overlay(
+                    Circle().strokeBorder(.white.opacity(isOn ? 0.0 : 0.14), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityID)
+        .accessibilityLabel(label)
+        .accessibilityValue(isOn ? "on" : "off")
+    }
+
+    // MARK: - Bottom card
+
+    private var bottomCard: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+            cardHeader
+
+            if isCardExpanded {
+                Divider().background(Color.white.opacity(0.14))
+
+                legendChips
+
+                metaRow
+
+                if model.pendingUploadCount > 0 {
+                    pendingUploadsPill
+                }
+
+                if let mapLoadError {
+                    mapLoadBanner(message: mapLoadError)
+                }
+
+                primaryAction
+            }
+        }
+        .padding(DesignTokens.Space.md)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+        )
+        .animation(DesignTokens.Motion.standard, value: isCardExpanded)
+    }
+
+    private var cardHeader: some View {
+        Button {
+            withAnimation(DesignTokens.Motion.standard) {
+                isCardExpanded.toggle()
+            }
+        } label: {
+            HStack(alignment: .center, spacing: DesignTokens.Space.sm) {
+                Circle()
+                    .fill(recordingTint)
+                    .frame(width: 10, height: 10)
+                    .shadow(color: recordingTint.opacity(0.7), radius: 6)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(recordingTitle)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    Text(headerSubtitle)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.78))
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: DesignTokens.Space.xs)
+
+                Image(systemName: isCardExpanded ? "chevron.down" : "chevron.up")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var legendChips: some View {
+        HStack(spacing: DesignTokens.Space.xs) {
+            legendChip(color: DesignTokens.Palette.smooth, label: "Smooth")
+            legendChip(color: DesignTokens.Palette.fair, label: "Fair")
+            legendChip(color: DesignTokens.Palette.rough, label: "Rough")
+            legendChip(color: DesignTokens.Palette.veryRough, label: "Very rough")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func legendChip(color: Color, label: String) -> some View {
+        HStack(spacing: 6) {
+            Capsule()
+                .fill(color)
+                .frame(width: 14, height: 4)
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.86))
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.black.opacity(0.22), in: Capsule())
+    }
+
+    private var metaRow: some View {
+        HStack(spacing: DesignTokens.Space.sm) {
+            metaCell(label: "Mapped", value: mappedValue)
+            Divider().frame(height: 24).background(Color.white.opacity(0.14))
+            metaCell(label: "Segments", value: segmentsValue)
+            Divider().frame(height: 24).background(Color.white.opacity(0.14))
+            metaCell(label: "Last drive", value: lastDriveValue)
+        }
+    }
+
+    private func metaCell(label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white.opacity(0.58))
+                .tracking(0.6)
+            Text(value)
+                .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var pendingUploadsPill: some View {
+        Label("\(model.pendingUploadCount) uploads waiting", systemImage: "arrow.triangle.2.circlepath")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.94))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.white.opacity(0.14), in: Capsule())
+            .accessibilityIdentifier("map.pending-uploads")
+    }
+
+    private func mapLoadBanner(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label("Map load issue", systemImage: "wifi.exclamationmark")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.82))
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignTokens.Space.sm)
+        .background(DesignTokens.Palette.danger.opacity(0.42), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
+    }
+
+    private var primaryAction: some View {
+        Button(primaryActionTitle, action: handlePrimaryAction)
+            .buttonStyle(.borderedProminent)
+            .tint(DesignTokens.Palette.signal)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("map.primary-action")
+    }
+
+    // MARK: - First-run illustration
+
+    private var firstRunIllustration: some View {
+        VStack(spacing: DesignTokens.Space.sm) {
+            ZStack {
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.14), style: StrokeStyle(lineWidth: 1, dash: [4, 6]))
+                    .frame(width: 140, height: 140)
+                Circle()
+                    .fill(DesignTokens.Palette.signal.opacity(0.2))
+                    .frame(width: 80, height: 80)
+                Image(systemName: "car.side.fill")
+                    .font(.system(size: 32, weight: .regular))
+                    .foregroundStyle(.white)
+            }
+
+            Text("Drive to start mapping.")
+                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+
+            Text("Your first uploads will appear here after the next sync.")
+                .font(.caption)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.white.opacity(0.78))
+                .frame(maxWidth: 280)
+        }
+        .padding(DesignTokens.Space.md)
+    }
+
+    private var loadingVeil: some View {
+        ProgressView("Loading road details…")
+            .progressViewStyle(.circular)
+            .tint(.white)
+            .foregroundStyle(.white)
+            .padding(DesignTokens.Space.md)
+            .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous))
+    }
+
+    // MARK: - Derived state
+
+    private var showsFirstRunIllustration: Bool {
+        isMapLoaded
+            && mapLoadError == nil
+            && model.userStatsSummary.acceptedReadingCount == 0
+            && model.pendingDriveCoordinates.isEmpty
+            && !model.readiness.showsPrivacyRiskWarning
     }
 
     private var recordingTitle: String {
-        if model.readiness.backgroundCollection == .upgradeRequired {
-            return "Needs Always Location"
-        }
+        if model.readiness.backgroundCollection == .upgradeRequired { return "Needs Always Location" }
+        if model.readiness.showsPrivacyRiskWarning { return "Privacy zones needed" }
         return model.isPassiveMonitoringEnabled ? "Recording" : "Paused"
     }
 
-    private var recordingSubtitle: String {
-        if model.readiness.backgroundCollection == .upgradeRequired {
-            return "Enable background collection for passive drives."
-        }
-        return model.isPassiveMonitoringEnabled
-            ? "Tracking only while the app thinks you're driving."
-            : "Passive monitoring is off until you resume it."
+    private var headerSubtitle: String {
+        if !isMapLoaded && mapLoadError == nil { return "Loading community layer…" }
+        if model.readiness.showsPrivacyRiskWarning { return "Set zones before real driving." }
+        if model.pendingUploadCount > 0 { return "\(model.pendingUploadCount) uploads waiting" }
+        if model.userStatsSummary.acceptedReadingCount == 0 { return "No drives yet" }
+        return mappedValue + " mapped"
     }
 
     private var recordingTint: Color {
-        if model.readiness.backgroundCollection == .upgradeRequired {
-            return .orange
-        }
-        return model.isPassiveMonitoringEnabled ? .mint : .white.opacity(0.8)
+        if model.readiness.backgroundCollection == .upgradeRequired { return DesignTokens.Palette.warning }
+        if model.readiness.showsPrivacyRiskWarning { return DesignTokens.Palette.signal }
+        return model.isPassiveMonitoringEnabled ? DesignTokens.Palette.smooth : .white.opacity(0.6)
     }
 
-    private var centerMessage: String {
-        if model.readiness.showsPrivacyRiskWarning {
-            return "Finish privacy zones before real field testing so home and work areas stay off the map."
-        }
-        if let mapLoadError, !mapLoadError.isEmpty {
-            return "The live map did not finish loading. Your local state is safe, but the community layer needs a retry."
-        }
-        if !isMapLoaded {
-            return "Loading the community road-quality layer and your saved overlays."
-        }
-        if !model.isPassiveMonitoringEnabled {
-            return "Turn passive monitoring back on, then RoadSense NS will start collecting automatically the next time you drive."
-        }
-        if !model.pendingDriveCoordinates.isEmpty {
-            return "Showing your local drive overlay. Upload to blend it into the community road-quality layer."
-        }
-        if model.userStatsSummary.acceptedReadingCount == 0 {
-            return "Drive with RoadSense on to start mapping this area. Your first uploads will appear here after the next successful sync."
-        }
-        return "Community road quality layers plug into this surface next. The collection and upload path behind it is already live."
+    private var mappedValue: String {
+        let km = model.userStatsSummary.totalKmRecorded
+        if km < 0.05 { return "0 km" }
+        return "\(km.formatted(.number.precision(.fractionLength(1)))) km"
     }
 
-    private var contributionDistanceText: String {
-        let kilometers = model.userStatsSummary.totalKmRecorded
-        if kilometers < 0.05 {
-            return "No mapped distance yet"
-        }
-        return "\(kilometers.formatted(.number.precision(.fractionLength(1)))) km mapped"
+    private var segmentsValue: String {
+        "\(model.userStatsSummary.totalSegmentsContributed)"
     }
 
-    private var pendingUploadsText: String {
-        model.pendingUploadCount == 0
-            ? "All uploads delivered"
-            : "\(model.pendingUploadCount) uploads waiting"
-    }
-
-    private var secondaryContributionText: String {
-        if let lastDriveAt = model.userStatsSummary.lastDriveAt {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .short
-            return "Last drive \(formatter.localizedString(for: lastDriveAt, relativeTo: .now))"
-        }
-        return "Segments helped: \(model.userStatsSummary.totalSegmentsContributed)"
+    private var lastDriveValue: String {
+        guard let lastDriveAt = model.userStatsSummary.lastDriveAt else { return "—" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: lastDriveAt, relativeTo: .now)
     }
 
     private var primaryActionTitle: String {
-        if model.readiness.showsPrivacyRiskWarning {
-            return "Set privacy zones"
-        }
-        if model.readiness.backgroundCollection == .upgradeRequired {
-            return "Enable background collection"
-        }
-        if !model.isPassiveMonitoringEnabled {
-            return "Resume monitoring"
-        }
-        if model.pendingUploadCount > 0 {
-            return "Upload now"
-        }
+        if model.readiness.showsPrivacyRiskWarning { return "Set privacy zones" }
+        if model.readiness.backgroundCollection == .upgradeRequired { return "Enable background collection" }
+        if !model.isPassiveMonitoringEnabled { return "Resume monitoring" }
+        if model.pendingUploadCount > 0 { return "Upload now" }
         return "View stats"
     }
 
@@ -287,32 +399,10 @@ struct MapScreen: View {
         } else if !model.isPassiveMonitoringEnabled {
             model.startPassiveMonitoring()
         } else if model.pendingUploadCount > 0 {
-            Task {
-                await model.uploadPendingData()
-            }
+            Task { await model.uploadPendingData() }
         } else {
             onShowStats()
         }
-    }
-
-    private func overlayButton(systemName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 44, height: 44)
-                .background(.black.opacity(0.26), in: Circle())
-                .overlay(
-                    Circle()
-                        .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func overlayButton(systemName: String, accessibilityID: String, action: @escaping () -> Void) -> some View {
-        overlayButton(systemName: systemName, action: action)
-            .accessibilityIdentifier(accessibilityID)
     }
 
     private func loadSegment(id: UUID) async {
@@ -331,140 +421,6 @@ struct MapScreen: View {
         }
 
         isLoadingSegment = false
-    }
-}
-
-private struct StatusPill: View {
-    let title: String
-    let subtitle: String
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(tint)
-                    .frame(width: 10, height: 10)
-
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-            }
-
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.78))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: 230, alignment: .leading)
-        .background(.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-        )
-    }
-}
-
-private struct RoadLegendCard: View {
-    @Binding var isExpanded: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Text("Road quality")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-
-                    Spacer()
-
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.up")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white.opacity(0.78))
-                }
-            }
-            .buttonStyle(.plain)
-
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 8) {
-                    legendRow(color: DesignTokens.Palette.smooth, label: "Smooth")
-                    legendRow(color: DesignTokens.Palette.fair, label: "Fair")
-                    legendRow(color: DesignTokens.Palette.rough, label: "Rough")
-                    legendRow(color: DesignTokens.Palette.veryRough, label: "Very rough")
-
-                    Text("Confidence explains how much community data is behind a score.")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.72))
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .padding(14)
-        .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.white.opacity(0.1), lineWidth: 1)
-        )
-    }
-
-    private func legendRow(color: Color, label: String) -> some View {
-        HStack(spacing: 10) {
-            Capsule()
-                .fill(color)
-                .frame(width: 28, height: 8)
-
-            Text(label)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.88))
-        }
-    }
-}
-
-private struct ContributionCard: View {
-    let title: String
-    let distanceText: String
-    let pendingText: String
-    let secondaryText: String
-    let actionTitle: String
-    let onAction: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(title.uppercased())
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.white.opacity(0.72))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(distanceText)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.white)
-
-                Text(pendingText)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.84))
-
-                Text(secondaryText)
-                    .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.68))
-            }
-
-            Button(actionTitle, action: onAction)
-                .buttonStyle(.borderedProminent)
-                .tint(DesignTokens.Palette.signal)
-                .accessibilityIdentifier("map.primary-action")
-        }
-        .padding(18)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
-        )
     }
 }
 
