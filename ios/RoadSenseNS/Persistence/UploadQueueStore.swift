@@ -1,6 +1,20 @@
 import Foundation
 import SwiftData
 
+struct UploadQueueStatusSummary: Equatable {
+    let pendingReadingCount: Int
+    let failedPermanentBatchCount: Int
+    let nextRetryAt: Date?
+    let lastSuccessfulUploadAt: Date?
+
+    static let empty = UploadQueueStatusSummary(
+        pendingReadingCount: 0,
+        failedPermanentBatchCount: 0,
+        nextRetryAt: nil,
+        lastSuccessfulUploadAt: nil
+    )
+}
+
 @MainActor
 final class UploadQueueStore {
     private let container: ModelContainer
@@ -51,6 +65,20 @@ final class UploadQueueStore {
         return try context.fetch(descriptor)
     }
 
+    func markBatchInFlight(batchID: UUID, now: Date = Date()) throws {
+        let context = ModelContext(container)
+        guard let batchModel = try fetchBatch(id: batchID, in: context) else {
+            return
+        }
+
+        let updated = UploadQueueCore.markInFlight(
+            batch: QueueModelMapper.makeQueueBatch(from: batchModel),
+            now: now
+        )
+        QueueModelMapper.apply(updated, to: batchModel)
+        try context.save()
+    }
+
     func applySuccess(
         batchID: UUID,
         result: UploadServerResult,
@@ -97,6 +125,55 @@ final class UploadQueueStore {
         )
         QueueModelMapper.apply(updated, to: batchModel)
         try context.save()
+    }
+
+    func statusSummary(now: Date = Date()) throws -> UploadQueueStatusSummary {
+        let context = ModelContext(container)
+        let pendingDescriptor = FetchDescriptor<ReadingRecord>(
+            predicate: #Predicate {
+                $0.uploadedAt == nil && $0.droppedByPrivacyZone == false
+            }
+        )
+        let pendingCount = try context.fetchCount(pendingDescriptor)
+        let batches = try context.fetch(FetchDescriptor<UploadBatch>())
+
+        let failedPermanentBatchCount = batches.filter { $0.status == .failedPermanent }.count
+        let nextRetryAt = batches
+            .filter { $0.status == .pending }
+            .compactMap(\.nextAttemptAt)
+            .filter { $0 > now }
+            .min()
+        let lastSuccessfulUploadAt = batches
+            .filter { $0.status == .succeeded }
+            .compactMap(\.lastAttemptAt)
+            .max()
+
+        return UploadQueueStatusSummary(
+            pendingReadingCount: pendingCount,
+            failedPermanentBatchCount: failedPermanentBatchCount,
+            nextRetryAt: nextRetryAt,
+            lastSuccessfulUploadAt: lastSuccessfulUploadAt
+        )
+    }
+
+    func retryFailedBatches() throws {
+        let context = ModelContext(container)
+        let descriptor = FetchDescriptor<UploadBatch>(
+            predicate: #Predicate { $0.statusRawValue == "failedPermanent" }
+        )
+        let batches = try context.fetch(descriptor)
+
+        for batch in batches {
+            batch.status = .pending
+            batch.attemptCount = 0
+            batch.lastAttemptAt = nil
+            batch.nextAttemptAt = nil
+            batch.firstErrorMessage = nil
+        }
+
+        if !batches.isEmpty {
+            try context.save()
+        }
     }
 
     private func fetchPendingReadings(in context: ModelContext) throws -> [ReadingRecord] {

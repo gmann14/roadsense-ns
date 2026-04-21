@@ -6,7 +6,8 @@ final class PlaceholderTests: XCTestCase {
         let config = AppConfig(
             environment: .local,
             apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
-            mapboxAccessToken: "pk.test"
+            mapboxAccessToken: "pk.test",
+            supabaseAnonKey: "anon.test"
         )
 
         XCTAssertEqual(

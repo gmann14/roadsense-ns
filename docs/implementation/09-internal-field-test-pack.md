@@ -93,7 +93,7 @@ Use when touching the relevant subsystem:
 ## During-Drive Rules
 
 - do not interact with the phone while driving
-- no manual pothole prompts or photo capture in MVP
+- manual `Mark pothole` is available in the current internal build; marker follow-up prompts and photo capture are not
 - if a tester needs to note a location, have a passenger do it or record it after stopping
 - do not disable privacy zones “just to see more data”
 - if the app appears stuck, finish the drive safely first and note the time rather than troubleshooting on the road

@@ -2,6 +2,7 @@ FORWARD_SLASH = /
 APP_ENV = LOCAL
 API_BASE_URL = http:$(FORWARD_SLASH)$(FORWARD_SLASH)127.0.0.1:54321
 MAPBOX_ACCESS_TOKEN = pk.placeholder.local
+SUPABASE_ANON_KEY = anon.placeholder.local
 SENTRY_DSN =
 APP_GROUP_IDENTIFIER = group.ca.roadsense.ios.local
 

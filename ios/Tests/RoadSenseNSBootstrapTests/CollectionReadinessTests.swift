@@ -33,8 +33,8 @@ struct CollectionReadinessTests {
         #expect(readiness.canStartPassiveCollection == false)
     }
 
-    @Test("privacy zone decision is mandatory before collection")
-    func privacyZoneDecisionIsMandatoryBeforeCollection() {
+    @Test("collection can start without privacy zones configured")
+    func collectionCanStartWithoutPrivacyZonesConfigured() {
         let readiness = CollectionReadiness.evaluate(
             PermissionSnapshot(
                 location: .whenInUse,
@@ -43,9 +43,10 @@ struct CollectionReadinessTests {
             )
         )
 
-        #expect(readiness.stage == .privacyZonesRequired)
-        #expect(readiness.canStartPassiveCollection == false)
+        #expect(readiness.stage == .ready)
+        #expect(readiness.canStartPassiveCollection)
         #expect(readiness.backgroundCollection == .upgradeRequired)
+        #expect(readiness.showsPrivacyRiskWarning == false)
     }
 
     @Test("configured privacy zones unlock collection")

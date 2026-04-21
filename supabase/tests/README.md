@@ -20,3 +20,4 @@ Current pgTAP suites:
 - `007_nightly_recompute_and_expiry.sql` — nightly recompute math, contributor caps, expiry idempotence, and cron registration checks
 - `008_get_tile.sql` — MVT tile function existence, low-confidence suppression, zoom-floor behavior, and execute permissions
 - `009_public_read_models.sql` — stats MV, pothole bbox RPC, healthcheck function, and stats-refresh cron registration
+- `011_pothole_actions.sql` — manual/follow-up pothole canonicalization, 24h same-device dedupe, stale-target rejection, and resolved-pothole reactivation

@@ -84,18 +84,21 @@ Roads in Nova Scotia are rough. Municipalities know some roads are bad but lack 
 - Coverage percentage for the user's municipality
 - Segments with < 3 unique contributors shown as "low confidence" with dashed/faded styling
 
-### 6. Privacy Zones
-- User defines home/work radius (default **500m**)
+### 6. Privacy Defaults
+- **Default protection:** trim the start and end of every drive before upload
+- Trim rule: do not upload readings that fall within the first/last **60 seconds** of a drive or within **300m** of the drive's start/end coordinate
+- If nothing remains after trimming, upload nothing for that drive and show a plain-language local notice
+- **Optional extra protection:** user-defined privacy zones (default radius **500m**)
 - Radius options: 250m, 500m, 1km, 2km
 - No data collected within privacy zones
 - Zone center is never stored server-side — only a geofence checked on-device
-- Strava-style implementation: randomized offset (50-100m) applied to zone center to prevent triangulation from data gaps
+- Strava-style implementation: randomized offset (50-100m) applied to zone center to prevent triangulation from stored zone data
 - **Partial overlap handling:** If a GPS point falls within any privacy zone, drop that individual reading (not the entire segment — segment assignment happens server-side)
-- **Edge case:** If a user's entire commute falls within zones, show a notice: "Your privacy zones cover your recent route — no data was contributed. Consider adjusting your zone radius."
+- **Edge case:** If a user's entire commute falls within trimmed endpoints and/or zones, show a notice: "Your recent drive was filtered for privacy — no data was contributed. Review privacy settings if needed."
 
 ### 7. Data Upload
-- Batch upload processed data when on WiFi (default)
-- **Optional cellular upload toggle** (default OFF) — for users who rarely connect to WiFi
+- Batch upload processed data whenever connectivity is available
+- No Wi-Fi / cellular toggle in MVP — measured data volume is too small to justify the extra UX and retry complexity
 - Upload in batches of **1,000 readings max per request** with retry logic and resume from last successful batch
 - Only upload: GPS point, roughness score, heading, speed, GPS accuracy, timestamp, device_token
 - Never upload raw GPS tracks or continuous location data
@@ -105,8 +108,10 @@ Roads in Nova Scotia are rough. Municipalities know some roads are bad but lack 
 
 ### 8. Road Repair / Pothole Expiry
 - **Automatic detection:** When the most recent N readings (e.g., 5) from 2+ unique contributors show "smooth" for a previously "rough" segment, apply accelerated recency weighting to bring the score down faster
-- **Pothole expiry:** If no pothole spikes are detected at a flagged location for 10+ readings from 3+ contributors, auto-remove the pothole marker. Add `last_confirmed_at` timestamp to pothole records — expire after 90 days without confirmation.
-- **User report (post-MVP):** "This road was repaired" button on segment detail — flags the segment for accelerated score recalculation on next readings
+- **Canonical pothole model:** The public map shows one merged pothole marker per physical spot, not one marker per report. Passive spikes, manual `Mark pothole` taps, and approved photos all fold into the same `pothole_reports` cluster.
+- **Pothole expiry:** If a pothole receives no positive confirmations for 90 days, mark it `expired` and hide it from the public map.
+- **Resolved / fixed flow:** Users can submit `Still there` or `Looks fixed` updates for an existing pothole marker. A single `Looks fixed` vote does **not** remove the marker; it becomes `resolved` only after repeated independent negative confirmations, and a later positive confirmation re-activates it.
+- **Road repair signal:** Smooth future readings near a resolved pothole or rough segment accelerate confidence that the repair was real; user follow-up is a hint, not the only source of truth.
 
 ---
 
@@ -169,7 +174,7 @@ activityManager.startActivityUpdates(to: queue) { activity in
 2. **GPS sampling:** 1Hz is sufficient. Reduce to every 3s in battery saver mode.
 3. **Adaptive duty cycling:** If driving on a road with >10 existing high-confidence readings, reduce sampling to every 5th second
 4. **Batch processing:** Buffer accelerometer data, process in batches every 5 minutes
-5. **WiFi-only upload by default:** Never upload over cellular unless user opts in
+5. **Upload automatically on any available network:** Do not add Wi-Fi / cellular controls until beta data proves the need
 6. **Pause GPS at low speeds:** When speed drops below 5 km/h (stopped at light), reduce GPS accuracy temporarily
 
 ### Expected Battery Impact
@@ -278,7 +283,7 @@ activityManager.startActivityUpdates(to: queue) { activity in
 │  │  6. Store as POINT readings (SwiftData)        │   │
 │  │  7. Render local data on map immediately       │   │
 │  └──────────────────┬───────────────────────────┘   │
-│                      │ (WiFi batch upload, 1K/batch)  │
+│                      │ (batch upload, 1K/batch)        │
 └──────────────────────┬──────────────────────────────┘
                        │
                        ▼
@@ -489,7 +494,9 @@ CREATE TABLE pothole_reports (
   first_reported_at TIMESTAMPTZ NOT NULL,
   last_confirmed_at TIMESTAMPTZ NOT NULL,
   confirmation_count INTEGER DEFAULT 1,
+  negative_confirmation_count INTEGER DEFAULT 0,
   unique_reporters INTEGER DEFAULT 1,
+  has_photo BOOLEAN DEFAULT false,
   status TEXT DEFAULT 'active', -- active, expired, resolved
   created_at TIMESTAMPTZ DEFAULT now()
 );
@@ -527,7 +534,8 @@ CREATE INDEX idx_potholes_status ON pothole_reports (status);
 |---|---|
 | `GET /api/segments/worst?municipality=...` | Top N worst segments. Powers "worst roads" reports. |
 | `GET /api/segments/export?format=geojson&bbox=...` | GeoJSON/KML export for a region. |
-| `POST /api/report-repair` | User-reported road repair. Flags segment for accelerated recalculation. |
+| `POST /api/pothole-actions` | One-tap pothole reports plus `still_there` / `looks_fixed` follow-up actions against existing pothole markers. |
+| `POST /api/pothole-photos` | Stopped / walking photo reports that join the same merged pothole markers after moderation. |
 
 ### Rate Limiting & Abuse Protection
 
@@ -596,7 +604,7 @@ A token map lives in `docs/design-tokens.md` (to be generated) and is consumed b
 **iOS**
 1. **Map (home)** — remove center-screen overlay; replace three-panel glass chrome with one bottom card (peek / expanded), compact top bar, `…` menu, "my drives" toggle.
 2. **Segment detail** — editorial infographic: hero score tile, real 6-month sparkline (driven by `scoreLast30D` / `score30To60D`), confidence filled-dots, promoted primary CTA.
-3. **Onboarding** — 4-card `TabView` flow (welcome → permissions → privacy zones → ready) with illustration, progress dots, primary + secondary actions.
+3. **Onboarding** — 3-card `TabView` flow (welcome → permissions → ready) with illustration, progress dots, primary + secondary actions. Privacy zones move to an optional ready-state/settings action rather than a blocking step.
 4. **Settings** — grouped card sections with inline status chips (recording, zone count, sync); "Your data" mini-dashboard.
 5. **Stats** — contribution hero: km-mapped medallion, 14-day bar strip, milestones list with progress, shareable card stub.
 6. **Privacy zones** — full-screen Mapbox surface with detented bottom sheet (20 / 60 / 100%), FAB to add, slider at spec-defined 250 / 500 / 1000 / 2000 m ticks, haptic tick on radius change.
@@ -705,8 +713,8 @@ The app should feel **simple, beautiful, and modern** — approachable for non-t
 │                                         │
 │  Data Collection                        │
 │  Auto-detect driving        [ON]        │
-│  Upload on WiFi only        [ON]        │
-│  Allow cellular upload      [OFF]       │
+│  Uploads happen automatically           │
+│  Last upload: Today, 3:15pm             │
 │  Battery saver mode         [OFF]       │
 │  Pause collection           [OFF]       │
 │                                         │
@@ -817,7 +825,7 @@ The app should feel **simple, beautiful, and modern** — approachable for non-t
 | Battery drain complaints | HIGH | Honest messaging (~10%/hr). Battery saver mode. Adaptive sampling. Use `kCLLocationAccuracyNearestTenMeters`. |
 | Not enough users for useful data | HIGH | Hyper-local launch (Halifax only). Partner with municipal fleet vehicles. Cycling advocacy groups. Media-friendly "worst roads" report. |
 | Accelerometer readings vary between vehicles | MEDIUM | Crowdsourced averaging normalizes. Per-device reading caps. Outlier trimming. Focus on relative rankings. |
-| Privacy concerns (location tracking) | MEDIUM | Privacy-first design. No raw GPS stored server-side. 500m privacy zones. Anonymous contributions. Open-source. |
+| Privacy concerns (location tracking) | MEDIUM | Privacy-first design. Default endpoint trimming, optional 500m privacy zones, no public raw traces, short raw-retention window, pseudonymous rotating device tokens, open-source code. |
 | False positives (speed bumps, rail crossings) | HIGH | OSM tag cross-referencing. Suppress known features. Separate unpaved road category. |
 | Data poisoning / abuse | MEDIUM | Rate limiting. Plausibility checks. Min contributor threshold. Statistical outlier detection. DeviceCheck (future). |
 | Map performance at scale (40K+ segments) | HIGH | Vector tiles (not GeoJSON). Zoom-level filtering. Geometry simplification. Aggressive caching. |
@@ -845,7 +853,7 @@ The app should feel **simple, beautiful, and modern** — approachable for non-t
 
 1. **Swift vs React Native?** → **Swift.** Core value is background sensor collection — fundamentally native. React Native adds bridge latency and you'd write native code anyway.
 2. **Start with Lunenburg or Halifax?** → **Halifax.** More users, more media potential, more impact.
-3. **Pothole button in MVP?** → **No.** MVP is fully passive. Add pothole button later (only usable when stopped — liability).
+3. **Pothole button in MVP?** → **Not on day-one passive launch, but yes in the next explicit-reporting slice.** Add a large one-tap `Mark pothole` button when the map is open, keep it safe by making it tap-only with no typing, and keep stopped / walking photo capture as a separate low-speed flow.
 4. **Open-source from day one?** → **Yes.** Builds trust, civic tech ethos, strongest portfolio signal.
 5. **Cold start problem?** → Show personal data immediately. "Be the first to map" messaging. Coverage percentage gamification.
 6. **Privacy zone default?** → **500m** (changed from 200m). Safer default, especially in low-density areas.

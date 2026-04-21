@@ -19,16 +19,21 @@ public enum UploadEligibilityPolicy {
     public static func shouldUpload(
         pendingCount: Int,
         network: NetworkPathSnapshot,
-        allowCellularUpload: Bool
+        nextAttemptAt: Date? = nil,
+        now: Date = Date()
     ) -> Bool {
         guard network.status == .satisfied else {
             return false
         }
 
-        if network.isExpensive, !allowCellularUpload, pendingCount < 100 {
+        guard pendingCount > 0 else {
             return false
         }
 
-        return pendingCount > 0
+        if let nextAttemptAt, nextAttemptAt > now {
+            return false
+        }
+
+        return true
     }
 }

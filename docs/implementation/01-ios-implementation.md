@@ -155,7 +155,7 @@ The current app shell is intentionally thin but real:
 
 - `AppBootstrap` reads `APP_ENV`, `API_BASE_URL`, `MAPBOX_ACCESS_TOKEN`, `SENTRY_DSN`, and `APP_GROUP_IDENTIFIER` from `Info.plist`
 - `AppContainer` now also owns the SwiftData `ModelContainer`, `PrivacyZoneStore`, `UploadQueueStore`, `APIClient`, `Uploader`, sensor wrappers, logger, and background-task registrar seam
-- `AppModel` owns the current `PermissionSnapshot`, persists the privacy-zone decision in `UserDefaults`, derives `CollectionReadiness`, and reads actual zone existence from `PrivacyZoneStore` so a saved zone automatically satisfies the onboarding gate
+- `AppModel` owns the current `PermissionSnapshot`, derives `CollectionReadiness`, and reads actual zone existence from `PrivacyZoneStore` so optional privacy controls can be surfaced consistently from onboarding-ready, map, and settings states
 - `ContentView` routes between onboarding and `MapScreen` using `CollectionReadiness.evaluate(...)`
 - `PrivacyZonesView` is now a real app-target screen with a map-backed placement flow: the user pans the map to position the center reticle, adjusts the radius with a slider, and saves the resulting zone while reviewing existing saved footprints.
 
@@ -195,7 +195,7 @@ This keeps the permission/privacy gate testable in pure Swift while leaving the 
 
 This is now credible product UI with the first real live map loop in place. The app target also now has deterministic UI-test launch scenarios:
 
-- `ROAD_SENSE_TEST_SCENARIO=default` starts in the privacy-gate path
+- `ROAD_SENSE_TEST_SCENARIO=default` starts in the permissions-first onboarding path
 - `ROAD_SENSE_TEST_SCENARIO=ready-shell` seeds an in-memory ready state with one saved privacy zone, a few local readings, and user stats
 - Under XCTest, the home shell uses a lightweight non-Mapbox testing surface so simulator UI tests validate our app flow rather than third-party map startup
 
@@ -576,9 +576,13 @@ final class UploadBatch {
     var createdAt: Date
     var attemptCount: Int
     var lastAttemptAt: Date?
+    var nextAttemptAt: Date?
     var status: UploadStatus        // .pending, .inFlight, .succeeded, .failedPermanent
     var readingCount: Int
     var firstErrorMessage: String?
+    var lastHTTPStatusCode: Int?
+    var lastRequestID: String?
+    var completedAt: Date?
 
     // Last server-returned ingest result. Populated on every 200 response so the
     // user can see why the server is silently discarding readings (e.g. stationary
@@ -626,36 +630,94 @@ final class DeviceTokenRecord {
 
 Implementation note: the app target can delegate the rotation decision to the pure `DeviceTokenManager` seam and keep the SwiftData-specific fetch/insert logic in a thin `DeviceTokenStore`.
 
+### SwiftData Migration Strategy
+
+Do **not** rely on implicit SwiftData migration once TestFlight users exist. The app uses explicit `VersionedSchema` + `SchemaMigrationPlan` from the first shipping build onward.
+
+- **Schema v1 (MVP launch):** `ReadingRecord`, `UploadBatch`, `PrivacyZoneRecord`, `UserStats`, `DeviceTokenRecord`
+- **Schema v2 (post-MVP photos):** add `PotholeReportRecord`
+- **Schema v3 (post-MVP drives):** add `DriveSessionRecord` and the optional `ReadingRecord.drive` relationship
+
+Rules:
+
+1. Additive first. New columns / relationships start optional or have safe defaults.
+2. Never rename or delete a stored property in the same release that introduces the replacement.
+3. Migration tests must open a fixture store created by the prior schema and assert the new schema loads without data loss.
+4. If a migration fails, the app must fail closed: pause collection, show a local error explaining that the app's local database needs repair, and offer `Reset local data` rather than silently creating a second store.
+
 ## Upload Queue
 
-Runs on app foreground + on `BGAppRefreshTask` (registered for frequent invocation — iOS ultimately decides cadence).
+Readings and photo uploads share the same scheduler (`UploadDrainCoordinator`) but do **not** share the same persistence row type.
+
+- **Readings:** queued via `ReadingRecord` + `UploadBatch`
+- **Photos:** queued via `PotholeReportRecord`
+
+The coordinator serializes drain execution; the per-kind uploaders own their own state machines.
+
+### Reading Queue State
+
+`UploadBatch.status` has exactly four meanings:
+
+- `.pending` — eligible now if `nextAttemptAt == nil || nextAttemptAt <= now`
+- `.inFlight` — actively being submitted by the current drain task
+- `.succeeded` — terminal success
+- `.failedPermanent` — terminal failure, user-visible in Diagnostics
+
+Retryable failures do **not** get their own status. They remain `.pending` with a future `nextAttemptAt`.
 
 ```
-every queue tick:
-  pending_readings = ReadingRecord where uploadBatchID == nil LIMIT 1000
-  if count < 100 AND !user.wifiOnlyOverride:
-      skip this tick  (don't upload small trickles on cell)
-  batch_id = UUID()
-  associate readings with batch_id (writes uploadBatchID)
-  attempt upload
-     on 200:
-         mark uploadedAt, trigger local map overlay refresh
-         persist response {accepted, rejected, rejected_reasons, duplicate}
-             onto the UploadBatch row so Settings → Uploads → Diagnostics
-             can show per-batch reject breakdowns
-         if response.rejected > 0 over a rolling 24h window
-             AND rejected / (accepted + rejected) > 0.20
-             AND the top reason is persistent or user-actionable (e.g. `low_quality`,
-                 `stale_timestamp`, `unpaved`):
-             set AppState.ingestHealth = .degraded(reasons: …)
-             surface a non-blocking banner in Settings → Uploads
-     on 400 (validation error): mark batch failed_permanent, log, stop retrying
-     on 429 (rate limited): respect Retry-After header; if missing, back off 60s + jitter
-     on 5xx / network error: exponential backoff (1s, 2s, 4s, 8s, 16s), max 5 attempts
-     after 5 failures: set status = .failedPermanent, surface in Settings screen
+drainUntilBlocked(now):
+  while network.status == .satisfied:
+    if a photo upload is eligible:
+        run one photo upload attempt
+        continue
+
+    existing_batch = oldest UploadBatch where status in (.pending, .inFlight)
+
+    if existing_batch.status == .inFlight:
+        adopt it only if lastAttemptAt <= now - 5 minutes
+        else stop (another drain is active or recently crashed)
+
+    if existing_batch.status == .pending && nextAttemptAt > now:
+        stop
+
+    if no existing batch:
+        pending_readings = oldest 1000 ReadingRecord where uploadBatchID == nil
+        if pending_readings is empty:
+            stop
+        create UploadBatch(status: .pending, nextAttemptAt: nil)
+        associate readings with batch_id
+
+    mark batch .inFlight
+    attempt upload
+      on 200:
+          mark uploadedAt on associated readings
+          mark batch .succeeded
+          clear nextAttemptAt
+          persist request_id, accepted/rejected counts, rejected reasons, duplicate
+          continue
+      on 400:
+          mark batch .failedPermanent
+          persist request_id / HTTP status / firstErrorMessage
+          stop
+      on 429:
+          mark batch .pending
+          set nextAttemptAt = now + Retry-After (or 60s default) + jitter
+          persist request_id / HTTP status
+          stop
+      on 5xx / network error:
+          if attemptCount >= 5:
+              mark batch .failedPermanent
+          else:
+              mark batch .pending
+              set nextAttemptAt = now + exponentialBackoff + jitter
+          persist request_id / HTTP status
+          stop
 ```
 
 **Idempotency:** `batch_id` is the dedup key server-side. Client retries send the same batch_id; the server returns 200 with the original `{accepted, rejected, duplicate: true, rejected_reasons}` result on re-submit. The client stores `wasDuplicateOnResubmit` so Diagnostics can distinguish between "server dropped 47 rows" and "we already uploaded this batch and the retry was a no-op."
+
+**Crash recovery:** a batch left in `.inFlight` at app relaunch is not assumed lost or succeeded. If `lastAttemptAt` is newer than 5 minutes, leave it alone and wait for the next scheduled drain. If older than 5 minutes, downgrade it to `.pending` and retry using the same `batch_id`.
 
 **Rejected-reason surfacing:** The server's `rejected_reasons` map is a 1:1 copy of the API contract's emitted enum (see [03-api-contracts.md](03-api-contracts.md)). The iOS-side mapping lives in `RejectedReason.displayString`:
 
@@ -684,7 +746,7 @@ enum RejectedReason: String, Codable {
 
 This is intentional — the user should see exactly what the server saw, in plain language, so they can tell the difference between "my privacy filter dropped it" (local, visible via `droppedByPrivacyZone`) and "the server dropped it" (remote, visible via `rejected_reasons`).
 
-**WiFi detection:** `NWPathMonitor` publishes `path.isExpensive` (true on cellular/tethered) and `path.status`. If `isExpensive == true` **and** `user.allowCellularUpload == false`, defer the batch until the next non-expensive path. This also correctly defers when the user is on a personal hotspot, which we treat as cellular.
+**Upload eligibility:** `NWPathMonitor` still publishes `path.status`, but MVP does **not** gate uploads on `path.isExpensive`. If the device has a satisfied network path, uploads are eligible. The only reasons to defer are: no network, a drain already in flight, or a persisted retry window (`nextAttemptAt`) after a 429 / 5xx.
 
 **Batch size:** 1000 readings max per request (matches API contract). For ~50m-per-reading, that's ~50km of driving per batch.
 
@@ -692,50 +754,65 @@ This is intentional — the user should see exactly what the server saw, in plai
 
 *Status: partially implemented. `BackgroundTaskRegistrar` today registers both identifiers but the `upload-drain` handler only calls `setTaskCompleted(success: true)`. This section is the contract for wiring it to the real `Uploader`.*
 
-The user should never have to think about uploading. There is no "Upload now" button; there is no spinner the user has to wait on. Uploads happen opportunistically and quietly. The four triggers below cover every realistic case; none of them block the user.
+The user should never have to think about uploading. There is no "Upload now" button; there is no spinner the user has to wait on. Uploads happen opportunistically and quietly. Every trigger below funnels into a single `UploadDrainCoordinator` actor so foreground activation, queued BG refreshes, and drive-end scheduling cannot start concurrent drains against the same queue.
 
 ```
 trigger                              | who submits it                 | task type
 -------------------------------------|--------------------------------|------------------------
-app foreground                       | RoadSenseNSApp scenePhase      | Task { await uploader.drain() }
+app foreground                       | RoadSenseNSApp scenePhase      | coordinator.requestDrain(.foreground)
 drive end (DrivingDetector false)    | SensorCoordinator              | BGAppRefreshTask in ~15m
 app backgrounded with pending >= 100 | RoadSenseNSApp scenePhase      | BGAppRefreshTask in ~15m
+BGAppRefresh fire                    | BackgroundTaskRegistrar        | coordinator.requestDrain(.backgroundTask)
 nightly maintenance                  | AppDelegate on launch + BG     | BGProcessingTask daily
 ```
 
 **Concrete wiring.** `AppModel` gains an `uploadDrainCoordinator` seam that the `UploadDrainTask` handler on `BackgroundTaskRegistrar` actually calls:
 
 ```swift
-// BackgroundTaskRegistrar.swift — replacement for the current stub
-BGTaskScheduler.shared.register(
-    forTaskWithIdentifier: uploadDrainTaskIdentifier,
-    using: nil
-) { task in
-    let refreshTask = task as! BGAppRefreshTask
-    let op = Task {
-        await self.uploader.drain()
-    }
-    refreshTask.expirationHandler = { op.cancel() }
-    Task {
-        _ = await op.value
-        refreshTask.setTaskCompleted(success: true)
-        // chain the next one so iOS keeps the slot warm
-        self.scheduleNextUploadDrain(earliestBegin: .now + 15 * 60)
+actor UploadDrainCoordinator {
+    private var activeDrain: Task<Bool, Never>?
+
+    func requestDrain(reason: UploadDrainReason) async -> Bool {
+        if let activeDrain {
+            return await activeDrain.value
+        }
+
+        let task = Task { [uploader] in
+            do {
+                try await uploader.drainUntilBlocked()
+                return true
+            } catch is CancellationError {
+                return false
+            } catch {
+                return false
+            }
+        }
+
+        activeDrain = task
+        let result = await task.value
+        activeDrain = nil
+        return result
     }
 }
 ```
+
+Drain order is deliberate: eligible pothole actions run first, then photo uploads, then reading batches. Rationale: explicit user-initiated pothole signals are tiny and latency-sensitive; clear them before the larger passive backlog.
 
 `scheduleNextUploadDrain` wraps `BGTaskScheduler.shared.submit(BGAppRefreshTaskRequest(...))`. iOS decides when to actually fire — our job is to keep asking.
 
 **Drive-end submit.** When `DrivingDetector` emits `false`, `SensorCoordinator` calls `scheduleNextUploadDrain(earliestBegin: .now + 15 * 60)`. 15 minutes is a compromise: long enough that iOS considers the device "idle", short enough that a commuter's data is normally on the server by the time they're done parking and walking inside.
 
-**Foreground drain.** In `RoadSenseNSApp.body`, observe `scenePhase` and call `uploader.drain()` on `.active` transitions, gated so we don't double-fire across quick backgrounding.
+**BG handler cancellation.** `expirationHandler` cancels the coordinator's active drain, `setTaskCompleted(success: false)` is still called, and `scheduleNextUploadDrain(...)` is re-submitted from the completion path even on cancellation. The background chain must not die just because iOS reclaimed one slot.
 
-**No user-triggered manual upload.** The stale "Upload now" button has been removed from the `MapScreen` contribution card. The only surfaced affordance is a passive count (`"3 uploads waiting"`) and a **Diagnostics → Retry failed batches** row in Settings → Uploads, used only when the queue is in `.failedPermanent` state.
+**Foreground drain.** In `RoadSenseNSApp.body`, observe `scenePhase` and call `uploadDrainCoordinator.requestDrain(.foreground)` on `.active` transitions, gated so we do not re-fire on every tiny foreground/background flap. A 30-second cooldown is enough.
 
-### Data Volume & Wi-Fi Strategy
+**Retry / backoff.** `Uploader.drainUntilBlocked()` loops until one of three stop conditions: no eligible batches remain, network is offline, or the next batch is still inside its persisted retry window. 429 / 5xx do not "poison" later drains; they only block until `nextAttemptAt`.
 
-The Wi-Fi question has two different answers because we have two different upload shapes.
+**No user-triggered manual upload.** The stale "Upload now" button has been removed from the `MapScreen` contribution card. The surfaced affordances are passive only: queue count, last successful upload time, and a plain-language waiting reason (`offline`, `retrying at 3:42 PM`, `waiting for background time`). The only action row is **Diagnostics → Retry failed batches**, used when the queue is in `.failedPermanent` state.
+
+### Data Volume & Upload Policy
+
+The upload question has one answer for MVP: if the device has a network connection, upload. The data volume is too small to justify UI complexity or delayed ingestion.
 
 **Readings (every user, every drive).**
 
@@ -745,32 +822,74 @@ The Wi-Fi question has two different answers because we have two different uploa
 - A median Nova Scotia commuter drives ~45 min/day (Stats Canada 2021). That's **~2 MB/month** uploaded.
 - A heavy driver (2 hrs/day, every day) tops out around **~10 MB/month**.
 
-Conclusion: readings are not remotely a concern for cellular data. Blocking them on Wi-Fi would trade off coverage (drives happen outside of Wi-Fi ranges, sometimes for hours) against a sub-1% monthly data-plan cost.
+Conclusion: readings are not remotely a concern for cellular data. Delaying them for Wi-Fi would trade off coverage and freshness against a sub-1% monthly data-plan cost.
 
 **Pothole photos (post-MVP, opt-in per report).**
 
 - Target: **≤ 400 KB per photo** after on-device JPEG resize (1600px longest edge, quality 0.8) and EXIF strip.
-- 5 reports per week from an engaged user = **~8 MB/month** — enough that a user on a 500 MB plan cares.
+- 5 reports per week from an engaged user = **~8 MB/month**.
+- 1 report per day = **~12 MB/month**.
 
 **Decision:**
 
-| Upload type | Cellular default | Wi-Fi-only toggle | Rationale |
+| Upload type | MVP behavior | User toggle | Rationale |
 |---|---|---|---|
-| Readings | **Allowed** | Available, OFF by default | ~2 MB/month is negligible; coverage suffers if we wait for Wi-Fi. |
-| Photos | **Deferred to Wi-Fi** | Available, ON by default, user can opt into cellular | Photos are ~100× bigger and less time-sensitive. |
+| Readings | **Upload over any available network** | None | ~2 MB/month is negligible; coverage and freshness matter more than a settings switch. |
+| Photos | **Upload over any available network** | None | Even engaged usage stays small enough that the extra toggle is not worth the code and UX complexity. |
 
 Settings → Uploads wording:
 
-- `Upload drive data over cellular` — default ON. Footnote: "Typical usage is under 5 MB/month."
-- `Upload pothole photos over cellular` — default OFF. Footnote: "Photos are larger. Wi-Fi keeps this from using your data plan."
+- `Uploads waiting`
+- `Last successful upload`
+- `Current waiting reason`
+- `Retry failed batches`
 
-The `NWPathMonitor.isExpensive` check becomes per-upload-kind: readings ignore the flag unless the user flipped the toggle off; photos honour it unless the user flipped it on.
+`NWPathMonitor.isExpensive` is ignored in MVP. If data-plan complaints become real during beta, revisit with field data rather than speculative gating.
 
 ### Retention & Cleanup
 
 Already specified above: prune uploaded `ReadingRecord` after 30 days, enforced by the `nightly-cleanup` `BGProcessingTask`. The task handler is real but the pruning SQL is stubbed — tracked as a separate backlog item.
 
-## Privacy Zone Implementation
+## Endpoint Trimming And Privacy Zones
+
+### Default Endpoint Trimming
+
+Privacy zones are **optional** extra protection, not the default guardrail. Every sealed drive goes through endpoint trimming before any reading is enqueued for upload.
+
+`DriveEndpointTrimmer` runs after `DriveSessionRecord` seal, using the ordered accepted `ReadingWindow`s plus the session's first and last usable `LocationSample`.
+
+Drop a reading from upload if **any** of the following is true:
+
+1. `reading.recordedAt < session.startedAt + 60s`
+2. `reading.recordedAt > session.endedAt - 60s`
+3. `haversineDistance(reading.location, session.startCoordinate) < 300m`
+4. `haversineDistance(reading.location, session.endCoordinate) < 300m`
+
+This is a union, not an either/or toggle. The point is to suppress both driveway-scale endpoint leakage and the jittery parked period at the beginning/end of a trip.
+
+Implementation notes:
+
+- `DriveSessionRecord` must persist `startCoordinate` and `endCoordinate` separately from uploadable readings so trimming is deterministic after relaunch.
+- The trimmer mutates local reading state to `uploadEligibility = .trimmedByEndpoint` rather than deleting the rows. Local drives/stats can still explain why nothing uploaded.
+- If trimming removes every reading in a drive, enqueue nothing for that drive and surface a local-only explanation: `This drive was kept private by endpoint trimming.`
+- Photos do **not** use endpoint trimming. They rely on explicit user action plus privacy-zone rejection.
+
+Sketch:
+
+```swift
+func uploadEligibility(
+    for reading: ReadingWindow,
+    session: DriveSessionRecord
+) -> UploadEligibility {
+    if reading.recordedAt < session.startedAt.addingTimeInterval(60) { return .trimmedByEndpoint }
+    if reading.recordedAt > session.endedAt.addingTimeInterval(-60) { return .trimmedByEndpoint }
+    if haversineDistance(reading.location, session.startCoordinate) < 300 { return .trimmedByEndpoint }
+    if haversineDistance(reading.location, session.endCoordinate) < 300 { return .trimmedByEndpoint }
+    return .eligible
+}
+```
+
+### Privacy Zone Implementation
 
 ### Zone Creation
 
@@ -797,9 +916,17 @@ func shouldDrop(_ reading: ReadingWindow, zones: [PrivacyZone]) -> Bool {
 
 Run on **every single GPS sample** inside `ReadingBuilder`, not just at window close. If any sample inside the window falls in a zone, drop the entire window. Set `droppedByPrivacyZone = true` locally for user-visible stats ("73 readings filtered by privacy zones this month").
 
+Order of operations for a completed drive:
+
+1. Real-time privacy-zone filtering during collection
+2. Persist accepted readings locally
+3. Seal `DriveSessionRecord`
+4. Apply endpoint trimming to persisted accepted readings
+5. Enqueue only readings whose final `uploadEligibility == .eligible`
+
 ### Edge Case — Entire Commute Inside Zones
 
-`ReadingBuilder` tracks dropped windows per session. If in a single session `dropped_count > 10 && emitted_count == 0`, show a non-blocking banner: "Privacy zones cover your recent route — no data was contributed. Tap to review zones."
+`ReadingBuilder` tracks dropped windows per session. If endpoint trimming and/or privacy-zone filtering leaves a session with `eligible_upload_count == 0`, show a non-blocking banner: "This drive was filtered for privacy — no data was contributed. Tap to review privacy settings."
 
 ## Permission Flow (UI Timing)
 
@@ -983,7 +1110,7 @@ Do not fill the map with panels. The floating chrome should stay below ~20% of t
 - **MapScreen** — full-bleed Mapbox view, floating contribution card, recording pill, expandable legend
 - **SegmentDetailSheet** — `.sheet` presentation, scrollable; loads from `GET /segments/{id}`
 - **StatsScreen** — personal contribution summary first, community context second
-- **SettingsScreen** — privacy zones, upload controls, battery saver, data management, about
+- **SettingsScreen** — privacy zones, upload status, battery saver, data management, about
 - **PrivacyZoneEditor** — map picker + radius slider
 - **AboutScreen** — how it works (plain language), privacy policy link, open-source link
 
@@ -996,11 +1123,12 @@ Three screens are enough, but they need stronger emotional and informational str
    - one short paragraph, not a wall of text
 2. **Trust:** "What we use, and what we do not store."
    - location + motion explanation
-   - explicit privacy-zone mention
+   - explicit endpoint-trimming explanation
+   - optional privacy-zone mention
    - one tap to expand "Learn more"
 3. **Permission ask:** "Turn on location and motion to start mapping."
    - list the immediate benefit
-   - list the user control: pause anytime, delete local data, set privacy zones
+   - list the user control: pause anytime, delete local data, add privacy zones
 
 Avoid copy that sounds apologetic or legalistic. The tone should be plain, civic, and confident.
 
@@ -1044,7 +1172,7 @@ Order:
 Group settings into four sections only:
 
 1. **Privacy** — zones, delete local data, privacy policy
-2. **Uploads** — Wi-Fi only, allow cellular, pending count, retry, plus a `Diagnostics` row that opens a transparent log: last 20 batches with `{accepted, rejected, top reasons}`. Shows an inline banner when `ingestHealth == .degraded` with the top reason in plain language (e.g. "47% of readings this week were rejected because the app thought you were stationary"). No dark patterns; the row is named `Diagnostics`, not `Advanced`.
+2. **Uploads** — pending count, last successful upload, current waiting reason, retry, plus a `Diagnostics` row that opens a transparent log: last 20 batches with `{accepted, rejected, top reasons}`. Shows an inline banner when `ingestHealth == .degraded` with the top reason in plain language (e.g. "47% of readings this week were rejected because the app thought you were stationary"). No dark patterns; the row is named `Diagnostics`, not `Advanced`.
 3. **Recording** — pause/resume, battery saver explanation
 4. **About** — how it works, open source, version
 
@@ -1099,22 +1227,178 @@ Cross-screen state (recording status, pending upload count, stats) lives on a si
 
 ## iOS Decisions Locked
 
-- **Privacy-zone onboarding is mandatory before passive collection starts.** The user must either configure at least one privacy zone or explicitly confirm a high-visibility "skip for now" warning sheet that explains home/work exposure risk. Do not bury this behind a later settings screen for first-time family/friends testers.
+- **Endpoint trimming is mandatory; privacy zones are optional.** Passive collection can start once the core permissions are granted. Privacy zones remain prominent in Settings and the ready state, but they are an extra user control, not a collection gate.
 - **Dynamic Type coverage scope is broad, not selective.** Test onboarding, map chrome, segment drawer, stats, and settings at large accessibility sizes. The question was simply how much of the UI must be exercised at large text sizes; answer: all core user-facing flows, not just one or two screens.
 - **No pothole haptics in MVP.** Passive collection should stay quiet in the background; revisit only if a future explicit "active drive mode" exists.
+
+## Manual Pothole Reporting And Follow-up
+
+*Status: core manual `Mark pothole` is implemented in the current iOS build: map CTA, 5-second undo, `ManualPotholeLocator`, `PotholeActionRecord`, queue persistence, and upload through `POST /pothole-actions`. Marker-detail `Still there` / `Looks fixed` actions and expiring follow-up prompts remain pending.*
+
+The passive pothole detector remains the default source of road-issue data, but it misses two things users clearly want:
+
+1. a fast "I just hit one" signal while the map is already open during a drive
+2. a way to say an existing pothole is still there or appears fixed
+
+All explicit pothole actions feed the same canonical backend entity: one merged `pothole_reports` row per physical pothole spot.
+
+### User Flow
+
+#### Manual mark while driving
+
+1. User has the map open while driving.
+2. A large thumb-reachable button reads `Mark pothole`.
+3. Tap once.
+4. App immediately shows a toast: `Pothole marked` with `Undo` for 5 seconds.
+5. After the undo window expires, the action uploads automatically on the next eligible drain.
+
+There is no typing, no modal confirm step, no star rating, and no camera in the happy path.
+
+#### Follow-up on an existing pothole
+
+1. User taps a pothole marker or a pothole row in segment detail.
+2. The sheet offers `Still there` and `Looks fixed`.
+3. Tap either action.
+4. App shows `Thanks for the update.` and queues the follow-up action for upload.
+
+The client never immediately flips the marker to resolved. Resolution is server-owned and only appears after the next tile refresh.
+
+### Safety And Location Capture
+
+The manual `Mark pothole` button is explicitly allowed while driving. Safety comes from keeping it one tap with no text entry or camera, not from blocking motion.
+
+The client must still reject obviously bad location state:
+
+```swift
+let hasUsableLocation =
+    chosenSample.ageSeconds <= 10 &&
+    chosenSample.horizontalAccuracyM <= 25
+```
+
+Location selection for the tap is intentionally not just `latestSample`. Driver reaction time means the tap usually happens slightly after the wheel hits the pothole. `ManualPotholeLocator` keeps a rolling 3-second buffer of `LocationSample`s and chooses the sample closest to `tapTimestamp - 0.75s`. If no buffered sample exists, fall back to `latestSample`.
+
+If `hasUsableLocation == false`, tapping the button shows a non-blocking banner: `Waiting for a stronger location signal.` and no row is queued.
+
+### Privacy And Abuse Rules
+
+Manual pothole actions are explicit, but they do **not** override privacy protections in MVP.
+
+1. **Privacy zones still win.** If the chosen pothole coordinate falls inside a privacy zone, reject the action client-side and show `This spot is inside one of your privacy zones, so it was not reported.`
+2. **No free text.** Manual pothole reporting has zero comment fields.
+3. **No one-tap hard resolve.** `Looks fixed` is a negative confirmation, not an immediate delete.
+4. **Duplicate-tap guard.** After a successful tap, disable `Mark pothole` for 5 seconds. If the user taps again within `20m` and `8s`, update the existing pending-undo row instead of creating another one.
+
+### Data Model
+
+```swift
+enum PotholeActionType: String, Codable {
+    case manualReport
+    case confirmPresent
+    case confirmFixed
+}
+
+enum PotholeActionUploadState: String, Codable {
+    case pendingUndo
+    case pendingUpload
+    case failedPermanent
+}
+
+@Model
+final class PotholeActionRecord {
+    @Attribute(.unique) var id: UUID
+    var potholeReportID: UUID?      // required for confirmPresent / confirmFixed
+    var actionType: PotholeActionType
+    var latitude: Double
+    var longitude: Double
+    var accuracyM: Double
+    var recordedAt: Date
+    var createdAt: Date
+    var undoExpiresAt: Date?        // only set for manualReport
+    var uploadState: PotholeActionUploadState
+    var uploadAttemptCount: Int
+    var lastAttemptAt: Date?
+    var nextAttemptAt: Date?
+    var lastHTTPStatusCode: Int?
+    var lastRequestID: String?
+}
+```
+
+Rows in `pendingUndo` are local-only and must be skipped by the uploader until `undoExpiresAt <= now`. Once the undo window passes, promote the row to `pendingUpload`.
+
+Successful uploads can be deleted from SwiftData immediately; only retryable or permanent-failure rows need to stay around for diagnostics.
+
+### Upload
+
+Manual pothole actions use a small JSON endpoint, `POST /pothole-actions`.
+
+Request body sketch:
+
+```json
+{
+  "action_id": "uuid",
+  "device_token": "uuid",
+  "action_type": "manual_report",
+  "pothole_report_id": null,
+  "lat": 44.6488,
+  "lng": -63.5752,
+  "accuracy_m": 6.8,
+  "recorded_at": "2026-04-21T18:22:00Z"
+}
+```
+
+Server response includes the canonical `pothole_report_id` that the action folded into (new or existing).
+
+### Pothole Action Client State Machine
+
+```swift
+for each eligible PotholeActionRecord:
+  if uploadState == .failedPermanent:
+      skip
+
+  if uploadState == .pendingUndo && undoExpiresAt > now:
+      skip
+
+  if uploadState == .pendingUndo && undoExpiresAt <= now:
+      set uploadState = .pendingUpload
+
+  if nextAttemptAt > now:
+      stop pothole-action pass and yield back to the coordinator
+
+  POST /pothole-actions with action_id == id
+    on 200:
+        delete local row
+    on 409 stale_target:
+        set uploadState = .failedPermanent
+    on 400:
+        set uploadState = .failedPermanent
+    on 429 / 5xx / network error:
+        keep uploadState = .pendingUpload
+        set nextAttemptAt using the same backoff rules as readings
+```
+
+Undo behavior is purely local. If the user taps `Undo` before upload, delete the row outright and show `Pothole report cancelled`.
+
+### Follow-up UX Scope
+
+Core follow-up entry points for this feature are:
+
+- pothole marker detail sheet
+- segment detail rows for nearby potholes
+
+Expiring Waze-style prompts after a later pass near an active pothole are a separate UX-polish slice. They build on this same action model but are not required for the first implementation.
 
 ## Pothole Photo Capture (Post-MVP)
 
 *Status: not implemented. This section is the spec; no code yet.*
 
-The passive pipeline already detects and reports pothole *events* via accelerometer spikes, but that signal has weaknesses: it cannot describe severity, cannot distinguish potholes from utility cuts, and gives municipalities nothing to act on visually. The photo capture feature adds a low-friction way for a pedestrian or stopped driver to submit a geotagged photo of a specific pothole.
+The passive pipeline already detects pothole events, and the manual tap flow gives a fast explicit confirmation, but neither provides visual context. The photo capture feature adds a low-friction way for a pedestrian or stopped driver to submit a geotagged image that will join the same merged pothole cluster after moderation.
 
-Product-spec Open Question #3 already said "no pothole button in MVP" for driver safety; this feature is explicitly designed for the **stopped-or-walking** case (passenger, pedestrian, someone who noticed a pothole while getting out of their car) and gates the capture behind a low-speed check.
+This feature is explicitly designed for the **stopped-or-walking** case (passenger, pedestrian, someone who noticed a pothole while getting out of their car) and gates the capture behind a low-speed check.
 
 ### User Flow (target: ≤ 4 taps from app open)
 
 1. User opens the app.
-2. On the map, a secondary floating button (below the contribution card) reads `Report a pothole`. (Icon: `camera.viewfinder`.)
+2. On the map, a secondary floating button reads `Take photo`. (Icon: `camera.viewfinder`.) It sits below the primary `Mark pothole` action.
 3. Tap → full-screen camera sheet (`AVFoundation`, not `UIImagePickerController` — we need to strip metadata before the user sees a confirm screen).
 4. User frames the pothole, taps shutter. (Optional: enable device-side AF/AE lock during capture for sharper hand-held shots.)
 5. Confirm screen shows the photo + `📍 Near Quinpool Road, Halifax` + two buttons: `Submit` / `Retake`.
@@ -1125,23 +1409,20 @@ No moderation happens client-side. No AI classification client-side. The user do
 ### Entry Points
 
 - **Map screen:** secondary floating button as above.
-- **Segment detail sheet:** tapping on a segment that already has pothole flags shows a `Report another pothole here` row that opens the camera pre-scoped to that segment ID.
+- **Segment detail sheet:** tapping on a segment that already has pothole flags shows an `Add photo` row that opens the camera pre-scoped to that segment ID.
 - **Settings → About:** no entry point. The feature is discoverable from the map, not buried.
 
 ### Safety Gates
 
-```
-state: camera-sheet-presenting
-  precondition:
-    - NOT driving (DrivingDetector.last == false) OR
-    - speed < 5 km/h (from last LocationSample)
+The button is visible from the map even while the app believes the user is driving. The actual gate happens when the user tries to open the camera and again when they press the shutter:
 
-  if preconditions fail:
-    show sheet "Pull over first — the report tool is only available when you're stopped."
-    [OK] dismisses. No photo is captured.
+```swift
+let canCapture =
+    latestLocation.ageSeconds <= 10 &&
+    latestLocation.speedKmh < 5
 ```
 
-Re-check preconditions every 500ms while the camera sheet is presented. If the user starts moving again, dismiss with a warning (do not capture silently).
+If `canCapture == false`, show the sheet: "Slow down or pull over first — photo reports only work below 5 km/h." `[OK]` dismisses. A stale location sample counts as `false`; we do not infer "probably stopped." We do **not** try to run a continuous 500ms polling loop while the camera is open; one check on camera open and one on shutter is enough.
 
 ### Privacy
 
@@ -1149,28 +1430,41 @@ Photos are categorically more sensitive than readings. The photo pipeline MUST:
 
 1. **Strip all EXIF metadata before upload.** Use `CGImageDestination` with `kCGImagePropertyExifDictionary: nil, kCGImagePropertyGPSDictionary: nil, kCGImagePropertyTIFFDictionary: nil`. Camera metadata (lens, ISO, phone model, original GPS) is discarded before the image ever touches the upload queue.
 2. **Use `LocationService.latestSample`, not EXIF GPS, for geotagging.** This keeps the geotag in the privacy-zone pipeline. Any photo whose GPS coords fall in a privacy zone gets **rejected at the client** with a sheet: "This spot is inside one of your privacy zones. The report was not sent. (You can adjust your zones in Settings.)" The photo file is deleted immediately.
-3. **Apply the same 50–100m random offset to the uploaded lat/lng** that privacy zones use for their center. This prevents the server from reconstructing a precise "here is my house" pattern from repeated photo uploads.
+3. **Upload the precise `latestSample` coordinate; do not randomize it.** Photo moderation and pothole clustering need exact placement. Privacy comes from client-side privacy-zone rejection, rotating device tokens, private storage of raw photo rows, and the fact that the public map shows the merged `pothole_reports` point / matched segment, not the submitter's original photo coordinate.
 4. **Resize to ≤ 1600px longest edge, JPEG quality 0.8** before upload. Typical output: 250–400 KB. Raw HEIC off the camera is 3–5 MB and contains too much incidental detail (faces, license plates, house numbers in the background).
-5. **Do not store photos permanently on-device.** Photos live in the upload queue until a 200 comes back from the server, then are deleted from disk. There is no "my reports" photo gallery.
+5. **Do not store photos permanently on-device.** Photos live in the upload queue until the PUT succeeds, then are deleted from disk. There is no "my reports" photo gallery.
 
 ### Data Model
 
 ```swift
 // Persistence/Models/PotholeReportRecord.swift
+enum PhotoUploadState: String, Codable {
+    case pendingMetadata
+    case pendingModeration
+    case failedPermanent
+}
+
 @Model
 final class PotholeReportRecord {
     @Attribute(.unique) var id: UUID
     var photoFileURL: URL           // points into AppSupport/pothole-photos/{id}.jpg
-    var latitude: Double            // already offset-randomized
-    var longitude: Double           // already offset-randomized
+    var latitude: Double            // precise latestSample coordinate
+    var longitude: Double           // precise latestSample coordinate
     var accuracyM: Double
     var capturedAt: Date
-    var uploadStatus: UploadStatus  // reuse the existing enum
+    var uploadState: PhotoUploadState
     var uploadAttemptCount: Int
     var lastAttemptAt: Date?
-    var serverReportID: String?     // populated on 200
+    var nextAttemptAt: Date?
+    var expectedObjectPath: String?
+    var byteSize: Int
+    var sha256Hex: String
+    var lastHTTPStatusCode: Int?
+    var lastRequestID: String?
 }
 ```
+
+`id` is the client-generated `report_id`. There is no separate server-assigned identifier to wait for.
 
 The on-disk photo file is written once, never rewritten. Deletion is the only allowed lifecycle event after creation.
 
@@ -1191,17 +1485,55 @@ Two-step, signed-URL pattern (the readings endpoint is fine for point JSON; phot
      "sha256": "hex..."
    }
    ```
-   Server validates, creates a `pothole_photos` row in `pending_moderation` status, allocates a Supabase Storage object path, returns a signed PUT URL + expected object path.
+   Server validates, creates a `pothole_photos` row in `pending_upload` status, allocates a Supabase Storage object path, returns a signed PUT URL + expected object path.
 2. `PUT <signed-url>` — direct upload of the JPEG bytes to Supabase Storage. The app computes and sends `Content-SHA256` so the server can reject a corrupted upload.
-3. Server watcher (trigger or cron) on the Storage bucket flips the row to `awaiting_review` once the file lands. Client polls `GET /pothole-photos/{id}` once on next foreground to surface a toast: `"Your pothole photo was uploaded. A moderator will review it."`
+3. Server watcher (trigger or cron) on the Storage bucket flips the row to `pending_moderation` once the file lands. The client does **not** poll status; after the PUT returns 200, it sets `uploadState = .pendingModeration`, deletes the local JPEG, and shows the success toast immediately: `"Thanks — a moderator will review this report."`
 
-Pothole photos upload on **Wi-Fi by default** (see Data Volume & Wi-Fi Strategy above). A user who wants to submit on cellular flips the `Upload pothole photos over cellular` toggle.
+Pothole photos follow the same network policy as readings: if the device has connectivity and the queue is eligible, they upload.
+
+### Photo Upload Client State Machine
+
+The client does **not** persist signed upload URLs. Treat `POST metadata + PUT bytes` as one in-memory attempt:
+
+```swift
+for each eligible PotholeReportRecord:
+  if uploadState == .pendingModeration || .failedPermanent:
+      skip
+
+  if nextAttemptAt > now:
+      stop photo pass and yield back to the main drain coordinator
+
+  POST /pothole-photos with report_id == id
+    on 200:
+        persist expectedObjectPath, request_id
+        immediately PUT bytes to signed URL
+           on 200:
+               set uploadState = .pendingModeration
+               delete local file
+               clear nextAttemptAt
+           on 400 / 413:
+               set uploadState = .failedPermanent
+           on 429 / 5xx / network error:
+               leave uploadState = .pendingMetadata
+               set nextAttemptAt using the same backoff rules as readings
+    on 409 already_uploaded:
+        treat as success, set uploadState = .pendingModeration, delete local file
+    on 400:
+        set uploadState = .failedPermanent
+    on 429 / 5xx / network error:
+        keep uploadState = .pendingMetadata
+        set nextAttemptAt
+```
+
+Photo backoff does **not** block reading uploads. A photo row with `nextAttemptAt > now` is simply skipped until a later drain.
+
+If the app backgrounds or the task expires after the metadata POST but before the PUT completes, discard the in-memory signed URL and retry from step 1 with the same `report_id` on the next drain. The backend reissues a fresh signed URL while the row is still `pending_upload`.
 
 ### Moderation
 
 Explicitly server-side, out of scope for this doc except for the client contract:
 
-- Photos that pass moderation are published to the map as a new `pothole_reports` row with a `has_photo: true` flag.
+- Photos that pass moderation fold into the canonical pothole cluster and set `pothole_reports.has_photo = true`.
 - Photos that fail moderation are deleted server-side; the client never learns why.
 - The client does not show pending/rejected state to the submitter — the UX is "you reported it; thanks". Post-MVP we can add a "my reports" screen, but adding visibility into the moderation queue early creates an abuse vector (submitters tuning to bypass filters).
 
@@ -1222,7 +1554,7 @@ See [02-backend-implementation.md §Pothole Photo Moderation](02-backend-impleme
 ### Not In This Version
 
 - Rating the pothole ("how bad?"). Server-side aggregation from photo + nearby accelerometer hits is a better signal than user rating.
-- Editing the geotag location. If the device GPS is off by more than the privacy offset, the report is wrong; better to reject it at `accuracyM > 20` client-side than let a user hand-move a pin.
+- Editing the geotag location. If the device GPS is off by more than 20m, the report is wrong; better to reject it at `accuracyM > 20` client-side than let a user hand-move a pin.
 - Comment field. Zero value, unlimited abuse surface.
 - Video. 10× the bandwidth, 1.1× the signal.
 

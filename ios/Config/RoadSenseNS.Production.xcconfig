@@ -2,6 +2,7 @@ FORWARD_SLASH = /
 APP_ENV = PRODUCTION
 API_BASE_URL = https:$(FORWARD_SLASH)$(FORWARD_SLASH)roadsense.ca
 MAPBOX_ACCESS_TOKEN = pk.placeholder.production
+SUPABASE_ANON_KEY = anon.placeholder.production
 SENTRY_DSN =
 APP_GROUP_IDENTIFIER = group.ca.roadsense.ios
 

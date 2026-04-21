@@ -1,3 +1,4 @@
+import MapboxMaps
 import SwiftUI
 import SwiftData
 
@@ -7,12 +8,16 @@ struct RoadSenseNSApp: App {
 
     init() {
         let config = AppBootstrap.loadConfig()
+        MapboxOptions.accessToken = config.mapboxAccessToken
         if AppBootstrap.isRunningTests {
             self.container = AppContainer.bootstrapForTesting(config: config)
         } else {
             SentryBootstrapper.bootstrap(config: config)
             let container = AppContainer.bootstrap(config: config)
-            BackgroundTaskRegistrar.registerAll(logger: container.logger)
+            BackgroundTaskRegistrar.registerAll(
+                logger: container.logger,
+                uploadDrainCoordinator: container.uploadDrainCoordinator
+            )
             self.container = container
         }
     }

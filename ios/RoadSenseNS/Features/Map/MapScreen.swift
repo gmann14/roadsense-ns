@@ -14,6 +14,7 @@ struct MapScreen: View {
     @State private var segmentLoadError: String?
     @State private var isMapLoaded = false
     @State private var mapLoadError: String?
+    @State private var potholeFeedback: PotholeFeedback?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -63,6 +64,21 @@ struct MapScreen: View {
         .sheet(item: $selectedSegment) { segment in
             SegmentDetailSheet(segment: segment)
         }
+        .overlay(alignment: .bottom) {
+            if let potholeFeedback {
+                potholeFeedbackBanner(potholeFeedback)
+                    .padding(.horizontal, DesignTokens.Space.md)
+                    .padding(.bottom, 156)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .task(id: potholeFeedback.id) {
+                        try? await Task.sleep(for: potholeFeedback.dismissDelay)
+                        guard self.potholeFeedback?.id == potholeFeedback.id else { return }
+                        withAnimation(DesignTokens.Motion.standard) {
+                            self.potholeFeedback = nil
+                        }
+                    }
+            }
+        }
         .alert("Could not load road details", isPresented: Binding(
             get: { segmentLoadError != nil },
             set: { if !$0 { segmentLoadError = nil } }
@@ -80,7 +96,24 @@ struct MapScreen: View {
             Text("RoadSense NS")
                 .font(.system(size: 16, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.35), radius: 6, y: 1)
+                .padding(.horizontal, DesignTokens.Space.sm)
+                .padding(.vertical, DesignTokens.Space.xs)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            DesignTokens.Palette.deep.opacity(0.82),
+                            DesignTokens.Palette.deepInk.opacity(0.72)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: Capsule()
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.22), radius: 10, y: 4)
                 .accessibilityIdentifier("map.title")
 
             Spacer(minLength: DesignTokens.Space.sm)
@@ -132,15 +165,38 @@ struct MapScreen: View {
                     mapLoadBanner(message: mapLoadError)
                 }
 
+                markPotholeAction
+
                 primaryAction
+
+                if model.readiness.showsPrivacyRiskWarning {
+                    privacyZonesAction
+                }
             }
         }
         .padding(DesignTokens.Space.md)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    DesignTokens.Palette.deep.opacity(0.74),
+                                    DesignTokens.Palette.deepInk.opacity(0.64)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+        }
         .overlay(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
         )
+        .shadow(color: Color.black.opacity(0.16), radius: 20, y: 10)
         .animation(DesignTokens.Motion.standard, value: isCardExpanded)
     }
 
@@ -163,7 +219,7 @@ struct MapScreen: View {
 
                     Text(headerSubtitle)
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.78))
+                        .foregroundStyle(DesignTokens.Palette.signalSoft.opacity(0.96))
                         .lineLimit(1)
                         .accessibilityIdentifier("map.pending-uploads")
                 }
@@ -196,11 +252,11 @@ struct MapScreen: View {
                 .frame(width: 14, height: 4)
             Text(label)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.86))
+                .foregroundStyle(DesignTokens.Palette.surface)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.black.opacity(0.22), in: Capsule())
+        .background(Color.black.opacity(0.3), in: Capsule())
     }
 
     private var metaRow: some View {
@@ -217,11 +273,11 @@ struct MapScreen: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label.uppercased())
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.white.opacity(0.58))
+                .foregroundStyle(DesignTokens.Palette.signalSoft.opacity(0.94))
                 .tracking(0.6)
             Text(value)
                 .font(.system(size: 14, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.white)
+                .foregroundStyle(DesignTokens.Palette.surface)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -232,14 +288,48 @@ struct MapScreen: View {
             Label("Map load issue", systemImage: "wifi.exclamationmark")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white)
-            Text(message)
+            Text(AppBootstrap.formatMapLoadError(message))
                 .font(.caption)
                 .foregroundStyle(.white.opacity(0.82))
-                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DesignTokens.Space.sm)
         .background(DesignTokens.Palette.danger.opacity(0.42), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
+    }
+
+    private var markPotholeAction: some View {
+        Button(action: handleMarkPotholeTap) {
+            HStack(spacing: DesignTokens.Space.xs) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 15, weight: .bold))
+                Text("Mark pothole")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                Spacer(minLength: DesignTokens.Space.xs)
+                Text("One tap")
+                    .font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, DesignTokens.Space.xs)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.16), in: Capsule())
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, DesignTokens.Space.md)
+            .padding(.vertical, DesignTokens.Space.sm)
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(
+                    colors: [
+                        DesignTokens.Palette.warning,
+                        DesignTokens.Palette.danger
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("map.mark-pothole-button")
     }
 
     private var primaryAction: some View {
@@ -249,6 +339,74 @@ struct MapScreen: View {
             .controlSize(.large)
             .frame(maxWidth: .infinity)
             .accessibilityIdentifier("map.primary-action")
+    }
+
+    private var privacyZonesAction: some View {
+        Button("Manage privacy zones", action: onShowPrivacyZones)
+            .buttonStyle(.plain)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(DesignTokens.Palette.signalSoft)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("map.privacy-zones-action")
+    }
+
+    private func potholeFeedbackBanner(_ feedback: PotholeFeedback) -> some View {
+        HStack(alignment: .center, spacing: DesignTokens.Space.sm) {
+            Image(systemName: feedback.iconName)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(feedback.tint)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(feedback.title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                Text(feedback.message)
+                    .font(.caption)
+                    .foregroundStyle(DesignTokens.Palette.surface)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: DesignTokens.Space.xs)
+
+            if let actionID = feedback.actionID {
+                Button("Undo") {
+                    model.undoPotholeReport(id: actionID)
+                    withAnimation(DesignTokens.Motion.standard) {
+                        potholeFeedback = nil
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(DesignTokens.Palette.signalSoft)
+                .padding(.horizontal, DesignTokens.Space.sm)
+                .padding(.vertical, DesignTokens.Space.xs)
+                .background(.white.opacity(0.12), in: Capsule())
+            }
+        }
+        .padding(DesignTokens.Space.md)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .fill(Color.black.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    DesignTokens.Palette.deep.opacity(0.76),
+                                    DesignTokens.Palette.deepInk.opacity(0.74)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
+        .accessibilityIdentifier("map.pothole-feedback-banner")
     }
 
     // MARK: - First-run illustration
@@ -274,10 +432,31 @@ struct MapScreen: View {
             Text("Your first uploads will appear here after the next sync.")
                 .font(.caption)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundStyle(DesignTokens.Palette.surface)
                 .frame(maxWidth: 280)
         }
         .padding(DesignTokens.Space.md)
+        .background {
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    DesignTokens.Palette.deep.opacity(0.52),
+                                    DesignTokens.Palette.deepInk.opacity(0.4)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                )
+        }
     }
 
     private var loadingVeil: some View {
@@ -296,18 +475,17 @@ struct MapScreen: View {
             && mapLoadError == nil
             && model.userStatsSummary.acceptedReadingCount == 0
             && model.pendingDriveCoordinates.isEmpty
-            && !model.readiness.showsPrivacyRiskWarning
     }
 
     private var recordingTitle: String {
         if model.readiness.backgroundCollection == .upgradeRequired { return "Needs Always Location" }
-        if model.readiness.showsPrivacyRiskWarning { return "Privacy zones needed" }
         return model.isPassiveMonitoringEnabled ? "Recording" : "Paused"
     }
 
     private var headerSubtitle: String {
         if !isMapLoaded && mapLoadError == nil { return "Loading community layer…" }
-        if model.readiness.showsPrivacyRiskWarning { return "Set zones before real driving." }
+        if model.readiness.backgroundCollection == .upgradeRequired { return "Allow Always Location so RoadSense can keep collecting after you leave the app." }
+        if model.readiness.showsPrivacyRiskWarning { return "Privacy zones are optional extra protection." }
         if model.pendingUploadCount > 0 { return "\(model.pendingUploadCount) uploads waiting" }
         if model.userStatsSummary.acceptedReadingCount == 0 { return "No drives yet" }
         return mappedValue + " mapped"
@@ -315,7 +493,6 @@ struct MapScreen: View {
 
     private var recordingTint: Color {
         if model.readiness.backgroundCollection == .upgradeRequired { return DesignTokens.Palette.warning }
-        if model.readiness.showsPrivacyRiskWarning { return DesignTokens.Palette.signal }
         return model.isPassiveMonitoringEnabled ? DesignTokens.Palette.smooth : .white.opacity(0.6)
     }
 
@@ -337,21 +514,53 @@ struct MapScreen: View {
     }
 
     private var primaryActionTitle: String {
-        if model.readiness.showsPrivacyRiskWarning { return "Set privacy zones" }
-        if model.readiness.backgroundCollection == .upgradeRequired { return "Enable background collection" }
-        if !model.isPassiveMonitoringEnabled { return "Resume monitoring" }
+        if model.readiness.backgroundCollection == .upgradeRequired { return "Allow in background" }
+        if model.isCollectionPausedByUser { return "Turn collection back on" }
         return "View stats"
     }
 
     private func handlePrimaryAction() {
-        if model.readiness.showsPrivacyRiskWarning {
-            onShowPrivacyZones()
-        } else if model.readiness.backgroundCollection == .upgradeRequired {
+        if model.readiness.backgroundCollection == .upgradeRequired {
             model.requestAlwaysLocationUpgrade()
-        } else if !model.isPassiveMonitoringEnabled {
+        } else if model.isCollectionPausedByUser {
             model.startPassiveMonitoring()
         } else {
             onShowStats()
+        }
+    }
+
+    private func handleMarkPotholeTap() {
+        let feedback: PotholeFeedback
+        switch model.markPothole() {
+        case let .queued(actionID):
+            feedback = PotholeFeedback(
+                actionID: actionID,
+                title: "Pothole marked",
+                message: "It will send automatically after 5 seconds unless you undo it.",
+                iconName: "checkmark.circle.fill",
+                tint: DesignTokens.Palette.signalSoft,
+                dismissDelay: .seconds(5.2)
+            )
+        case .unavailableLocation:
+            feedback = PotholeFeedback(
+                title: "Need a fresh GPS fix",
+                message: "Keep the app open for a moment, then try again.",
+                iconName: "location.slash.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        case .insidePrivacyZone:
+            feedback = PotholeFeedback(
+                title: "Inside a privacy zone",
+                message: "RoadSense will not report potholes from an excluded area.",
+                iconName: "hand.raised.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        }
+
+        withAnimation(DesignTokens.Motion.enter) {
+            potholeFeedback = feedback
         }
     }
 
@@ -371,6 +580,32 @@ struct MapScreen: View {
         }
 
         isLoadingSegment = false
+    }
+}
+
+private struct PotholeFeedback: Identifiable {
+    let id = UUID()
+    let actionID: UUID?
+    let title: String
+    let message: String
+    let iconName: String
+    let tint: Color
+    let dismissDelay: Duration
+
+    init(
+        actionID: UUID? = nil,
+        title: String,
+        message: String,
+        iconName: String,
+        tint: Color,
+        dismissDelay: Duration
+    ) {
+        self.actionID = actionID
+        self.title = title
+        self.message = message
+        self.iconName = iconName
+        self.tint = tint
+        self.dismissDelay = dismissDelay
     }
 }
 

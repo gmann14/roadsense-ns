@@ -4,7 +4,7 @@ import Testing
 
 struct BackgroundCollectionPolicyTests {
     @Test
-    func enablesBackgroundLocationOnlyWithAlwaysAndSatisfiedPrivacyGate() {
+    func enablesBackgroundLocationWithAlwaysLocation() {
         let decision = BackgroundCollectionPolicy.evaluate(
             PermissionSnapshot(
                 location: .always,
@@ -34,7 +34,7 @@ struct BackgroundCollectionPolicyTests {
     }
 
     @Test
-    func keepsBackgroundOffWhenPrivacyZonesAreStillPending() {
+    func keepsBackgroundOnWhenPrivacyZonesAreStillPending() {
         let decision = BackgroundCollectionPolicy.evaluate(
             PermissionSnapshot(
                 location: .always,
@@ -43,8 +43,8 @@ struct BackgroundCollectionPolicyTests {
             )
         )
 
-        #expect(!decision.shouldEnableBackgroundLocation)
-        #expect(!decision.shouldRegisterSignificantLocationBootstrap)
+        #expect(decision.shouldEnableBackgroundLocation)
+        #expect(decision.shouldRegisterSignificantLocationBootstrap)
         #expect(!decision.shouldPromptForAlwaysUpgrade)
     }
 }

@@ -36,6 +36,7 @@ public struct QueueUploadBatch: Equatable, Sendable {
     public let createdAt: Date
     public let attemptCount: Int
     public let lastAttemptAt: Date?
+    public let nextAttemptAt: Date?
     public let status: QueueUploadStatus
     public let readingCount: Int
     public let firstErrorMessage: String?
@@ -45,14 +46,15 @@ public struct QueueUploadBatch: Equatable, Sendable {
     public let wasDuplicateOnResubmit: Bool
 
     public init(
-        id: UUID,
-        createdAt: Date,
-        attemptCount: Int = 0,
-        lastAttemptAt: Date? = nil,
-        status: QueueUploadStatus,
-        readingCount: Int,
-        firstErrorMessage: String? = nil,
-        acceptedCount: Int = 0,
+            id: UUID,
+            createdAt: Date,
+            attemptCount: Int = 0,
+            lastAttemptAt: Date? = nil,
+            nextAttemptAt: Date? = nil,
+            status: QueueUploadStatus,
+            readingCount: Int,
+            firstErrorMessage: String? = nil,
+            acceptedCount: Int = 0,
         rejectedCount: Int = 0,
         rejectedReasons: [String: Int] = [:],
         wasDuplicateOnResubmit: Bool = false
@@ -61,6 +63,7 @@ public struct QueueUploadBatch: Equatable, Sendable {
         self.createdAt = createdAt
         self.attemptCount = attemptCount
         self.lastAttemptAt = lastAttemptAt
+        self.nextAttemptAt = nextAttemptAt
         self.status = status
         self.readingCount = readingCount
         self.firstErrorMessage = firstErrorMessage
@@ -105,10 +108,25 @@ public enum UploadQueueCore {
         pendingReadings: [QueueReadingRecord],
         existingBatch: QueueUploadBatch?,
         now: Date,
+        inFlightTimeout: TimeInterval = 5 * 60,
         makeBatchID: () -> UUID
     ) -> QueuePreparationDecision {
-        if let existingBatch, existingBatch.status == .pending || existingBatch.status == .inFlight {
-            return .ready(existingBatch, pendingReadings)
+        if let existingBatch {
+            switch existingBatch.status {
+            case .pending:
+                if let nextAttemptAt = existingBatch.nextAttemptAt, nextAttemptAt > now {
+                    return .none
+                }
+                return .ready(existingBatch, pendingReadings)
+            case .inFlight:
+                if let lastAttemptAt = existingBatch.lastAttemptAt,
+                   now.timeIntervalSince(lastAttemptAt) < inFlightTimeout {
+                    return .none
+                }
+                return .ready(existingBatch, pendingReadings)
+            case .succeeded, .failedPermanent:
+                break
+            }
         }
 
         let unassigned = pendingReadings.filter { $0.uploadBatchID == nil && $0.uploadedAt == nil }
@@ -125,11 +143,32 @@ public enum UploadQueueCore {
         let batch = QueueUploadBatch(
             id: batchID,
             createdAt: now,
+            nextAttemptAt: nil,
             status: .pending,
             readingCount: selectedIDs.count
         )
 
         return .ready(batch, updatedReadings)
+    }
+
+    public static func markInFlight(
+        batch: QueueUploadBatch,
+        now: Date
+    ) -> QueueUploadBatch {
+        QueueUploadBatch(
+            id: batch.id,
+            createdAt: batch.createdAt,
+            attemptCount: batch.attemptCount,
+            lastAttemptAt: now,
+            nextAttemptAt: batch.nextAttemptAt,
+            status: .inFlight,
+            readingCount: batch.readingCount,
+            firstErrorMessage: batch.firstErrorMessage,
+            acceptedCount: batch.acceptedCount,
+            rejectedCount: batch.rejectedCount,
+            rejectedReasons: batch.rejectedReasons,
+            wasDuplicateOnResubmit: batch.wasDuplicateOnResubmit
+        )
     }
 
     public static func applySuccess(
@@ -143,6 +182,7 @@ public enum UploadQueueCore {
             createdAt: batch.createdAt,
             attemptCount: batch.attemptCount,
             lastAttemptAt: now,
+            nextAttemptAt: nil,
             status: .succeeded,
             readingCount: batch.readingCount,
             firstErrorMessage: batch.firstErrorMessage,
@@ -179,11 +219,20 @@ public enum UploadQueueCore {
             nextStatus = .pending
         }
 
+        let nextAttemptAt: Date?
+        switch disposition {
+        case let .retry(afterSeconds):
+            nextAttemptAt = now.addingTimeInterval(afterSeconds)
+        case .failedPermanent, .succeeded:
+            nextAttemptAt = nil
+        }
+
         return QueueUploadBatch(
             id: batch.id,
             createdAt: batch.createdAt,
             attemptCount: nextAttemptCount,
             lastAttemptAt: now,
+            nextAttemptAt: nextAttemptAt,
             status: nextStatus,
             readingCount: batch.readingCount,
             firstErrorMessage: batch.firstErrorMessage ?? errorMessage,

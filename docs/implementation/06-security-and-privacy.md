@@ -1,6 +1,6 @@
 # 06 — Security & Privacy
 
-*Last updated: 2026-04-20*
+*Last updated: 2026-04-21*
 
 Covers: PIPEDA compliance checklist, threat model, abuse mitigation, App Store privacy labels, and incident response for privacy-impacting issues.
 
@@ -24,8 +24,8 @@ PIPEDA's 10 Principles, mapped to our implementation:
 |---|---|
 | 1. Accountability | Single data controller: Graham Mann. Privacy policy names a contact. |
 | 2. Identifying purposes | App onboarding + privacy policy explicitly state: collect accelerometer + GPS to map road quality; aggregate publicly. |
-| 3. Consent | Opt-in via iOS permission prompts, explicit onboarding screen. Cellular upload OFF by default. |
-| 4. Limiting collection | No PII fields collected. GPS discarded inside privacy zones. Device token is pseudonymous and rotated monthly. |
+| 3. Consent | Opt-in via iOS permission prompts, explicit onboarding screen. Uploads happen automatically on any available network because data volume is small and this is stated up front. |
+| 4. Limiting collection | No PII fields collected. Default endpoint trimming suppresses likely private trip endpoints; GPS inside optional privacy zones is discarded even for explicit pothole actions and photos; device token is pseudonymous and rotated monthly. |
 | 5. Limiting use, disclosure, retention | Raw readings kept 6 months, then deleted (partition drop). Aggregates kept indefinitely. No data sold to third parties at MVP. |
 | 6. Accuracy | Quality filters reject bad GPS; crowdsourced averaging improves over time. "Report repair" path (post-MVP) lets users correct stale data. |
 | 7. Safeguards | TLS for all API calls. Server-side hashing with pepper. Supabase-managed DB with RLS. No service-role keys on client. |
@@ -122,7 +122,7 @@ Apple's policy: diagnostics ARE "collected" data under their framework, even if 
 
 ### Assets to protect
 
-1. **User home/work locations** — inferred from privacy-zone gaps, or from raw GPS if uploaded
+1. **User home/work locations** — inferred from repeated trip endpoints, optional privacy-zone gaps, or raw GPS if mishandled
 2. **Individual drive patterns** — unaggregated readings that could show a person's commute
 3. **Device identifiability** — long-term tracking of a single device across contributions
 
@@ -138,9 +138,10 @@ Apple's policy: diagnostics ARE "collected" data under their framework, even if 
 
 | Threat | Mitigation |
 |---|---|
-| Reverse triangulation of home from privacy zone gaps | Strava-style randomized offset (50-100m) + min zone radius 250m |
-| Tracking individual drives | Midpoint-of-window coords (not continuous track); 50m granularity server-side; per-device weekly reading cap of 3 per segment |
+| Reverse triangulation of home/work from repeated trip endpoints | Default endpoint trimming (first/last 60s and 300m), plus optional privacy zones with randomized stored centers. Explicit pothole actions and photos are also blocked inside privacy zones by default. |
+| Tracking individual drives | Exact point readings are uploaded only after endpoint trimming and outside optional privacy zones, at roughly 50m sampling cadence; no public raw-trace views; 6-month raw retention; per-device weekly reading cap of 3 per segment |
 | Long-term device identification | Monthly device token rotation; SHA-256 server hash with secret pepper |
+| Explicit report abuse or vandalism | No free-text pothole reports, rate limits on pothole actions/photos, follow-up actions tied to existing marker IDs, and quorum required before a `looks_fixed` action resolves a public marker |
 | Uploaded data intercepted | TLS 1.3 only; certificate pinning (nice-to-have — evaluate week 6) |
 | MITM rewriting traffic | TLS; no signed batch in MVP. If abuse emerges, add request signing / attestation in Phase 2 rather than claiming it now. |
 | Stolen phone | iOS device lock is the primary defense. App contains no credentials to steal; SwiftData store contains only local readings (already "my drives") |

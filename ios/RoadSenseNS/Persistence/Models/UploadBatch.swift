@@ -7,6 +7,7 @@ final class UploadBatch {
     var createdAt: Date
     var attemptCount: Int
     var lastAttemptAt: Date?
+    var nextAttemptAt: Date?
     var statusRawValue: String
     var readingCount: Int
     var firstErrorMessage: String?
@@ -25,6 +26,7 @@ final class UploadBatch {
         createdAt: Date,
         attemptCount: Int = 0,
         lastAttemptAt: Date? = nil,
+        nextAttemptAt: Date? = nil,
         status: UploadStatus,
         readingCount: Int,
         firstErrorMessage: String? = nil,
@@ -37,6 +39,7 @@ final class UploadBatch {
         self.createdAt = createdAt
         self.attemptCount = attemptCount
         self.lastAttemptAt = lastAttemptAt
+        self.nextAttemptAt = nextAttemptAt
         self.statusRawValue = status.rawValue
         self.readingCount = readingCount
         self.firstErrorMessage = firstErrorMessage

@@ -193,6 +193,7 @@ Before inviting wider testers, run this checklist once against a signed build an
   - environment
   - request ID if present
   - no raw latitude / longitude
+  - no photo storage paths or signed upload URLs
   - no raw device token
   - no IP address
   - no free-form user-entered text
@@ -210,6 +211,7 @@ Before inviting wider testers, run this checklist once against a signed build an
   - full `device_token_hash`
   - IP address
   - exact coordinates
+  - signed photo upload URLs
   - full request payload dumps
 - confirm at least one forced 5xx reaches backend Sentry
 - confirm rate-limit events still avoid raw token/IP leakage
@@ -272,6 +274,19 @@ Week 8: submit for Beta App Review to unlock external testing. Prepare:
   2. PR 2: backfill via scheduled job or one-off script
   3. PR 3: make column NOT NULL + add constraint
 - Partition additions are automated via cron, but we also pre-create 3 months ahead manually to tolerate cron failure
+
+### iOS Local Store Migrations
+
+- Treat SwiftData schema changes with the same discipline as backend migrations
+- Every schema bump ships with:
+  - a `VersionedSchema`
+  - a `SchemaMigrationPlan`
+  - a fixture store created by the prior schema and opened in CI by the new schema
+- Post-MVP additive migrations are expected in this order:
+  1. add `PotholeReportRecord`
+  2. add `DriveSessionRecord`
+  3. add optional `ReadingRecord.drive` relationship
+- Never ship a build that both changes the schema and silently deletes the prior local store as the fallback path
 
 ## Logging
 

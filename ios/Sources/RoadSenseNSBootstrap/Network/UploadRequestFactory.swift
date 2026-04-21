@@ -12,6 +12,8 @@ public enum UploadRequestFactory {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(endpoints.config.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(endpoints.config.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
 
         let payload = UploadReadingsRequest(
             batchID: batchID,

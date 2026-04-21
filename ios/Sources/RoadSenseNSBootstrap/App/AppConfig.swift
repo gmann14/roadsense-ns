@@ -4,6 +4,7 @@ public struct AppConfig: Equatable, Sendable {
     public let environment: AppEnvironment
     public let apiBaseURL: URL
     public let mapboxAccessToken: String
+    public let supabaseAnonKey: String
     public let sentryDSN: String?
     public let appGroupIdentifier: String?
 
@@ -11,12 +12,14 @@ public struct AppConfig: Equatable, Sendable {
         environment: AppEnvironment,
         apiBaseURL: URL,
         mapboxAccessToken: String,
+        supabaseAnonKey: String,
         sentryDSN: String? = nil,
         appGroupIdentifier: String? = nil
     ) {
         self.environment = environment
         self.apiBaseURL = apiBaseURL
         self.mapboxAccessToken = mapboxAccessToken
+        self.supabaseAnonKey = supabaseAnonKey
         self.sentryDSN = sentryDSN?.nilIfEmpty
         self.appGroupIdentifier = appGroupIdentifier?.nilIfEmpty
     }
@@ -43,10 +46,15 @@ public struct AppConfig: Equatable, Sendable {
             throw AppConfigError.missingOrInvalid("MAPBOX_ACCESS_TOKEN")
         }
 
+        guard let supabaseAnonKey = values["SUPABASE_ANON_KEY"]?.nilIfEmpty else {
+            throw AppConfigError.missingOrInvalid("SUPABASE_ANON_KEY")
+        }
+
         return AppConfig(
             environment: environment,
             apiBaseURL: apiBaseURL,
             mapboxAccessToken: mapboxAccessToken,
+            supabaseAnonKey: supabaseAnonKey,
             sentryDSN: values["SENTRY_DSN"],
             appGroupIdentifier: values["APP_GROUP_IDENTIFIER"]
         )

@@ -28,6 +28,8 @@ struct OnboardingFlowView: View {
                 store: model.privacyZoneStore,
                 onChange: { model.refreshPrivacyZones() }
             )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
     }
 
@@ -72,10 +74,9 @@ struct OnboardingFlowView: View {
 
     private var eyebrow: String {
         switch model.readiness.stage {
-        case .permissionsRequired: return "Step 1 of 3 · Permissions"
-        case .permissionHelp:      return "Step 1 of 3 · Permissions"
-        case .privacyZonesRequired: return "Step 2 of 3 · Privacy"
-        case .ready:                return "Step 3 of 3 · Ready"
+        case .permissionsRequired: return "Step 1 of 2 · Permissions"
+        case .permissionHelp:      return "Step 1 of 2 · Permissions"
+        case .ready:               return "Step 2 of 2 · Ready"
         }
     }
 
@@ -84,8 +85,7 @@ struct OnboardingFlowView: View {
         switch model.readiness.stage {
         case .permissionsRequired: permissionIntro
         case .permissionHelp:      permissionHelp
-        case .privacyZonesRequired: privacyZoneDecision
-        case .ready:                readyState
+        case .ready:               readyState
         }
     }
 
@@ -116,8 +116,7 @@ struct OnboardingFlowView: View {
     private var stageIndex: Int {
         switch model.readiness.stage {
         case .permissionsRequired, .permissionHelp: return 0
-        case .privacyZonesRequired:                 return 1
-        case .ready:                                return 2
+        case .ready:                                return 1
         }
     }
 
@@ -208,31 +207,6 @@ struct OnboardingFlowView: View {
         }
     }
 
-    private var privacyZoneDecision: some View {
-        stageCard(
-            iconSystemName: "lock.shield.fill",
-            iconTint: DesignTokens.Palette.smooth,
-            title: "Protect home and work before collection starts.",
-            body: "RoadSense NS filters readings near your privacy zones on-device. Add at least one zone, or accept the risk to continue without."
-        ) {
-            VStack(spacing: DesignTokens.Space.sm) {
-                Button("Manage privacy zones") { isShowingPrivacyZones = true }
-                    .buttonStyle(.borderedProminent)
-                    .tint(DesignTokens.Palette.deep)
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity)
-                    .accessibilityIdentifier("onboarding.manage-privacy-zones")
-
-                Button("Skip for now and accept the risk") { model.skipPrivacyZonesForNow() }
-                    .buttonStyle(.bordered)
-                    .tint(DesignTokens.Palette.warning)
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity)
-                    .accessibilityIdentifier("onboarding.skip-privacy-risk")
-            }
-        }
-    }
-
     private var readyState: some View {
         stageCard(
             iconSystemName: "checkmark.seal.fill",
@@ -240,15 +214,24 @@ struct OnboardingFlowView: View {
             title: "Ready to collect.",
             body: readySubtitle
         ) {
-            permissionStatusSummary
+            VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
+                permissionStatusSummary
+
+                Button("Optional: manage privacy zones") { isShowingPrivacyZones = true }
+                    .buttonStyle(.bordered)
+                    .tint(DesignTokens.Palette.deep)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("onboarding.manage-privacy-zones")
+            }
         }
     }
 
     private var readySubtitle: String {
         if model.readiness.showsPrivacyRiskWarning {
-            return "Privacy zones are skipped — home/work exposure risk remains high until you configure them."
+            return "Privacy zones are still off. Add them later if you want extra home/work protection on top of the default filtering."
         }
-        return "Permissions are in place and the privacy gate is satisfied. Drive as you normally would; RoadSense works in the background."
+        return "Permissions are in place. Drive as you normally would; add privacy zones later if you want extra home/work filtering."
     }
 
     // MARK: - Shared building blocks
@@ -301,7 +284,7 @@ struct OnboardingFlowView: View {
             Divider()
             statusRow(label: "Motion", value: model.snapshot.motion.displayName)
             Divider()
-            statusRow(label: "Background collection", value: model.readiness.backgroundCollection.displayName)
+            statusRow(label: "Runs in background", value: model.readiness.backgroundCollection.displayName)
         }
         .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous))
     }

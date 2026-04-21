@@ -65,7 +65,6 @@ public struct PermissionSnapshot: Equatable, Sendable {
 public enum CollectionReadinessStage: Equatable, Sendable {
     case permissionsRequired
     case permissionHelp
-    case privacyZonesRequired
     case ready
 }
 
@@ -130,15 +129,6 @@ public struct CollectionReadiness: Equatable, Sendable {
             .upgradeRequired
         case .notDetermined, .denied:
             .unavailable
-        }
-
-        guard snapshot.privacyZones != .pending else {
-            return CollectionReadiness(
-                stage: .privacyZonesRequired,
-                canStartPassiveCollection: false,
-                backgroundCollection: backgroundCollection,
-                showsPrivacyRiskWarning: false
-            )
         }
 
         return CollectionReadiness(

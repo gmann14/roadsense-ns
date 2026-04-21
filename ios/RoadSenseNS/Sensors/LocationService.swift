@@ -5,6 +5,8 @@ import Foundation
 protocol LocationServicing {
     var samples: AsyncStream<LocationSample> { get }
     var authorizationStatus: CLAuthorizationStatus { get }
+    var latestSample: LocationSample? { get }
+    var recentSamples: [LocationSample] { get }
     func start() throws
     func stop()
     func requestAlwaysUpgrade()
@@ -14,6 +16,7 @@ protocol LocationServicing {
 final class LocationService: NSObject, LocationServicing {
     private let manager: CLLocationManager
     private let continuation: AsyncStream<LocationSample>.Continuation
+    private var bufferedSamples: [LocationSample] = []
     let samples: AsyncStream<LocationSample>
 
     init(manager: CLLocationManager = CLLocationManager()) {
@@ -34,6 +37,14 @@ final class LocationService: NSObject, LocationServicing {
         manager.authorizationStatus
     }
 
+    var latestSample: LocationSample? {
+        prunedBufferedSamples(referenceTime: Date().timeIntervalSince1970).last
+    }
+
+    var recentSamples: [LocationSample] {
+        prunedBufferedSamples(referenceTime: Date().timeIntervalSince1970)
+    }
+
     func start() throws {
         manager.startUpdatingLocation()
     }
@@ -52,16 +63,21 @@ extension LocationService: @preconcurrency CLLocationManagerDelegate {
         for location in locations where location.horizontalAccuracy >= 0 {
             let speedKmh = max(location.speed, 0) * 3.6
             let heading = location.course >= 0 ? location.course : 0
-            continuation.yield(
-                LocationSample(
-                    timestamp: location.timestamp.timeIntervalSince1970,
-                    latitude: location.coordinate.latitude,
-                    longitude: location.coordinate.longitude,
-                    horizontalAccuracyMeters: location.horizontalAccuracy,
-                    speedKmh: speedKmh,
-                    headingDegrees: heading
-                )
+            let sample = LocationSample(
+                timestamp: location.timestamp.timeIntervalSince1970,
+                latitude: location.coordinate.latitude,
+                longitude: location.coordinate.longitude,
+                horizontalAccuracyMeters: location.horizontalAccuracy,
+                speedKmh: speedKmh,
+                headingDegrees: heading
             )
+            bufferedSamples.append(sample)
+            bufferedSamples = prunedBufferedSamples(referenceTime: sample.timestamp)
+            continuation.yield(sample)
         }
+    }
+
+    private func prunedBufferedSamples(referenceTime: TimeInterval) -> [LocationSample] {
+        bufferedSamples.filter { referenceTime - $0.timestamp <= 3.5 }
     }
 }

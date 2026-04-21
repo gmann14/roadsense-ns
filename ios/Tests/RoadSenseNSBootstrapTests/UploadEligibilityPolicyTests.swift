@@ -1,40 +1,42 @@
+import Foundation
 import Testing
 
 @testable import RoadSenseNSBootstrap
 
 @Suite("Upload eligibility policy")
 struct UploadEligibilityPolicyTests {
-    @Test("skips small batches on cellular when cellular uploads are disabled")
-    func skipsSmallBatchOnCellular() {
+    @Test("allows uploads whenever network is available and no retry window is active")
+    func allowsSatisfiedNetwork() {
         let decision = UploadEligibilityPolicy.shouldUpload(
             pendingCount: 50,
+            network: NetworkPathSnapshot(status: .satisfied, isExpensive: true)
+        )
+
+        #expect(decision)
+    }
+
+    @Test("blocks uploads while waiting for retry")
+    func blocksDuringRetryWindow() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let decision = UploadEligibilityPolicy.shouldUpload(
+            pendingCount: 100,
             network: NetworkPathSnapshot(status: .satisfied, isExpensive: true),
-            allowCellularUpload: false
+            nextAttemptAt: now.addingTimeInterval(30),
+            now: now
         )
 
         #expect(decision == false)
     }
 
-    @Test("allows larger batches even when cellular uploads are disabled")
-    func allowsLargeBatch() {
+    @Test("skips upload when there is nothing pending")
+    func skipsWhenNoPendingData() {
         let decision = UploadEligibilityPolicy.shouldUpload(
-            pendingCount: 100,
+            pendingCount: 0,
             network: NetworkPathSnapshot(status: .satisfied, isExpensive: true),
-            allowCellularUpload: false
+            nextAttemptAt: nil
         )
 
-        #expect(decision)
-    }
-
-    @Test("allows cellular when the user opted in")
-    func allowsCellularWhenEnabled() {
-        let decision = UploadEligibilityPolicy.shouldUpload(
-            pendingCount: 50,
-            network: NetworkPathSnapshot(status: .satisfied, isExpensive: true),
-            allowCellularUpload: true
-        )
-
-        #expect(decision)
+        #expect(decision == false)
     }
 
     @Test("skips upload entirely when network is unavailable")
@@ -42,7 +44,7 @@ struct UploadEligibilityPolicyTests {
         let decision = UploadEligibilityPolicy.shouldUpload(
             pendingCount: 500,
             network: NetworkPathSnapshot(status: .unsatisfied, isExpensive: false),
-            allowCellularUpload: true
+            nextAttemptAt: nil
         )
 
         #expect(decision == false)

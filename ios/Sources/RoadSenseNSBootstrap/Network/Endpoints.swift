@@ -11,6 +11,10 @@ public struct Endpoints: Equatable, Sendable {
         config.functionsBaseURL.appendingPathComponent("upload-readings", isDirectory: false)
     }
 
+    public var potholeActionsURL: URL {
+        config.functionsBaseURL.appendingPathComponent("pothole-actions", isDirectory: false)
+    }
+
     public func segmentDetailURL(id: UUID) -> URL {
         config.functionsBaseURL
             .appendingPathComponent("segments", isDirectory: true)
@@ -18,9 +22,11 @@ public struct Endpoints: Equatable, Sendable {
     }
 
     public var tileTemplateURLString: String {
-        config.functionsBaseURL.absoluteString
+        let base = config.functionsBaseURL.absoluteString
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            + "/tiles/{z}/{x}/{y}.mvt"
+        let encodedAnonKey = config.supabaseAnonKey.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+            ?? config.supabaseAnonKey
+        return base + "/tiles/{z}/{x}/{y}.mvt?apikey=" + encodedAnonKey
     }
 
     public func tileURL(z: Int, x: Int, y: Int, version: Int? = nil) -> URL {

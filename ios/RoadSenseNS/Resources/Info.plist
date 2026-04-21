@@ -30,6 +30,8 @@
 	<true/>
 	<key>MAPBOX_ACCESS_TOKEN</key>
 	<string>$(MAPBOX_ACCESS_TOKEN)</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>RoadSense NS uses background location to keep collecting road quality readings during a drive.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

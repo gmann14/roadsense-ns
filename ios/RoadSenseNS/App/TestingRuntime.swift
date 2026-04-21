@@ -26,6 +26,8 @@ private struct TestingPermissionManager: PermissionManaging {
 private struct TestingLocationService: LocationServicing {
     var samples: AsyncStream<LocationSample> { AsyncStream { _ in } }
     var authorizationStatus: CLAuthorizationStatus { .authorizedAlways }
+    var latestSample: LocationSample? { nil }
+    var recentSamples: [LocationSample] { [] }
     func start() throws {}
     func stop() {}
     func requestAlwaysUpgrade() {}
@@ -60,6 +62,7 @@ extension AppContainer {
         }
 
         let privacyZoneStore = PrivacyZoneStore(container: modelContainer)
+        let potholeActionStore = PotholeActionStore(container: modelContainer)
         let readingStore = ReadingStore(container: modelContainer)
         let userStatsStore = UserStatsStore(container: modelContainer)
         let uploadQueueStore = UploadQueueStore(container: modelContainer)
@@ -71,8 +74,13 @@ extension AppContainer {
         let checkpointStore = SensorCheckpointStore()
         let uploader = Uploader(
             container: modelContainer,
+            potholeActionStore: potholeActionStore,
             queueStore: uploadQueueStore,
             client: apiClient,
+            logger: .upload
+        )
+        let uploadDrainCoordinator = UploadDrainCoordinator(
+            uploader: uploader,
             logger: .upload
         )
 
@@ -87,11 +95,13 @@ extension AppContainer {
             permissions: TestingPermissionManager(),
             modelContainer: modelContainer,
             privacyZoneStore: privacyZoneStore,
+            potholeActionStore: potholeActionStore,
             readingStore: readingStore,
             userStatsStore: userStatsStore,
             uploadQueueStore: uploadQueueStore,
             apiClient: apiClient,
             uploader: uploader,
+            uploadDrainCoordinator: uploadDrainCoordinator,
             sensorCoordinator: SensorCoordinator(
                 locationService: locationService,
                 motionService: motionService,
@@ -99,9 +109,9 @@ extension AppContainer {
                 thermalMonitor: thermalMonitor,
                 privacyZoneStore: privacyZoneStore,
                 readingStore: readingStore,
-                uploader: uploader,
                 logger: logger,
-                checkpointStore: checkpointStore
+                checkpointStore: checkpointStore,
+                scheduleUploadDrain: { _ in }
             ),
             locationService: locationService,
             motionService: motionService,

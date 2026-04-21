@@ -7,11 +7,13 @@ struct AppContainer {
     let permissions: PermissionManaging
     let modelContainer: ModelContainer
     let privacyZoneStore: PrivacyZoneStoring
+    let potholeActionStore: PotholeActionStore
     let readingStore: ReadingStore
     let userStatsStore: UserStatsStore
     let uploadQueueStore: UploadQueueStore
     let apiClient: APIClient
     let uploader: Uploader
+    let uploadDrainCoordinator: UploadDrainCoordinator
     let sensorCoordinator: SensorCoordinator
     let locationService: LocationServicing
     let motionService: MotionServicing
@@ -29,6 +31,7 @@ struct AppContainer {
         }
 
         let privacyZoneStore = PrivacyZoneStore(container: modelContainer)
+        let potholeActionStore = PotholeActionStore(container: modelContainer)
         let readingStore = ReadingStore(container: modelContainer)
         let userStatsStore = UserStatsStore(container: modelContainer)
         let uploadQueueStore = UploadQueueStore(container: modelContainer)
@@ -40,8 +43,13 @@ struct AppContainer {
         let checkpointStore = SensorCheckpointStore()
         let uploader = Uploader(
             container: modelContainer,
+            potholeActionStore: potholeActionStore,
             queueStore: uploadQueueStore,
             client: apiClient,
+            logger: .upload
+        )
+        let uploadDrainCoordinator = UploadDrainCoordinator(
+            uploader: uploader,
             logger: .upload
         )
         return AppContainer(
@@ -49,11 +57,13 @@ struct AppContainer {
             permissions: SystemPermissionManager(),
             modelContainer: modelContainer,
             privacyZoneStore: privacyZoneStore,
+            potholeActionStore: potholeActionStore,
             readingStore: readingStore,
             userStatsStore: userStatsStore,
             uploadQueueStore: uploadQueueStore,
             apiClient: apiClient,
             uploader: uploader,
+            uploadDrainCoordinator: uploadDrainCoordinator,
             sensorCoordinator: SensorCoordinator(
                 locationService: locationService,
                 motionService: motionService,
@@ -61,9 +71,14 @@ struct AppContainer {
                 thermalMonitor: thermalMonitor,
                 privacyZoneStore: privacyZoneStore,
                 readingStore: readingStore,
-                uploader: uploader,
                 logger: logger,
-                checkpointStore: checkpointStore
+                checkpointStore: checkpointStore,
+                scheduleUploadDrain: { earliestBegin in
+                    BackgroundTaskRegistrar.scheduleNextUploadDrain(
+                        earliestBegin: earliestBegin,
+                        logger: logger
+                    )
+                }
             ),
             locationService: locationService,
             motionService: motionService,

@@ -115,7 +115,7 @@ struct PrivacyZonesView: View {
                     updateDraftCenter(event.cameraState.center)
                 }
                 .onMapLoadingError { event in
-                    errorMessage = event.message
+                    errorMessage = AppBootstrap.formatMapLoadError(event.message)
                 }
                 .frame(height: 320)
                 .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous))

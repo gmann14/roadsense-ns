@@ -423,14 +423,71 @@ Client MUST use the same `batch_id` for retries of the same batch. Changing `bat
 - Old token is not persisted; new token replaces it immediately
 - Server receives the cleartext token over TLS at upload time, hashes it inside the Edge Function, persists only the hash, and discards the cleartext immediately
 
-## Deferred Endpoints (post-MVP)
+## Additional Endpoints Beyond The Passive-MVP Loop
 
-These are in the spec but not in MVP. Listing them here so the shape is ready when needed:
+These endpoints sit outside the narrow passive-collection MVP loop. Some are already implemented for the internal build; others remain deferred but are specified here so the contract shape is locked.
 
 - `GET /segments/export?bbox=...&format=geojson|kml` — data export
-- `POST /report-repair` — user-reported road repair
+- `POST /pothole-actions` — explicit pothole mark / still-there / looks-fixed actions; implemented for the manual `Mark pothole` flow, with follow-up UI still pending
 - `GET /coverage?municipality=<name>` — coverage % by municipality
 - `GET /contributors/me` — personal stats authenticated via device token (requires token-signing flow, out of scope for MVP)
+
+### `POST /pothole-actions` (manual pothole reports + follow-up)
+
+One-tap pothole report endpoint plus follow-up actions against existing pothole markers. Matches [01-ios-implementation.md §Manual Pothole Reporting And Follow-up](01-ios-implementation.md) and [02-backend-implementation.md §Explicit Pothole Actions](02-backend-implementation.md).
+
+**Request**
+
+```json
+{
+    "action_id": "d89fe2a5-6b3f-4207-a592-5fe67bb4b6ff",
+    "device_token": "a78f9e2b-4c6d-11ec-81d3-0242ac130003",
+    "client_sent_at": "2026-04-21T18:22:05Z",
+    "client_app_version": "0.2.0 (78)",
+    "client_os_version": "iOS 17.4.1",
+    "action_type": "manual_report",
+    "pothole_report_id": null,
+    "lat": 44.6488,
+    "lng": -63.5752,
+    "accuracy_m": 6.8,
+    "recorded_at": "2026-04-21T18:22:00Z"
+}
+```
+
+**Notes**
+
+- `action_id` is the idempotency key. Repeating the exact same action returns the same canonical result.
+- `action_type` values: `manual_report`, `confirm_present`, `confirm_fixed`.
+- `pothole_report_id` is required for `confirm_present` and `confirm_fixed`, omitted for `manual_report`.
+- `lat` / `lng` are the precise client coordinates after privacy-zone filtering. Do not randomize them.
+- repeating the same action type from the same device against the same pothole within 24 hours may return `200` without incrementing public counters again
+
+**Response — 200 OK**
+
+```json
+{
+    "action_id": "d89fe2a5-6b3f-4207-a592-5fe67bb4b6ff",
+    "pothole_report_id": "0bb4e4af-c1a0-4c1f-9c19-4ef1f0f6f420",
+    "status": "active",
+    "request_id": "01H9Z..."
+}
+```
+
+`status` is the canonical pothole status after the action is applied. Most `manual_report` and `confirm_present` calls return `active`; `confirm_fixed` may return either `active` or `resolved` depending on quorum.
+
+**Response — 409 stale_target**
+
+```json
+{
+    "error": "stale_target",
+    "message": "This pothole marker no longer matches your current location.",
+    "request_id": "01H9Z..."
+}
+```
+
+**Response — 429 rate_limited**
+
+Pothole actions have a dedicated bucket: 60 / 24h per device token hash, 120 / 1h per IP. See [02-backend-implementation.md §Pothole Action Rate Limits](02-backend-implementation.md).
 
 ### `POST /pothole-photos` (post-MVP — photo capture)
 
@@ -457,11 +514,12 @@ Two-step signed-URL upload for pothole photos. Matches [01-ios-implementation.md
 
 **Notes**
 
-- `report_id` is a client-generated UUIDv4 and is the idempotency key. Retrying the call with the same `report_id` returns the original signed URL (or 409 if the previous upload already succeeded).
+- `report_id` is a client-generated UUIDv4 and is the idempotency key. Retrying the call with the same `report_id` while the row is still `pending_upload` returns a fresh signed URL for the same object path. Once the object already exists, the endpoint returns `409 already_uploaded`.
 - `content_type` must be `image/jpeg` (only accepted value in MVP).
 - `byte_size` must be ≤ 1,500,000. Client target is ≤ 400 KB.
 - `sha256` is the hex-encoded SHA-256 of the exact bytes the client will PUT.
-- `lat` / `lng` MUST already be offset-randomized by the client (same 50–100m randomization as privacy zone centers).
+- `lat` / `lng` are the precise client coordinates after privacy-zone filtering. Do not randomize them.
+- accepted photos join the same merged `pothole_reports` cluster model used by passive spikes and `POST /pothole-actions`
 
 **Response — 200 OK**
 

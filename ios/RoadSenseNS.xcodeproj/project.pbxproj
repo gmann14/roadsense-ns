@@ -12,6 +12,7 @@
 		08943009043515777FFF00D0 /* DrivingHeuristic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E77758971EB7F44643652E /* DrivingHeuristic.swift */; };
 		0BCFD3D8D47603D464DDD78B /* BackgroundCollectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */; };
 		0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */; };
+		135F89FB9099D9FAE72742CC /* UploadDrainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10DDA50E806EEF8535BD914 /* UploadDrainCoordinator.swift */; };
 		13F02CBE3FA2D19A992E0016 /* UploadBatchJSONCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */; };
 		1780B2A4E897E484A5BB3C0D /* DrivingHeuristic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E77758971EB7F44643652E /* DrivingHeuristic.swift */; };
 		1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE870B004546FC93939AF065 /* Endpoints.swift */; };
@@ -23,9 +24,11 @@
 		28550EE5A4D4CD7690CD48EB /* UploadQueueCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCF0439CC9DBD46EB595AA4 /* UploadQueueCore.swift */; };
 		2E1B6D32ED2B5BB95BBBDC7E /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB9B9294F92A70C11D0FB1B /* APIClient.swift */; };
 		3651E2DE8B84CAC043133934 /* SegmentAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5510C3BC3010F7CA1DBD337A /* SegmentAPIModels.swift */; };
+		3E1EAD8552D8141AAAF82DC8 /* PotholeActionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89EE7E2252FD9D4C1984BC93 /* PotholeActionStore.swift */; };
 		3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CE5D67A573F4B606118C23 /* SettingsView.swift */; };
 		4030CA59DBFD2BD1002A939A /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
 		415EED346262E91866151E11 /* UploadResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */; };
+		4233C35F3626F4B3635D657A /* RoadSenseSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B4E2F0BBA75CCC42516100B /* RoadSenseSchema.swift */; };
 		4294ED05A035C9695AEE0A7F /* UploadQueueCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DCF0439CC9DBD46EB595AA4 /* UploadQueueCore.swift */; };
 		42AFA19B9DFD89C70573617B /* UploadQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43F7CA78BA461644E2643371 /* UploadQueueStore.swift */; };
 		435DC685A77E3EC29BF2E26A /* SensorCheckpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */; };
@@ -37,12 +40,14 @@
 		5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F9E1A697AF1C0543503C5D /* PermissionManager.swift */; };
 		60AA16F79F94361B54431179 /* Uploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41B92DA7CA8EB765BCFC11A /* Uploader.swift */; };
 		61C6790E5D041EB25808BAF3 /* RoadSenseLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 659C7BBB94CC6DB51D4B2730 /* RoadSenseLogger.swift */; };
+		620E94DA1BD6F97C61B3C807 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3729474480B72BA41C2B5D8C /* AppModelTests.swift */; };
 		63328FB0E97ABDBED76424CF /* UploadResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */; };
 		63608FF99D0642C8081C5D41 /* DeviceTokenRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */; };
 		649D0F5915C8738794307D34 /* UserStatsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FDA026E9790EC226336CE31 /* UserStatsStore.swift */; };
 		6A4D3994F6D6782ACB98445F /* UploadRequestFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9553FFA21CB22675B92971 /* UploadRequestFactory.swift */; };
 		6B42654DBC077FAC55F09FD3 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */; };
 		6CB12F83F061BDDB1FAD352A /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24017FAA2743BBD1FD361A56 /* StatsView.swift */; };
+		6E2764000B77D35C50060E07 /* PotholeActionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6371625CAD43199A1021AA9 /* PotholeActionStoreTests.swift */; };
 		6F4BF681196BA8C52ABFDDD8 /* ReadingWindowProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */; };
 		71B953E564C5532CCA058F32 /* UploadAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AFFFE8ED069250BF48A1547 /* UploadAPIModels.swift */; };
 		7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */; };
@@ -50,19 +55,20 @@
 		8147DC66BED1C5411E9FD89D /* RetentionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */; };
 		81986E2AB5F2C3C7258A6A66 /* UploadAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AFFFE8ED069250BF48A1547 /* UploadAPIModels.swift */; };
 		825EF8A058DF7DA06B8A89CE /* SentryBootstrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A63DB84BA5E66CE3F794D25 /* SentryBootstrapper.swift */; };
+		84E7D05132747F49FB4C24DD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C687070E04DFCBE0FE4EA200 /* Assets.xcassets */; };
 		867513AB7BB41CE72BCFDBC8 /* QualityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */; };
 		88254277AF3BF19D3FD07EC8 /* QueueModelMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */; };
 		886A7E16B1112529B6004302 /* SensorFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026DC5F95328D7091BC8482E /* SensorFixture.swift */; };
 		88F7FD030231687D31CA394B /* AppFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7648F667665CDF25B279C81 /* AppFlowUITests.swift */; };
 		8AF51647C5DCF2AD6C785D47 /* SensorCheckpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */; };
-		DE51C047000000000000AA01 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE51C047000000000000AA02 /* DesignTokens.swift */; };
-		DE51C047000000000000AA04 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DE51C047000000000000AA05 /* Assets.xcassets */; };
+		92BB25E254C7AD6202139526 /* ManualPotholeLocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */; };
 		93499EAF4872315D0197908C /* ReadingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92672E8E369B06AFF5F25AF /* ReadingStore.swift */; };
 		94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */; };
 		982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70A04456020333C21483C47 /* HighPassBiquad.swift */; };
 		9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC86C13C16A0385D36E47FD /* AppContainer.swift */; };
 		9CD4809B0812EECC08018D96 /* BackgroundCollectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */; };
 		9D359A286A549E79A62BC47B /* SensorFixtureRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD48E01F41552DAB66909C1 /* SensorFixtureRunner.swift */; };
+		9EABEA30417F41AE694F52D1 /* ManualPotholeLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F57C6D76B7E595FE412BC87 /* ManualPotholeLocator.swift */; };
 		9FCD5095F22EFBE9D9811061 /* DeviceTokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EC0C104BF5658C06ACCBB1 /* DeviceTokenManager.swift */; };
 		A1474D058AA8DD8A7886BF8B /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */; };
 		A460A833459B34A6941B6DE9 /* UserStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDAC070ACEE2F122C555B0ED /* UserStats.swift */; };
@@ -70,6 +76,7 @@
 		A5B705950EDE96594CF43CAF /* RoadSenseNSSimHarnessApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BB9FA2F39D47DBE85F983C /* RoadSenseNSSimHarnessApp.swift */; };
 		ACDDE4CCC072420ECC01CCED /* HarnessFixtureCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9E2C334C77577FC08622EF8 /* HarnessFixtureCatalog.swift */; };
 		ADA01A3CE40ED182AAA833A5 /* UploadEligibilityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */; };
+		AE674105AE11F88B332E65BB /* UploadRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38491FCE6C30B52713465B8D /* UploadRuntimeTests.swift */; };
 		AFEE1434CB9A30B9D66A33DC /* IngestHealthEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */; };
 		B18C711CD756572A47A6DE8F /* UploadRequestFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9553FFA21CB22675B92971 /* UploadRequestFactory.swift */; };
 		B21405C05811503808C54478 /* DrivingDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777A503AFECA80F0A49C3096 /* DrivingDetector.swift */; };
@@ -77,6 +84,7 @@
 		B2E6DF647ED4515D3A700282 /* ReadingRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A96B8343D20095BCEF65D89C /* ReadingRecord.swift */; };
 		B8393B14BAC87209E1414CD7 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */; };
 		B84C0C037E20BD97BD457AB5 /* UploadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCAA398E4BA72123985282C /* UploadPolicy.swift */; };
+		BCED38C029DC23CD8CF965DB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95DBAC276591544789D06C3E /* DesignTokens.swift */; };
 		BE7DBD83E05D54A627C6B4E6 /* SegmentDetailResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06C075253EF1F1E69FC89030 /* SegmentDetailResponseParser.swift */; };
 		C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */; };
 		C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1269DDDE04E2FB4239384BC9 /* ContentView.swift */; };
@@ -97,6 +105,7 @@
 		D936E8CAA7F8D74C012BB1D8 /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43A2FE63800512FAB4319A1A /* LocationService.swift */; };
 		D9A351F9F40DFF896B73D712 /* pothole-hit.csv in Resources */ = {isa = PBXBuildFile; fileRef = 023DE992C5BA96EAB05EF99A /* pothole-hit.csv */; };
 		D9D68063F1304D636E7E2814 /* BackgroundTaskRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B2199FED8B8DBD6F6FD265B /* BackgroundTaskRegistrar.swift */; };
+		DB60EBD564C4FFEC0E4F4EE9 /* PotholeActionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB42FED037769EE898F2934 /* PotholeActionRecord.swift */; };
 		DBE9EAA01AE9BA7D8306F7BF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */; };
 		DC0045BD98623446B06CC83F /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = DFBDE19C2B3A05C0840949A5 /* MapboxMaps */; };
 		DDCC83C031162D3E518D596B /* QualityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */; };
@@ -146,13 +155,17 @@
 		1A63DB84BA5E66CE3F794D25 /* SentryBootstrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentryBootstrapper.swift; sourceTree = "<group>"; };
 		1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreen.swift; sourceTree = "<group>"; };
 		1EFAC01C66B9C992BC2313A7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		1F57C6D76B7E595FE412BC87 /* ManualPotholeLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualPotholeLocator.swift; sourceTree = "<group>"; };
 		1FB9B9294F92A70C11D0FB1B /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		24017FAA2743BBD1FD361A56 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		27F9E1A697AF1C0543503C5D /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		28F035620621F3107CCB6E6D /* ModelContainerProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerProvider.swift; sourceTree = "<group>"; };
 		31BB9FA2F39D47DBE85F983C /* RoadSenseNSSimHarnessApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSSimHarnessApp.swift; sourceTree = "<group>"; };
 		31E39073C99FB20D024E79D0 /* MotionMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionMath.swift; sourceTree = "<group>"; };
+		324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualPotholeLocatorTests.swift; sourceTree = "<group>"; };
 		33BE8F93CE35FA6438817474 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		3729474480B72BA41C2B5D8C /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		38491FCE6C30B52713465B8D /* UploadRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadRuntimeTests.swift; sourceTree = "<group>"; };
 		38814048A460DD56E42A5706 /* ThermalMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThermalMonitor.swift; sourceTree = "<group>"; };
 		3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadBatch.swift; sourceTree = "<group>"; };
 		3DCF0439CC9DBD46EB595AA4 /* UploadQueueCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadQueueCore.swift; sourceTree = "<group>"; };
@@ -162,6 +175,7 @@
 		46E77758971EB7F44643652E /* DrivingHeuristic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingHeuristic.swift; sourceTree = "<group>"; };
 		48A050A1F2F270139D92540F /* RoadSenseNS.Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Production.xcconfig; sourceTree = "<group>"; };
 		4B2199FED8B8DBD6F6FD265B /* BackgroundTaskRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTaskRegistrar.swift; sourceTree = "<group>"; };
+		4B4E2F0BBA75CCC42516100B /* RoadSenseSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseSchema.swift; sourceTree = "<group>"; };
 		53EC0C104BF5658C06ACCBB1 /* DeviceTokenManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenManager.swift; sourceTree = "<group>"; };
 		5510C3BC3010F7CA1DBD337A /* SegmentAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentAPIModels.swift; sourceTree = "<group>"; };
 		569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QualityFilter.swift; sourceTree = "<group>"; };
@@ -178,9 +192,11 @@
 		7FDA026E9790EC226336CE31 /* UserStatsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStatsStore.swift; sourceTree = "<group>"; };
 		851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
 		87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetentionPolicy.swift; sourceTree = "<group>"; };
+		89EE7E2252FD9D4C1984BC93 /* PotholeActionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeActionStore.swift; sourceTree = "<group>"; };
 		8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeDetector.swift; sourceTree = "<group>"; };
 		8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadQualityMapView.swift; sourceTree = "<group>"; };
 		9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingBuilder.swift; sourceTree = "<group>"; };
+		95DBAC276591544789D06C3E /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenRecord.swift; sourceTree = "<group>"; };
 		9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2D445C6696ED6F082B33288 /* TestingRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestingRuntime.swift; sourceTree = "<group>"; };
@@ -192,13 +208,17 @@
 		B045A4EE8832A8E643A3740C /* pothole-hit.expected.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "pothole-hit.expected.json"; sourceTree = "<group>"; };
 		B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundCollectionPolicy.swift; sourceTree = "<group>"; };
 		B41B92DA7CA8EB765BCFC11A /* Uploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Uploader.swift; sourceTree = "<group>"; };
+		B6371625CAD43199A1021AA9 /* PotholeActionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeActionStoreTests.swift; sourceTree = "<group>"; };
 		B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyZone.swift; sourceTree = "<group>"; };
+		C687070E04DFCBE0FE4EA200 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorCheckpoint.swift; sourceTree = "<group>"; };
 		C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSApp.swift; sourceTree = "<group>"; };
 		C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C9E2C334C77577FC08622EF8 /* HarnessFixtureCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessFixtureCatalog.swift; sourceTree = "<group>"; };
 		CA6257F1C7E68CE62C4CCF25 /* SegmentDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentDetailSheet.swift; sourceTree = "<group>"; };
+		CDB42FED037769EE898F2934 /* PotholeActionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeActionRecord.swift; sourceTree = "<group>"; };
 		CEC86C13C16A0385D36E47FD /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
+		D10DDA50E806EEF8535BD914 /* UploadDrainCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadDrainCoordinator.swift; sourceTree = "<group>"; };
 		D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingWindowProcessor.swift; sourceTree = "<group>"; };
 		D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadResponseParser.swift; sourceTree = "<group>"; };
 		D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionReadiness.swift; sourceTree = "<group>"; };
@@ -209,8 +229,6 @@
 		E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadBatchJSONCodec.swift; sourceTree = "<group>"; };
 		E68A275BABCEFCE3E1964F10 /* MotionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionService.swift; sourceTree = "<group>"; };
-		DE51C047000000000000AA02 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
-		DE51C047000000000000AA05 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkAndUploaderTests.swift; sourceTree = "<group>"; };
 		EDAC070ACEE2F122C555B0ED /* UserStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStats.swift; sourceTree = "<group>"; };
@@ -239,9 +257,11 @@
 			children = (
 				851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */,
 				28F035620621F3107CCB6E6D /* ModelContainerProvider.swift */,
+				89EE7E2252FD9D4C1984BC93 /* PotholeActionStore.swift */,
 				DB54690AD1B0B14F43315BE6 /* PrivacyZoneStore.swift */,
 				155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */,
 				F92672E8E369B06AFF5F25AF /* ReadingStore.swift */,
+				4B4E2F0BBA75CCC42516100B /* RoadSenseSchema.swift */,
 				770EBDB5BF565D5AD7546CA5 /* SensorCheckpointStore.swift */,
 				E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */,
 				43F7CA78BA461644E2643371 /* UploadQueueStore.swift */,
@@ -270,17 +290,10 @@
 			path = Map;
 			sourceTree = "<group>";
 		};
-		DE51C047000000000000AA03 /* DesignSystem */ = {
-			isa = PBXGroup;
-			children = (
-				DE51C047000000000000AA02 /* DesignTokens.swift */,
-			);
-			path = DesignSystem;
-			sourceTree = "<group>";
-		};
 		1A09BD3973D04017D455F835 /* Pipeline */ = {
 			isa = PBXGroup;
 			children = (
+				1F57C6D76B7E595FE412BC87 /* ManualPotholeLocator.swift */,
 				7A83AAFA6806FFC7DA4C2528 /* SensorCoordinator.swift */,
 			);
 			path = Pipeline;
@@ -301,6 +314,7 @@
 			isa = PBXGroup;
 			children = (
 				998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */,
+				CDB42FED037769EE898F2934 /* PotholeActionRecord.swift */,
 				10D40F3275A4DDC565E3DD2E /* PrivacyZoneRecord.swift */,
 				A96B8343D20095BCEF65D89C /* ReadingRecord.swift */,
 				3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */,
@@ -356,7 +370,7 @@
 		5A8CED41DE2A08EAC1E6EC8D /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				DE51C047000000000000AA05 /* Assets.xcassets */,
+				C687070E04DFCBE0FE4EA200 /* Assets.xcassets */,
 				1EFAC01C66B9C992BC2313A7 /* Info.plist */,
 			);
 			path = Resources;
@@ -399,6 +413,7 @@
 				C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */,
 				1A63DB84BA5E66CE3F794D25 /* SentryBootstrapper.swift */,
 				A2D445C6696ED6F082B33288 /* TestingRuntime.swift */,
+				D10DDA50E806EEF8535BD914 /* UploadDrainCoordinator.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -451,8 +466,12 @@
 		738AEE105180D9D2D869A4F8 /* RoadSenseNSTests */ = {
 			isa = PBXGroup;
 			children = (
+				3729474480B72BA41C2B5D8C /* AppModelTests.swift */,
+				324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */,
 				EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */,
 				0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */,
+				B6371625CAD43199A1021AA9 /* PotholeActionStoreTests.swift */,
+				38491FCE6C30B52713465B8D /* UploadRuntimeTests.swift */,
 			);
 			path = RoadSenseNSTests;
 			sourceTree = "<group>";
@@ -473,6 +492,14 @@
 				583510BB6B1BABFA95ACB79D /* PrivacyZonesView.swift */,
 			);
 			path = PrivacyZones;
+			sourceTree = "<group>";
+		};
+		7E8E84022CD1A16A9D70D26B /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				95DBAC276591544789D06C3E /* DesignTokens.swift */,
+			);
+			path = DesignSystem;
 			sourceTree = "<group>";
 		};
 		8729970931269C5BA5CF5208 /* Settings */ = {
@@ -548,7 +575,7 @@
 		FDA53F96E3D07F8598FC53E6 /* Features */ = {
 			isa = PBXGroup;
 			children = (
-				DE51C047000000000000AA03 /* DesignSystem */,
+				7E8E84022CD1A16A9D70D26B /* DesignSystem */,
 				1345EEAF9D9B0ED9D1BCB755 /* Map */,
 				A055F6FAB38CBD5786C00779 /* Onboarding */,
 				7A9157B62ED71B02C9AFF8BC /* PrivacyZones */,
@@ -602,8 +629,8 @@
 			buildConfigurationList = A8D996C6FFA47E92698C4A1A /* Build configuration list for PBXNativeTarget "RoadSenseNS" */;
 			buildPhases = (
 				F56E3E5C245208990E07B5F2 /* Sources */,
+				79E1DDA59361BC10953D56B1 /* Resources */,
 				7870343A5143E635A24ED237 /* Frameworks */,
-				DE51C047000000000000AA06 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -691,20 +718,20 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		79E1DDA59361BC10953D56B1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				84E7D05132747F49FB4C24DD /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A889CE1D80638DB527BAC1C5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				D9A351F9F40DFF896B73D712 /* pothole-hit.csv in Resources */,
 				C684FB9328095BE8B1048EF2 /* pothole-hit.expected.json in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		DE51C047000000000000AA06 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				DE51C047000000000000AA04 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -715,8 +742,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				620E94DA1BD6F97C61B3C807 /* AppModelTests.swift in Sources */,
+				92BB25E254C7AD6202139526 /* ManualPotholeLocatorTests.swift in Sources */,
 				01AB046260471C52C02D8C59 /* NetworkAndUploaderTests.swift in Sources */,
 				0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */,
+				6E2764000B77D35C50060E07 /* PotholeActionStoreTests.swift in Sources */,
+				AE674105AE11F88B332E65BB /* UploadRuntimeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -780,6 +811,7 @@
 				D9D68063F1304D636E7E2814 /* BackgroundTaskRegistrar.swift in Sources */,
 				C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */,
 				C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */,
+				BCED38C029DC23CD8CF965DB /* DesignTokens.swift in Sources */,
 				E0A858EAF54B726D7480CB88 /* DeviceTokenManager.swift in Sources */,
 				63608FF99D0642C8081C5D41 /* DeviceTokenRecord.swift in Sources */,
 				A1474D058AA8DD8A7886BF8B /* DeviceTokenStore.swift in Sources */,
@@ -789,13 +821,15 @@
 				982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */,
 				AFEE1434CB9A30B9D66A33DC /* IngestHealthEvaluator.swift in Sources */,
 				D936E8CAA7F8D74C012BB1D8 /* LocationService.swift in Sources */,
-				DE51C047000000000000AA01 /* DesignTokens.swift in Sources */,
+				9EABEA30417F41AE694F52D1 /* ManualPotholeLocator.swift in Sources */,
 				D3654C639B341A125F6F764E /* MapScreen.swift in Sources */,
 				CAFAF51DC3E1A3AF7854919C /* ModelContainerProvider.swift in Sources */,
 				1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */,
 				B2D9E6BCD21611B708C78F26 /* MotionService.swift in Sources */,
 				ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */,
 				5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */,
+				DB60EBD564C4FFEC0E4F4EE9 /* PotholeActionRecord.swift in Sources */,
+				3E1EAD8552D8141AAAF82DC8 /* PotholeActionStore.swift in Sources */,
 				4E08F2DAC6BCB52420AA8BB2 /* PotholeDetector.swift in Sources */,
 				58D2BBBAABD2C950BE180973 /* PrivacyZone.swift in Sources */,
 				FCBD4AA25AEF988133150B59 /* PrivacyZoneRecord.swift in Sources */,
@@ -812,6 +846,7 @@
 				F320CE0A988E38F2900ED60A /* RoadQualityMapView.swift in Sources */,
 				61C6790E5D041EB25808BAF3 /* RoadSenseLogger.swift in Sources */,
 				7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */,
+				4233C35F3626F4B3635D657A /* RoadSenseSchema.swift in Sources */,
 				F196DEC71004CA063E17D458 /* SegmentAPIModels.swift in Sources */,
 				BE7DBD83E05D54A627C6B4E6 /* SegmentDetailResponseParser.swift in Sources */,
 				A4F89ADA5E7D463589AF391D /* SegmentDetailSheet.swift in Sources */,
@@ -828,6 +863,7 @@
 				71B953E564C5532CCA058F32 /* UploadAPIModels.swift in Sources */,
 				94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */,
 				13F02CBE3FA2D19A992E0016 /* UploadBatchJSONCodec.swift in Sources */,
+				135F89FB9099D9FAE72742CC /* UploadDrainCoordinator.swift in Sources */,
 				55AA7CEAC78F98938B1505DB /* UploadEligibilityPolicy.swift in Sources */,
 				B84C0C037E20BD97BD457AB5 /* UploadPolicy.swift in Sources */,
 				4294ED05A035C9695AEE0A7F /* UploadQueueCore.swift in Sources */,

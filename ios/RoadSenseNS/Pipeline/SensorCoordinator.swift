@@ -8,9 +8,9 @@ final class SensorCoordinator {
     private let thermalMonitor: ThermalMonitoring
     private let privacyZoneStore: PrivacyZoneStoring
     private let readingStore: ReadingStore
-    private let uploader: Uploader
     private let logger: RoadSenseLogger
     private let checkpointStore: SensorCheckpointStore
+    private let scheduleUploadDrain: @MainActor (Date) -> Void
 
     private var drivingTask: Task<Void, Never>?
     private var locationTask: Task<Void, Never>?
@@ -32,9 +32,9 @@ final class SensorCoordinator {
         thermalMonitor: ThermalMonitoring,
         privacyZoneStore: PrivacyZoneStoring,
         readingStore: ReadingStore,
-        uploader: Uploader,
         logger: RoadSenseLogger,
-        checkpointStore: SensorCheckpointStore
+        checkpointStore: SensorCheckpointStore,
+        scheduleUploadDrain: @escaping @MainActor (Date) -> Void
     ) {
         self.locationService = locationService
         self.motionService = motionService
@@ -42,9 +42,9 @@ final class SensorCoordinator {
         self.thermalMonitor = thermalMonitor
         self.privacyZoneStore = privacyZoneStore
         self.readingStore = readingStore
-        self.uploader = uploader
         self.logger = logger
         self.checkpointStore = checkpointStore
+        self.scheduleUploadDrain = scheduleUploadDrain
     }
 
     func startMonitoring() {
@@ -153,6 +153,7 @@ final class SensorCoordinator {
 
         stopServicesAndReset()
         logger.info("sensor collection stopped")
+        scheduleUploadDrain(Date().addingTimeInterval(15 * 60))
     }
 
     private func stopServicesAndReset() {
@@ -208,7 +209,6 @@ final class SensorCoordinator {
         case let .accepted(candidate):
             do {
                 try readingStore.saveAccepted(candidate)
-                await uploader.drainOnce()
             } catch {
                 logger.error("failed to persist accepted reading: \(error.localizedDescription)")
             }

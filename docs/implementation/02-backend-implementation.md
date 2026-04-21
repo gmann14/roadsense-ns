@@ -55,6 +55,7 @@ CREATE TYPE roughness_category AS ENUM (
 );
 CREATE TYPE confidence_level AS ENUM ('low', 'medium', 'high');
 CREATE TYPE pothole_status AS ENUM ('active', 'expired', 'resolved');
+CREATE TYPE pothole_action_type AS ENUM ('manual_report', 'confirm_present', 'confirm_fixed');
 CREATE TYPE trend_direction AS ENUM ('improving', 'stable', 'worsening');
 ```
 
@@ -168,7 +169,10 @@ CREATE TABLE pothole_reports (
     first_reported_at TIMESTAMPTZ NOT NULL,
     last_confirmed_at TIMESTAMPTZ NOT NULL,
     confirmation_count INTEGER NOT NULL DEFAULT 1,
+    negative_confirmation_count INTEGER NOT NULL DEFAULT 0,
     unique_reporters INTEGER NOT NULL DEFAULT 1,
+    last_fixed_reported_at TIMESTAMPTZ,
+    has_photo BOOLEAN NOT NULL DEFAULT FALSE,
     status pothole_status NOT NULL DEFAULT 'active',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -176,6 +180,28 @@ CREATE TABLE pothole_reports (
 CREATE INDEX idx_potholes_geom ON pothole_reports USING GIST (geom);
 CREATE INDEX idx_potholes_segment ON pothole_reports (segment_id);
 CREATE INDEX idx_potholes_status ON pothole_reports (status);
+```
+
+### Migration 005b — `pothole_actions`
+
+Explicit user pothole actions get their own table for idempotency, dedupe, and resolution auditability.
+
+```sql
+CREATE TABLE pothole_actions (
+    action_id UUID PRIMARY KEY,
+    device_token_hash BYTEA NOT NULL,
+    pothole_report_id UUID REFERENCES pothole_reports(id) ON DELETE SET NULL,
+    segment_id UUID REFERENCES road_segments(id) ON DELETE SET NULL,
+    geom GEOMETRY(POINT, 4326) NOT NULL,
+    accuracy_m NUMERIC(5,2),
+    action_type pothole_action_type NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_pothole_actions_geom   ON pothole_actions USING GIST (geom);
+CREATE INDEX idx_pothole_actions_report ON pothole_actions (pothole_report_id);
+CREATE INDEX idx_pothole_actions_device ON pothole_actions (device_token_hash, recorded_at DESC);
 ```
 
 ### Migration 006 — `processed_batches` (idempotency)
@@ -1305,6 +1331,43 @@ $$;
 
 Full body omitted here for brevity; follows same structure as aggregate folding.
 
+### Explicit Pothole Actions: `apply_pothole_action`
+
+Manual `Mark pothole`, `Still there`, and `Looks fixed` actions all flow through one stored procedure plus an idempotent `pothole_actions` insert.
+
+Rules:
+
+0. same-device duplicates do not get to farm counts
+   - if the same `device_token_hash` already submitted the same `action_type` against the same canonical pothole within the last `24h`, return `200` with the same canonical `pothole_report_id` but do **not** increment counters again
+1. `manual_report`
+   - find the nearest `pothole_reports` row within `15m` and `status IN ('active', 'resolved')`
+   - if found, increment `confirmation_count`, update `last_confirmed_at`, and force `status = 'active'`
+   - if not found, create a new `active` row
+2. `confirm_present`
+   - requires `pothole_report_id`
+   - reject with `409 stale_target` if the provided coordinate is > `30m` from the target cluster geom
+   - increment `confirmation_count`, update `last_confirmed_at`, and force `status = 'active'`
+3. `confirm_fixed`
+   - requires `pothole_report_id`
+   - reject with `409 stale_target` if the provided coordinate is > `30m` from the target cluster geom
+   - increment `negative_confirmation_count`, update `last_fixed_reported_at`
+   - mark the report `resolved` only if there are at least **2 distinct device_token_hash** values in `pothole_actions` where:
+     - `action_type = 'confirm_fixed'`
+     - `pothole_report_id = target`
+     - `recorded_at > pothole_reports.last_confirmed_at`
+     - `recorded_at >= now() - interval '30 days'`
+
+Important consequence: a single `Looks fixed` report never deletes the marker. A later positive confirmation (`manual_report`, `confirm_present`, passive spike, or approved photo) re-activates the same pothole row if it is still within the 90-day relevance window.
+
+### Pothole Action Rate Limits
+
+Explicit pothole actions get their own rate-limit bucket so they cannot starve reading uploads and so a spammy tapper cannot brute-force public pothole counts:
+
+- **Per device token hash:** 60 pothole actions / 24h
+- **Per IP:** 120 pothole actions / 1h
+
+Reuse the existing `rate_limits` table and `check_and_bump_rate_limit` RPC with keys `pothole-action-device:<hash>` and `pothole-action-ip:<ip>`.
+
 ## Vector Tile Endpoint
 
 ### Endpoint: `GET /functions/v1/tiles/:z/:x/:y.mvt`
@@ -1936,7 +1999,7 @@ REVOKE EXECUTE ON FUNCTION expire_unconfirmed_potholes() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION expire_unconfirmed_potholes() TO service_role;
 ```
 
-Post-MVP: add "road repaired" auto-detection — if 2+ contributors report smooth readings at a pothole location, mark as `resolved`.
+Post-MVP: add "road repaired" auto-detection — if 2+ contributors report smooth readings at a pothole location, treat that as another negative confirmation input alongside explicit `confirm_fixed` actions.
 
 ## Indexing & Query Performance
 
@@ -1982,8 +2045,8 @@ This section covers the server half of the photo capture feature: storage, moder
 
 One Supabase Storage bucket, `pothole-photos`, with:
 
-- **Access:** private by default. Reads go through a dedicated `GET /pothole-photos/{id}/image` Edge Function that enforces moderation status and emits signed read URLs with a short TTL (60s).
-- **Write path:** signed PUT URLs issued by `POST /pothole-photos` (see [03-api-contracts.md](03-api-contracts.md)). Signed URLs expire after 5 minutes and can only write to `pending/{report_id}.jpg`.
+- **Access:** private by default. Reads for the moderation tool go through a dedicated internal-only `GET /pothole-photos/{id}/image` Edge Function that enforces moderation status and emits signed read URLs with a short TTL (60s). This is **not** part of the public mobile API contract in [03-api-contracts.md](03-api-contracts.md).
+- **Write path:** signed PUT URLs issued by `POST /pothole-photos` (see [03-api-contracts.md](03-api-contracts.md)). Signed URLs expire after 5 minutes and can only write to `pending/{report_id}.jpg`. Repeating the metadata POST while the row is still `pending_upload` issues a fresh signed URL for the same `report_id`.
 - **Max object size:** 1.5 MB enforced at the bucket level. Client target is ≤ 400 KB; the extra headroom tolerates compression variance. Anything larger is a bug or abuse.
 - **Content-Type allowlist:** `image/jpeg` only. HEIC is converted to JPEG client-side before upload.
 
@@ -2006,7 +2069,7 @@ CREATE TABLE pothole_photos (
     device_token_hash BYTEA NOT NULL,
     segment_id UUID REFERENCES road_segments(id) ON DELETE SET NULL,
     pothole_report_id UUID REFERENCES pothole_reports(id) ON DELETE SET NULL,
-    geom GEOMETRY(POINT, 4326) NOT NULL,          -- already offset-randomized by client
+    geom GEOMETRY(POINT, 4326) NOT NULL,          -- precise client coordinate after privacy-zone filtering
     accuracy_m NUMERIC(5,2),
     captured_at TIMESTAMPTZ NOT NULL,
     submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -2025,7 +2088,7 @@ CREATE INDEX idx_pothole_photos_status ON pothole_photos (status);
 CREATE INDEX idx_pothole_photos_device ON pothole_photos (device_token_hash, submitted_at DESC);
 ```
 
-**Relationship to `pothole_reports`:** an approved photo that matches (or creates) a nearby pothole cluster links back via `pothole_report_id`. The existing pothole folding logic (see Migration 012) is extended: a photo's `geom` participates in the same 20m-radius cluster merge as accelerometer-detected pothole points, and the resulting `pothole_reports` row carries `has_photo = true`.
+**Relationship to `pothole_reports`:** an approved photo that matches (or creates) a nearby pothole cluster links back via `pothole_report_id`. The existing pothole folding logic (see Migration 012) is extended: a photo's `geom` participates in the same 15m-radius cluster merge as accelerometer-detected pothole points and manual pothole actions, and the resulting `pothole_reports` row carries `has_photo = true`. The public map uses the merged `pothole_reports` point, not the raw `pothole_photos.geom`.
 
 ### Moderation Tooling
 

@@ -9,6 +9,7 @@ struct AppConfigTests {
             "APP_ENV": "STAGING",
             "API_BASE_URL": "https://roadsense.ca",
             "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
             "SENTRY_DSN": "https://public@sentry.example/1",
             "APP_GROUP_IDENTIFIER": "group.ca.roadsense.ios"
         ])
@@ -17,6 +18,7 @@ struct AppConfigTests {
         #expect(config.apiBaseURL.absoluteString == "https://roadsense.ca")
         #expect(config.functionsBaseURL.absoluteString == "https://roadsense.ca/functions/v1")
         #expect(config.mapboxAccessToken == "pk.test-token")
+        #expect(config.supabaseAnonKey == "anon.test-key")
         #expect(config.sentryDSN == "https://public@sentry.example/1")
         #expect(config.appGroupIdentifier == "group.ca.roadsense.ios")
     }
@@ -26,7 +28,8 @@ struct AppConfigTests {
         #expect(throws: AppConfigError.missingOrInvalid("APP_ENV")) {
             try AppConfig.fromDictionary([
                 "API_BASE_URL": "https://roadsense.ca",
-                "MAPBOX_ACCESS_TOKEN": "pk.test-token"
+                "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+                "SUPABASE_ANON_KEY": "anon.test-key"
             ])
         }
 
@@ -34,14 +37,24 @@ struct AppConfigTests {
             try AppConfig.fromDictionary([
                 "APP_ENV": "LOCAL",
                 "API_BASE_URL": "not-a-url",
-                "MAPBOX_ACCESS_TOKEN": "pk.test-token"
+                "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+                "SUPABASE_ANON_KEY": "anon.test-key"
             ])
         }
 
         #expect(throws: AppConfigError.missingOrInvalid("MAPBOX_ACCESS_TOKEN")) {
             try AppConfig.fromDictionary([
                 "APP_ENV": "PRODUCTION",
-                "API_BASE_URL": "https://roadsense.ca"
+                "API_BASE_URL": "https://roadsense.ca",
+                "SUPABASE_ANON_KEY": "anon.test-key"
+            ])
+        }
+
+        #expect(throws: AppConfigError.missingOrInvalid("SUPABASE_ANON_KEY")) {
+            try AppConfig.fromDictionary([
+                "APP_ENV": "PRODUCTION",
+                "API_BASE_URL": "https://roadsense.ca",
+                "MAPBOX_ACCESS_TOKEN": "pk.test-token"
             ])
         }
     }

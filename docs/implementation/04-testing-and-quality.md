@@ -1,6 +1,6 @@
 # 04 — Testing & Quality
 
-*Last updated: 2026-04-20*
+*Last updated: 2026-04-21*
 
 How we verify each part of the system works, stays working, and that the roughness data we publish is trustworthy. Sensor apps fail in subtle ways (small drift, bad in edge cases, fine in simulator); this doc is biased toward catching those failures.
 
@@ -33,12 +33,18 @@ Tests live in `RoadSenseNSTests/`. Use `XCTest` + `Quick/Nimble` only if we hit 
 | `RoughnessScorer` | Deterministic scoring of canned signals (synthetic sine, step, real CSV clip). Asserts RMS within ±0.02g of expected. |
 | `PotholeDetector` | Synthetic dip-then-spike, synthetic braking (should NOT trigger), real pothole CSV (should trigger). |
 | `PrivacyZoneFilter` | Point in zone, point at boundary, point outside, multiple overlapping zones. |
+| `DriveEndpointTrimmer` | Prefix/suffix time trimming, start/end radius trimming, overlap of both rules, short-drive fully-trimmed behavior, and deterministic recovery after relaunch from persisted session endpoints. |
+| `ManualPotholeLocator` | chooses the buffered location nearest `tapTimestamp - 0.75s`, falls back to `latestSample`, rejects stale/poor-accuracy state, and preserves deterministic behavior around sparse GPS samples. |
 | `QualityFilter` | Speed, GPS accuracy, thermal state combinations — truth table. |
 | `ReadingBuilder` | Window closes at 50m, window aborts at > 15s, window discards at thermal.serious. |
-| `Uploader` | Retry backoff scheduling (inject clock), idempotency (same batch_id on retry), 429 respects Retry-After, batch_size cap. |
+| `Uploader` | Retry backoff scheduling (inject clock), idempotency (same batch_id on retry), 429 respects Retry-After, batch_size cap, `.inFlight` crash recovery, and `drainUntilBlocked()` stopping on `nextAttemptAt`. |
+| `UploadDrainCoordinator` | Foreground + BG triggers collapse to one active drain; cancellation clears active task; drain order runs pothole actions before photos before readings. |
+| `PotholeActionUploader` | 5-second undo window, dedupe of repeated taps within 20m / 8s, idempotent retry on `action_id`, `409 stale_target` handling for follow-up, and privacy-zone rejection before enqueue. |
+| `PhotoUploader` | low-speed freshness gate, precise `latestSample` coordinate persistence, metadata POST + PUT happy path, signed-URL reissue after expiry/background, 409 treated as success, and local-file deletion on success only. |
 | `PrivacyZone` | Offset creation is randomized + deterministic-given-seed, never persists un-offset coords. Statistical test: 1000 offsets for the same zone have std. dev. ≥ 60m in both lat and lng (proves the randomization isn't collapsed). |
 | `DeviceToken` | Rotation on month boundary, persistence across launches. |
 | `PermissionManager` | Each permission state → correct UI directive. |
+| `SchemaMigrationPlan` | v1 store opens under v2 and v3 without data loss; migration failure surfaces repair UI instead of silently resetting the store. |
 
 **Coverage targets:** 80% line coverage on `Pipeline/`, `Sensors/`, `Privacy/`, `Network/`. No minimum for `Features/` (UI) — SwiftUI view coverage is noise.
 
@@ -65,6 +71,7 @@ Tests live in `supabase/tests/`. Use `pgTAP` (Postgres test framework). Run in C
 | `update_segment_aggregates_from_batch` | Weighted average math, confidence tier thresholds, category boundaries. |
 | `nightly_recompute_aggregates` | Outlier trimming correctness, recency weighting, trend detection (improving/worsening/stable). |
 | `fold_pothole_candidates` | New pothole, confirmation of existing, too-far-away creates new. |
+| `apply_pothole_action` | manual report folds into nearest cluster, same-device 24h duplicates do not inflate counts, stale-target rejection for follow-up, 2-reporter fixed quorum resolves, and later positive confirmation re-activates resolved potholes. |
 | `expire_unconfirmed_potholes` | 90-day threshold, idempotent. |
 | Read-side models | `public_stats_mv` refreshes cleanly, `GET /segments/{id}` joins the right aggregate row, pothole bbox query respects the max area cap. |
 | Partition management | Next-month partition auto-created, old partition dropped. |
@@ -78,6 +85,8 @@ Tests live in `supabase/functions/<fn>/test.ts`. Use Deno's built-in `Deno.test`
 
 - Contract tests per endpoint: valid payload → 200, malformed payload → 400 with exact field_errors, all-soft-rejected payload → 200 with populated `rejected_reasons`
 - Rate limit test: 51st request in 24h → 429 with Retry-After
+- `POST /pothole-actions`: duplicate `action_id` is idempotent, same-device repeats within 24h do not inflate counters, `confirm_fixed` does not resolve on one vote, second distinct fixed vote resolves, and a later positive confirmation re-activates the same pothole
+- `POST /pothole-photos`: repeat POST while `pending_upload` returns a fresh signed URL, 409 after completed upload, and mismatched `Content-SHA256` is rejected
 - Tile test: empty tile → 204 with cache headers, non-empty tile → 200 with MVT content-type
 - Read-endpoint tests: `/segments/{id}`, `/potholes`, `/stats`, `/health`
 - Phase-2 web contract tests: `/tiles/coverage/{z}/{x}/{y}.mvt` returns `segment_coverage` layer with only `coverage_level` semantics (no raw low-sample counts), and `/segments/worst` enforces ranking/order/filter rules exactly
@@ -189,6 +198,7 @@ Commit these to the repo (small — ~1MB each):
 - `pocket-orientation.csv` — recorded with phone in pocket (orientation test)
 - `mount-orientation.csv` — recorded with phone dash-mounted
 - `low-gps-urban.csv` — downtown Halifax with known GPS dropouts
+- `home-endpoints.csv` — drive fixture where the first/last minute and first/last 300m should be trimmed from upload eligibility
 
 Each fixture has an accompanying `.expected.json` with the assertion targets:
 
@@ -203,6 +213,8 @@ Each fixture has an accompanying `.expected.json` with the assertion targets:
 ```
 
 CI runs the harness against every fixture on every PR.
+
+For `home-endpoints.csv`, `.expected.json` must also assert `trimmed_prefix_count`, `trimmed_suffix_count`, and `eligible_upload_count` so endpoint privacy is regression-tested, not just documented.
 
 Current repo note:
 
@@ -241,6 +253,7 @@ Before a real drive or simulator-harness replay is required, keep one determinis
 - Upload → 200
 - Query `segment_aggregates` for the segment → new reading_count matches
 - Query tile endpoint → MVT contains the segment
+- Photo smoke (post-MVP): metadata POST → signed PUT → `pothole_photos.status = 'pending_moderation'` → approval path folds into `pothole_reports`
 
 ### Backend internal
 
@@ -294,6 +307,63 @@ iPhone mounted on dashboard on a sunny day, 60+ minute drive. Watch for:
 - Drive for 1 hour uninterrupted
 - Check: collected readings cover the full hour, no > 5 minute gaps
 
+### Upload Execution Stress Test (week 5)
+
+Exercise the exact trigger collisions that usually break iOS background work:
+
+1. build up 3+ pending reading batches offline
+2. bring the app foreground online and immediately background it
+3. manually trigger Background Fetch in Xcode while the foreground drain is still active
+4. inject one 429 and one 5xx in successive attempts
+
+Acceptance:
+
+- exactly one active drain at a time
+- no duplicate batch submissions with different `batch_id`s for the same readings
+- `nextAttemptAt` advances correctly after 429 / 5xx
+- once the retry window expires, the next drain resumes automatically without user action
+
+### Manual Pothole Tap Accuracy Test (post-MVP)
+
+1. run the app with the map open on a real drive over a known pothole
+2. tap `Mark pothole` at the moment the wheel hits
+3. repeat 10+ times across the same physical pothole
+
+Acceptance:
+
+- resulting points cluster within the backend merge radius instead of creating multiple nearby phantom potholes
+- the buffered `tapTimestamp - 0.75s` locator outperforms naive `latestSample` in replay analysis
+- accidental double-taps inside the cooldown window do not create duplicate uploaded actions
+
+### Pothole Resolution Workflow Test (post-MVP)
+
+1. create or locate an active pothole marker
+2. submit one `Looks fixed` update
+3. verify the marker stays active
+4. submit a second `Looks fixed` update from a second device
+5. verify the marker becomes `resolved`
+6. later submit `Still there` or a new manual pothole report at the same location
+
+Acceptance:
+
+- one negative confirmation is insufficient to resolve the pothole
+- two independent negative confirmations resolve it
+- a later positive confirmation re-activates the same pothole cluster instead of creating a new one nearby
+
+### Photo Upload Resume Test (post-MVP)
+
+1. capture a photo with a fresh `< 5 km/h` speed sample
+2. allow metadata POST to succeed
+3. background the app before PUT finishes or force the PUT to time out
+4. relaunch with connectivity
+
+Acceptance:
+
+- the same `report_id` is reused
+- the client re-POSTs metadata instead of reusing an expired signed URL
+- local JPEG is retained until PUT succeeds, then deleted immediately
+- no duplicate `pothole_photos` rows are created
+
 ### Tunnel / GPS Dropout Test
 
 Drive through the MacKay / Macdonald bridges and A. Murray MacKay Bridge tunnel (if any). Verify:
@@ -323,7 +393,7 @@ Success criteria:
 - A first-time user can explain what the app does within 30 seconds of opening it
 - A first-time user can tell whether the app is currently recording within 5 seconds of seeing the map
 - A tester can identify what green/yellow/orange/red mean without guessing
-- A tester can find privacy zones and pause collection without assistance
+- A tester can find pause collection immediately and optional privacy controls without assistance
 - A tester understands the difference between their local drives and community data
 - A tester can tap a road and explain confidence / last updated in plain English after reading the sheet
 

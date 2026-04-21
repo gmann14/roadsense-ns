@@ -107,3 +107,75 @@ public struct UploadErrorEnvelope: Codable, Equatable, Sendable {
         self.details = details
     }
 }
+
+public struct PotholeActionUploadRequest: Codable, Equatable, Sendable {
+    public let actionID: UUID
+    public let deviceToken: String
+    public let clientSentAt: Date
+    public let clientAppVersion: String
+    public let clientOSVersion: String
+    public let actionType: String
+    public let potholeReportID: UUID?
+    public let lat: Double
+    public let lng: Double
+    public let accuracyM: Double
+    public let recordedAt: Date
+
+    public init(
+        actionID: UUID,
+        deviceToken: String,
+        clientSentAt: Date,
+        clientAppVersion: String,
+        clientOSVersion: String,
+        actionType: String,
+        potholeReportID: UUID?,
+        lat: Double,
+        lng: Double,
+        accuracyM: Double,
+        recordedAt: Date
+    ) {
+        self.actionID = actionID
+        self.deviceToken = deviceToken
+        self.clientSentAt = clientSentAt
+        self.clientAppVersion = clientAppVersion
+        self.clientOSVersion = clientOSVersion
+        self.actionType = actionType
+        self.potholeReportID = potholeReportID
+        self.lat = lat
+        self.lng = lng
+        self.accuracyM = accuracyM
+        self.recordedAt = recordedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case actionID = "action_id"
+        case deviceToken = "device_token"
+        case clientSentAt = "client_sent_at"
+        case clientAppVersion = "client_app_version"
+        case clientOSVersion = "client_os_version"
+        case actionType = "action_type"
+        case potholeReportID = "pothole_report_id"
+        case lat
+        case lng
+        case accuracyM = "accuracy_m"
+        case recordedAt = "recorded_at"
+    }
+}
+
+public struct PotholeActionUploadResponse: Codable, Equatable, Sendable {
+    public let actionID: UUID
+    public let potholeReportID: UUID
+    public let status: String
+
+    public init(actionID: UUID, potholeReportID: UUID, status: String) {
+        self.actionID = actionID
+        self.potholeReportID = potholeReportID
+        self.status = status
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case actionID = "action_id"
+        case potholeReportID = "pothole_report_id"
+        case status
+    }
+}

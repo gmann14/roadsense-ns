@@ -4,13 +4,7 @@ import SwiftData
 enum ModelContainerProvider {
     @MainActor
     static func schema() -> Schema {
-        Schema([
-            ReadingRecord.self,
-            UploadBatch.self,
-            PrivacyZoneRecord.self,
-            UserStats.self,
-            DeviceTokenRecord.self,
-        ])
+        Schema(versionedSchema: RoadSenseSchemaV2.self)
     }
 
     @MainActor
@@ -19,7 +13,11 @@ enum ModelContainerProvider {
             schema: schema(),
             isStoredInMemoryOnly: false
         )
-        return try ModelContainer(for: schema(), configurations: [configuration])
+        return try ModelContainer(
+            for: schema(),
+            migrationPlan: RoadSenseSchemaMigrationPlan.self,
+            configurations: [configuration]
+        )
     }
 
     @MainActor
@@ -28,6 +26,10 @@ enum ModelContainerProvider {
             schema: schema(),
             isStoredInMemoryOnly: true
         )
-        return try ModelContainer(for: schema(), configurations: [configuration])
+        return try ModelContainer(
+            for: schema(),
+            migrationPlan: RoadSenseSchemaMigrationPlan.self,
+            configurations: [configuration]
+        )
     }
 }

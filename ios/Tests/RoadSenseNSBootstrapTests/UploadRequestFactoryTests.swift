@@ -9,7 +9,8 @@ struct UploadRequestFactoryTests {
         let config = AppConfig(
             environment: .local,
             apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
-            mapboxAccessToken: "pk.test-token"
+            mapboxAccessToken: "pk.test-token",
+            supabaseAnonKey: "anon.test-key"
         )
         let endpoints = Endpoints(config: config)
         let batchID = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
@@ -37,6 +38,8 @@ struct UploadRequestFactoryTests {
         #expect(request.url == endpoints.uploadReadingsURL)
         #expect(request.httpMethod == "POST")
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+        #expect(request.value(forHTTPHeaderField: "apikey") == "anon.test-key")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer anon.test-key")
 
         let payload = try JSONSerialization.jsonObject(with: try #require(request.httpBody), options: []) as? [String: Any]
         #expect((payload?["batch_id"] as? String)?.lowercased() == batchID.uuidString.lowercased())

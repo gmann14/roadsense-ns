@@ -278,11 +278,14 @@ Post-MVP phases:
 - **Depends on:** B030
 - **RED**
   - persistence tests for reading windows, upload queue items, token rotation state, and privacy zones
+  - migration test fixture proving schema v1 opens cleanly under the explicit `SchemaMigrationPlan`
 - **GREEN**
   - implement SwiftData models
   - implement local queue and cleanup policies
+  - wire explicit `VersionedSchema` / `SchemaMigrationPlan` instead of implicit migration
 - **Acceptance**
   - app can persist pending upload state across relaunch
+  - app-hosted test can open a prior-schema store without data loss
 - **Current repo note:** `ModelContainerProvider`, `PrivacyZoneStore`, and `UploadQueueStore` now land this slice beyond just model definitions. Relauch persistence still needs app-target validation.
 
 ## Phase 5 — End-To-End Stub Loop
@@ -346,19 +349,21 @@ Post-MVP phases:
   - scores are stable under fixture replay
 - **Current repo note:** `PotholeDetector` is now wired into the live `SensorCoordinator` path, but `RoughnessScorer` still needs to replace the current direct-RMS placeholder once fixture calibration work starts.
 
-### B051 — Client-side privacy zones
+### B051 — Drive endpoint trimming and optional privacy zones
 
 - **Spec refs:** [01](01-ios-implementation.md), [06](06-security-and-privacy.md)
 - **Depends on:** B032, B034
 - **RED**
+  - unit tests for endpoint time/radius trimming, fully-trimmed short drives, and relaunch-stable trimming decisions
   - unit tests for zone inclusion/exclusion and randomized offsets
-  - UI tests for first-run privacy-zone gating
+  - UI tests proving passive collection can start without zones and that zones remain reachable from ready/settings states
 - **GREEN**
-  - implement privacy-zone storage, filtering, and onboarding requirement
+  - implement drive endpoint trimming on sealed sessions
+  - implement privacy-zone storage and filtering as optional extra protection
 - **Acceptance**
-  - passive collection cannot silently start without privacy-zone decision
-  - server never receives filtered-zone readings
-- **Current repo note:** this slice is materially implemented: onboarding is wired to a real `PrivacyZonesView` + `PrivacyZoneStore`, saved zones automatically satisfy the gate, the editor is map-backed, `SensorCoordinator` applies zone filtering before persistence/upload, and simulator UI smokes now cover the first-run privacy path via a deterministic test scenario. Remaining work is real-device validation of the privacy flow.
+  - passive collection starts after the required permissions alone
+  - server never receives endpoint-trimmed or filtered-zone readings
+- **Current repo note:** the optional privacy-zone path is materially implemented: onboarding/settings can open the real `PrivacyZonesView` + `PrivacyZoneStore`, the editor is map-backed, and `SensorCoordinator` already applies zone filtering before persistence/upload. Remaining work is the default endpoint-trimming pass, the updated ready-state/privacy copy, and real-device validation of the combined privacy flow.
 
 ### B052 — Quality filters and uploader hardening
 
@@ -442,7 +447,7 @@ Post-MVP phases:
   - adjust layouts for onboarding, map chrome, segment drawer, stats, and settings
 - **Acceptance**
   - core flows remain usable at large text sizes
-- **Current repo note:** this slice is now materially implemented in the simulator path: `OnboardingFlowView` is scroll-safe at large sizes, the app accepts a deterministic `ROAD_SENSE_DYNAMIC_TYPE_SIZE` override for UI automation, and UI smokes now verify privacy-gate plus stats/settings usability at `accessibility5`. Remaining work is VoiceOver and real-device validation, not the absence of a large-text test path.
+- **Current repo note:** this slice is now materially implemented in the simulator path: `OnboardingFlowView` is scroll-safe at large sizes, the app accepts a deterministic `ROAD_SENSE_DYNAMIC_TYPE_SIZE` override for UI automation, and UI smokes now verify the permissions-first onboarding plus stats/settings usability at `accessibility5`. Remaining work is VoiceOver and real-device validation, not the absence of a large-text test path.
 
 ## Phase 8 — TestFlight Readiness
 
@@ -561,18 +566,18 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
 ### B110 — Pothole follow-up UX
 
 - **Spec refs:** [01](01-ios-implementation.md), [07](07-web-dashboard-implementation.md)
-- **Depends on:** B050, B021
+- **Depends on:** B075, B021
 - **RED**
-  - UX copy/test plan for expiring “pothole still there?” prompts
-  - contract tests if this becomes a backend endpoint rather than local notification only
+  - UX copy/test plan for when to suppress, defer, or re-show expiring follow-up prompts
+  - web trust-copy tests explaining `active` vs `resolved` pothole semantics
 - **GREEN**
-  - implement expiring confirmation prompt similar to Waze incident confirmation
-  - optionally allow photo attachment on manual pothole reports if privacy/storage tradeoffs are explicitly accepted
+  - tune expiring confirmation prompts similar to Waze incident confirmation
+  - optionally allow photo attachment from the follow-up flow if privacy/storage tradeoffs are explicitly accepted
+  - add clear public-copy treatment for resolved potholes on the web/dashboard surfaces
 - **Acceptance**
   - follow-up prompts expire automatically and never fire while driving
   - photo upload remains optional and is not required for pothole confirmation
-- **Acceptance**
-  - search resolves municipalities and places correctly
+  - web/public copy does not imply that one user can instantly delete a pothole marker
 
 ### B093 — Coverage mode and worst-roads page
 
@@ -612,12 +617,13 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 - **Spec refs:** [01](01-ios-implementation.md#upload-execution--triggers-background-foreground)
 - **Depends on:** B060-range iOS foundation tasks
 - **RED**
-  - XCTest-level test that the registered handler posts an `UploaderDidDrain` notification when given a fake uploader with pending batches
-  - assertion that the handler calls `setTaskCompleted(success: true)` even if `Uploader.drain()` throws
+  - XCTest-level test that the registered handler calls into a fake `UploadDrainCoordinator` when given pending batches
+  - assertion that the handler still re-submits the next `BGAppRefreshTaskRequest` when the drain is cancelled or throws
+  - assertion that the handler calls `setTaskCompleted(success: false)` on cancellation and `true` on a clean drain
 - **GREEN**
-  - replace `BackgroundTaskRegistrar.upload-drain` stub with real call to `AppContainer.uploader.drain()`
-  - wire `expirationHandler` to cancel the drain task and still complete the `BGAppRefreshTask`
-  - chain `BGTaskScheduler.shared.submit(...)` for the next drain after successful completion
+  - replace `BackgroundTaskRegistrar.upload-drain` stub with real call to `AppContainer.uploadDrainCoordinator.requestDrain(...)`
+  - wire `expirationHandler` to cancel the active drain and still complete the `BGAppRefreshTask`
+  - chain `BGTaskScheduler.shared.submit(...)` for the next drain from the completion path, not only the success path
 - **Acceptance**
   - Xcode → Debug → Simulate Background Fetch triggers the real drain path on a signed build
   - drains surface progress in Settings → Uploads → Diagnostics on a device where they previously stalled
@@ -628,67 +634,129 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 - **Depends on:** B070
 - **RED**
   - unit test: on `DrivingDetector.events -> false`, `SensorCoordinator` calls `scheduleNextUploadDrain(earliestBegin: now + 15m)`
-  - scene-phase test asserting foreground transition calls `Uploader.drain()` exactly once per activation
+  - scene-phase test asserting foreground transition calls `UploadDrainCoordinator.requestDrain(.foreground)` exactly once per activation window
+  - concurrency test asserting a foreground activation and BG refresh firing at the same time result in one queue drain, not two
 - **GREEN**
   - add `scheduleNextUploadDrain` helper on `BackgroundTaskRegistrar`
-  - observe `scenePhase` in `RoadSenseNSApp` with a debounce so quick foreground/background toggles do not stack drain calls
+  - observe `scenePhase` in `RoadSenseNSApp` with a debounce/cooldown so quick foreground/background toggles do not stack drain calls
+  - route every trigger path through the same `UploadDrainCoordinator`
 - **Acceptance**
   - a simulated drive on device results in a queued `BGAppRefreshTaskRequest` in Xcode → Debug → Background Tasks
+  - a cold open with queued data does not produce concurrent drain attempts
 
-### B072 — Cellular/Wi-Fi toggle per upload kind
+### B072 — Persist retry/backoff eligibility and passive upload status
 
-- **Spec refs:** [01](01-ios-implementation.md#data-volume--wi-fi-strategy)
+- **Spec refs:** [01](01-ios-implementation.md#data-volume--upload-policy)
 - **Depends on:** B071
 - **RED**
-  - `UploadPolicy` unit tests covering the matrix from the Wi-Fi Strategy table
+  - `UploadPolicy` / queue tests asserting 429 and 5xx persist `nextAttemptAt`
+  - unit test: `drainUntilBlocked()` uploads multiple eligible batches, then stops when the next batch is still backing off
+  - settings view-model test covering `offline`, `retrying at <time>`, and `waiting for background time` copy
 - **GREEN**
-  - promote the current single `allowCellularUpload` UserDefault into a pair: `allowCellularUploadReadings` (default true), `allowCellularUploadPhotos` (default false)
-  - Settings → Uploads renders both toggles with the documented footnote copy
+  - add persisted `nextAttemptAt` / last-success metadata to the upload queue models
+  - replace expensive-network gating and cellular toggles with a simpler eligibility policy: network satisfied + retry window elapsed
+  - define stale-`.inFlight` recovery (`lastAttemptAt > 5m` => retryable `.pending`)
+  - Settings → Uploads renders passive status only: pending count, last success, waiting reason, retry failed batches
 - **Acceptance**
-  - toggling Wi-Fi-only for readings prevents a batch from attempting upload while `NWPathMonitor.isExpensive == true`, and resumes when path becomes non-expensive
+  - one 5xx on a drive-end trigger does not block the next eligible cycle after backoff expires
+  - an app relaunch after a killed in-flight upload does not strand the batch forever in `.inFlight`
+  - on both cellular and Wi-Fi, eligible batches upload automatically without user intervention
 
-## Phase 11b — Pothole photo capture (post-MVP feature)
+## Phase 11b — Manual pothole reporting and follow-up
 
-### B073 — Photo capture client surface
+### B073 — Manual pothole client surface
+
+- **Spec refs:** [01](01-ios-implementation.md#manual-pothole-reporting-and-follow-up)
+- **Depends on:** B070, B072
+- **Status:** partially implemented. `Mark pothole`, undo, `ManualPotholeLocator`, `PotholeActionRecord`, and upload-drain integration are in the app. Remaining scope is marker-detail `Still there` / `Looks fixed` actions.
+- **RED**
+  - UI test that tapping `Mark pothole` with a stale (`> 10s`) or poor-accuracy (`> 25m`) location sample shows the non-blocking GPS warning instead of queueing an action
+  - unit test that `ManualPotholeLocator` chooses the buffered sample nearest `tapTimestamp - 0.75s`
+  - unit test that repeated taps within `20m` / `8s` update the same pending-undo row instead of creating duplicates
+  - unit test that pothole actions inside a privacy zone are discarded and never enqueued
+- **GREEN**
+  - add the large `Mark pothole` map action plus marker-detail `Still there` / `Looks fixed` actions
+  - add `PotholeActionRecord` SwiftData model with `pendingUndo` / `pendingUpload` states
+  - integrate pothole actions with `UploadDrainCoordinator` ahead of photos/readings
+- **Acceptance**
+  - tapping `Mark pothole` produces one queued `PotholeActionRecord` with compensated precise lat/lng and a 5-second undo window
+  - tapping `Still there` / `Looks fixed` produces one queued follow-up action tied to the selected `pothole_report_id`
+
+### B074 — Manual pothole backend + contract
+
+- **Spec refs:** [02](02-backend-implementation.md#explicit-pothole-actions-apply_pothole_action), [03](03-api-contracts.md)
+- **Depends on:** B010-range backend foundation
+- **Status:** implemented. Migration, Edge Function, stored procedure, and test coverage exist in the repo.
+- **RED**
+  - pgTAP tests for `pothole_actions` schema, idempotent `apply_pothole_action`, same-device 24h dedupe, stale-target rejection, and resolved-pothole reactivation
+  - Deno tests for `POST /pothole-actions` happy path, duplicate `action_id`, same-device repeat not inflating counters, one-vote-not-resolved, second-distinct-fixed-vote resolves, and 429 rate limit
+- **GREEN**
+  - migration for `pothole_action_type` + `pothole_actions`
+  - Edge Function `pothole-actions/index.ts`
+  - stored procedure `apply_pothole_action(...)` folding manual/follow-up actions into canonical `pothole_reports`
+- **Acceptance**
+  - one pothole location reported manually multiple times resolves to one canonical `pothole_report_id`
+  - two independent `confirm_fixed` actions resolve a pothole; one alone does not
+
+### B075 — Follow-up UX polish on top of the core action model
+
+- **Spec refs:** [01](01-ios-implementation.md#manual-pothole-reporting-and-follow-up)
+- **Depends on:** B073, B074
+- **Status:** pending. This is the remaining explicit-reporting slice after the shipped manual-mark + backend foundation.
+- **RED**
+  - UX copy/test plan for expiring `still there?` prompts
+  - unit tests that prompts never fire while driving and expire automatically if ignored
+- **GREEN**
+  - optional expiring follow-up prompt after a later pass near an active pothole
+  - hook the prompt buttons into the existing `PotholeActionRecord` flow rather than inventing a second resolution path
+- **Acceptance**
+  - follow-up prompts expire automatically and never fire while driving
+  - prompt actions and marker-sheet actions produce the same server-side result
+
+## Phase 11c — Pothole photo capture (post-MVP feature)
+
+### B076 — Photo capture client surface
 
 - **Spec refs:** [01](01-ios-implementation.md#pothole-photo-capture-post-mvp)
-- **Depends on:** B070, B072
+- **Depends on:** B070, B072, B074
 - **RED**
-  - UI test that the `Report a pothole` button is hidden when `DrivingDetector.last == true`
+  - UI test that tapping `Take photo` while `latestSpeedKmh >= 5` or the latest speed sample is older than 10s shows the safety interstitial, while a fresh `< 5` sample presents the camera
   - unit test that photos captured inside a privacy zone are deleted and never enqueued
+  - unit test that the queued report stores the precise `latestSample` coordinate, not EXIF GPS and not a randomized offset
   - unit test that EXIF fields (GPS, TIFF, Exif dicts) are absent from the final uploaded bytes
 - **GREEN**
   - add `PotholeCameraView` (AVFoundation) with confirm + retake flow
   - add `PotholeReportRecord` SwiftData model
-  - integrate with upload queue; photos are a separate `UploadKind.photo`
+  - integrate with upload scheduling while keeping a photo-specific local state machine (`pendingMetadata`, `pendingModeration`, `failedPermanent`)
 - **Acceptance**
-  - end-to-end test against a local Supabase: tap shutter → confirm → server receives the photo → row lands in `pothole_photos` as `pending_moderation`
+  - tap shutter → confirm produces one queued `PotholeReportRecord` with precise lat/lng, a stripped JPEG on disk, and `uploadState == .pendingMetadata`
 
-### B074 — Photo upload backend
+### B077 — Photo upload backend
 
 - **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp), [03](03-api-contracts.md)
-- **Depends on:** B010-range backend foundation
+- **Depends on:** B010-range backend foundation, B074
 - **RED**
   - pgTAP tests for `pothole_photos` schema + RLS + rate-limit bucket isolation
-  - Deno tests for `POST /pothole-photos` happy path, 409 duplicate, 429 rate limit, and content-SHA mismatch
+  - Deno tests for `POST /pothole-photos` happy path, repeat POST while `pending_upload` returning a fresh signed URL, 409 after completed upload, 429 rate limit, and content-SHA mismatch
 - **GREEN**
   - migration for `pothole_photos` + `pothole_photo_status` enum
-  - Edge Function `pothole-photos/index.ts` issuing signed PUT URLs with 5-minute TTL
+  - Edge Function `pothole-photos/index.ts` issuing signed PUT URLs with 5-minute TTL and idempotent reissue before upload completes
   - Storage bucket provisioning with byte-size + content-type restrictions
   - Storage webhook or cron that promotes uploaded objects from `pending/` to `pending_moderation/`
 - **Acceptance**
   - E2E contract tests pass against a preview Supabase project
+  - a timed-out PUT followed by retry creates one server row and eventually lands in `pending_moderation`
 
-### B075 — Photo moderation queue + publishing
+### B078 — Photo moderation queue + publishing
 
 - **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp)
-- **Depends on:** B074
+- **Depends on:** B077
 - **RED**
   - pgTAP tests for `approve_pothole_photo()` and `reject_pothole_photo()` stored procedures (status transition, storage path move, `pothole_reports` fold-in)
 - **GREEN**
   - approve/reject stored procedures; Storage move on approve; Storage delete on reject
   - Supabase Studio view with approve/reject actions bound to those procedures
-  - pothole-folding logic extension so approved photos participate in the 20m-cluster merge with `pothole_reports`
+  - pothole-folding logic extension so approved photos participate in the same 15m cluster merge used by accelerometer pothole folding and manual pothole actions, with the public marker coming from the merged `pothole_reports` row
 - **Acceptance**
   - an approved photo appears on the public pothole layer within one tile-cache TTL
 

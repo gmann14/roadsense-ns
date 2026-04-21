@@ -1,6 +1,6 @@
 # 00 — Execution Plan
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-04-21*
 
 ## Objective
 
@@ -15,7 +15,7 @@ For literal task order and acceptance-criteria slicing, use [08-implementation-b
 1. **Own the critical path ruthlessly.** Backend schema, OSM import, and vector tile plumbing block everything. Start them week 1, even before the iOS client is collecting real data.
 2. **Ship the boring path first.** Skeleton end-to-end loop (with fake/stub scoring) before polishing any single layer.
 3. **Calibrate early with real driving.** The roughness thresholds in the spec are guesses. Drive a known-bad road in week 3 and look at the data before writing the UI.
-4. **Privacy-first defaults are cheaper to implement than to retrofit.** Ship with 500m zones, randomized offsets, WiFi-only upload from day one.
+4. **Privacy-first defaults are cheaper to implement than to retrofit.** Ship with endpoint trimming by default, optional 500m zones, randomized zone-center storage, precise post-filter uploads, and short raw-data retention from day one.
 5. **Observability before scale.** Logs/metrics in place before first outside tester. A silent failure in a civic-data app is worse than a loud one.
 
 ## Critical Path (8 Weeks)
@@ -41,7 +41,7 @@ Week 3 ──┬─ End-to-end smoke test: stub reading → upload → aggregate
 
 Week 4 ──┬─ Roughness scoring algorithm tuned against calibration data
          ├─ iOS: Mapbox map view with vector tile source
-         ├─ Privacy zone filtering + batched upload queue
+         ├─ Endpoint trimming + optional privacy zones + batched upload queue
          └─ Nightly aggregate recompute job
 
 Week 5 ──┬─ UI polish pass: onboarding, permission prompts, empty states

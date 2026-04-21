@@ -39,6 +39,7 @@ struct UploadQueueCoreTests {
             createdAt: now.addingTimeInterval(-60),
             attemptCount: 1,
             lastAttemptAt: now.addingTimeInterval(-30),
+            nextAttemptAt: nil,
             status: .pending,
             readingCount: 10
         )
@@ -58,6 +59,80 @@ struct UploadQueueCoreTests {
         #expect(batch.id == existingBatch.id)
     }
 
+    @Test("blocks pending batches until next attempt time")
+    func blocksRetryWindow() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let existingBatch = QueueUploadBatch(
+            id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
+            createdAt: now.addingTimeInterval(-60),
+            attemptCount: 1,
+            lastAttemptAt: now.addingTimeInterval(-30),
+            nextAttemptAt: now.addingTimeInterval(120),
+            status: .pending,
+            readingCount: 10
+        )
+
+        let decision = UploadQueueCore.prepareNextBatch(
+            pendingReadings: (0..<10).map { _ in QueueReadingRecord(uploadBatchID: existingBatch.id) },
+            existingBatch: existingBatch,
+            now: now,
+            makeBatchID: { UUID() }
+        )
+
+        #expect(decision == .none)
+    }
+
+    @Test("does not adopt a fresh in-flight batch")
+    func blocksFreshInFlightBatch() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let existingBatch = QueueUploadBatch(
+            id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
+            createdAt: now.addingTimeInterval(-60),
+            attemptCount: 1,
+            lastAttemptAt: now.addingTimeInterval(-10),
+            nextAttemptAt: nil,
+            status: .inFlight,
+            readingCount: 10
+        )
+
+        let decision = UploadQueueCore.prepareNextBatch(
+            pendingReadings: (0..<10).map { _ in QueueReadingRecord(uploadBatchID: existingBatch.id) },
+            existingBatch: existingBatch,
+            now: now,
+            makeBatchID: { UUID() }
+        )
+
+        #expect(decision == .none)
+    }
+
+    @Test("adopts a stale in-flight batch")
+    func adoptsStaleInFlightBatch() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let existingBatch = QueueUploadBatch(
+            id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
+            createdAt: now.addingTimeInterval(-600),
+            attemptCount: 1,
+            lastAttemptAt: now.addingTimeInterval(-400),
+            nextAttemptAt: nil,
+            status: .inFlight,
+            readingCount: 10
+        )
+
+        let decision = UploadQueueCore.prepareNextBatch(
+            pendingReadings: (0..<10).map { _ in QueueReadingRecord(uploadBatchID: existingBatch.id) },
+            existingBatch: existingBatch,
+            now: now,
+            makeBatchID: { UUID() }
+        )
+
+        guard case let .ready(batch, _) = decision else {
+            Issue.record("Expected stale in-flight batch to be adopted")
+            return
+        }
+
+        #expect(batch.id == existingBatch.id)
+    }
+
     @Test("successful upload marks the batch and attached readings complete")
     func successMarksUploadComplete() {
         let now = Date(timeIntervalSince1970: 2_000)
@@ -67,6 +142,7 @@ struct UploadQueueCoreTests {
             createdAt: now.addingTimeInterval(-60),
             attemptCount: 1,
             lastAttemptAt: now.addingTimeInterval(-30),
+            nextAttemptAt: now.addingTimeInterval(20),
             status: .inFlight,
             readingCount: 2
         )
@@ -88,6 +164,7 @@ struct UploadQueueCoreTests {
         )
 
         #expect(outcome.batch.status == .succeeded)
+        #expect(outcome.batch.nextAttemptAt == nil)
         #expect(outcome.batch.acceptedCount == 2)
         #expect(outcome.readings.allSatisfy { $0.uploadedAt == now })
     }
@@ -100,6 +177,7 @@ struct UploadQueueCoreTests {
             createdAt: now.addingTimeInterval(-60),
             attemptCount: 4,
             lastAttemptAt: now.addingTimeInterval(-30),
+            nextAttemptAt: nil,
             status: .inFlight,
             readingCount: 10
         )
@@ -112,7 +190,33 @@ struct UploadQueueCoreTests {
         )
 
         #expect(updated.status == .failedPermanent)
+        #expect(updated.nextAttemptAt == nil)
         #expect(updated.firstErrorMessage == "validation_failed")
         #expect(updated.attemptCount == 5)
+    }
+
+    @Test("retry failure keeps batch pending and sets next attempt time")
+    func retryFailureSetsNextAttemptTime() {
+        let now = Date(timeIntervalSince1970: 3_000)
+        let batch = QueueUploadBatch(
+            id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
+            createdAt: now.addingTimeInterval(-60),
+            attemptCount: 1,
+            lastAttemptAt: now.addingTimeInterval(-30),
+            nextAttemptAt: nil,
+            status: .inFlight,
+            readingCount: 10
+        )
+
+        let updated = UploadQueueCore.applyFailure(
+            batch: batch,
+            disposition: .retry(afterSeconds: 60),
+            errorMessage: "rate_limited",
+            now: now
+        )
+
+        #expect(updated.status == .pending)
+        #expect(updated.nextAttemptAt == now.addingTimeInterval(60))
+        #expect(updated.attemptCount == 2)
     }
 }

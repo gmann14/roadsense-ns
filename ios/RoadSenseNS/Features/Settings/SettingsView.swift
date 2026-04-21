@@ -6,6 +6,7 @@ struct SettingsView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var isDeleting = false
+    @State private var isRetryingFailedUploads = false
     @State private var isConfirmingDelete = false
     @State private var errorMessage: String?
 
@@ -13,6 +14,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Space.xl) {
                 collectionCard
+                uploadsCard
                 privacyCard
                 dataCard
                 aboutCard
@@ -64,19 +66,19 @@ struct SettingsView: View {
             iconSystemName: "waveform.path.ecg",
             iconTint: DesignTokens.Palette.deep,
             title: "Collection",
-            subtitle: "Passive monitoring starts when permissions are in place."
+            subtitle: "Collection is your on/off switch. Background use lets RoadSense keep collecting after you leave the app."
         ) {
             VStack(spacing: 0) {
                 statusRow(
-                    label: "Passive monitoring",
+                    label: "Collection",
                     value: model.isPassiveMonitoringEnabled ? "Enabled" : "Disabled",
                     valueTint: model.isPassiveMonitoringEnabled ? DesignTokens.Palette.smooth : DesignTokens.Palette.inkMuted
                 )
                 Divider()
                 statusRow(
-                    label: "Background collection",
+                    label: "Runs in background",
                     value: model.readiness.backgroundCollection.displayName,
-                    valueTint: DesignTokens.Palette.inkMuted
+                    valueTint: backgroundAccessTint
                 )
             }
             .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
@@ -88,7 +90,7 @@ struct SettingsView: View {
                     model.startPassiveMonitoring()
                 }
             } label: {
-                Text(model.isPassiveMonitoringEnabled ? "Stop passive monitoring" : "Start passive monitoring")
+                Text(model.isPassiveMonitoringEnabled ? "Stop collection" : "Start collection")
                     .font(.system(size: 16, weight: .semibold))
                     .frame(maxWidth: .infinity)
             }
@@ -98,7 +100,7 @@ struct SettingsView: View {
             .accessibilityIdentifier("settings.toggle-monitoring")
 
             if model.readiness.backgroundCollection == .upgradeRequired {
-                Button("Enable background collection") {
+                Button("Allow in background") {
                     model.requestAlwaysLocationUpgrade()
                 }
                 .buttonStyle(.bordered)
@@ -115,7 +117,7 @@ struct SettingsView: View {
             iconSystemName: "lock.shield.fill",
             iconTint: DesignTokens.Palette.smooth,
             title: "Privacy",
-            subtitle: "Zones filter readings on-device before upload. Home, work, partner, school — as many as you need."
+            subtitle: "Optional zones filter readings on-device before upload. Useful for home, work, or anywhere you stop often."
         ) {
             Button("Manage privacy zones") {
                 dismiss()
@@ -126,6 +128,57 @@ struct SettingsView: View {
             .controlSize(.large)
             .frame(maxWidth: .infinity)
             .accessibilityIdentifier("settings.manage-privacy-zones")
+        }
+    }
+
+    private var uploadsCard: some View {
+        groupedCard(
+            iconSystemName: "arrow.triangle.2.circlepath.circle.fill",
+            iconTint: DesignTokens.Palette.deep,
+            title: "Uploads",
+            subtitle: "Uploads happen automatically when a network is available."
+        ) {
+            VStack(spacing: 0) {
+                statusRow(
+                    label: "Uploads waiting",
+                    value: "\(model.uploadStatusSummary.pendingReadingCount)",
+                    valueTint: DesignTokens.Palette.ink
+                )
+                Divider()
+                statusRow(
+                    label: "Last successful upload",
+                    value: formattedUploadTime(model.uploadStatusSummary.lastSuccessfulUploadAt),
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
+                Divider()
+                statusRow(
+                    label: "Waiting reason",
+                    value: uploadWaitingReason,
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
+            }
+            .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
+
+            if model.uploadStatusSummary.failedPermanentBatchCount > 0 {
+                Button {
+                    retryFailedUploads()
+                } label: {
+                    HStack {
+                        if isRetryingFailedUploads {
+                            ProgressView()
+                                .tint(DesignTokens.Palette.deep)
+                        }
+                        Text(isRetryingFailedUploads ? "Retrying failed batches…" : "Retry failed batches")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.deep)
+                .controlSize(.large)
+                .disabled(isRetryingFailedUploads)
+                .accessibilityIdentifier("settings.retry-failed-uploads")
+            }
         }
     }
 
@@ -236,6 +289,41 @@ struct SettingsView: View {
         .padding(.vertical, DesignTokens.Space.sm)
     }
 
+    private var uploadWaitingReason: String {
+        if model.uploadStatusSummary.failedPermanentBatchCount > 0 {
+            return "Needs attention"
+        }
+
+        if let nextRetryAt = model.uploadStatusSummary.nextRetryAt {
+            return "Retrying at \(nextRetryAt.formatted(date: .omitted, time: .shortened))"
+        }
+
+        if model.uploadStatusSummary.pendingReadingCount > 0 {
+            return "Waiting to upload"
+        }
+
+        return "Up to date"
+    }
+
+    private var backgroundAccessTint: Color {
+        switch model.readiness.backgroundCollection {
+        case .enabled:
+            return DesignTokens.Palette.smooth
+        case .upgradeRequired:
+            return DesignTokens.Palette.warning
+        case .unavailable:
+            return DesignTokens.Palette.inkMuted
+        }
+    }
+
+    private func formattedUploadTime(_ date: Date?) -> String {
+        guard let date else {
+            return "Never"
+        }
+
+        return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
     private func deleteLocalData() {
         isDeleting = true
         defer { isDeleting = false }
@@ -245,6 +333,18 @@ struct SettingsView: View {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func retryFailedUploads() {
+        isRetryingFailedUploads = true
+
+        Task {
+            await model.retryFailedUploads()
+            await MainActor.run {
+                isRetryingFailedUploads = false
+                errorMessage = nil
+            }
         }
     }
 }

@@ -20,6 +20,7 @@ enum QueueModelMapper {
             createdAt: model.createdAt,
             attemptCount: model.attemptCount,
             lastAttemptAt: model.lastAttemptAt,
+            nextAttemptAt: model.nextAttemptAt,
             status: map(model.status),
             readingCount: model.readingCount,
             firstErrorMessage: model.firstErrorMessage,
@@ -34,6 +35,7 @@ enum QueueModelMapper {
         model.createdAt = record.createdAt
         model.attemptCount = record.attemptCount
         model.lastAttemptAt = record.lastAttemptAt
+        model.nextAttemptAt = record.nextAttemptAt
         model.status = map(record.status)
         model.readingCount = record.readingCount
         model.firstErrorMessage = record.firstErrorMessage
