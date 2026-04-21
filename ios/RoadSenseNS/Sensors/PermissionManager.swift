@@ -23,7 +23,7 @@ final class SystemPermissionManager: NSObject, PermissionManaging {
     func currentSnapshot(privacyZones: PrivacyZoneSetupState) -> PermissionSnapshot {
         PermissionSnapshot(
             location: map(locationManager.authorizationStatus),
-            motion: map(CMMotionActivityManager.authorizationStatus()),
+            motion: currentMotionState(),
             privacyZones: privacyZones
         )
     }
@@ -33,11 +33,25 @@ final class SystemPermissionManager: NSObject, PermissionManaging {
             _ = await requestLocationWhenInUseAuthorization()
         }
 
+        #if !targetEnvironment(simulator)
         if CMMotionActivityManager.authorizationStatus() == .notDetermined {
             await requestMotionAuthorization()
         }
+        #endif
 
         return currentSnapshot(privacyZones: privacyZones)
+    }
+
+    private func currentMotionState() -> MotionPermissionState {
+        #if targetEnvironment(simulator)
+        // Core Motion activity APIs aren't available on the iOS Simulator, so
+        // CMMotionActivityManager.authorizationStatus() stays .notDetermined forever
+        // and onboarding can't advance past the permissions stage. Synthesize
+        // an authorized state for developer testing; real-device behavior is unchanged.
+        return .authorized
+        #else
+        return map(CMMotionActivityManager.authorizationStatus())
+        #endif
     }
 
     private func requestLocationWhenInUseAuthorization() async -> CLAuthorizationStatus {

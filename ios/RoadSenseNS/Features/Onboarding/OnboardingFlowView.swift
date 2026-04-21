@@ -130,25 +130,62 @@ struct OnboardingFlowView: View {
             title: "We need two permissions before your first drive.",
             body: "Location while using the app, then Motion & Fitness. Always Location comes later, once you’ve seen a drive succeed."
         ) {
-            Button {
-                Task { await model.requestInitialPermissions() }
-            } label: {
-                if model.isRequestingPermissions {
-                    ProgressView()
-                        .tint(.white)
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text("Continue")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
+                permissionTip(
+                    icon: "location.fill",
+                    title: "Location",
+                    guidance: "Tap **Allow While Using App**. Allow Once resets every launch, so you’d be re-prompted forever."
+                )
+                permissionTip(
+                    icon: "figure.walk.motion",
+                    title: "Motion & Fitness",
+                    guidance: "Tap **OK**. Motion is the core signal for scoring road roughness."
+                )
+
+                Button {
+                    Task { await model.requestInitialPermissions() }
+                } label: {
+                    if model.isRequestingPermissions {
+                        ProgressView()
+                            .tint(.white)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("Continue")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.deep)
+                .controlSize(.large)
+                .disabled(model.isRequestingPermissions)
+                .accessibilityIdentifier("onboarding.continue")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(DesignTokens.Palette.deep)
-            .controlSize(.large)
-            .disabled(model.isRequestingPermissions)
-            .accessibilityIdentifier("onboarding.continue")
         }
+    }
+
+    private func permissionTip(icon: String, title: String, guidance: String) -> some View {
+        HStack(alignment: .top, spacing: DesignTokens.Space.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(DesignTokens.Palette.deep)
+                .frame(width: 20, alignment: .center)
+                .padding(.top, 1)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Palette.ink)
+                Text(.init(guidance))
+                    .font(.system(size: 13))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, DesignTokens.Space.md)
+        .padding(.vertical, DesignTokens.Space.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
     }
 
     private var permissionHelp: some View {
