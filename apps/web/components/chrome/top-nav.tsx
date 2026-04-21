@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const links: Array<{ href: string; label: string }> = [
   { href: "/", label: "Map" },
   { href: "/reports/worst-roads", label: "Worst Roads" },
+  { href: "/reports/potholes", label: "Potholes" },
   { href: "/methodology", label: "Methodology" },
   { href: "/privacy", label: "Privacy" },
 ];

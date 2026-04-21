@@ -6,6 +6,7 @@ import HomePage from "@/app/page";
 import MethodologyPage from "@/app/methodology/page";
 import MunicipalityPage, { generateMetadata } from "@/app/municipality/[slug]/page";
 import PrivacyPage from "@/app/privacy/page";
+import MostReportedPotholesPage from "@/app/reports/potholes/page";
 import WorstRoadsPage from "@/app/reports/worst-roads/page";
 import { getMunicipalityBySlug, municipalityManifest } from "@/lib/municipality-manifest";
 import { parseViewportState, withUpdatedRouteState } from "@/lib/url-state";
@@ -40,6 +41,12 @@ describe("web route shells", () => {
     const markup = renderToStaticMarkup(await WorstRoadsPage());
     expect(markup).toContain("Worst Roads");
     expect(markup).toContain("Ranked public report");
+  });
+
+  it("renders the most-reported potholes route shell", async () => {
+    const markup = renderToStaticMarkup(await MostReportedPotholesPage());
+    expect(markup).toContain("Most-reported potholes");
+    expect(markup).toContain("Community pothole report");
   });
 
   it("renders methodology and privacy pages", () => {

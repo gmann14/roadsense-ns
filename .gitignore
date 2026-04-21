@@ -19,6 +19,7 @@ coverage/
 playwright-report/
 test-results/
 .lighthouseci/
+tsconfig.tsbuildinfo
 
 # Supabase local state
 .supabase/
