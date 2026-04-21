@@ -18,196 +18,367 @@ struct PrivacyZonesView: View {
     )
     @State private var errorMessage: String?
     @State private var hasAppliedInitialViewport = false
+    @State private var zoneToDelete: PrivacyZoneRecord?
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                editorMap
-                draftPanel
+            ZStack(alignment: .top) {
+                backgroundGradient.ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: DesignTokens.Space.lg) {
+                        editorMap
+                        draftCard
+                        savedZonesCard
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.system(size: 14))
+                                .foregroundStyle(DesignTokens.Palette.danger)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .padding(.horizontal, DesignTokens.Space.xl)
+                    .padding(.top, DesignTokens.Space.md)
+                    .padding(.bottom, DesignTokens.Space.xxxl)
+                }
             }
-            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Privacy Zones")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("privacy-zones.close")
                 }
             }
-            .task {
-                loadZones()
+            .task { loadZones() }
+            .confirmationDialog(
+                "Remove this privacy zone?",
+                isPresented: Binding(
+                    get: { zoneToDelete != nil },
+                    set: { if !$0 { zoneToDelete = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: zoneToDelete
+            ) { zone in
+                Button("Delete \(zone.label)", role: .destructive) { deleteZone(zone) }
+                Button("Cancel", role: .cancel) { zoneToDelete = nil }
+            } message: { zone in
+                Text("Readings inside \(zone.label) will again be uploaded after deletion.")
             }
         }
     }
+
+    private var backgroundGradient: some View {
+        LinearGradient(
+            colors: [DesignTokens.Palette.canvas, DesignTokens.Palette.canvasSunken],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    // MARK: - Map + hint
 
     private var editorMap: some View {
-        ZStack(alignment: .top) {
-            Map(viewport: $viewport) {
-                Puck2D()
-                PrivacyZoneMapContent(
-                    zones: zones,
-                    draftCenter: draftCenter,
-                    draftRadiusM: draftRadiusM
-                )
-            }
-            .mapStyle(.standard(theme: .default))
-            .gestureOptions(GestureOptions(pinchEnabled: true, rotateEnabled: false))
-            .ornamentOptions(
-                OrnamentOptions(
-                    scaleBar: .init(visibility: .hidden),
-                    compass: .init(visibility: .hidden)
-                )
-            )
-            .onCameraChanged { event in
-                updateDraftCenter(event.cameraState.center)
-            }
-            .onMapLoadingError { event in
-                errorMessage = event.message
-            }
-            .frame(height: 380)
-            .overlay(alignment: .center) {
-                DraftReticle()
-                    .allowsHitTesting(false)
-            }
+        VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
+            Text("DRAFT ZONE")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.3)
+                .foregroundStyle(DesignTokens.Palette.inkMuted)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Pan the map to position the center")
-                    .font(.subheadline.weight(.semibold))
-                Text("RoadSense filters readings inside this radius before upload. Keep it large enough to cover driveways, side streets, and common arrival paths.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Text("Pan the map to position the center")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(DesignTokens.Palette.ink)
+
+            Text("RoadSense filters readings inside this radius before upload. Keep it large enough to cover driveways, side streets, and common arrival paths.")
+                .font(.system(size: 13))
+                .foregroundStyle(DesignTokens.Palette.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ZStack {
+                Map(viewport: $viewport) {
+                    Puck2D()
+                    PrivacyZoneMapContent(
+                        zones: zones,
+                        draftCenter: draftCenter,
+                        draftRadiusM: draftRadiusM
+                    )
+                }
+                .mapStyle(.standard(theme: .default))
+                .gestureOptions(GestureOptions(pinchEnabled: true, rotateEnabled: false))
+                .ornamentOptions(
+                    OrnamentOptions(
+                        scaleBar: .init(visibility: .hidden),
+                        compass: .init(visibility: .hidden)
+                    )
+                )
+                .onCameraChanged { event in
+                    updateDraftCenter(event.cameraState.center)
+                }
+                .onMapLoadingError { event in
+                    errorMessage = event.message
+                }
+                .frame(height: 320)
+                .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous))
+                .overlay(alignment: .center) {
+                    DraftReticle()
+                        .allowsHitTesting(false)
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                        .strokeBorder(DesignTokens.Palette.border, lineWidth: 1)
+                )
             }
-            .padding(14)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .padding(.top, 14)
-            .padding(.horizontal, 14)
+            .accessibilityIdentifier("privacy-zones.map")
         }
-        .accessibilityIdentifier("privacy-zones.map")
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignTokens.Space.lg)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .fill(DesignTokens.Palette.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .strokeBorder(DesignTokens.Palette.border, lineWidth: 1)
+        )
     }
 
-    private var draftPanel: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Draft zone")
-                        .font(.headline)
+    // MARK: - Draft panel
 
-                    TextField("Label", text: $draftLabel)
-                        .textInputAutocapitalization(.words)
-                        .autocorrectionDisabled()
-                        .textFieldStyle(.roundedBorder)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("Radius")
-                            Spacer()
-                            Text("\(Int(draftRadiusM)) m")
-                                .foregroundStyle(.secondary)
-                        }
-                        Slider(value: $draftRadiusM, in: 250...600, step: 25)
-                            .tint(DesignTokens.Palette.deep)
-                    }
-
-                    HStack(spacing: 12) {
-                        coordinateChip(
-                            title: "Latitude",
-                            value: draftCenter.latitude.formatted(.number.precision(.fractionLength(4)))
-                        )
-                        coordinateChip(
-                            title: "Longitude",
-                            value: draftCenter.longitude.formatted(.number.precision(.fractionLength(4)))
-                        )
-                    }
-
-                    Button("Save privacy zone") {
-                        saveZone()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(DesignTokens.Palette.deep)
-                    .disabled(draftLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .accessibilityIdentifier("privacy-zones.save")
+    private var draftCard: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
+            HStack(spacing: DesignTokens.Space.sm) {
+                ZStack {
+                    Circle()
+                        .fill(DesignTokens.Palette.deep.opacity(0.14))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Palette.deep)
                 }
-                .padding(18)
-                .background(.background, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Saved zones")
-                        .font(.headline)
-
-                    if zones.isEmpty {
-                        Text("No privacy zones yet. Add at least one before passive collection starts.")
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("privacy-zones.empty")
-                    } else {
-                        ForEach(zones, id: \.id) { zone in
-                            savedZoneRow(zone)
-                        }
-                    }
-                }
-                .padding(18)
-                .background(.background, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Zone details")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundStyle(DesignTokens.Palette.ink)
+                    Text("Label the location and pick a radius that fully covers the area.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(16)
+
+            VStack(alignment: .leading, spacing: DesignTokens.Space.xs) {
+                Text("Label")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                TextField("Label", text: $draftLabel)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .font(.system(size: 16))
+                    .padding(.horizontal, DesignTokens.Space.sm)
+                    .padding(.vertical, DesignTokens.Space.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                            .fill(DesignTokens.Palette.canvasSunken)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                            .strokeBorder(DesignTokens.Palette.border, lineWidth: 1)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: DesignTokens.Space.xs) {
+                HStack {
+                    Text("Radius")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    Spacer()
+                    Text("\(Int(draftRadiusM)) m")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(DesignTokens.Palette.ink)
+                }
+                Slider(value: $draftRadiusM, in: 250...600, step: 25)
+                    .tint(DesignTokens.Palette.deep)
+            }
+
+            HStack(spacing: DesignTokens.Space.sm) {
+                coordinateChip(
+                    title: "Latitude",
+                    value: draftCenter.latitude.formatted(.number.precision(.fractionLength(4)))
+                )
+                coordinateChip(
+                    title: "Longitude",
+                    value: draftCenter.longitude.formatted(.number.precision(.fractionLength(4)))
+                )
+            }
+
+            Button {
+                saveZone()
+            } label: {
+                Text("Save privacy zone")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(DesignTokens.Palette.deep)
+            .controlSize(.large)
+            .disabled(draftLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("privacy-zones.save")
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignTokens.Space.lg)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .fill(DesignTokens.Palette.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .strokeBorder(DesignTokens.Palette.border, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Saved zones
+
+    private var savedZonesCard: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
+            HStack(spacing: DesignTokens.Space.sm) {
+                ZStack {
+                    Circle()
+                        .fill(DesignTokens.Palette.smooth.opacity(0.14))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Palette.smooth)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Saved zones")
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundStyle(DesignTokens.Palette.ink)
+                    Text(zones.isEmpty
+                         ? "Add at least one before passive collection starts."
+                         : "Tap a zone to focus or delete it.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if zones.isEmpty {
+                VStack(alignment: .leading, spacing: DesignTokens.Space.xs) {
+                    Text("No privacy zones yet")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Palette.ink)
+                    Text("No privacy zones yet. Add at least one before passive collection starts.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
+                        .accessibilityIdentifier("privacy-zones.empty")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DesignTokens.Space.md)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                        .fill(DesignTokens.Palette.canvasSunken)
+                )
+            } else {
+                VStack(spacing: DesignTokens.Space.sm) {
+                    ForEach(zones, id: \.id) { zone in
+                        savedZoneRow(zone)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignTokens.Space.lg)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .fill(DesignTokens.Palette.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .strokeBorder(DesignTokens.Palette.border, lineWidth: 1)
+        )
     }
 
     private func coordinateChip(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .tracking(1.2)
+                .foregroundStyle(DesignTokens.Palette.inkMuted)
             Text(value)
-                .font(.subheadline.monospacedDigit())
+                .font(.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit())
+                .foregroundStyle(DesignTokens.Palette.ink)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, DesignTokens.Space.sm)
+        .padding(.vertical, DesignTokens.Space.sm)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                .fill(DesignTokens.Palette.canvasSunken)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                .strokeBorder(DesignTokens.Palette.border, lineWidth: 1)
+        )
     }
 
     private func savedZoneRow(_ zone: PrivacyZoneRecord) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+            HStack(alignment: .top, spacing: DesignTokens.Space.sm) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(zone.label)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Palette.ink)
                         .accessibilityIdentifier("privacy-zone.\(zone.label)")
                     Text("\(zone.latitude.formatted(.number.precision(.fractionLength(4)))), \(zone.longitude.formatted(.number.precision(.fractionLength(4))))")
-                        .font(.footnote.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12, design: .rounded).monospacedDigit())
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
                 }
 
-                Spacer(minLength: 12)
+                Spacer(minLength: DesignTokens.Space.sm)
 
                 Text("\(Int(zone.radiusM)) m")
-                    .font(.footnote.weight(.medium))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded).monospacedDigit())
                     .foregroundStyle(DesignTokens.Palette.deep)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, DesignTokens.Space.sm)
                     .padding(.vertical, 6)
                     .background(DesignTokens.Palette.deep.opacity(0.12), in: Capsule())
             }
 
-            HStack(spacing: 10) {
-                Button("Focus on map") {
+            HStack(spacing: DesignTokens.Space.sm) {
+                Button {
                     focus(on: zone)
+                } label: {
+                    Label("Focus on map", systemImage: "scope")
+                        .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.bordered)
+                .tint(DesignTokens.Palette.deep)
+                .controlSize(.small)
 
-                Button("Delete", role: .destructive) {
-                    deleteZone(zone)
+                Button(role: .destructive) {
+                    zoneToDelete = zone
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                        .font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(.bordered)
+                .tint(DesignTokens.Palette.danger)
+                .controlSize(.small)
             }
         }
-        .padding(.bottom, 4)
+        .padding(DesignTokens.Space.md)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                .fill(DesignTokens.Palette.canvasSunken)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                .strokeBorder(DesignTokens.Palette.border, lineWidth: 1)
+        )
     }
+
+    // MARK: - State helpers
 
     private func loadZones() {
         do {
@@ -249,6 +420,7 @@ struct PrivacyZonesView: View {
         do {
             try store.delete(id: zone.id)
             errorMessage = nil
+            zoneToDelete = nil
             loadZones()
             onChange()
         } catch {
