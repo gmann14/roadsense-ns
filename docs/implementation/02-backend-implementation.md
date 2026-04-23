@@ -2037,7 +2037,7 @@ Run `EXPLAIN ANALYZE` on the ingestion match query after first 100k readings exi
 
 ## Pothole Photo Moderation (Post-MVP)
 
-*Status: not implemented. Client-side spec lives in [01-ios-implementation.md §Pothole Photo Capture](01-ios-implementation.md).*
+*Status: implemented end-to-end in the current build for the internal moderation workflow: `pothole_photos` schema, private Storage bucket, `POST /pothole-photos` signed-upload endpoint, rate limiting, cron-based promotion from `pending_upload` to `pending_moderation`, moderation queue view, approve/reject procedures, signed image preview, and publishing/rejection storage actions.*
 
 This section covers the server half of the photo capture feature: storage, moderation queue, and publishing flow.
 
@@ -2045,12 +2045,12 @@ This section covers the server half of the photo capture feature: storage, moder
 
 One Supabase Storage bucket, `pothole-photos`, with:
 
-- **Access:** private by default. Reads for the moderation tool go through a dedicated internal-only `GET /pothole-photos/{id}/image` Edge Function that enforces moderation status and emits signed read URLs with a short TTL (60s). This is **not** part of the public mobile API contract in [03-api-contracts.md](03-api-contracts.md).
-- **Write path:** signed PUT URLs issued by `POST /pothole-photos` (see [03-api-contracts.md](03-api-contracts.md)). Signed URLs expire after 5 minutes and can only write to `pending/{report_id}.jpg`. Repeating the metadata POST while the row is still `pending_upload` issues a fresh signed URL for the same `report_id`.
+- **Access:** private by default. Reads for the moderation tool go through a dedicated internal-only `pothole-photo-image` Edge Function that enforces moderation status and emits signed read URLs with a short TTL (60s). This is **not** part of the public mobile API contract in [03-api-contracts.md](03-api-contracts.md).
+- **Write path:** signed PUT URLs issued by `POST /pothole-photos` (see [03-api-contracts.md](03-api-contracts.md)). In practice these are treated as ~2 hour Supabase signed upload URLs and can only write to `pending/{report_id}.jpg`. Repeating the metadata POST while the row is still `pending_upload` issues a fresh signed URL for the same `report_id`.
 - **Max object size:** 1.5 MB enforced at the bucket level. Client target is ≤ 400 KB; the extra headroom tolerates compression variance. Anything larger is a bug or abuse.
 - **Content-Type allowlist:** `image/jpeg` only. HEIC is converted to JPEG client-side before upload.
 
-On successful upload, a Storage webhook (or a one-minute `pg_cron` scan if webhooks are unavailable) promotes the row from `pending_upload` to `pending_moderation` and moves the object to `pending_moderation/{report_id}.jpg`. Approved objects move to `published/{report_id}.jpg`; rejected objects are deleted.
+On successful upload, a Storage webhook (or a one-minute `pg_cron` scan if webhooks are unavailable) promotes the row from `pending_upload` to `pending_moderation`. Approvals move the object to `published/{report_id}.jpg`; rejections delete the object from Storage immediately.
 
 ### Migration 017 — `pothole_photos`
 
@@ -2077,7 +2077,7 @@ CREATE TABLE pothole_photos (
     reviewed_at TIMESTAMPTZ,
     reviewed_by TEXT,                             -- moderator identifier, null until reviewed
     status pothole_photo_status NOT NULL DEFAULT 'pending_upload',
-    storage_object_path TEXT NOT NULL,            -- e.g., pending_moderation/{report_id}.jpg
+    storage_object_path TEXT NOT NULL,            -- e.g., pending/{report_id}.jpg
     content_sha256 BYTEA NOT NULL,                -- supplied by client, verified server-side on object write
     byte_size INTEGER NOT NULL,
     rejection_reason TEXT
@@ -2092,11 +2092,11 @@ CREATE INDEX idx_pothole_photos_device ON pothole_photos (device_token_hash, sub
 
 ### Moderation Tooling
 
-MVP moderation is deliberately low-tech: a private Retool / Supabase Studio view showing the `pending_moderation` queue sorted by `submitted_at ASC`, with:
+MVP moderation is deliberately low-tech: a Supabase Studio view (`moderation_pothole_photo_queue`) showing the `pending_moderation` queue sorted by `submitted_at ASC`, with:
 
-- the image (fetched via signed read URL)
+- the image (fetched via the internal `pothole-photo-image` function)
 - the reported lat/lng pinned on a small map
-- approve / reject buttons wired to a stored procedure
+- approve / reject actions wired through the internal `pothole-photo-moderation` function, which performs Storage move/delete and then calls the SQL procedures
 
 No ML classifier in MVP. The moderation policy (spec-driven, not code-driven) is:
 

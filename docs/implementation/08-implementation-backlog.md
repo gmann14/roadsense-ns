@@ -668,7 +668,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [01](01-ios-implementation.md#manual-pothole-reporting-and-follow-up)
 - **Depends on:** B070, B072
-- **Status:** partially implemented. `Mark pothole`, undo, `ManualPotholeLocator`, `PotholeActionRecord`, and upload-drain integration are in the app. Remaining scope is marker-detail `Still there` / `Looks fixed` actions.
+- **Status:** implemented for the first explicit-reporting pass. `Mark pothole`, undo, `ManualPotholeLocator`, `PotholeActionRecord`, upload-drain integration, and segment-detail `Still there` / `Looks fixed` actions are in the app. Remaining polish is B075 prompt UX rather than core action plumbing.
 - **RED**
   - UI test that tapping `Mark pothole` with a stale (`> 10s`) or poor-accuracy (`> 25m`) location sample shows the non-blocking GPS warning instead of queueing an action
   - unit test that `ManualPotholeLocator` chooses the buffered sample nearest `tapTimestamp - 0.75s`
@@ -702,7 +702,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [01](01-ios-implementation.md#manual-pothole-reporting-and-follow-up)
 - **Depends on:** B073, B074
-- **Status:** pending. This is the remaining explicit-reporting slice after the shipped manual-mark + backend foundation.
+- **Status:** implemented for the current scoped UX. The app now shows a stopped-only expiring follow-up prompt when a user opens a nearby active pothole segment, and prompt actions reuse the same `PotholeActionRecord` upload path as the segment sheet. Broader proactive resurfacing prompts on later passive passes remain optional polish.
 - **RED**
   - UX copy/test plan for expiring `still there?` prompts
   - unit tests that prompts never fire while driving and expire automatically if ignored
@@ -719,6 +719,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [01](01-ios-implementation.md#pothole-photo-capture-post-mvp)
 - **Depends on:** B070, B072, B074
+- **Status:** implemented. `Take photo` is available from the map, `Add photo` is available from segment detail, camera access runs through `PotholeCameraFlowView`, and confirmed captures queue `PotholeReportRecord` rows with processed JPEGs and precise coordinates.
 - **RED**
   - UI test that tapping `Take photo` while `latestSpeedKmh >= 5` or the latest speed sample is older than 10s shows the safety interstitial, while a fresh `< 5` sample presents the camera
   - unit test that photos captured inside a privacy zone are deleted and never enqueued
@@ -735,12 +736,13 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp), [03](03-api-contracts.md)
 - **Depends on:** B010-range backend foundation, B074
+- **Status:** implemented. `POST /pothole-photos`, the `pothole_photos` schema, rate-limit isolation, signed-upload reissue semantics, and cron-based promotion to `pending_moderation` are live.
 - **RED**
   - pgTAP tests for `pothole_photos` schema + RLS + rate-limit bucket isolation
   - Deno tests for `POST /pothole-photos` happy path, repeat POST while `pending_upload` returning a fresh signed URL, 409 after completed upload, 429 rate limit, and content-SHA mismatch
 - **GREEN**
   - migration for `pothole_photos` + `pothole_photo_status` enum
-  - Edge Function `pothole-photos/index.ts` issuing signed PUT URLs with 5-minute TTL and idempotent reissue before upload completes
+  - Edge Function `pothole-photos/index.ts` issuing signed PUT URLs and idempotent reissue before upload completes
   - Storage bucket provisioning with byte-size + content-type restrictions
   - Storage webhook or cron that promotes uploaded objects from `pending/` to `pending_moderation/`
 - **Acceptance**
@@ -751,6 +753,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp)
 - **Depends on:** B077
+- **Status:** implemented. The backend now has `approve_pothole_photo()` / `reject_pothole_photo()` procedures, the `moderation_pothole_photo_queue` view, internal signed-image preview, internal moderation actions that move/delete Storage objects, and pothole fold-in on approval.
 - **RED**
   - pgTAP tests for `approve_pothole_photo()` and `reject_pothole_photo()` stored procedures (status transition, storage path move, `pothole_reports` fold-in)
 - **GREEN**

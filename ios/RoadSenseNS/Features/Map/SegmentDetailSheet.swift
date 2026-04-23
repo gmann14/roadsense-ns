@@ -2,14 +2,31 @@ import SwiftUI
 
 struct SegmentDetailSheet: View {
     let segment: SegmentDetailResponse
+    var onSubmitPotholeAction: (SegmentPothole, PotholeActionType) -> PotholeActionSubmissionResult = { _, _ in
+        .unavailableLocation
+    }
+    var onAddPhoto: (UUID?) -> Void = { _ in }
+
+    @State private var followUpFeedback: FollowUpFeedback?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Space.lg) {
                 hero
                 chipRow
+                if let followUpFeedback {
+                    followUpFeedbackBanner(followUpFeedback)
+                        .task(id: followUpFeedback.id) {
+                            try? await Task.sleep(for: followUpFeedback.dismissDelay)
+                            guard self.followUpFeedback?.id == followUpFeedback.id else { return }
+                            withAnimation(DesignTokens.Motion.standard) {
+                                self.followUpFeedback = nil
+                            }
+                        }
+                }
                 trendCard
                 trustCard
+                potholesCard
                 metadataCard
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -253,6 +270,158 @@ struct SegmentDetailSheet: View {
         }
     }
 
+    // MARK: - Potholes card
+
+    private var potholesCard: some View {
+        sectionCard(title: "Pothole updates") {
+            VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
+                if segment.potholes.isEmpty {
+                    Text("No nearby pothole markers are available for follow-up on this segment yet.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Help verify whether an existing pothole is still there or looks fixed.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        onAddPhoto(segment.id)
+                    } label: {
+                        Label("Add photo", systemImage: "camera.viewfinder")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(DesignTokens.Palette.deep)
+                    .accessibilityIdentifier("segmentDetail.add-photo")
+
+                    ForEach(segment.potholes) { pothole in
+                        potholeRow(pothole)
+                    }
+                }
+            }
+        }
+    }
+
+    private func potholeRow(_ pothole: SegmentPothole) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+            HStack(alignment: .top, spacing: DesignTokens.Space.sm) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(pothole.status.displayPotholeLabel)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Palette.ink)
+                    Text(
+                        "\(pothole.confirmationCount) confirmations · \(pothole.uniqueReporters) reporters · updated \(relativeLabel(for: pothole.lastConfirmedAt))"
+                    )
+                    .font(.system(size: 12))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: DesignTokens.Space.sm)
+
+                Text(pothole.status.uppercased())
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundStyle(pothole.statusTint)
+                    .padding(.horizontal, DesignTokens.Space.xs)
+                    .padding(.vertical, 5)
+                    .background(pothole.statusTint.opacity(0.1), in: Capsule())
+            }
+
+            HStack(spacing: DesignTokens.Space.sm) {
+                Button("Still there") {
+                    handlePotholeAction(.confirmPresent, pothole: pothole)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.signal)
+                .accessibilityIdentifier("segmentDetail.pothole-still-there.\(pothole.id.uuidString)")
+
+                Button("Looks fixed") {
+                    handlePotholeAction(.confirmFixed, pothole: pothole)
+                }
+                .buttonStyle(.bordered)
+                .tint(DesignTokens.Palette.success)
+                .accessibilityIdentifier("segmentDetail.pothole-looks-fixed.\(pothole.id.uuidString)")
+            }
+        }
+        .padding(DesignTokens.Space.md)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                .fill(DesignTokens.Palette.canvasSunken)
+        )
+    }
+
+    private func handlePotholeAction(_ actionType: PotholeActionType, pothole: SegmentPothole) {
+        let result = onSubmitPotholeAction(pothole, actionType)
+        let feedback: FollowUpFeedback
+
+        switch result {
+        case .queued:
+            feedback = FollowUpFeedback(
+                title: "Thanks for the update",
+                message: actionType == .confirmFixed
+                    ? "Your “looks fixed” report will upload automatically in the background."
+                    : "Your confirmation will upload automatically in the background.",
+                tint: DesignTokens.Palette.signal,
+                iconName: "checkmark.circle.fill"
+            )
+        case .unavailableLocation:
+            feedback = FollowUpFeedback(
+                title: "Need a fresh GPS fix",
+                message: "Keep the app open for a moment, then try again near the pothole.",
+                tint: DesignTokens.Palette.warning,
+                iconName: "location.slash.fill"
+            )
+        case .insidePrivacyZone:
+            feedback = FollowUpFeedback(
+                title: "Inside a privacy zone",
+                message: "RoadSense will not send pothole updates from an excluded area.",
+                tint: DesignTokens.Palette.warning,
+                iconName: "hand.raised.fill"
+            )
+        }
+
+        withAnimation(DesignTokens.Motion.enter) {
+            followUpFeedback = feedback
+        }
+    }
+
+    private func relativeLabel(for date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: .now)
+    }
+
+    private func followUpFeedbackBanner(_ feedback: FollowUpFeedback) -> some View {
+        HStack(alignment: .top, spacing: DesignTokens.Space.sm) {
+            Image(systemName: feedback.iconName)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(feedback.tint)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(feedback.title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(DesignTokens.Palette.surface)
+                Text(feedback.message)
+                    .font(.caption)
+                    .foregroundStyle(DesignTokens.Palette.surface.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: DesignTokens.Space.sm)
+        }
+        .padding(DesignTokens.Space.md)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .fill(DesignTokens.Palette.deep)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .strokeBorder(.white.opacity(0.1), lineWidth: 1)
+        )
+    }
+
     private func trustRow(label: String, value: String, valueTint: Color = DesignTokens.Palette.ink) -> some View {
         HStack {
             Text(label)
@@ -385,6 +554,35 @@ private extension String {
             return "Stable"
         }
     }
+
+    var displayPotholeLabel: String {
+        switch self {
+        case "resolved":
+            return "Recently marked fixed"
+        default:
+            return "Active pothole marker"
+        }
+    }
+}
+
+private extension SegmentPothole {
+    var statusTint: Color {
+        switch status {
+        case "resolved":
+            return DesignTokens.Palette.success
+        default:
+            return DesignTokens.Palette.warning
+        }
+    }
+}
+
+private struct FollowUpFeedback: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+    let tint: Color
+    let iconName: String
+    let dismissDelay: Duration = .seconds(3)
 }
 
 #Preview("Segment Detail") {
@@ -416,6 +614,17 @@ private extension SegmentDetailResponse {
             lastReadingAt: Date(timeIntervalSince1970: 1_776_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_776_003_600)
         ),
+        potholes: [
+            SegmentPothole(
+                id: UUID(uuidString: "a8f6e5c4-9999-8888-7777-666666666666")!,
+                status: "active",
+                latitude: 44.64882,
+                longitude: -63.57512,
+                confirmationCount: 3,
+                uniqueReporters: 2,
+                lastConfirmedAt: Date(timeIntervalSince1970: 1_776_002_400)
+            )
+        ],
         history: [],
         neighbors: nil
     )

@@ -65,6 +65,7 @@ targets:
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: RoadSense NS uses your location to measure road quality while you drive.
         INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription: RoadSense NS uses background location to keep collecting road quality readings during a drive.
         INFOPLIST_KEY_NSMotionUsageDescription: RoadSense NS uses motion data to score road roughness and detect potholes.
+        INFOPLIST_KEY_NSCameraUsageDescription: RoadSense NS uses the camera so you can submit pothole photos while stopped.
         INFOPLIST_KEY_UIBackgroundModes:
           - location
           - processing

@@ -53,6 +53,46 @@ final class PotholeActionStore {
         return record
     }
 
+    func queueFollowUpAction(
+        potholeReportID: UUID,
+        actionType: PotholeActionType,
+        sample: LocationSample,
+        now: Date = Date()
+    ) throws -> PotholeActionRecord {
+        precondition(actionType != .manualReport, "Use queueManualReport for manual reports")
+
+        let context = ModelContext(container)
+        let recordedAt = Date(timeIntervalSince1970: sample.timestamp)
+
+        if let existing = try findPendingFollowUpDuplicate(
+            potholeReportID: potholeReportID,
+            actionType: actionType,
+            in: context
+        ) {
+            existing.latitude = sample.latitude
+            existing.longitude = sample.longitude
+            existing.accuracyM = sample.horizontalAccuracyMeters
+            existing.recordedAt = recordedAt
+            existing.createdAt = now
+            try context.save()
+            return existing
+        }
+
+        let record = PotholeActionRecord(
+            potholeReportID: potholeReportID,
+            actionType: actionType,
+            latitude: sample.latitude,
+            longitude: sample.longitude,
+            accuracyM: sample.horizontalAccuracyMeters,
+            recordedAt: recordedAt,
+            createdAt: now,
+            uploadState: .pendingUpload
+        )
+        context.insert(record)
+        try context.save()
+        return record
+    }
+
     func discard(id: UUID) throws {
         let context = ModelContext(container)
         guard let record = try fetchRecord(id: id, in: context) else {
@@ -191,6 +231,23 @@ final class PotholeActionStore {
             predicate: #Predicate { $0.id == id }
         )
         descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
+    }
+
+    private func findPendingFollowUpDuplicate(
+        potholeReportID: UUID,
+        actionType: PotholeActionType,
+        in context: ModelContext
+    ) throws -> PotholeActionRecord? {
+        let descriptor = FetchDescriptor<PotholeActionRecord>(
+            predicate: #Predicate {
+                $0.potholeReportID == potholeReportID &&
+                    $0.actionTypeRawValue == actionType.rawValue &&
+                    $0.uploadStateRawValue != "failed_permanent"
+            },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+
         return try context.fetch(descriptor).first
     }
 

@@ -2,8 +2,19 @@ import CoreLocation
 import Foundation
 import Observation
 
-enum ManualPotholeReportResult: Equatable {
+enum PotholeActionSubmissionResult: Equatable {
     case queued(UUID)
+    case unavailableLocation
+    case insidePrivacyZone
+}
+
+struct PotholePhotoCaptureContext: Equatable {
+    let coordinateLabel: String
+}
+
+enum PotholePhotoSubmissionResult: Equatable {
+    case queued(UUID)
+    case safetyRestricted
     case unavailableLocation
     case insidePrivacyZone
 }
@@ -22,6 +33,7 @@ final class AppModel {
     private let collectionPausedKey = "ca.roadsense.ios.collection-paused"
     private let apiClient: APIClient
     private let potholeActionStore: PotholeActionStore
+    private let potholePhotoStore: PotholePhotoStore
     private let readingStore: ReadingStore
     private let uploadQueueStore: UploadQueueStore
     private let uploadDrainCoordinator: UploadDrainCoordinator
@@ -51,6 +63,7 @@ final class AppModel {
         self.privacyZoneStore = container.privacyZoneStore
         self.apiClient = container.apiClient
         self.potholeActionStore = container.potholeActionStore
+        self.potholePhotoStore = container.potholePhotoStore
         self.readingStore = container.readingStore
         self.userStatsStore = container.userStatsStore
         self.uploadQueueStore = container.uploadQueueStore
@@ -64,7 +77,8 @@ final class AppModel {
             privacyZoneStore: container.privacyZoneStore
         )
         self.snapshot = container.permissions.currentSnapshot(privacyZones: privacyZones)
-        self.pendingUploadCount = (try? container.uploadQueueStore.pendingReadingCount()) ?? 0
+        self.pendingUploadCount = ((try? container.uploadQueueStore.pendingReadingCount()) ?? 0)
+            + ((try? container.potholePhotoStore.pendingCount()) ?? 0)
         self.uploadStatusSummary = (try? container.uploadQueueStore.statusSummary()) ?? .empty
         self.acceptedReadingCount = (try? container.readingStore.acceptedReadingCount()) ?? 0
         self.privacyFilteredCount = (try? container.readingStore.privacyFilteredReadingCount()) ?? 0
@@ -197,7 +211,7 @@ final class AppModel {
         try await apiClient.fetchSegmentDetail(id: id)
     }
 
-    func markPothole(now: Date = Date()) -> ManualPotholeReportResult {
+    func markPothole(now: Date = Date()) -> PotholeActionSubmissionResult {
         do {
             try potholeActionStore.promoteExpiredPendingUndoActions(now: now)
         } catch {
@@ -229,6 +243,113 @@ final class AppModel {
         }
     }
 
+    func queuePotholeFollowUp(
+        potholeReportID: UUID,
+        actionType: PotholeActionType,
+        now: Date = Date()
+    ) -> PotholeActionSubmissionResult {
+        guard actionType != .manualReport else {
+            return .unavailableLocation
+        }
+
+        guard let sample = locationService.latestSample,
+              hasUsableLocation(sample, now: now) else {
+            return .unavailableLocation
+        }
+
+        guard !isInsidePrivacyZone(sample) else {
+            return .insidePrivacyZone
+        }
+
+        do {
+            let action = try potholeActionStore.queueFollowUpAction(
+                potholeReportID: potholeReportID,
+                actionType: actionType,
+                sample: sample,
+                now: now
+            )
+            logger.info("pothole follow-up queued: \(action.id.uuidString) type=\(actionType.rawValue)")
+            return .queued(action.id)
+        } catch {
+            logger.error("failed to queue pothole follow-up: \(error.localizedDescription)")
+            return .unavailableLocation
+        }
+    }
+
+    func followUpPromptCandidate(
+        for potholes: [SegmentPothole],
+        now: Date = Date()
+    ) -> SegmentPothole? {
+        guard let sample = locationService.latestSample,
+              hasFreshStoppedLocation(sample, now: now),
+              !isInsidePrivacyZone(sample) else {
+            return nil
+        }
+
+        let currentLocation = CLLocation(latitude: sample.latitude, longitude: sample.longitude)
+        return potholes
+            .filter { $0.status != "resolved" }
+            .sorted { lhs, rhs in
+                distance(from: currentLocation, to: lhs) < distance(from: currentLocation, to: rhs)
+            }
+            .first(where: { distance(from: currentLocation, to: $0) <= 35 })
+    }
+
+    func potholePhotoCaptureContext(now: Date = Date()) -> PotholePhotoCaptureContext? {
+        guard let sample = locationService.latestSample,
+              hasFreshStoppedLocation(sample, now: now) else {
+            return nil
+        }
+
+        return PotholePhotoCaptureContext(
+            coordinateLabel: "Near \(formattedCoordinate(sample.latitude)), \(formattedCoordinate(sample.longitude))"
+        )
+    }
+
+    func submitPotholePhoto(
+        rawImageData: Data,
+        segmentID: UUID? = nil,
+        now: Date = Date()
+    ) -> PotholePhotoSubmissionResult {
+        guard let sample = locationService.latestSample else {
+            return .unavailableLocation
+        }
+
+        guard hasUsableLocation(sample, now: now) else {
+            return .unavailableLocation
+        }
+
+        guard hasFreshStoppedLocation(sample, now: now) else {
+            return .safetyRestricted
+        }
+
+        guard !isInsidePrivacyZone(sample) else {
+            return .insidePrivacyZone
+        }
+
+        do {
+            let prepared = try PotholePhotoProcessor.prepareCapturedPhoto(rawJPEGData: rawImageData)
+            let record = try potholePhotoStore.queuePreparedReport(
+                segmentID: segmentID,
+                photoFileURL: prepared.fileURL,
+                latitude: sample.latitude,
+                longitude: sample.longitude,
+                accuracyM: sample.horizontalAccuracyMeters,
+                capturedAt: now,
+                byteSize: prepared.byteSize,
+                sha256Hex: prepared.sha256Hex
+            )
+            Task { @MainActor in
+                _ = await uploadDrainCoordinator.requestDrain(reason: .foreground)
+            }
+            logger.info("pothole photo queued: \(record.id.uuidString)")
+            return .queued(record.id)
+        } catch {
+            logger.error("failed to queue pothole photo: \(error.localizedDescription)")
+            return .unavailableLocation
+        }
+    }
+
     func undoPotholeReport(id: UUID) {
         do {
             try potholeActionStore.discard(id: id)
@@ -245,7 +366,8 @@ final class AppModel {
 
     private func refreshCollectionStats() {
         _ = try? potholeActionStore.promoteExpiredPendingUndoActions()
-        pendingUploadCount = (try? uploadQueueStore.pendingReadingCount()) ?? 0
+        pendingUploadCount = ((try? uploadQueueStore.pendingReadingCount()) ?? 0)
+            + ((try? potholePhotoStore.pendingCount()) ?? 0)
         uploadStatusSummary = (try? uploadQueueStore.statusSummary()) ?? .empty
         acceptedReadingCount = (try? readingStore.acceptedReadingCount()) ?? 0
         privacyFilteredCount = (try? readingStore.privacyFilteredReadingCount()) ?? 0
@@ -258,6 +380,11 @@ final class AppModel {
     private func hasUsableLocation(_ sample: LocationSample, now: Date) -> Bool {
         let ageSeconds = now.timeIntervalSince1970 - sample.timestamp
         return ageSeconds <= 10 && sample.horizontalAccuracyMeters <= 25
+    }
+
+    private func hasFreshStoppedLocation(_ sample: LocationSample, now: Date) -> Bool {
+        let ageSeconds = now.timeIntervalSince1970 - sample.timestamp
+        return ageSeconds <= 10 && sample.speedKmh < 5
     }
 
     private func isInsidePrivacyZone(_ sample: LocationSample) -> Bool {
@@ -375,5 +502,15 @@ final class AppModel {
         case .always:
             return 3
         }
+    }
+
+    private func distance(from currentLocation: CLLocation, to pothole: SegmentPothole) -> CLLocationDistance {
+        currentLocation.distance(
+            from: CLLocation(latitude: pothole.latitude, longitude: pothole.longitude)
+        )
+    }
+
+    private func formattedCoordinate(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(4)))
     }
 }

@@ -179,3 +179,87 @@ public struct PotholeActionUploadResponse: Codable, Equatable, Sendable {
         case status
     }
 }
+
+public struct PotholePhotoUploadRequest: Codable, Equatable, Sendable {
+    public let reportID: UUID
+    public let deviceToken: String
+    public let clientSentAt: Date
+    public let clientAppVersion: String
+    public let clientOSVersion: String
+    public let lat: Double
+    public let lng: Double
+    public let accuracyM: Double
+    public let capturedAt: Date
+    public let contentType: String
+    public let byteSize: Int
+    public let sha256: String
+
+    public init(
+        reportID: UUID,
+        deviceToken: String,
+        clientSentAt: Date,
+        clientAppVersion: String,
+        clientOSVersion: String,
+        lat: Double,
+        lng: Double,
+        accuracyM: Double,
+        capturedAt: Date,
+        contentType: String,
+        byteSize: Int,
+        sha256: String
+    ) {
+        self.reportID = reportID
+        self.deviceToken = deviceToken
+        self.clientSentAt = clientSentAt
+        self.clientAppVersion = clientAppVersion
+        self.clientOSVersion = clientOSVersion
+        self.lat = lat
+        self.lng = lng
+        self.accuracyM = accuracyM
+        self.capturedAt = capturedAt
+        self.contentType = contentType
+        self.byteSize = byteSize
+        self.sha256 = sha256
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case reportID = "report_id"
+        case deviceToken = "device_token"
+        case clientSentAt = "client_sent_at"
+        case clientAppVersion = "client_app_version"
+        case clientOSVersion = "client_os_version"
+        case lat
+        case lng
+        case accuracyM = "accuracy_m"
+        case capturedAt = "captured_at"
+        case contentType = "content_type"
+        case byteSize = "byte_size"
+        case sha256
+    }
+}
+
+public struct PotholePhotoUploadResponse: Codable, Equatable, Sendable {
+    public let reportID: UUID
+    public let uploadURL: URL
+    public let uploadExpiresAt: Date
+    public let expectedObjectPath: String
+
+    public init(
+        reportID: UUID,
+        uploadURL: URL,
+        uploadExpiresAt: Date,
+        expectedObjectPath: String
+    ) {
+        self.reportID = reportID
+        self.uploadURL = uploadURL
+        self.uploadExpiresAt = uploadExpiresAt
+        self.expectedObjectPath = expectedObjectPath
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case reportID = "report_id"
+        case uploadURL = "upload_url"
+        case uploadExpiresAt = "upload_expires_at"
+        case expectedObjectPath = "expected_object_path"
+    }
+}

@@ -33,6 +33,17 @@ Deno.test("segments handler returns 200 with history and neighbors stubs", async
                 last_reading_at: "2026-04-16T22:15:00Z",
                 updated_at: "2026-04-17T03:15:00Z",
             },
+            potholes: [
+                {
+                    id: "00000000-0000-0000-0000-000000009001",
+                    status: "active",
+                    lat: 44.64882,
+                    lng: -63.57512,
+                    confirmation_count: 3,
+                    unique_reporters: 2,
+                    last_confirmed_at: "2026-04-17T02:15:00Z",
+                },
+            ],
         }),
     });
 
@@ -49,6 +60,9 @@ Deno.test("segments handler returns 200 with history and neighbors stubs", async
     assertEquals(body.history, []);
     assertEquals(body.neighbors, null);
     assertEquals(body.aggregate.category, "rough");
+    assertEquals(body.potholes.length, 1);
+    assertEquals(body.potholes[0].id, "00000000-0000-0000-0000-000000009001");
+    assertEquals(body.potholes[0].lat, 44.64882);
 });
 
 Deno.test("segments handler returns 404 when no segment detail exists", async () => {

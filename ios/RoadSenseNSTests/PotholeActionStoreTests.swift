@@ -71,4 +71,73 @@ final class PotholeActionStoreTests: XCTestCase {
         XCTAssertEqual(saved?.uploadState, .pendingUpload)
         XCTAssertNil(saved?.undoExpiresAt)
     }
+
+    func testQueueFollowUpActionCreatesPendingUploadRecord() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let potholeID = UUID()
+        let sample = LocationSample(
+            timestamp: 1_713_000_000.0,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 40,
+            headingDegrees: 180
+        )
+
+        let record = try store.queueFollowUpAction(
+            potholeReportID: potholeID,
+            actionType: .confirmFixed,
+            sample: sample,
+            now: Date(timeIntervalSince1970: 1_713_000_000.0)
+        )
+
+        XCTAssertEqual(record.potholeReportID, potholeID)
+        XCTAssertEqual(record.actionType, .confirmFixed)
+        XCTAssertEqual(record.uploadState, .pendingUpload)
+        XCTAssertNil(record.undoExpiresAt)
+    }
+
+    func testQueueFollowUpActionDedupesPendingUploadForSamePotholeAndType() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let potholeID = UUID()
+        let firstSample = LocationSample(
+            timestamp: 1_713_000_000.0,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 40,
+            headingDegrees: 180
+        )
+        let secondSample = LocationSample(
+            timestamp: 1_713_000_010.0,
+            latitude: 44.6489,
+            longitude: -63.5751,
+            horizontalAccuracyMeters: 5,
+            speedKmh: 38,
+            headingDegrees: 182
+        )
+
+        let first = try store.queueFollowUpAction(
+            potholeReportID: potholeID,
+            actionType: .confirmPresent,
+            sample: firstSample,
+            now: Date(timeIntervalSince1970: 1_713_000_000.0)
+        )
+        let second = try store.queueFollowUpAction(
+            potholeReportID: potholeID,
+            actionType: .confirmPresent,
+            sample: secondSample,
+            now: Date(timeIntervalSince1970: 1_713_000_010.0)
+        )
+
+        XCTAssertEqual(first.id, second.id)
+
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.latitude, secondSample.latitude)
+        XCTAssertEqual(records.first?.actionType, .confirmPresent)
+    }
 }

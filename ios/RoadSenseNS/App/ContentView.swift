@@ -165,6 +165,7 @@ func makePreviewContainer() -> AppContainer {
     let modelContainer = try! ModelContainerProvider.makeDefault()
     let privacyZoneStore = PreviewPrivacyZoneStore()
     let potholeActionStore = PotholeActionStore(container: modelContainer)
+    let potholePhotoStore = PotholePhotoStore(container: modelContainer)
     let readingStore = ReadingStore(container: modelContainer)
     let userStatsStore = UserStatsStore(container: modelContainer)
     let uploadQueueStore = UploadQueueStore(container: modelContainer)
@@ -173,6 +174,7 @@ func makePreviewContainer() -> AppContainer {
     let uploader = Uploader(
         container: modelContainer,
         potholeActionStore: potholeActionStore,
+        potholePhotoStore: potholePhotoStore,
         queueStore: uploadQueueStore,
         client: apiClient,
         logger: .upload
@@ -194,6 +196,7 @@ func makePreviewContainer() -> AppContainer {
         modelContainer: modelContainer,
         privacyZoneStore: privacyZoneStore,
         potholeActionStore: potholeActionStore,
+        potholePhotoStore: potholePhotoStore,
         readingStore: readingStore,
         userStatsStore: userStatsStore,
         uploadQueueStore: uploadQueueStore,

@@ -17,6 +17,8 @@
 		1780B2A4E897E484A5BB3C0D /* DrivingHeuristic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E77758971EB7F44643652E /* DrivingHeuristic.swift */; };
 		1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE870B004546FC93939AF065 /* Endpoints.swift */; };
 		1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E39073C99FB20D024E79D0 /* MotionMath.swift */; };
+		1CBE5AA8C087BA9471E07E16 /* PotholePhotoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006FA6E12647281144C3D972 /* PotholePhotoStore.swift */; };
+		1D4FC225C05C821199D006A5 /* PotholeReportRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 029336ECC82481F844689FD4 /* PotholeReportRecord.swift */; };
 		22B4F239312F802697F769EC /* SegmentDetailResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06C075253EF1F1E69FC89030 /* SegmentDetailResponseParser.swift */; };
 		24EAE00CAF67007A446D2F50 /* UploadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCAA398E4BA72123985282C /* UploadPolicy.swift */; };
 		256FE28742CA77F526CC7022 /* SensorCheckpointStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770EBDB5BF565D5AD7546CA5 /* SensorCheckpointStore.swift */; };
@@ -35,6 +37,7 @@
 		476D1DCAD75559D8E2CBE87C /* PrivacyZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */; };
 		4E08F2DAC6BCB52420AA8BB2 /* PotholeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */; };
 		55AA7CEAC78F98938B1505DB /* UploadEligibilityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */; };
+		57E1241F899736857CCD5C5C /* PotholePhotoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99BE4E2399EF31135224A3E8 /* PotholePhotoProcessor.swift */; };
 		58D2BBBAABD2C950BE180973 /* PrivacyZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */; };
 		5A661F0F9DCBC5633EDDF277 /* SimHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56EBF67158E7FCDE38E6E04F /* SimHarnessView.swift */; };
 		5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F9E1A697AF1C0543503C5D /* PermissionManager.swift */; };
@@ -61,11 +64,13 @@
 		886A7E16B1112529B6004302 /* SensorFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026DC5F95328D7091BC8482E /* SensorFixture.swift */; };
 		88F7FD030231687D31CA394B /* AppFlowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7648F667665CDF25B279C81 /* AppFlowUITests.swift */; };
 		8AF51647C5DCF2AD6C785D47 /* SensorCheckpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */; };
+		912813A8964A74F475023D98 /* PotholePhotoProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29327C76BAE8991E25115A8E /* PotholePhotoProcessorTests.swift */; };
 		92BB25E254C7AD6202139526 /* ManualPotholeLocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */; };
 		93499EAF4872315D0197908C /* ReadingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92672E8E369B06AFF5F25AF /* ReadingStore.swift */; };
 		94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */; };
 		982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70A04456020333C21483C47 /* HighPassBiquad.swift */; };
 		9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC86C13C16A0385D36E47FD /* AppContainer.swift */; };
+		9C76D445B3A6A352A2B066D3 /* PotholeCameraFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4FAA04CA9D8B3BCE9A9CC19 /* PotholeCameraFlowView.swift */; };
 		9CD4809B0812EECC08018D96 /* BackgroundCollectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */; };
 		9D359A286A549E79A62BC47B /* SensorFixtureRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD48E01F41552DAB66909C1 /* SensorFixtureRunner.swift */; };
 		9EABEA30417F41AE694F52D1 /* ManualPotholeLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F57C6D76B7E595FE412BC87 /* ManualPotholeLocator.swift */; };
@@ -111,6 +116,7 @@
 		DDCC83C031162D3E518D596B /* QualityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */; };
 		DFB8ADBE97DE5439C2D6429A /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BE8F93CE35FA6438817474 /* AppConfig.swift */; };
 		E0A858EAF54B726D7480CB88 /* DeviceTokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EC0C104BF5658C06ACCBB1 /* DeviceTokenManager.swift */; };
+		E1DCB9FC2A5B640B1B58F385 /* PotholePhotoStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4242FA58E0DE0AE3062BF2B /* PotholePhotoStoreTests.swift */; };
 		EB26C71EB8CF4A2C2C9247A0 /* HighPassBiquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70A04456020333C21483C47 /* HighPassBiquad.swift */; };
 		EB46566139FD4C04A594EA96 /* AppBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06554CA351911A995764AA76 /* AppBootstrap.swift */; };
 		ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */; };
@@ -143,8 +149,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		006FA6E12647281144C3D972 /* PotholePhotoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoStore.swift; sourceTree = "<group>"; };
 		023DE992C5BA96EAB05EF99A /* pothole-hit.csv */ = {isa = PBXFileReference; path = "pothole-hit.csv"; sourceTree = "<group>"; };
 		026DC5F95328D7091BC8482E /* SensorFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorFixture.swift; sourceTree = "<group>"; };
+		029336ECC82481F844689FD4 /* PotholeReportRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeReportRecord.swift; sourceTree = "<group>"; };
 		06554CA351911A995764AA76 /* AppBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBootstrap.swift; sourceTree = "<group>"; };
 		06C075253EF1F1E69FC89030 /* SegmentDetailResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentDetailResponseParser.swift; sourceTree = "<group>"; };
 		0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderTests.swift; sourceTree = "<group>"; };
@@ -160,6 +168,7 @@
 		24017FAA2743BBD1FD361A56 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		27F9E1A697AF1C0543503C5D /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		28F035620621F3107CCB6E6D /* ModelContainerProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerProvider.swift; sourceTree = "<group>"; };
+		29327C76BAE8991E25115A8E /* PotholePhotoProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoProcessorTests.swift; sourceTree = "<group>"; };
 		31BB9FA2F39D47DBE85F983C /* RoadSenseNSSimHarnessApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSSimHarnessApp.swift; sourceTree = "<group>"; };
 		31E39073C99FB20D024E79D0 /* MotionMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionMath.swift; sourceTree = "<group>"; };
 		324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualPotholeLocatorTests.swift; sourceTree = "<group>"; };
@@ -198,6 +207,7 @@
 		9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingBuilder.swift; sourceTree = "<group>"; };
 		95DBAC276591544789D06C3E /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
 		998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenRecord.swift; sourceTree = "<group>"; };
+		99BE4E2399EF31135224A3E8 /* PotholePhotoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoProcessor.swift; sourceTree = "<group>"; };
 		9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2D445C6696ED6F082B33288 /* TestingRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestingRuntime.swift; sourceTree = "<group>"; };
 		A4CE5D67A573F4B606118C23 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -208,6 +218,7 @@
 		B045A4EE8832A8E643A3740C /* pothole-hit.expected.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "pothole-hit.expected.json"; sourceTree = "<group>"; };
 		B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundCollectionPolicy.swift; sourceTree = "<group>"; };
 		B41B92DA7CA8EB765BCFC11A /* Uploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Uploader.swift; sourceTree = "<group>"; };
+		B4242FA58E0DE0AE3062BF2B /* PotholePhotoStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoStoreTests.swift; sourceTree = "<group>"; };
 		B6371625CAD43199A1021AA9 /* PotholeActionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeActionStoreTests.swift; sourceTree = "<group>"; };
 		B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyZone.swift; sourceTree = "<group>"; };
 		C687070E04DFCBE0FE4EA200 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -221,6 +232,7 @@
 		D10DDA50E806EEF8535BD914 /* UploadDrainCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadDrainCoordinator.swift; sourceTree = "<group>"; };
 		D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingWindowProcessor.swift; sourceTree = "<group>"; };
 		D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadResponseParser.swift; sourceTree = "<group>"; };
+		D4FAA04CA9D8B3BCE9A9CC19 /* PotholeCameraFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeCameraFlowView.swift; sourceTree = "<group>"; };
 		D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionReadiness.swift; sourceTree = "<group>"; };
 		D6D673F19DB713B76E0CDCF0 /* RoadSenseNSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB54690AD1B0B14F43315BE6 /* PrivacyZoneStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyZoneStore.swift; sourceTree = "<group>"; };
@@ -258,6 +270,7 @@
 				851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */,
 				28F035620621F3107CCB6E6D /* ModelContainerProvider.swift */,
 				89EE7E2252FD9D4C1984BC93 /* PotholeActionStore.swift */,
+				006FA6E12647281144C3D972 /* PotholePhotoStore.swift */,
 				DB54690AD1B0B14F43315BE6 /* PrivacyZoneStore.swift */,
 				155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */,
 				F92672E8E369B06AFF5F25AF /* ReadingStore.swift */,
@@ -284,6 +297,8 @@
 			isa = PBXGroup;
 			children = (
 				1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */,
+				D4FAA04CA9D8B3BCE9A9CC19 /* PotholeCameraFlowView.swift */,
+				99BE4E2399EF31135224A3E8 /* PotholePhotoProcessor.swift */,
 				8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */,
 				CA6257F1C7E68CE62C4CCF25 /* SegmentDetailSheet.swift */,
 			);
@@ -315,6 +330,7 @@
 			children = (
 				998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */,
 				CDB42FED037769EE898F2934 /* PotholeActionRecord.swift */,
+				029336ECC82481F844689FD4 /* PotholeReportRecord.swift */,
 				10D40F3275A4DDC565E3DD2E /* PrivacyZoneRecord.swift */,
 				A96B8343D20095BCEF65D89C /* ReadingRecord.swift */,
 				3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */,
@@ -471,6 +487,8 @@
 				EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */,
 				0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */,
 				B6371625CAD43199A1021AA9 /* PotholeActionStoreTests.swift */,
+				29327C76BAE8991E25115A8E /* PotholePhotoProcessorTests.swift */,
+				B4242FA58E0DE0AE3062BF2B /* PotholePhotoStoreTests.swift */,
 				38491FCE6C30B52713465B8D /* UploadRuntimeTests.swift */,
 			);
 			path = RoadSenseNSTests;
@@ -747,6 +765,8 @@
 				01AB046260471C52C02D8C59 /* NetworkAndUploaderTests.swift in Sources */,
 				0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */,
 				6E2764000B77D35C50060E07 /* PotholeActionStoreTests.swift in Sources */,
+				912813A8964A74F475023D98 /* PotholePhotoProcessorTests.swift in Sources */,
+				E1DCB9FC2A5B640B1B58F385 /* PotholePhotoStoreTests.swift in Sources */,
 				AE674105AE11F88B332E65BB /* UploadRuntimeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -830,7 +850,11 @@
 				5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */,
 				DB60EBD564C4FFEC0E4F4EE9 /* PotholeActionRecord.swift in Sources */,
 				3E1EAD8552D8141AAAF82DC8 /* PotholeActionStore.swift in Sources */,
+				9C76D445B3A6A352A2B066D3 /* PotholeCameraFlowView.swift in Sources */,
 				4E08F2DAC6BCB52420AA8BB2 /* PotholeDetector.swift in Sources */,
+				57E1241F899736857CCD5C5C /* PotholePhotoProcessor.swift in Sources */,
+				1CBE5AA8C087BA9471E07E16 /* PotholePhotoStore.swift in Sources */,
+				1D4FC225C05C821199D006A5 /* PotholeReportRecord.swift in Sources */,
 				58D2BBBAABD2C950BE180973 /* PrivacyZone.swift in Sources */,
 				FCBD4AA25AEF988133150B59 /* PrivacyZoneRecord.swift in Sources */,
 				C859EED8CA59645B04B5D668 /* PrivacyZoneStore.swift in Sources */,
@@ -903,6 +927,7 @@
 					"ca.roadsense.ios.nightly-cleanup",
 					"ca.roadsense.ios.upload-drain",
 				);
+				INFOPLIST_KEY_NSCameraUsageDescription = "RoadSense NS uses the camera so you can submit pothole photos while stopped.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "RoadSense NS uses motion data to score road roughness and detect potholes.";
@@ -1060,6 +1085,7 @@
 					"ca.roadsense.ios.nightly-cleanup",
 					"ca.roadsense.ios.upload-drain",
 				);
+				INFOPLIST_KEY_NSCameraUsageDescription = "RoadSense NS uses the camera so you can submit pothole photos while stopped.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "RoadSense NS uses motion data to score road roughness and detect potholes.";
@@ -1246,6 +1272,7 @@
 					"ca.roadsense.ios.nightly-cleanup",
 					"ca.roadsense.ios.upload-drain",
 				);
+				INFOPLIST_KEY_NSCameraUsageDescription = "RoadSense NS uses the camera so you can submit pothole photos while stopped.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "RoadSense NS uses motion data to score road roughness and detect potholes.";

@@ -253,7 +253,7 @@ Before a real drive or simulator-harness replay is required, keep one determinis
 - Upload → 200
 - Query `segment_aggregates` for the segment → new reading_count matches
 - Query tile endpoint → MVT contains the segment
-- Photo smoke (post-MVP): metadata POST → signed PUT → `pothole_photos.status = 'pending_moderation'` → approval path folds into `pothole_reports`
+- Photo moderation smoke: metadata POST → signed PUT → `pothole_photos.status = 'pending_moderation'` → approve/reject path updates Storage + folds approved photos into `pothole_reports`
 
 ### Backend internal
 

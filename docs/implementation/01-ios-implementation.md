@@ -1233,7 +1233,7 @@ Cross-screen state (recording status, pending upload count, stats) lives on a si
 
 ## Manual Pothole Reporting And Follow-up
 
-*Status: core manual `Mark pothole` is implemented in the current iOS build: map CTA, 5-second undo, `ManualPotholeLocator`, `PotholeActionRecord`, queue persistence, and upload through `POST /pothole-actions`. Marker-detail `Still there` / `Looks fixed` actions and expiring follow-up prompts remain pending.*
+*Status: implemented in the current iOS build for the first explicit-reporting pass: map CTA, 5-second undo, `ManualPotholeLocator`, `PotholeActionRecord`, queue persistence, upload through `POST /pothole-actions`, segment-detail `Still there` / `Looks fixed` actions against canonical pothole IDs, and a stopped-only expiring follow-up prompt when the user opens a nearby segment that already has an active pothole. Broader proactive resurfacing prompts on later drive passes remain polish, not missing plumbing.*
 
 The passive pothole detector remains the default source of road-issue data, but it misses two things users clearly want:
 
@@ -1389,7 +1389,7 @@ Expiring Waze-style prompts after a later pass near an active pothole are a sepa
 
 ## Pothole Photo Capture (Post-MVP)
 
-*Status: not implemented. This section is the spec; no code yet.*
+*Status: implemented end-to-end in the current build for the first shipped photo flow: map `Take photo` CTA, segment-detail `Add photo` entry point, stopped-only camera gating, `PotholeCameraFlowView`, `PotholeReportRecord`, `PotholePhotoProcessor`, queue persistence, metadata POST + signed PUT upload, transition to local `pendingModeration` after upload, and backend moderation/publishing support. Moderator-facing tooling remains intentionally internal-only, not user-facing.*
 
 The passive pipeline already detects pothole events, and the manual tap flow gives a fast explicit confirmation, but neither provides visual context. The photo capture feature adds a low-friction way for a pedestrian or stopped driver to submit a geotagged image that will join the same merged pothole cluster after moderation.
 
@@ -1400,8 +1400,8 @@ This feature is explicitly designed for the **stopped-or-walking** case (passeng
 1. User opens the app.
 2. On the map, a secondary floating button reads `Take photo`. (Icon: `camera.viewfinder`.) It sits below the primary `Mark pothole` action.
 3. Tap → full-screen camera sheet (`AVFoundation`, not `UIImagePickerController` — we need to strip metadata before the user sees a confirm screen).
-4. User frames the pothole, taps shutter. (Optional: enable device-side AF/AE lock during capture for sharper hand-held shots.)
-5. Confirm screen shows the photo + `📍 Near Quinpool Road, Halifax` + two buttons: `Submit` / `Retake`.
+4. User frames the pothole, taps shutter.
+5. Confirm screen shows the photo + a simple coordinate label (`Near 44.6488, -63.5752`) + two buttons: `Submit` / `Retake`.
 6. Tap `Submit` → success toast (`Thanks — a moderator will review this report`) → return to map. Photo queues for upload like readings.
 
 No moderation happens client-side. No AI classification client-side. The user does not name the pothole, rate the pothole, or describe the pothole — those are moderation concerns.
@@ -1422,13 +1422,13 @@ let canCapture =
     latestLocation.speedKmh < 5
 ```
 
-If `canCapture == false`, show the sheet: "Slow down or pull over first — photo reports only work below 5 km/h." `[OK]` dismisses. A stale location sample counts as `false`; we do not infer "probably stopped." We do **not** try to run a continuous 500ms polling loop while the camera is open; one check on camera open and one on shutter is enough.
+If `canCapture == false`, do not present the camera; show the same non-blocking feedback path used by manual pothole taps. A stale location sample counts as `false`; we do not infer "probably stopped." The current build gates on camera entry and on final submit, which is sufficient for the first pass.
 
 ### Privacy
 
 Photos are categorically more sensitive than readings. The photo pipeline MUST:
 
-1. **Strip all EXIF metadata before upload.** Use `CGImageDestination` with `kCGImagePropertyExifDictionary: nil, kCGImagePropertyGPSDictionary: nil, kCGImagePropertyTIFFDictionary: nil`. Camera metadata (lens, ISO, phone model, original GPS) is discarded before the image ever touches the upload queue.
+1. **Strip all source-camera metadata before upload.** Re-encode the captured image into a fresh JPEG before it ever touches the upload queue. The privacy-sensitive fields (GPS, TIFF, original Exif capture metadata) must be absent from the uploaded bytes. ImageIO may still emit minimal derived structural metadata such as pixel dimensions; that is acceptable.
 2. **Use `LocationService.latestSample`, not EXIF GPS, for geotagging.** This keeps the geotag in the privacy-zone pipeline. Any photo whose GPS coords fall in a privacy zone gets **rejected at the client** with a sheet: "This spot is inside one of your privacy zones. The report was not sent. (You can adjust your zones in Settings.)" The photo file is deleted immediately.
 3. **Upload the precise `latestSample` coordinate; do not randomize it.** Photo moderation and pothole clustering need exact placement. Privacy comes from client-side privacy-zone rejection, rotating device tokens, private storage of raw photo rows, and the fact that the public map shows the merged `pothole_reports` point / matched segment, not the submitter's original photo coordinate.
 4. **Resize to ≤ 1600px longest edge, JPEG quality 0.8** before upload. Typical output: 250–400 KB. Raw HEIC off the camera is 3–5 MB and contains too much incidental detail (faces, license plates, house numbers in the background).
@@ -1447,7 +1447,8 @@ enum PhotoUploadState: String, Codable {
 @Model
 final class PotholeReportRecord {
     @Attribute(.unique) var id: UUID
-    var photoFileURL: URL           // points into AppSupport/pothole-photos/{id}.jpg
+    var segmentID: UUID?
+    var photoFilePath: String       // points into AppSupport/pothole-photos/{id}.jpg
     var latitude: Double            // precise latestSample coordinate
     var longitude: Double           // precise latestSample coordinate
     var accuracyM: Double
@@ -1488,6 +1489,8 @@ Two-step, signed-URL pattern (the readings endpoint is fine for point JSON; phot
    Server validates, creates a `pothole_photos` row in `pending_upload` status, allocates a Supabase Storage object path, returns a signed PUT URL + expected object path.
 2. `PUT <signed-url>` — direct upload of the JPEG bytes to Supabase Storage. The app computes and sends `Content-SHA256` so the server can reject a corrupted upload.
 3. Server watcher (trigger or cron) on the Storage bucket flips the row to `pending_moderation` once the file lands. The client does **not** poll status; after the PUT returns 200, it sets `uploadState = .pendingModeration`, deletes the local JPEG, and shows the success toast immediately: `"Thanks — a moderator will review this report."`
+
+Supabase signed upload URLs currently behave as two-hour URLs in practice. The client treats them as single-attempt, in-memory credentials regardless and re-POSTs metadata after interruption rather than persisting them.
 
 Pothole photos follow the same network policy as readings: if the device has connectivity and the queue is eligible, they upload.
 
@@ -1541,10 +1544,10 @@ See [02-backend-implementation.md §Pothole Photo Moderation](02-backend-impleme
 
 ### Accessibility & Failure Modes
 
-- Camera permission denied → inline sheet with `Open Settings` button (same pattern as location).
+- Camera permission denied → inline full-screen state with `Open Settings` button.
 - Low-light capture → no flash; we'd rather have no report than a flash-blinded one that crashes the classifier. Show inline hint: "Tap to focus. Daylight works best."
 - Out-of-bounds coords (outside Nova Scotia) → client-side rejection with sheet: "Reports are limited to Nova Scotia roads right now."
-- Upload 400 / 413 / 429 → same state as readings (`failedPermanent` after 5 attempts). The photo is preserved locally and surfaced in Settings → Uploads → Diagnostics with a `Retry` action.
+- Upload 400 / 413 / 429 → same state as readings (`failedPermanent` after 5 attempts). The photo is preserved locally for later diagnostics/retry work; the current build does not yet expose a dedicated photo retry UI in Settings.
 
 ### UI Accessibility
 

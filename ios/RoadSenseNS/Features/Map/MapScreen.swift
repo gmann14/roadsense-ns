@@ -15,6 +15,10 @@ struct MapScreen: View {
     @State private var isMapLoaded = false
     @State private var mapLoadError: String?
     @State private var potholeFeedback: PotholeFeedback?
+    @State private var followUpPrompt: FollowUpPrompt?
+    @State private var photoCaptureContext: PotholePhotoCaptureContext?
+    @State private var isShowingCamera = false
+    @State private var scopedPhotoSegmentID: UUID?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -62,22 +66,61 @@ struct MapScreen: View {
             }
         }
         .sheet(item: $selectedSegment) { segment in
-            SegmentDetailSheet(segment: segment)
+            SegmentDetailSheet(
+                segment: segment,
+                onSubmitPotholeAction: { pothole, actionType in
+                    model.queuePotholeFollowUp(
+                        potholeReportID: pothole.id,
+                        actionType: actionType
+                    )
+                },
+                onAddPhoto: { segmentID in
+                    handleTakePhotoTap(segmentID: segmentID)
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $isShowingCamera) {
+            if let photoCaptureContext {
+                PotholeCameraFlowView(
+                    coordinateLabel: photoCaptureContext.coordinateLabel,
+                    onCancel: {
+                        isShowingCamera = false
+                    },
+                    onSubmit: { data in
+                        isShowingCamera = false
+                        handlePhotoSubmit(data)
+                    }
+                )
+            }
         }
         .overlay(alignment: .bottom) {
-            if let potholeFeedback {
-                potholeFeedbackBanner(potholeFeedback)
-                    .padding(.horizontal, DesignTokens.Space.md)
-                    .padding(.bottom, 156)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .task(id: potholeFeedback.id) {
-                        try? await Task.sleep(for: potholeFeedback.dismissDelay)
-                        guard self.potholeFeedback?.id == potholeFeedback.id else { return }
-                        withAnimation(DesignTokens.Motion.standard) {
-                            self.potholeFeedback = nil
+            VStack(spacing: DesignTokens.Space.sm) {
+                if let followUpPrompt {
+                    followUpPromptBanner(followUpPrompt)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .task(id: followUpPrompt.id) {
+                            try? await Task.sleep(for: followUpPrompt.dismissDelay)
+                            guard self.followUpPrompt?.id == followUpPrompt.id else { return }
+                            withAnimation(DesignTokens.Motion.standard) {
+                                self.followUpPrompt = nil
+                            }
                         }
-                    }
+                }
+
+                if let potholeFeedback {
+                    potholeFeedbackBanner(potholeFeedback)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .task(id: potholeFeedback.id) {
+                            try? await Task.sleep(for: potholeFeedback.dismissDelay)
+                            guard self.potholeFeedback?.id == potholeFeedback.id else { return }
+                            withAnimation(DesignTokens.Motion.standard) {
+                                self.potholeFeedback = nil
+                            }
+                        }
+                }
             }
+            .padding(.horizontal, DesignTokens.Space.md)
+            .padding(.bottom, 156)
         }
         .alert("Could not load road details", isPresented: Binding(
             get: { segmentLoadError != nil },
@@ -166,6 +209,8 @@ struct MapScreen: View {
                 }
 
                 markPotholeAction
+
+                takePhotoAction
 
                 primaryAction
 
@@ -332,6 +377,35 @@ struct MapScreen: View {
         .accessibilityIdentifier("map.mark-pothole-button")
     }
 
+    private var takePhotoAction: some View {
+        Button {
+            handleTakePhotoTap()
+        } label: {
+            HStack(spacing: DesignTokens.Space.xs) {
+                Image(systemName: "camera.viewfinder")
+                    .font(.system(size: 15, weight: .bold))
+                Text("Take photo")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                Spacer(minLength: DesignTokens.Space.xs)
+                Text("Stopped only")
+                    .font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, DesignTokens.Space.xs)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.12), in: Capsule())
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, DesignTokens.Space.md)
+            .padding(.vertical, DesignTokens.Space.sm)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                    .fill(Color.black.opacity(0.28))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("map.take-photo-button")
+    }
+
     private var primaryAction: some View {
         Button(primaryActionTitle, action: handlePrimaryAction)
             .buttonStyle(.borderedProminent)
@@ -407,6 +481,62 @@ struct MapScreen: View {
         )
         .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
         .accessibilityIdentifier("map.pothole-feedback-banner")
+    }
+
+    private func followUpPromptBanner(_ prompt: FollowUpPrompt) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+            HStack(spacing: DesignTokens.Space.sm) {
+                Image(systemName: "questionmark.circle.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(DesignTokens.Palette.warning)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Still there?")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("You’re stopped near an active pothole marker. Want to confirm it or say it looks fixed?")
+                        .font(.caption)
+                        .foregroundStyle(DesignTokens.Palette.surface)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: DesignTokens.Space.xs)
+
+                Button {
+                    withAnimation(DesignTokens.Motion.standard) {
+                        followUpPrompt = nil
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: DesignTokens.Space.sm) {
+                Button("Still there") {
+                    submitPromptFollowUp(.confirmPresent, prompt: prompt)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.signal)
+
+                Button("Looks fixed") {
+                    submitPromptFollowUp(.confirmFixed, prompt: prompt)
+                }
+                .buttonStyle(.bordered)
+                .tint(DesignTokens.Palette.success)
+            }
+        }
+        .padding(DesignTokens.Space.md)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .fill(Color.black.opacity(0.78))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+        )
     }
 
     // MARK: - First-run illustration
@@ -564,6 +694,114 @@ struct MapScreen: View {
         }
     }
 
+    private func handleTakePhotoTap(segmentID: UUID? = nil) {
+        guard let context = model.potholePhotoCaptureContext() else {
+            withAnimation(DesignTokens.Motion.enter) {
+                potholeFeedback = PotholeFeedback(
+                    title: "Pull over first",
+                    message: "Photo reports only work below 5 km/h with a fresh GPS fix.",
+                    iconName: "camera.metering.unknown",
+                    tint: DesignTokens.Palette.warning,
+                    dismissDelay: .seconds(3)
+                )
+            }
+            return
+        }
+
+        scopedPhotoSegmentID = segmentID
+        photoCaptureContext = context
+        isShowingCamera = true
+    }
+
+    private func handlePhotoSubmit(_ data: Data) {
+        let feedback: PotholeFeedback
+        switch model.submitPotholePhoto(rawImageData: data, segmentID: scopedPhotoSegmentID) {
+        case .queued:
+            feedback = PotholeFeedback(
+                title: "Photo queued",
+                message: "Thanks. RoadSense will upload it and send it to moderation automatically.",
+                iconName: "checkmark.circle.fill",
+                tint: DesignTokens.Palette.signalSoft,
+                dismissDelay: .seconds(3.5)
+            )
+        case .safetyRestricted:
+            feedback = PotholeFeedback(
+                title: "Pull over first",
+                message: "Photo reports only work below 5 km/h with a fresh GPS fix.",
+                iconName: "camera.metering.unknown",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        case .unavailableLocation:
+            feedback = PotholeFeedback(
+                title: "Need a fresh GPS fix",
+                message: "Keep the app open for a moment, then try again.",
+                iconName: "location.slash.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        case .insidePrivacyZone:
+            feedback = PotholeFeedback(
+                title: "Inside a privacy zone",
+                message: "RoadSense will not send photo reports from an excluded area.",
+                iconName: "hand.raised.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        }
+
+        scopedPhotoSegmentID = nil
+        photoCaptureContext = nil
+
+        withAnimation(DesignTokens.Motion.enter) {
+            potholeFeedback = feedback
+        }
+    }
+
+    private func submitPromptFollowUp(_ actionType: PotholeActionType, prompt: FollowUpPrompt) {
+        let result = model.queuePotholeFollowUp(
+            potholeReportID: prompt.pothole.id,
+            actionType: actionType
+        )
+        withAnimation(DesignTokens.Motion.standard) {
+            followUpPrompt = nil
+        }
+
+        let feedback: PotholeFeedback
+        switch result {
+        case .queued:
+            feedback = PotholeFeedback(
+                title: "Thanks for the update",
+                message: actionType == .confirmFixed
+                    ? "Your “looks fixed” report will upload automatically in the background."
+                    : "Your confirmation will upload automatically in the background.",
+                iconName: "checkmark.circle.fill",
+                tint: DesignTokens.Palette.signalSoft,
+                dismissDelay: .seconds(3)
+            )
+        case .unavailableLocation:
+            feedback = PotholeFeedback(
+                title: "Need a fresh GPS fix",
+                message: "Keep the app open for a moment, then try again near the pothole.",
+                iconName: "location.slash.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        case .insidePrivacyZone:
+            feedback = PotholeFeedback(
+                title: "Inside a privacy zone",
+                message: "RoadSense will not send pothole updates from an excluded area.",
+                iconName: "hand.raised.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        }
+
+        withAnimation(DesignTokens.Motion.enter) {
+            potholeFeedback = feedback
+        }
+    }
+
     private func loadSegment(id: UUID) async {
         guard !isLoadingSegment else { return }
 
@@ -574,6 +812,11 @@ struct MapScreen: View {
             try await Task.sleep(for: .milliseconds(140))
             let detail = try await model.fetchSegmentDetail(id: id)
             selectedSegment = detail
+            if let promptPothole = model.followUpPromptCandidate(for: detail.potholes) {
+                withAnimation(DesignTokens.Motion.enter) {
+                    followUpPrompt = FollowUpPrompt(pothole: promptPothole)
+                }
+            }
         } catch {
             selectedSegment = nil
             segmentLoadError = error.localizedDescription
@@ -607,6 +850,12 @@ private struct PotholeFeedback: Identifiable {
         self.tint = tint
         self.dismissDelay = dismissDelay
     }
+}
+
+private struct FollowUpPrompt: Identifiable {
+    let id = UUID()
+    let pothole: SegmentPothole
+    let dismissDelay: Duration = .seconds(12)
 }
 
 #Preview("Map Screen") {

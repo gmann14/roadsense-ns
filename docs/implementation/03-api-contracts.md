@@ -428,7 +428,8 @@ Client MUST use the same `batch_id` for retries of the same batch. Changing `bat
 These endpoints sit outside the narrow passive-collection MVP loop. Some are already implemented for the internal build; others remain deferred but are specified here so the contract shape is locked.
 
 - `GET /segments/export?bbox=...&format=geojson|kml` — data export
-- `POST /pothole-actions` — explicit pothole mark / still-there / looks-fixed actions; implemented for the manual `Mark pothole` flow, with follow-up UI still pending
+- `POST /pothole-actions` — explicit pothole mark / still-there / looks-fixed actions; implemented for the manual `Mark pothole` flow, segment-detail follow-up UI, and stopped-only expiring prompt actions
+- `POST /pothole-photos` — photo metadata + signed-upload initiation; implemented for the first photo-reporting pass
 - `GET /coverage?municipality=<name>` — coverage % by municipality
 - `GET /contributors/me` — personal stats authenticated via device token (requires token-signing flow, out of scope for MVP)
 
@@ -527,12 +528,14 @@ Two-step signed-URL upload for pothole photos. Matches [01-ios-implementation.md
 {
     "report_id": "c2f1a4b3-1234-4c5d-8e9f-112233445566",
     "upload_url": "https://...supabase.co/storage/v1/object/sign/pothole-photos/pending/c2f1a4b3-...jpg?token=...",
-    "upload_expires_at": "2026-04-21T18:27:05Z",
+    "upload_expires_at": "2026-04-21T20:22:05Z",
     "expected_object_path": "pending/c2f1a4b3-....jpg"
 }
 ```
 
 Client then `PUT`s the JPEG bytes to `upload_url` directly. The Storage service enforces byte size, content type, and path pattern. The client sends `Content-SHA256: <hex>` so the server can reject a corrupted upload.
+
+`upload_expires_at` is currently emitted as a ~2 hour window to match Supabase signed-upload URL behavior. The client must still treat it as ephemeral and restart from the metadata POST after interruption instead of persisting signed URLs.
 
 **Response — 409 already_uploaded**
 
