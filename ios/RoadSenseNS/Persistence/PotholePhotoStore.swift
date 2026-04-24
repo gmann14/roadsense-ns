@@ -1,6 +1,28 @@
 import Foundation
 import SwiftData
 
+struct PotholePhotoStatusSummary: Equatable {
+    let pendingCount: Int
+    let failedPermanentCount: Int
+    let nextRetryAt: Date?
+    let lastSuccessfulUploadAt: Date?
+
+    static let empty = PotholePhotoStatusSummary(
+        pendingCount: 0,
+        failedPermanentCount: 0,
+        nextRetryAt: nil,
+        lastSuccessfulUploadAt: nil
+    )
+}
+
+struct FailedPotholePhotoSummary: Identifiable, Equatable {
+    let id: UUID
+    let latitude: Double
+    let longitude: Double
+    let capturedAt: Date
+    let lastHTTPStatusCode: Int?
+}
+
 @MainActor
 final class PotholePhotoStore {
     private let container: ModelContainer
@@ -80,16 +102,14 @@ final class PotholePhotoStore {
         }
 
         let fileURL = report.photoFileURL
-        if fileManager.fileExists(atPath: fileURL.path) {
-            try? fileManager.removeItem(at: fileURL)
-        }
-
         report.uploadState = .pendingModeration
         report.expectedObjectPath = expectedObjectPath ?? report.expectedObjectPath
         report.lastRequestID = requestID
         report.lastAttemptAt = now
         report.nextAttemptAt = nil
         try context.save()
+
+        removeFileIfPresent(at: fileURL)
     }
 
     func applyUploadFailure(
@@ -133,20 +153,108 @@ final class PotholePhotoStore {
         }
 
         let fileURL = report.photoFileURL
-        if fileManager.fileExists(atPath: fileURL.path) {
-            try? fileManager.removeItem(at: fileURL)
-        }
-
         context.delete(report)
         try context.save()
+
+        removeFileIfPresent(at: fileURL)
     }
 
     func pendingCount() throws -> Int {
         let context = ModelContext(container)
-        let descriptor = FetchDescriptor<PotholeReportRecord>(
-            predicate: #Predicate { $0.uploadStateRawValue == "pending_metadata" }
+        return try context.fetch(FetchDescriptor<PotholeReportRecord>())
+            .filter { report in
+                report.uploadState == .pendingMetadata || report.uploadState == .pendingModeration
+            }
+            .count
+    }
+
+    func statusSummary(now: Date = Date()) throws -> PotholePhotoStatusSummary {
+        let context = ModelContext(container)
+        let reports = try context.fetch(FetchDescriptor<PotholeReportRecord>())
+
+        let pendingCount = reports.filter { report in
+            report.uploadState == .pendingMetadata || report.uploadState == .pendingModeration
+        }.count
+        let failedPermanentCount = reports.filter { $0.uploadState == .failedPermanent }.count
+        let nextRetryAt = reports
+            .filter { $0.uploadState == .pendingMetadata }
+            .compactMap(\.nextAttemptAt)
+            .filter { $0 > now }
+            .min()
+        let lastSuccessfulUploadAt = reports
+            .filter { $0.uploadState == .pendingModeration }
+            .compactMap(\.lastAttemptAt)
+            .max()
+
+        return PotholePhotoStatusSummary(
+            pendingCount: pendingCount,
+            failedPermanentCount: failedPermanentCount,
+            nextRetryAt: nextRetryAt,
+            lastSuccessfulUploadAt: lastSuccessfulUploadAt
         )
-        return try context.fetchCount(descriptor)
+    }
+
+    func failedPermanentReports(limit: Int = 10) throws -> [FailedPotholePhotoSummary] {
+        let context = ModelContext(container)
+        let reports = try context.fetch(FetchDescriptor<PotholeReportRecord>(
+            sortBy: [SortDescriptor(\.capturedAt, order: .reverse)]
+        ))
+
+        return reports
+            .filter { $0.uploadState == .failedPermanent }
+            .prefix(max(limit, 0))
+            .map { report in
+                FailedPotholePhotoSummary(
+                    id: report.id,
+                    latitude: report.latitude,
+                    longitude: report.longitude,
+                    capturedAt: report.capturedAt,
+                    lastHTTPStatusCode: report.lastHTTPStatusCode
+                )
+            }
+    }
+
+    func retryFailedReports(ids: [UUID]? = nil) throws {
+        let context = ModelContext(container)
+        let retryIDs = ids.map(Set.init)
+        let reports = try context.fetch(FetchDescriptor<PotholeReportRecord>())
+        var didChange = false
+
+        for report in reports where report.uploadState == .failedPermanent {
+            guard retryIDs?.contains(report.id) ?? true else {
+                continue
+            }
+
+            report.uploadState = .pendingMetadata
+            report.uploadAttemptCount = 0
+            report.lastAttemptAt = nil
+            report.nextAttemptAt = nil
+            report.lastHTTPStatusCode = nil
+            report.lastRequestID = nil
+            didChange = true
+        }
+
+        if didChange {
+            try context.save()
+        }
+    }
+
+    func deleteAllReports() throws {
+        let context = ModelContext(container)
+        let reports = try context.fetch(FetchDescriptor<PotholeReportRecord>())
+        let fileURLs = reports.map(\.photoFileURL)
+
+        for report in reports {
+            context.delete(report)
+        }
+
+        if !reports.isEmpty {
+            try context.save()
+        }
+
+        for fileURL in fileURLs {
+            removeFileIfPresent(at: fileURL)
+        }
     }
 
     private func fetchRecord(id: UUID, in context: ModelContext) throws -> PotholeReportRecord? {
@@ -155,5 +263,13 @@ final class PotholePhotoStore {
         )
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
+    }
+
+    private func removeFileIfPresent(at fileURL: URL) {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            return
+        }
+
+        try? fileManager.removeItem(at: fileURL)
     }
 }

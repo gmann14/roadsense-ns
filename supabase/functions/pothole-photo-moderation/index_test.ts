@@ -111,7 +111,7 @@ Deno.test("pothole photo moderation handler approves pending photos and moves st
 });
 
 Deno.test("pothole photo moderation handler rejects pending photos and deletes storage", async () => {
-    const deleted: string[] = [];
+    const events: string[] = [];
     const handler = createPotholePhotoModerationHandler({
         authorize: () => true,
         getPhoto: async () => ({
@@ -121,7 +121,7 @@ Deno.test("pothole photo moderation handler rejects pending photos and deletes s
         }),
         moveObject: async () => undefined,
         deleteObject: async (path) => {
-            deleted.push(path);
+            events.push(`delete:${path}`);
         },
         approvePhoto: async () => ({
             report_id: "00000000-0000-4000-8000-000000002103",
@@ -129,6 +129,7 @@ Deno.test("pothole photo moderation handler rejects pending photos and deletes s
             storage_object_path: "published/00000000-0000-4000-8000-000000002103.jpg",
         }),
         rejectPhoto: async ({ reportID, reviewedBy, rejectionReason }) => {
+            events.push(`reject:${reportID}`);
             assertEquals(reviewedBy, "mod-3");
             assertEquals(rejectionReason, "contains a plate");
             return {
@@ -151,8 +152,54 @@ Deno.test("pothole photo moderation handler rejects pending photos and deletes s
     }));
 
     assertEquals(response.status, 200);
-    assertEquals(deleted, ["pending/00000000-0000-4000-8000-000000002103.jpg"]);
+    assertEquals(events, [
+        "reject:00000000-0000-4000-8000-000000002103",
+        "delete:pending/00000000-0000-4000-8000-000000002103.jpg",
+    ]);
     assertEquals((await response.json()).status, "rejected");
+});
+
+Deno.test("pothole photo moderation handler rolls storage move back when approval RPC fails", async () => {
+    const moves: Array<[string, string]> = [];
+    const handler = createPotholePhotoModerationHandler({
+        authorize: () => true,
+        getPhoto: async () => ({
+            report_id: "00000000-0000-4000-8000-000000002104",
+            status: "pending_moderation",
+            storage_object_path: "pending/00000000-0000-4000-8000-000000002104.jpg",
+        }),
+        moveObject: async (fromPath, toPath) => {
+            moves.push([fromPath, toPath]);
+        },
+        deleteObject: async () => undefined,
+        approvePhoto: async () => {
+            throw new Error("rpc_failed");
+        },
+        rejectPhoto: async () => ({
+            report_id: "00000000-0000-4000-8000-000000002104",
+            status: "rejected",
+            storage_object_path: "pending/00000000-0000-4000-8000-000000002104.jpg",
+        }),
+    });
+
+    const response = await handler(new Request("http://localhost/functions/v1/pothole-photo-moderation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            report_id: "00000000-0000-4000-8000-000000002104",
+            decision: "approve",
+            reviewed_by: "mod-5",
+        }),
+    }));
+
+    assertEquals(response.status, 502);
+    assertEquals(moves, [[
+        "pending/00000000-0000-4000-8000-000000002104.jpg",
+        "published/00000000-0000-4000-8000-000000002104.jpg",
+    ], [
+        "published/00000000-0000-4000-8000-000000002104.jpg",
+        "pending/00000000-0000-4000-8000-000000002104.jpg",
+    ]]);
 });
 
 Deno.test("pothole photo moderation handler maps invalid states to 409", async () => {

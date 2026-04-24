@@ -5,6 +5,7 @@ import type { RpcResponse } from "../upload-readings/runtime.ts";
 
 const validPayload = {
     report_id: "c2f1a4b3-1234-4c5d-8e9f-112233445566",
+    segment_id: "92abed15-d273-4bd3-92ec-d4f0c8b82f99",
     device_token: "a78f9e2b-4c6d-41ec-81d3-0242ac130003",
     client_sent_at: "2026-04-21T18:22:05Z",
     client_app_version: "0.2.0 (78)",
@@ -21,6 +22,7 @@ const validPayload = {
 Deno.test("validatePotholePhotoPayload rejects malformed payloads", () => {
     const result = validatePotholePhotoPayload({
         ...validPayload,
+        segment_id: "bad",
         content_type: "image/png",
         sha256: "nope",
     });
@@ -28,6 +30,7 @@ Deno.test("validatePotholePhotoPayload rejects malformed payloads", () => {
     assertEquals(result.ok, false);
     if (!result.ok) {
         assertObjectMatch(result.fieldErrors, {
+            segment_id: "must be a UUIDv4 string or null",
             content_type: "must be image/jpeg",
             sha256: "must be a lowercase SHA-256 hex string",
         });
@@ -54,16 +57,20 @@ Deno.test("createPotholePhotoRateLimitChecker uses pothole-photo prefixes and li
 });
 
 Deno.test("pothole photo handler returns 200 with signed upload payload", async () => {
+    let forwardedSegmentID: string | null | undefined;
     const handler = createPotholePhotosHandler({
         hashDeviceToken: async () => "deadbeef",
         checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
-        prepareUpload: async () => ({
+        prepareUpload: async ({ payload }) => {
+            forwardedSegmentID = payload.segment_id;
+            return {
             kind: "ready",
             report_id: validPayload.report_id,
             upload_url: "https://example.supabase.co/storage/v1/object/upload/sign/pothole-photos/pending/test.jpg?token=abc",
             upload_expires_at: "2026-04-21T20:22:05Z",
             expected_object_path: "pending/test.jpg",
-        }),
+            };
+        },
     });
 
     const response = await handler(
@@ -77,6 +84,7 @@ Deno.test("pothole photo handler returns 200 with signed upload payload", async 
     assertEquals(response.status, 200);
     const body = await response.json();
     assertEquals(body.report_id, validPayload.report_id);
+    assertEquals(forwardedSegmentID, validPayload.segment_id);
     assertMatch(body.upload_url, /^https:\/\/example\.supabase\.co\//);
     assertEquals(body.expected_object_path, "pending/test.jpg");
 });

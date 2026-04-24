@@ -143,7 +143,10 @@ final class AppModelTests: XCTestCase {
             return XCTFail("Expected queued pothole action")
         }
 
-        model.undoPotholeReport(id: id)
+        model.undoPotholeReport(
+            id: id,
+            now: now.addingTimeInterval(1)
+        )
 
         let context = ModelContext(container.modelContainer)
         let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
@@ -305,7 +308,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(stoppedModel.followUpPromptCandidate(for: [candidate], now: now)?.id, candidate.id)
     }
 
-    func testSubmitPotholePhotoQueuesPendingMetadataReport() throws {
+    func testSubmitPotholePhotoQueuesPendingMetadataReport() async throws {
         let defaults = try makeDefaults()
         let now = Date(timeIntervalSince1970: 1_713_000_000)
         let sample = LocationSample(
@@ -324,7 +327,7 @@ final class AppModelTests: XCTestCase {
         )
         let model = AppModel(container: container, defaults: defaults)
 
-        let result = model.submitPotholePhoto(
+        let result = await model.submitPotholePhoto(
             rawImageData: try makeJPEGData(),
             segmentID: UUID(),
             now: now
@@ -343,7 +346,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(reports.first?.uploadState, .pendingMetadata)
     }
 
-    func testSubmitPotholePhotoRejectsPrivacyZoneOverlap() throws {
+    func testSubmitPotholePhotoRejectsPrivacyZoneOverlap() async throws {
         let defaults = try makeDefaults()
         let now = Date(timeIntervalSince1970: 1_713_000_000)
         let sample = LocationSample(
@@ -362,11 +365,32 @@ final class AppModelTests: XCTestCase {
             seedPrivacyZone: true
         )
         let model = AppModel(container: container, defaults: defaults)
+        let result = await model.submitPotholePhoto(rawImageData: try makeJPEGData(), now: now)
 
-        XCTAssertEqual(
-            model.submitPotholePhoto(rawImageData: try makeJPEGData(), now: now),
-            .insidePrivacyZone
+        XCTAssertEqual(result, .insidePrivacyZone)
+    }
+
+    func testSubmitPotholePhotoRejectsOutsideNovaScotiaCoverage() async throws {
+        let defaults = try makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let sample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.5,
+            latitude: 48.4284,
+            longitude: -123.3656,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 0,
+            headingDegrees: 180
         )
+        let container = try makeContainer(
+            locationService: TestLocationService(
+                latestSample: sample,
+                recentSamples: [sample]
+            )
+        )
+        let model = AppModel(container: container, defaults: defaults)
+        let result = await model.submitPotholePhoto(rawImageData: try makeJPEGData(), now: now)
+
+        XCTAssertEqual(result, .outsideCoverage)
     }
 
     private func makeDefaults(file: StaticString = #filePath, line: UInt = #line) throws -> UserDefaults {

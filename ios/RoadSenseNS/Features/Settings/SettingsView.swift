@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isDeleting = false
     @State private var isRetryingFailedUploads = false
+    @State private var isRetryingFailedPhotos = false
     @State private var isConfirmingDelete = false
     @State private var errorMessage: String?
 
@@ -47,7 +48,7 @@ struct SettingsView: View {
             Button("Delete", role: .destructive) { deleteLocalData() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This clears locally stored readings, upload queue state, and stats. It does not touch your privacy zones.")
+            Text("This clears locally stored readings, pothole reports, upload queue state, and stats. It does not touch your privacy zones.")
         }
     }
 
@@ -141,13 +142,19 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 statusRow(
                     label: "Uploads waiting",
-                    value: "\(model.uploadStatusSummary.pendingReadingCount)",
+                    value: "\(model.pendingUploadCount)",
+                    valueTint: DesignTokens.Palette.ink
+                )
+                Divider()
+                statusRow(
+                    label: "Photo reports waiting",
+                    value: "\(model.potholePhotoStatusSummary.pendingCount)",
                     valueTint: DesignTokens.Palette.ink
                 )
                 Divider()
                 statusRow(
                     label: "Last successful upload",
-                    value: formattedUploadTime(model.uploadStatusSummary.lastSuccessfulUploadAt),
+                    value: formattedUploadTime(lastSuccessfulUploadAt),
                     valueTint: DesignTokens.Palette.inkMuted
                 )
                 Divider()
@@ -179,6 +186,38 @@ struct SettingsView: View {
                 .disabled(isRetryingFailedUploads)
                 .accessibilityIdentifier("settings.retry-failed-uploads")
             }
+
+            if model.potholePhotoStatusSummary.failedPermanentCount > 0 {
+                Button {
+                    retryFailedPhotos()
+                } label: {
+                    HStack {
+                        if isRetryingFailedPhotos {
+                            ProgressView()
+                                .tint(DesignTokens.Palette.deep)
+                        }
+                        Text(isRetryingFailedPhotos ? "Retrying failed photos…" : "Retry failed photos")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.deep)
+                .controlSize(.large)
+                .disabled(isRetryingFailedPhotos)
+                .accessibilityIdentifier("settings.retry-failed-photos")
+
+                VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+                    Text("Failed photos stay on-device until you retry or remove them.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    ForEach(model.failedPotholePhotos) { photo in
+                        failedPhotoRow(photo)
+                    }
+                }
+            }
         }
     }
 
@@ -187,7 +226,7 @@ struct SettingsView: View {
             iconSystemName: "trash.circle.fill",
             iconTint: DesignTokens.Palette.warning,
             title: "Data management",
-            subtitle: "Locally stored readings, upload queue state, and stats only. Privacy zones stay in place."
+            subtitle: "Locally stored readings, pothole reports, upload queue state, and stats only. Privacy zones stay in place."
         ) {
             Button {
                 isConfirmingDelete = true
@@ -208,6 +247,27 @@ struct SettingsView: View {
             .disabled(isDeleting)
             .accessibilityIdentifier("settings.delete-local-data")
         }
+    }
+
+    private func failedPhotoRow(_ photo: FailedPotholePhotoSummary) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.xs) {
+            Text(formattedCoordinateLabel(for: photo))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(DesignTokens.Palette.ink)
+            Text("Captured \(photo.capturedAt.formatted(date: .abbreviated, time: .shortened))\(httpStatusLabel(for: photo))")
+                .font(.system(size: 13))
+                .foregroundStyle(DesignTokens.Palette.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button("Remove photo") {
+                model.deleteFailedPotholePhoto(id: photo.id)
+            }
+            .buttonStyle(.bordered)
+            .tint(DesignTokens.Palette.warning)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignTokens.Space.md)
+        .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
     }
 
     private var aboutCard: some View {
@@ -290,19 +350,46 @@ struct SettingsView: View {
     }
 
     private var uploadWaitingReason: String {
-        if model.uploadStatusSummary.failedPermanentBatchCount > 0 {
+        if model.uploadStatusSummary.failedPermanentBatchCount > 0
+            || model.potholePhotoStatusSummary.failedPermanentCount > 0 {
             return "Needs attention"
         }
 
-        if let nextRetryAt = model.uploadStatusSummary.nextRetryAt {
+        if let nextRetryAt = nextRetryAt {
             return "Retrying at \(nextRetryAt.formatted(date: .omitted, time: .shortened))"
         }
 
-        if model.uploadStatusSummary.pendingReadingCount > 0 {
+        if model.pendingUploadCount > 0 {
             return "Waiting to upload"
         }
 
         return "Up to date"
+    }
+
+    private var nextRetryAt: Date? {
+        switch (model.uploadStatusSummary.nextRetryAt, model.potholePhotoStatusSummary.nextRetryAt) {
+        case let (lhs?, rhs?):
+            return min(lhs, rhs)
+        case let (lhs?, nil):
+            return lhs
+        case let (nil, rhs?):
+            return rhs
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    private var lastSuccessfulUploadAt: Date? {
+        switch (model.uploadStatusSummary.lastSuccessfulUploadAt, model.potholePhotoStatusSummary.lastSuccessfulUploadAt) {
+        case let (lhs?, rhs?):
+            return max(lhs, rhs)
+        case let (lhs?, nil):
+            return lhs
+        case let (nil, rhs?):
+            return rhs
+        case (nil, nil):
+            return nil
+        }
     }
 
     private var backgroundAccessTint: Color {
@@ -346,5 +433,31 @@ struct SettingsView: View {
                 errorMessage = nil
             }
         }
+    }
+
+    private func retryFailedPhotos() {
+        isRetryingFailedPhotos = true
+
+        Task {
+            await model.retryFailedPotholePhotos()
+            await MainActor.run {
+                isRetryingFailedPhotos = false
+                errorMessage = nil
+            }
+        }
+    }
+
+    private func formattedCoordinateLabel(for photo: FailedPotholePhotoSummary) -> String {
+        let lat = photo.latitude.formatted(.number.precision(.fractionLength(4)))
+        let lng = photo.longitude.formatted(.number.precision(.fractionLength(4)))
+        return "Near \(lat), \(lng)"
+    }
+
+    private func httpStatusLabel(for photo: FailedPotholePhotoSummary) -> String {
+        guard let statusCode = photo.lastHTTPStatusCode else {
+            return ""
+        }
+
+        return " · HTTP \(statusCode)"
     }
 }

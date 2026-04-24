@@ -2037,7 +2037,7 @@ Run `EXPLAIN ANALYZE` on the ingestion match query after first 100k readings exi
 
 ## Pothole Photo Moderation (Post-MVP)
 
-*Status: implemented end-to-end in the current build for the internal moderation workflow: `pothole_photos` schema, private Storage bucket, `POST /pothole-photos` signed-upload endpoint, rate limiting, cron-based promotion from `pending_upload` to `pending_moderation`, moderation queue view, approve/reject procedures, signed image preview, and publishing/rejection storage actions.*
+*Status: implemented end-to-end in the current build for the internal moderation workflow: `pothole_photos` schema, private Storage bucket, `POST /pothole-photos` signed-upload endpoint, rate limiting, cron-based promotion from `pending_upload` to `pending_moderation`, moderation queue view, approve/reject procedures, signed image preview, and publishing/rejection storage actions. The current build also hardens the path with single-write signed upload URLs (`upsert: false`), `segment_id` persistence from iOS, moderation move rollback on failed approval RPCs, reject-before-delete ordering, `security_invoker` on the moderation queue view, and a geography index for the approval-path nearby lookup.*
 
 This section covers the server half of the photo capture feature: storage, moderation queue, and publishing flow.
 
@@ -2046,7 +2046,7 @@ This section covers the server half of the photo capture feature: storage, moder
 One Supabase Storage bucket, `pothole-photos`, with:
 
 - **Access:** private by default. Reads for the moderation tool go through a dedicated internal-only `pothole-photo-image` Edge Function that enforces moderation status and emits signed read URLs with a short TTL (60s). This is **not** part of the public mobile API contract in [03-api-contracts.md](03-api-contracts.md).
-- **Write path:** signed PUT URLs issued by `POST /pothole-photos` (see [03-api-contracts.md](03-api-contracts.md)). In practice these are treated as ~2 hour Supabase signed upload URLs and can only write to `pending/{report_id}.jpg`. Repeating the metadata POST while the row is still `pending_upload` issues a fresh signed URL for the same `report_id`.
+- **Write path:** signed PUT URLs issued by `POST /pothole-photos` (see [03-api-contracts.md](03-api-contracts.md)). In practice these are treated as ~2 hour Supabase signed upload URLs and can only write to `pending/{report_id}.jpg`. URLs are issued with `upsert: false`, so the object path is single-write; repeating the metadata POST while the row is still `pending_upload` reissues a fresh signed URL only until the object actually exists.
 - **Max object size:** 1.5 MB enforced at the bucket level. Client target is ≤ 400 KB; the extra headroom tolerates compression variance. Anything larger is a bug or abuse.
 - **Content-Type allowlist:** `image/jpeg` only. HEIC is converted to JPEG client-side before upload.
 
@@ -2078,7 +2078,7 @@ CREATE TABLE pothole_photos (
     reviewed_by TEXT,                             -- moderator identifier, null until reviewed
     status pothole_photo_status NOT NULL DEFAULT 'pending_upload',
     storage_object_path TEXT NOT NULL,            -- e.g., pending/{report_id}.jpg
-    content_sha256 BYTEA NOT NULL,                -- supplied by client, verified server-side on object write
+    content_sha256 BYTEA NOT NULL,                -- supplied by client for idempotency / metadata-consistency checks
     byte_size INTEGER NOT NULL,
     rejection_reason TEXT
 );
@@ -2096,7 +2096,9 @@ MVP moderation is deliberately low-tech: a Supabase Studio view (`moderation_pot
 
 - the image (fetched via the internal `pothole-photo-image` function)
 - the reported lat/lng pinned on a small map
-- approve / reject actions wired through the internal `pothole-photo-moderation` function, which performs Storage move/delete and then calls the SQL procedures
+- approve / reject actions wired through the internal `pothole-photo-moderation` function, which coordinates Storage move/delete with the SQL procedures, including rollback on failed approve RPCs and delete-after-state-change ordering on reject
+
+The view now runs with `security_invoker = true`, so future narrower moderation roles inherit table-level access rules rather than silently bypassing them through a definer-owned view.
 
 No ML classifier in MVP. The moderation policy (spec-driven, not code-driven) is:
 
@@ -2115,7 +2117,7 @@ Photo submissions get their own rate-limit bucket (separate from reading batches
 - **Per device token hash:** 20 photo submissions / 24h
 - **Per IP:** 40 photo submissions / 1h
 
-Both buckets reuse the existing `rate_limits` table and `check_and_bump_rate_limit` RPC with keys `photo-device:<hash>` and `photo-ip:<ip>`.
+Both buckets reuse the existing `rate_limits` table and `check_and_bump_rate_limit` RPC with keys `pothole-photo-device:<hash>` and `pothole-photo-ip:<ip>`.
 
 ### RLS
 

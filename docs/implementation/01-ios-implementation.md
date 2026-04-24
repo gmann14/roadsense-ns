@@ -1233,7 +1233,7 @@ Cross-screen state (recording status, pending upload count, stats) lives on a si
 
 ## Manual Pothole Reporting And Follow-up
 
-*Status: implemented in the current iOS build for the first explicit-reporting pass: map CTA, 5-second undo, `ManualPotholeLocator`, `PotholeActionRecord`, queue persistence, upload through `POST /pothole-actions`, segment-detail `Still there` / `Looks fixed` actions against canonical pothole IDs, and a stopped-only expiring follow-up prompt when the user opens a nearby segment that already has an active pothole. Broader proactive resurfacing prompts on later drive passes remain polish, not missing plumbing.*
+*Status: implemented in the current iOS build for the first explicit-reporting pass: map CTA, 5-second undo, `ManualPotholeLocator`, `PotholeActionRecord`, queue persistence, upload through `POST /pothole-actions`, segment-detail `Still there` / `Looks fixed` actions against canonical pothole IDs, and a stopped-only expiring follow-up prompt when the user opens a nearby segment that already has an active pothole. The undo window is now enforced against `undoExpiresAt` rather than toast timing, and promoted actions request an upload drain immediately after the window closes. Broader proactive resurfacing prompts on later drive passes remain polish, not missing plumbing.*
 
 The passive pothole detector remains the default source of road-issue data, but it misses two things users clearly want:
 
@@ -1389,7 +1389,7 @@ Expiring Waze-style prompts after a later pass near an active pothole are a sepa
 
 ## Pothole Photo Capture (Post-MVP)
 
-*Status: implemented end-to-end in the current build for the first shipped photo flow: map `Take photo` CTA, segment-detail `Add photo` entry point, stopped-only camera gating, `PotholeCameraFlowView`, `PotholeReportRecord`, `PotholePhotoProcessor`, queue persistence, metadata POST + signed PUT upload, transition to local `pendingModeration` after upload, and backend moderation/publishing support. Moderator-facing tooling remains intentionally internal-only, not user-facing.*
+*Status: implemented end-to-end in the current build for the first shipped photo flow: map `Take photo` CTA, segment-detail `Add photo` entry point, stopped-only camera gating, `PotholeCameraFlowView`, `PotholeReportRecord`, `PotholePhotoProcessor`, queue persistence, metadata POST + signed PUT upload, transition to local `pendingModeration` after upload, and backend moderation/publishing support. The current build also includes sheet-safe camera presentation sequencing, segment-scoped `segment_id` wiring, Settings diagnostics plus retry/remove controls for failed photos, and accessibility fixes for camera controls and banner text. Moderator-facing tooling remains intentionally internal-only, not user-facing.*
 
 The passive pipeline already detects pothole events, and the manual tap flow gives a fast explicit confirmation, but neither provides visual context. The photo capture feature adds a low-friction way for a pedestrian or stopped driver to submit a geotagged image that will join the same merged pothole cluster after moderation.
 
@@ -1409,7 +1409,7 @@ No moderation happens client-side. No AI classification client-side. The user do
 ### Entry Points
 
 - **Map screen:** secondary floating button as above.
-- **Segment detail sheet:** tapping on a segment that already has pothole flags shows an `Add photo` row that opens the camera pre-scoped to that segment ID.
+- **Segment detail sheet:** any opened segment detail sheet shows an `Add photo` row that opens the camera pre-scoped to that segment ID.
 - **Settings → About:** no entry point. The feature is discoverable from the map, not buried.
 
 ### Safety Gates
@@ -1477,6 +1477,7 @@ Two-step, signed-URL pattern (the readings endpoint is fine for point JSON; phot
    ```json
    {
      "report_id": "uuid",
+     "segment_id": "uuid-or-null",
      "device_token": "uuid",
      "lat": 44.6488,
      "lng": -63.5752,
@@ -1486,8 +1487,9 @@ Two-step, signed-URL pattern (the readings endpoint is fine for point JSON; phot
      "sha256": "hex..."
    }
    ```
+   `segment_id` is optional and is populated when the photo flow starts from a specific segment detail sheet.
    Server validates, creates a `pothole_photos` row in `pending_upload` status, allocates a Supabase Storage object path, returns a signed PUT URL + expected object path.
-2. `PUT <signed-url>` — direct upload of the JPEG bytes to Supabase Storage. The app computes and sends `Content-SHA256` so the server can reject a corrupted upload.
+2. `PUT <signed-url>` — direct upload of the JPEG bytes to Supabase Storage. The app uploads the exact JPEG bytes it hashed in step 1; the signed URL is treated as an ephemeral, single-attempt credential and is never persisted locally.
 3. Server watcher (trigger or cron) on the Storage bucket flips the row to `pending_moderation` once the file lands. The client does **not** poll status; after the PUT returns 200, it sets `uploadState = .pendingModeration`, deletes the local JPEG, and shows the success toast immediately: `"Thanks — a moderator will review this report."`
 
 Supabase signed upload URLs currently behave as two-hour URLs in practice. The client treats them as single-attempt, in-memory credentials regardless and re-POSTs metadata after interruption rather than persisting them.
@@ -1530,7 +1532,7 @@ for each eligible PotholeReportRecord:
 
 Photo backoff does **not** block reading uploads. A photo row with `nextAttemptAt > now` is simply skipped until a later drain.
 
-If the app backgrounds or the task expires after the metadata POST but before the PUT completes, discard the in-memory signed URL and retry from step 1 with the same `report_id` on the next drain. The backend reissues a fresh signed URL while the row is still `pending_upload`.
+If the app backgrounds or the task expires after the metadata POST but before the PUT completes, discard the in-memory signed URL and retry from step 1 with the same `report_id` on the next drain. The backend reissues a fresh signed URL while the row is still `pending_upload`; once the object already exists, the prepare endpoint returns `409 already_uploaded`.
 
 ### Moderation
 
@@ -1547,7 +1549,7 @@ See [02-backend-implementation.md §Pothole Photo Moderation](02-backend-impleme
 - Camera permission denied → inline full-screen state with `Open Settings` button.
 - Low-light capture → no flash; we'd rather have no report than a flash-blinded one that crashes the classifier. Show inline hint: "Tap to focus. Daylight works best."
 - Out-of-bounds coords (outside Nova Scotia) → client-side rejection with sheet: "Reports are limited to Nova Scotia roads right now."
-- Upload 400 / 413 / 429 → same state as readings (`failedPermanent` after 5 attempts). The photo is preserved locally for later diagnostics/retry work; the current build does not yet expose a dedicated photo retry UI in Settings.
+- Upload 400 / 413 / 429 → same state as readings (`failedPermanent` after 5 attempts). The photo is preserved locally for later diagnostics/retry work, and the current build exposes retry/remove controls in Settings for failed photo rows.
 
 ### UI Accessibility
 

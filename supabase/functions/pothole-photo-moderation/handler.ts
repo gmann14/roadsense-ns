@@ -158,17 +158,35 @@ export function createPotholePhotoModerationHandler(deps: PotholePhotoModeration
                 const targetPath = photo.storage_object_path.startsWith("published/")
                     ? photo.storage_object_path
                     : `published/${payload.report_id}.jpg`;
+                const shouldMoveObject = photo.status === "pending_moderation"
+                    && photo.storage_object_path !== targetPath;
 
-                if (photo.status === "pending_moderation" && photo.storage_object_path !== targetPath) {
+                if (shouldMoveObject) {
                     await deps.moveObject(photo.storage_object_path, targetPath);
                 }
 
-                const result = await deps.approvePhoto({
-                    reportID: payload.report_id,
-                    reviewedBy: payload.reviewed_by,
-                    storageObjectPath: targetPath,
-                });
-                return jsonResponse(result, 200, {}, requestId);
+                try {
+                    const result = await deps.approvePhoto({
+                        reportID: payload.report_id,
+                        reviewedBy: payload.reviewed_by,
+                        storageObjectPath: targetPath,
+                    });
+                    return jsonResponse(result, 200, {}, requestId);
+                } catch (error) {
+                    if (shouldMoveObject) {
+                        try {
+                            await deps.moveObject(targetPath, photo.storage_object_path);
+                        } catch (rollbackError) {
+                            console.error("pothole-photo-moderation rollback failed", {
+                                request_id: requestId,
+                                report_id: payload.report_id,
+                                rollbackError,
+                            });
+                        }
+                    }
+
+                    throw error;
+                }
             }
 
             if (photo.status !== "pending_moderation" && photo.status !== "rejected") {
@@ -180,15 +198,13 @@ export function createPotholePhotoModerationHandler(deps: PotholePhotoModeration
                 );
             }
 
-            if (photo.status === "pending_moderation") {
-                await deps.deleteObject(photo.storage_object_path);
-            }
-
             const result = await deps.rejectPhoto({
                 reportID: payload.report_id,
                 reviewedBy: payload.reviewed_by,
                 rejectionReason: payload.rejection_reason,
             });
+
+            await deps.deleteObject(photo.storage_object_path);
             return jsonResponse(result, 200, {}, requestId);
         } catch (error) {
             const message = error instanceof Error ? error.message : "unknown_error";

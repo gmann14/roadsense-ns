@@ -499,6 +499,7 @@ Two-step signed-URL upload for pothole photos. Matches [01-ios-implementation.md
 ```json
 {
     "report_id": "c2f1a4b3-1234-4c5d-8e9f-112233445566",
+    "segment_id": "92abed15-d273-4bd3-92ec-d4f0c8b82f99",
     "device_token": "a78f9e2b-4c6d-11ec-81d3-0242ac130003",
     "client_sent_at": "2026-04-21T18:22:05Z",
     "client_app_version": "0.2.0 (78)",
@@ -516,6 +517,7 @@ Two-step signed-URL upload for pothole photos. Matches [01-ios-implementation.md
 **Notes**
 
 - `report_id` is a client-generated UUIDv4 and is the idempotency key. Retrying the call with the same `report_id` while the row is still `pending_upload` returns a fresh signed URL for the same object path. Once the object already exists, the endpoint returns `409 already_uploaded`.
+- `segment_id` is optional. Clients send it when the capture flow was scoped from a segment detail view; otherwise send `null` or omit it.
 - `content_type` must be `image/jpeg` (only accepted value in MVP).
 - `byte_size` must be ≤ 1,500,000. Client target is ≤ 400 KB.
 - `sha256` is the hex-encoded SHA-256 of the exact bytes the client will PUT.
@@ -533,7 +535,7 @@ Two-step signed-URL upload for pothole photos. Matches [01-ios-implementation.md
 }
 ```
 
-Client then `PUT`s the JPEG bytes to `upload_url` directly. The Storage service enforces byte size, content type, and path pattern. The client sends `Content-SHA256: <hex>` so the server can reject a corrupted upload.
+Client then `PUT`s the JPEG bytes to `upload_url` directly. The Storage service enforces byte size, content type, path pattern, and single-write semantics on the signed upload path. Clients must treat the URL as ephemeral and restart from the metadata POST after interruption instead of persisting it.
 
 `upload_expires_at` is currently emitted as a ~2 hour window to match Supabase signed-upload URL behavior. The client must still treat it as ephemeral and restart from the metadata POST after interruption instead of persisting signed URLs.
 

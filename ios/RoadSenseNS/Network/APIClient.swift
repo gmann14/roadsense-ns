@@ -191,6 +191,7 @@ final class APIClient {
         request.httpBody = try UploadCodec.makeEncoder().encode(
             PotholePhotoUploadRequest(
                 reportID: report.id,
+                segmentID: report.segmentID,
                 deviceToken: deviceToken,
                 clientSentAt: now,
                 clientAppVersion: appVersionString(),
@@ -241,17 +242,13 @@ final class APIClient {
 
     func uploadPotholePhotoFile(
         fileURL: URL,
-        uploadURL: URL,
-        sha256Hex: String
+        uploadURL: URL
     ) async throws -> SignedUploadAttemptSummary {
         var request = URLRequest(url: uploadURL)
         request.httpMethod = "PUT"
         request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
-        request.setValue(sha256Hex, forHTTPHeaderField: "Content-SHA256")
 
-        let fileData = try Data(contentsOf: fileURL)
-        request.httpBody = fileData
-        let (_, response) = try await session.data(for: request)
+        let (_, response) = try await session.upload(for: request, fromFile: fileURL)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }

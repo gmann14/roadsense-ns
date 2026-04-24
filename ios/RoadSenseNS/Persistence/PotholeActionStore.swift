@@ -93,14 +93,41 @@ final class PotholeActionStore {
         return record
     }
 
-    func discard(id: UUID) throws {
+    func discard(id: UUID, now: Date = Date()) throws {
         let context = ModelContext(container)
         guard let record = try fetchRecord(id: id, in: context) else {
+            return
+        }
+        guard record.uploadState == .pendingUndo else {
+            return
+        }
+        guard let undoExpiresAt = record.undoExpiresAt,
+              undoExpiresAt > now else {
             return
         }
 
         context.delete(record)
         try context.save()
+    }
+
+    func pendingCount() throws -> Int {
+        let context = ModelContext(container)
+        return try context.fetch(FetchDescriptor<PotholeActionRecord>())
+            .filter { $0.uploadState != .failedPermanent }
+            .count
+    }
+
+    func deleteAllActions() throws {
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+
+        for record in records {
+            context.delete(record)
+        }
+
+        if !records.isEmpty {
+            try context.save()
+        }
     }
 
     @discardableResult

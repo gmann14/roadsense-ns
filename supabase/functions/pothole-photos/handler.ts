@@ -7,6 +7,7 @@ const SHA256_REGEX = /^[0-9a-f]{64}$/i;
 
 export type PotholePhotoPayload = {
     report_id: string;
+    segment_id?: string | null;
     device_token: string;
     client_sent_at: string;
     client_app_version: string;
@@ -68,6 +69,10 @@ export function validatePotholePhotoPayload(payload: unknown): ValidationResult 
         fieldErrors.report_id = "must be a UUIDv4 string";
     }
 
+    if (!(input.segment_id === undefined || input.segment_id === null || UUID_V4_REGEX.test(String(input.segment_id)))) {
+        fieldErrors.segment_id = "must be a UUIDv4 string or null";
+    }
+
     if (!UUID_V4_REGEX.test(String(input.device_token ?? ""))) {
         fieldErrors.device_token = "must be a UUIDv4 string";
     }
@@ -120,6 +125,7 @@ export function validatePotholePhotoPayload(payload: unknown): ValidationResult 
         ok: true,
         payload: {
             report_id: String(input.report_id),
+            segment_id: input.segment_id == null ? null : String(input.segment_id),
             device_token: String(input.device_token),
             client_sent_at: String(input.client_sent_at),
             client_app_version: String(input.client_app_version),

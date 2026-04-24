@@ -16,9 +16,12 @@ struct MapScreen: View {
     @State private var mapLoadError: String?
     @State private var potholeFeedback: PotholeFeedback?
     @State private var followUpPrompt: FollowUpPrompt?
+    @State private var deferredFollowUpPrompt: FollowUpPrompt?
     @State private var photoCaptureContext: PotholePhotoCaptureContext?
     @State private var isShowingCamera = false
+    @State private var isWaitingToPresentCamera = false
     @State private var scopedPhotoSegmentID: UUID?
+    @State private var bottomCardHeight: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -57,6 +60,12 @@ struct MapScreen: View {
                 Spacer(minLength: 0)
 
                 bottomCard
+                    .background(
+                        GeometryReader { proxy in
+                            Color.clear
+                                .preference(key: BottomCardHeightPreferenceKey.self, value: proxy.size.height)
+                        }
+                    )
                     .padding(.horizontal, DesignTokens.Space.md)
                     .padding(.bottom, DesignTokens.Space.md)
             }
@@ -65,7 +74,7 @@ struct MapScreen: View {
                 loadingVeil
             }
         }
-        .sheet(item: $selectedSegment) { segment in
+        .sheet(item: $selectedSegment, onDismiss: handleSegmentDismiss) { segment in
             SegmentDetailSheet(
                 segment: segment,
                 onSubmitPotholeAction: { pothole, actionType in
@@ -79,7 +88,7 @@ struct MapScreen: View {
                 }
             )
         }
-        .fullScreenCover(isPresented: $isShowingCamera) {
+        .fullScreenCover(isPresented: $isShowingCamera, onDismiss: handleCameraDismiss) {
             if let photoCaptureContext {
                 PotholeCameraFlowView(
                     coordinateLabel: photoCaptureContext.coordinateLabel,
@@ -87,8 +96,11 @@ struct MapScreen: View {
                         isShowingCamera = false
                     },
                     onSubmit: { data in
+                        let segmentID = scopedPhotoSegmentID
                         isShowingCamera = false
-                        handlePhotoSubmit(data)
+                        Task {
+                            await handlePhotoSubmit(data, segmentID: segmentID)
+                        }
                     }
                 )
             }
@@ -120,8 +132,9 @@ struct MapScreen: View {
                 }
             }
             .padding(.horizontal, DesignTokens.Space.md)
-            .padding(.bottom, 156)
+            .padding(.bottom, bottomCardHeight + DesignTokens.Space.md)
         }
+        .onPreferenceChange(BottomCardHeightPreferenceKey.self) { bottomCardHeight = $0 }
         .alert("Could not load road details", isPresented: Binding(
             get: { segmentLoadError != nil },
             set: { if !$0 { segmentLoadError = nil } }
@@ -375,6 +388,7 @@ struct MapScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("map.mark-pothole-button")
+        .accessibilityHint("Queues a pothole report using your current stopped location.")
     }
 
     private var takePhotoAction: some View {
@@ -404,6 +418,7 @@ struct MapScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("map.take-photo-button")
+        .accessibilityHint("Opens the camera when you are safely stopped.")
     }
 
     private var primaryAction: some View {
@@ -432,10 +447,10 @@ struct MapScreen: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(feedback.title)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(.headline, design: .rounded, weight: .bold))
                     .foregroundStyle(.white)
                 Text(feedback.message)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(DesignTokens.Palette.surface)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -492,10 +507,10 @@ struct MapScreen: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Still there?")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(.headline, design: .rounded, weight: .bold))
                         .foregroundStyle(.white)
                     Text("You’re stopped near an active pothole marker. Want to confirm it or say it looks fixed?")
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(DesignTokens.Palette.surface)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -669,7 +684,7 @@ struct MapScreen: View {
                 message: "It will send automatically after 5 seconds unless you undo it.",
                 iconName: "checkmark.circle.fill",
                 tint: DesignTokens.Palette.signalSoft,
-                dismissDelay: .seconds(5.2)
+                dismissDelay: .seconds(4.9)
             )
         case .unavailableLocation:
             feedback = PotholeFeedback(
@@ -710,12 +725,22 @@ struct MapScreen: View {
 
         scopedPhotoSegmentID = segmentID
         photoCaptureContext = context
-        isShowingCamera = true
+        if segmentID != nil {
+            deferredFollowUpPrompt = nil
+        }
+
+        guard selectedSegment != nil else {
+            isShowingCamera = true
+            return
+        }
+
+        isWaitingToPresentCamera = true
+        selectedSegment = nil
     }
 
-    private func handlePhotoSubmit(_ data: Data) {
+    private func handlePhotoSubmit(_ data: Data, segmentID: UUID?) async {
         let feedback: PotholeFeedback
-        switch model.submitPotholePhoto(rawImageData: data, segmentID: scopedPhotoSegmentID) {
+        switch await model.submitPotholePhoto(rawImageData: data, segmentID: segmentID) {
         case .queued:
             feedback = PotholeFeedback(
                 title: "Photo queued",
@@ -745,6 +770,14 @@ struct MapScreen: View {
                 title: "Inside a privacy zone",
                 message: "RoadSense will not send photo reports from an excluded area.",
                 iconName: "hand.raised.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        case .outsideCoverage:
+            feedback = PotholeFeedback(
+                title: "Outside coverage area",
+                message: "Photo reports currently work only within Nova Scotia.",
+                iconName: "map.circle.fill",
                 tint: DesignTokens.Palette.warning,
                 dismissDelay: .seconds(3)
             )
@@ -807,15 +840,15 @@ struct MapScreen: View {
 
         isLoadingSegment = true
         segmentLoadError = nil
+        followUpPrompt = nil
+        deferredFollowUpPrompt = nil
 
         do {
             try await Task.sleep(for: .milliseconds(140))
             let detail = try await model.fetchSegmentDetail(id: id)
             selectedSegment = detail
             if let promptPothole = model.followUpPromptCandidate(for: detail.potholes) {
-                withAnimation(DesignTokens.Motion.enter) {
-                    followUpPrompt = FollowUpPrompt(pothole: promptPothole)
-                }
+                deferredFollowUpPrompt = FollowUpPrompt(pothole: promptPothole)
             }
         } catch {
             selectedSegment = nil
@@ -823,6 +856,34 @@ struct MapScreen: View {
         }
 
         isLoadingSegment = false
+    }
+
+    private func handleSegmentDismiss() {
+        if isWaitingToPresentCamera {
+            isWaitingToPresentCamera = false
+            isShowingCamera = true
+            return
+        }
+
+        showDeferredFollowUpPromptIfNeeded()
+    }
+
+    private func handleCameraDismiss() {
+        photoCaptureContext = nil
+        scopedPhotoSegmentID = nil
+    }
+
+    private func showDeferredFollowUpPromptIfNeeded() {
+        guard selectedSegment == nil,
+              !isShowingCamera,
+              let prompt = deferredFollowUpPrompt else {
+            return
+        }
+
+        deferredFollowUpPrompt = nil
+        withAnimation(DesignTokens.Motion.enter) {
+            followUpPrompt = prompt
+        }
     }
 }
 
@@ -856,6 +917,14 @@ private struct FollowUpPrompt: Identifiable {
     let id = UUID()
     let pothole: SegmentPothole
     let dismissDelay: Duration = .seconds(12)
+}
+
+private struct BottomCardHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
 }
 
 #Preview("Map Screen") {

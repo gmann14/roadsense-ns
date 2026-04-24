@@ -668,16 +668,14 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [01](01-ios-implementation.md#manual-pothole-reporting-and-follow-up)
 - **Depends on:** B070, B072
-- **Status:** implemented for the first explicit-reporting pass. `Mark pothole`, undo, `ManualPotholeLocator`, `PotholeActionRecord`, upload-drain integration, and segment-detail `Still there` / `Looks fixed` actions are in the app. Remaining polish is B075 prompt UX rather than core action plumbing.
+- **Status:** implemented for the first explicit-reporting pass. `Mark pothole`, undo, `ManualPotholeLocator`, `PotholeActionRecord`, upload-drain integration, and segment-detail `Still there` / `Looks fixed` actions are in the app. The undo window is now enforced against `undoExpiresAt`, stale Undo taps no longer delete already-expired rows, and promoted actions request an upload drain immediately after the 5-second window closes. Remaining polish is B075 prompt UX rather than core action plumbing.
 - **RED**
   - UI test that tapping `Mark pothole` with a stale (`> 10s`) or poor-accuracy (`> 25m`) location sample shows the non-blocking GPS warning instead of queueing an action
-  - unit test that `ManualPotholeLocator` chooses the buffered sample nearest `tapTimestamp - 0.75s`
-  - unit test that repeated taps within `20m` / `8s` update the same pending-undo row instead of creating duplicates
-  - unit test that pothole actions inside a privacy zone are discarded and never enqueued
 - **GREEN**
   - add the large `Mark pothole` map action plus marker-detail `Still there` / `Looks fixed` actions
   - add `PotholeActionRecord` SwiftData model with `pendingUndo` / `pendingUpload` states
   - integrate pothole actions with `UploadDrainCoordinator` ahead of photos/readings
+- **Current repo note:** `ManualPotholeLocator` reaction-time selection, repeated-tap dedupe, privacy-zone rejection, and expired-undo handling all have XCTest coverage in the current branch.
 - **Acceptance**
   - tapping `Mark pothole` produces one queued `PotholeActionRecord` with compensated precise lat/lng and a 5-second undo window
   - tapping `Still there` / `Looks fixed` produces one queued follow-up action tied to the selected `pothole_report_id`
@@ -686,10 +684,9 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [02](02-backend-implementation.md#explicit-pothole-actions-apply_pothole_action), [03](03-api-contracts.md)
 - **Depends on:** B010-range backend foundation
-- **Status:** implemented. Migration, Edge Function, stored procedure, and test coverage exist in the repo.
+- **Status:** implemented. Migration, Edge Function, stored procedure, and both pgTAP + Deno coverage exist in the repo.
 - **RED**
-  - pgTAP tests for `pothole_actions` schema, idempotent `apply_pothole_action`, same-device 24h dedupe, stale-target rejection, and resolved-pothole reactivation
-  - Deno tests for `POST /pothole-actions` happy path, duplicate `action_id`, same-device repeat not inflating counters, one-vote-not-resolved, second-distinct-fixed-vote resolves, and 429 rate limit
+  - none for the current scoped contract
 - **GREEN**
   - migration for `pothole_action_type` + `pothole_actions`
   - Edge Function `pothole-actions/index.ts`
@@ -702,13 +699,14 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [01](01-ios-implementation.md#manual-pothole-reporting-and-follow-up)
 - **Depends on:** B073, B074
-- **Status:** implemented for the current scoped UX. The app now shows a stopped-only expiring follow-up prompt when a user opens a nearby active pothole segment, and prompt actions reuse the same `PotholeActionRecord` upload path as the segment sheet. Broader proactive resurfacing prompts on later passive passes remain optional polish.
+- **Status:** implemented for the current scoped UX. The app now shows a stopped-only expiring follow-up prompt when a user opens a nearby active pothole segment, prompt actions reuse the same `PotholeActionRecord` upload path as the segment sheet, and prompt presentation is deferred until the segment sheet dismisses so the banner is actually visible. Broader proactive resurfacing prompts on later passive passes remain optional polish.
 - **RED**
-  - UX copy/test plan for expiring `still there?` prompts
-  - unit tests that prompts never fire while driving and expire automatically if ignored
+  - UI test that the deferred prompt appears only after segment-sheet dismissal and expires cleanly if ignored
+  - UX copy/test plan for broader passive resurfacing prompts on later passes
 - **GREEN**
   - optional expiring follow-up prompt after a later pass near an active pothole
   - hook the prompt buttons into the existing `PotholeActionRecord` flow rather than inventing a second resolution path
+- **Current repo note:** the stopped/fresh-location gate is already unit-tested; the remaining gap is view-level automation around prompt presentation timing.
 - **Acceptance**
   - follow-up prompts expire automatically and never fire while driving
   - prompt actions and marker-sheet actions produce the same server-side result
@@ -719,16 +717,16 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [01](01-ios-implementation.md#pothole-photo-capture-post-mvp)
 - **Depends on:** B070, B072, B074
-- **Status:** implemented. `Take photo` is available from the map, `Add photo` is available from segment detail, camera access runs through `PotholeCameraFlowView`, and confirmed captures queue `PotholeReportRecord` rows with processed JPEGs and precise coordinates.
+- **Status:** implemented. `Take photo` is available from the map, `Add photo` is available from segment detail for any opened segment, camera access runs through `PotholeCameraFlowView`, and confirmed captures queue `PotholeReportRecord` rows with processed JPEGs and precise coordinates. The current build also fixes sheet/camera presentation sequencing, re-checks camera authorization on return from Settings, exposes failed-photo retry/remove controls in Settings, and adds VoiceOver + Dynamic Type coverage to the camera flow and map banners.
 - **RED**
   - UI test that tapping `Take photo` while `latestSpeedKmh >= 5` or the latest speed sample is older than 10s shows the safety interstitial, while a fresh `< 5` sample presents the camera
-  - unit test that photos captured inside a privacy zone are deleted and never enqueued
-  - unit test that the queued report stores the precise `latestSample` coordinate, not EXIF GPS and not a randomized offset
-  - unit test that EXIF fields (GPS, TIFF, Exif dicts) are absent from the final uploaded bytes
+  - UI test that segment-detail photo capture dismisses the sheet before presenting the full-screen camera
+  - manual accessibility QA pass for VoiceOver copy and large Dynamic Type in the map banners and camera flow
 - **GREEN**
   - add `PotholeCameraView` (AVFoundation) with confirm + retake flow
   - add `PotholeReportRecord` SwiftData model
   - integrate with upload scheduling while keeping a photo-specific local state machine (`pendingMetadata`, `pendingModeration`, `failedPermanent`)
+- **Current repo note:** privacy-zone rejection, precise coordinate persistence, EXIF stripping, upload-success file deletion order, failed-photo retry/reset, and signed-upload request wiring all have automated coverage in the current branch.
 - **Acceptance**
   - tap shutter → confirm produces one queued `PotholeReportRecord` with precise lat/lng, a stripped JPEG on disk, and `uploadState == .pendingMetadata`
 
@@ -736,15 +734,15 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp), [03](03-api-contracts.md)
 - **Depends on:** B010-range backend foundation, B074
-- **Status:** implemented. `POST /pothole-photos`, the `pothole_photos` schema, rate-limit isolation, signed-upload reissue semantics, and cron-based promotion to `pending_moderation` are live.
+- **Status:** implemented. `POST /pothole-photos`, the `pothole_photos` schema, rate-limit isolation, signed-upload reissue semantics, and cron-based promotion to `pending_moderation` are live. The current build also persists `segment_id` from iOS, treats already-stored pending objects as `409 already_uploaded`, issues single-write signed upload URLs with `upsert: false`, and aligns the docs/tests with metadata-consistency checks instead of a nonexistent Storage-side `Content-SHA256` verification step.
 - **RED**
-  - pgTAP tests for `pothole_photos` schema + RLS + rate-limit bucket isolation
-  - Deno tests for `POST /pothole-photos` happy path, repeat POST while `pending_upload` returning a fresh signed URL, 409 after completed upload, 429 rate limit, and content-SHA mismatch
+  - preview-project end-to-end smoke for real signed PUT upload, retry after interrupted metadata/PUT split, and cron/webhook promotion to `pending_moderation`
 - **GREEN**
   - migration for `pothole_photos` + `pothole_photo_status` enum
   - Edge Function `pothole-photos/index.ts` issuing signed PUT URLs and idempotent reissue before upload completes
   - Storage bucket provisioning with byte-size + content-type restrictions
   - Storage webhook or cron that promotes uploaded objects from `pending/` to `pending_moderation/`
+- **Current repo note:** pgTAP, Deno, and targeted iOS tests now cover the local contract; the remaining gap is a live preview-environment Storage smoke.
 - **Acceptance**
   - E2E contract tests pass against a preview Supabase project
   - a timed-out PUT followed by retry creates one server row and eventually lands in `pending_moderation`
@@ -753,13 +751,14 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp)
 - **Depends on:** B077
-- **Status:** implemented. The backend now has `approve_pothole_photo()` / `reject_pothole_photo()` procedures, the `moderation_pothole_photo_queue` view, internal signed-image preview, internal moderation actions that move/delete Storage objects, and pothole fold-in on approval.
+- **Status:** implemented. The backend now has `approve_pothole_photo()` / `reject_pothole_photo()` procedures, the `moderation_pothole_photo_queue` view, internal signed-image preview, internal moderation actions that move/delete Storage objects, and pothole fold-in on approval. The current build also adds rollback if a Storage move succeeds but the approval RPC fails, reject-before-delete ordering, `security_invoker` on the moderation queue view, and a geography index for the approval-path nearby lookup.
 - **RED**
-  - pgTAP tests for `approve_pothole_photo()` and `reject_pothole_photo()` stored procedures (status transition, storage path move, `pothole_reports` fold-in)
+  - preview-project moderation smoke verifying real Storage move/delete behavior plus published-map visibility after approval
 - **GREEN**
   - approve/reject stored procedures; Storage move on approve; Storage delete on reject
   - Supabase Studio view with approve/reject actions bound to those procedures
   - pothole-folding logic extension so approved photos participate in the same 15m cluster merge used by accelerometer pothole folding and manual pothole actions, with the public marker coming from the merged `pothole_reports` row
+- **Current repo note:** SQL procedures, Deno moderation contracts, and pgTAP moderation suites all pass locally; the remaining work is live-environment smoke rather than missing backend logic.
 - **Acceptance**
   - an approved photo appears on the public pothole layer within one tile-cache TTL
 

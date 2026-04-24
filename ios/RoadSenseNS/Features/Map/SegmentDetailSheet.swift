@@ -275,6 +275,17 @@ struct SegmentDetailSheet: View {
     private var potholesCard: some View {
         sectionCard(title: "Pothole updates") {
             VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
+                Button {
+                    onAddPhoto(segment.id)
+                } label: {
+                    Label("Add photo", systemImage: "camera.viewfinder")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .tint(DesignTokens.Palette.deep)
+                .accessibilityIdentifier("segmentDetail.add-photo")
+                .accessibilityHint("Opens the camera to attach a pothole photo for this road segment.")
+
                 if segment.potholes.isEmpty {
                     Text("No nearby pothole markers are available for follow-up on this segment yet.")
                         .font(.system(size: 14))
@@ -285,16 +296,6 @@ struct SegmentDetailSheet: View {
                         .font(.system(size: 13))
                         .foregroundStyle(DesignTokens.Palette.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    Button {
-                        onAddPhoto(segment.id)
-                    } label: {
-                        Label("Add photo", systemImage: "camera.viewfinder")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(DesignTokens.Palette.deep)
-                    .accessibilityIdentifier("segmentDetail.add-photo")
 
                     ForEach(segment.potholes) { pothole in
                         potholeRow(pothole)
@@ -330,20 +331,27 @@ struct SegmentDetailSheet: View {
                     .background(pothole.statusTint.opacity(0.1), in: Capsule())
             }
 
-            HStack(spacing: DesignTokens.Space.sm) {
-                Button("Still there") {
-                    handlePotholeAction(.confirmPresent, pothole: pothole)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(DesignTokens.Palette.signal)
-                .accessibilityIdentifier("segmentDetail.pothole-still-there.\(pothole.id.uuidString)")
+            if pothole.status == "resolved" {
+                Text("This pothole is already marked fixed. Add a new photo if the area still needs moderation review.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack(spacing: DesignTokens.Space.sm) {
+                    Button("Still there") {
+                        handlePotholeAction(.confirmPresent, pothole: pothole)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(DesignTokens.Palette.signal)
+                    .accessibilityIdentifier("segmentDetail.pothole-still-there.\(pothole.id.uuidString)")
 
-                Button("Looks fixed") {
-                    handlePotholeAction(.confirmFixed, pothole: pothole)
+                    Button("Looks fixed") {
+                        handlePotholeAction(.confirmFixed, pothole: pothole)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(DesignTokens.Palette.success)
+                    .accessibilityIdentifier("segmentDetail.pothole-looks-fixed.\(pothole.id.uuidString)")
                 }
-                .buttonStyle(.bordered)
-                .tint(DesignTokens.Palette.success)
-                .accessibilityIdentifier("segmentDetail.pothole-looks-fixed.\(pothole.id.uuidString)")
             }
         }
         .padding(DesignTokens.Space.md)

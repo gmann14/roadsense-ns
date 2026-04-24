@@ -7,6 +7,7 @@ struct PotholeCameraFlowView: View {
     let onCancel: () -> Void
     let onSubmit: (Data) -> Void
 
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var camera = CameraCaptureModel()
     @State private var capturedData: Data?
 
@@ -23,6 +24,12 @@ struct PotholeCameraFlowView: View {
         }
         .task {
             await camera.startIfNeeded()
+        }
+        .onChange(of: scenePhase) { phase in
+            guard phase == .active else { return }
+            Task {
+                await camera.refreshAuthorizationState()
+            }
         }
         .onDisappear {
             camera.stop()
@@ -44,10 +51,10 @@ struct PotholeCameraFlowView: View {
 
                 VStack(spacing: DesignTokens.Space.xs) {
                     Text("Review photo")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(.title3, design: .rounded, weight: .bold))
                         .foregroundStyle(.white)
                     Text(coordinateLabel)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(.subheadline, weight: .medium))
                         .foregroundStyle(.white.opacity(0.82))
                         .multilineTextAlignment(.center)
                 }
@@ -83,11 +90,12 @@ struct PotholeCameraFlowView: View {
                                 .foregroundStyle(.white)
                                 .padding(DesignTokens.Space.lg)
                         }
+                        .accessibilityLabel("Close camera")
                     }
                     .overlay(alignment: .bottom) {
                         VStack(spacing: DesignTokens.Space.md) {
                             Text("Slow down or pull over first. Daylight works best.")
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.system(.callout, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.82))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, DesignTokens.Space.lg)
@@ -108,6 +116,8 @@ struct PotholeCameraFlowView: View {
                             }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("camera.shutter")
+                            .accessibilityLabel("Take pothole photo")
+                            .accessibilityHint("Captures a photo for the pothole report.")
                             .padding(.bottom, DesignTokens.Space.xl)
                         }
                     }
@@ -122,11 +132,11 @@ struct PotholeCameraFlowView: View {
                 .foregroundStyle(.white)
 
             Text("Camera access is off")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(.title2, design: .rounded, weight: .bold))
                 .foregroundStyle(.white)
 
             Text("Allow camera access in Settings to submit pothole photos.")
-                .font(.system(size: 15))
+                .font(.body)
                 .foregroundStyle(.white.opacity(0.82))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 280)
@@ -163,9 +173,19 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
             authorizationState = granted ? .authorized : .denied
         }
 
-        guard authorizationState == .authorized, !session.isRunning else {
+        await refreshAuthorizationState()
+    }
+
+    @MainActor
+    func refreshAuthorizationState() async {
+        authorizationState = AVCaptureDevice.authorizationStatus(for: .video)
+
+        guard authorizationState == .authorized else {
+            stop()
             return
         }
+
+        guard !session.isRunning else { return }
 
         configureSessionIfNeeded()
         session.startRunning()
@@ -182,6 +202,9 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
         continuation = onCapture
         let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         settings.flashMode = .off
+        if #available(iOS 16.0, *) {
+            settings.maxPhotoDimensions = output.maxPhotoDimensions
+        }
         output.capturePhoto(with: settings, delegate: self)
     }
 
@@ -204,7 +227,13 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
 
         session.addInput(input)
         session.addOutput(output)
-        output.isHighResolutionCaptureEnabled = false
+        if #available(iOS 16.0, *) {
+            if let maxDimensions = device.activeFormat.supportedMaxPhotoDimensions.max(by: { lhs, rhs in
+                lhs.width * lhs.height < rhs.width * rhs.height
+            }) {
+                output.maxPhotoDimensions = maxDimensions
+            }
+        }
     }
 }
 

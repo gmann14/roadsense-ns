@@ -183,11 +183,12 @@ final class NetworkAndUploaderTests: XCTestCase {
             )
         )
         let reportID = UUID()
+        let segmentID = UUID()
         let capturedAt = Date(timeIntervalSince1970: 1_713_000_000)
         let requestNow = Date(timeIntervalSince1970: 1_713_000_100)
         let report = PotholeReportRecord(
             id: reportID,
-            segmentID: nil,
+            segmentID: segmentID,
             photoFilePath: "/tmp/photo.jpg",
             latitude: 44.6488,
             longitude: -63.5752,
@@ -207,6 +208,7 @@ final class NetworkAndUploaderTests: XCTestCase {
                 from: try requestBody(for: request)
             )
             XCTAssertEqual(payload.reportID, reportID)
+            XCTAssertEqual(payload.segmentID, segmentID)
             XCTAssertEqual(payload.deviceToken, "device-token")
             XCTAssertEqual(payload.clientSentAt, requestNow)
             XCTAssertEqual(payload.contentType, "image/jpeg")
@@ -847,7 +849,7 @@ final class NetworkAndUploaderTests: XCTestCase {
 
             XCTAssertEqual(request.url?.host, "uploads.example.invalid")
             XCTAssertEqual(request.httpMethod, "PUT")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-SHA256"), String(repeating: "a", count: 64))
+            XCTAssertNil(request.value(forHTTPHeaderField: "Content-SHA256"))
             return (
                 HTTPURLResponse(
                     url: try XCTUnwrap(request.url),

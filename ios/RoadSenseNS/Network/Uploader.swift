@@ -235,8 +235,7 @@ final class Uploader: UploadDrainPerforming {
             do {
                 putSummary = try await client.uploadPotholePhotoFile(
                     fileURL: report.photoFileURL,
-                    uploadURL: response.uploadURL,
-                    sha256Hex: report.sha256Hex
+                    uploadURL: response.uploadURL
                 )
             } catch is CancellationError {
                 throw CancellationError()

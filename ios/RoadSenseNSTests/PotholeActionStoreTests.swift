@@ -140,4 +140,62 @@ final class PotholeActionStoreTests: XCTestCase {
         XCTAssertEqual(records.first?.latitude, secondSample.latitude)
         XCTAssertEqual(records.first?.actionType, .confirmPresent)
     }
+
+    func testDiscardIgnoresAlreadyQueuedUpload() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let potholeID = UUID()
+        let sample = LocationSample(
+            timestamp: 1_713_000_000.0,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 40,
+            headingDegrees: 180
+        )
+
+        let record = try store.queueFollowUpAction(
+            potholeReportID: potholeID,
+            actionType: .confirmPresent,
+            sample: sample,
+            now: Date(timeIntervalSince1970: 1_713_000_000.0)
+        )
+
+        try store.discard(id: record.id)
+
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.id, record.id)
+        XCTAssertEqual(try store.pendingCount(), 1)
+    }
+
+    func testDiscardIgnoresExpiredPendingUndoAction() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let sample = LocationSample(
+            timestamp: 1_713_000_000.0,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 40,
+            headingDegrees: 180
+        )
+
+        let record = try store.queueManualReport(
+            sample: sample,
+            now: Date(timeIntervalSince1970: 1_713_000_000.0)
+        )
+
+        try store.discard(
+            id: record.id,
+            now: Date(timeIntervalSince1970: 1_713_000_006.0)
+        )
+
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.id, record.id)
+        XCTAssertEqual(records.first?.uploadState, .pendingUndo)
+    }
 }

@@ -15,6 +15,10 @@ type ExistingPotholePhoto = {
     content_type: string;
 };
 
+type StorageObjectRecord = {
+    name: string;
+};
+
 function normalizeStoredHash(value: string): string {
     return value.startsWith("\\x") ? value.slice(2) : value;
 }
@@ -42,6 +46,22 @@ function createPrepareUpload(
     supabase: ReturnType<typeof createClient>,
     supabaseURL: string,
 ) {
+    const objectAlreadyStored = async (objectPath: string): Promise<boolean> => {
+        const { data, error } = await supabase
+            .schema("storage")
+            .from("objects")
+            .select("name")
+            .eq("bucket_id", BUCKET)
+            .eq("name", objectPath)
+            .maybeSingle();
+
+        if (error) {
+            throw new Error(error.message);
+        }
+
+        return Boolean(data as StorageObjectRecord | null);
+    };
+
     return async ({ payload, tokenHashHex }: { payload: PotholePhotoPayload; tokenHashHex: string }): Promise<PotholePhotoResult> => {
         const objectPath = objectPathFor(payload.report_id);
 
@@ -67,12 +87,17 @@ function createPrepareUpload(
             if (existingPhoto.status !== "pending_upload") {
                 return { kind: "already_uploaded" };
             }
+
+            if (await objectAlreadyStored(existingPhoto.storage_object_path)) {
+                return { kind: "already_uploaded" };
+            }
         } else {
             const { error: insertError } = await supabase
                 .from("pothole_photos")
                 .insert({
                     report_id: payload.report_id,
                     device_token_hash: `\\x${tokenHashHex}`,
+                    segment_id: payload.segment_id ?? null,
                     geom: {
                         type: "Point",
                         coordinates: [payload.lng, payload.lat],
@@ -94,7 +119,7 @@ function createPrepareUpload(
         const { data, error } = await supabase
             .storage
             .from(BUCKET)
-            .createSignedUploadUrl(objectPath, { upsert: true });
+            .createSignedUploadUrl(objectPath, { upsert: false });
 
         if (error || !data) {
             throw new Error(error?.message ?? "createSignedUploadUrl returned no data");

@@ -3,7 +3,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-struct PreparedPotholePhoto {
+struct PreparedPotholePhoto: Sendable {
     let reportID: UUID
     let fileURL: URL
     let byteSize: Int

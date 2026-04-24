@@ -182,6 +182,7 @@ public struct PotholeActionUploadResponse: Codable, Equatable, Sendable {
 
 public struct PotholePhotoUploadRequest: Codable, Equatable, Sendable {
     public let reportID: UUID
+    public let segmentID: UUID?
     public let deviceToken: String
     public let clientSentAt: Date
     public let clientAppVersion: String
@@ -196,6 +197,7 @@ public struct PotholePhotoUploadRequest: Codable, Equatable, Sendable {
 
     public init(
         reportID: UUID,
+        segmentID: UUID? = nil,
         deviceToken: String,
         clientSentAt: Date,
         clientAppVersion: String,
@@ -209,6 +211,7 @@ public struct PotholePhotoUploadRequest: Codable, Equatable, Sendable {
         sha256: String
     ) {
         self.reportID = reportID
+        self.segmentID = segmentID
         self.deviceToken = deviceToken
         self.clientSentAt = clientSentAt
         self.clientAppVersion = clientAppVersion
@@ -224,6 +227,7 @@ public struct PotholePhotoUploadRequest: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case reportID = "report_id"
+        case segmentID = "segment_id"
         case deviceToken = "device_token"
         case clientSentAt = "client_sent_at"
         case clientAppVersion = "client_app_version"
