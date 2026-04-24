@@ -86,6 +86,7 @@ targets:
         PRODUCT_NAME: RoadSenseNSTests
         PRODUCT_MODULE_NAME: RoadSenseNSTests
         PRODUCT_BUNDLE_IDENTIFIER: ca.roadsense.ios.tests
+        INFOPLIST_FILE: RoadSenseNSTests/Info.plist
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/RoadSense NS.app/RoadSense NS"
         BUNDLE_LOADER: "$(TEST_HOST)"
   RoadSenseNSUITests:
@@ -100,6 +101,7 @@ targets:
         PRODUCT_NAME: RoadSenseNSUITests
         PRODUCT_MODULE_NAME: RoadSenseNSUITests
         PRODUCT_BUNDLE_IDENTIFIER: ca.roadsense.ios.uitests
+        INFOPLIST_FILE: RoadSenseNSUITests/Info.plist
   RoadSenseNSSimHarness:
     type: application
     platform: iOS

@@ -26,6 +26,11 @@ How we verify each part of the system works, stays working, and that the roughne
 
 Tests live in `RoadSenseNSTests/`. Use `XCTest` + `Quick/Nimble` only if we hit readability limits — prefer plain XCTest. Run every PR in CI via `xcodebuild test`.
 
+Generated-project note:
+
+- `ios/project.yml` is the source of truth for the app and both test bundles.
+- `RoadSenseNSTests` and `RoadSenseNSUITests` now pin dedicated `Info.plist` files so `xcodegen generate` does not regress `.xctest` packaging into app-style bundles.
+
 **What gets unit-tested (non-exhaustive):**
 
 | Module | Coverage |
@@ -240,13 +245,14 @@ Current repo note:
   - ready-shell Settings -> Privacy Zones navigation
   - seeded stats rendering
   - delete-local-data behavior from Settings
+- The full `RoadSenseNS` scheme now runs green locally under `xcodebuild test`, including the current app-hosted UI suite rather than only `build-for-testing`.
 - What still remains is expanding that corpus with real captured drives and keeping the harness/UI-test targets green in CI.
 
 ## Integration Tests
 
 ### iOS → Staging backend
 
-Per-PR on merge to main: a "staging smoke" job runs the simulator harness end-to-end with uploads pointed at staging Supabase.
+On pushes to `main`, `deploy-staging.yml` is intended to push migrations/functions and run staging smoke checks once the `staging` GitHub Environment is populated with the required Supabase secrets.
 
 Before a real drive or simulator-harness replay is required, keep one deterministic backend smoke in the loop:
 
