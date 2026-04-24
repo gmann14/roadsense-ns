@@ -630,7 +630,7 @@ struct MapScreen: View {
     private var headerSubtitle: String {
         if !isMapLoaded && mapLoadError == nil { return "Loading community layer…" }
         if model.readiness.backgroundCollection == .upgradeRequired { return "Allow Always Location so RoadSense can keep collecting after you leave the app." }
-        if model.readiness.showsPrivacyRiskWarning { return "Privacy zones are optional extra protection." }
+        if model.readiness.showsPrivacyRiskWarning { return "Privacy zones are optional extra protection on top of default endpoint trimming." }
         if model.pendingUploadCount > 0 { return "\(model.pendingUploadCount) uploads waiting" }
         if model.userStatsSummary.acceptedReadingCount == 0 { return "No drives yet" }
         return mappedValue + " mapped"

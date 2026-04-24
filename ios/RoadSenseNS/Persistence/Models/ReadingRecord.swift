@@ -13,8 +13,11 @@ final class ReadingRecord {
     var isPothole: Bool
     var potholeMagnitude: Double?
     var recordedAt: Date
+    var driveSessionID: UUID?
     var uploadBatchID: UUID?
     var uploadedAt: Date?
+    var uploadReadyAt: Date?
+    var endpointTrimmedAt: Date?
     var droppedByPrivacyZone: Bool
 
     init(
@@ -28,8 +31,11 @@ final class ReadingRecord {
         isPothole: Bool,
         potholeMagnitude: Double?,
         recordedAt: Date,
+        driveSessionID: UUID? = nil,
         uploadBatchID: UUID? = nil,
         uploadedAt: Date? = nil,
+        uploadReadyAt: Date? = nil,
+        endpointTrimmedAt: Date? = nil,
         droppedByPrivacyZone: Bool = false
     ) {
         self.id = id
@@ -42,8 +48,20 @@ final class ReadingRecord {
         self.isPothole = isPothole
         self.potholeMagnitude = potholeMagnitude
         self.recordedAt = recordedAt
+        self.driveSessionID = driveSessionID
         self.uploadBatchID = uploadBatchID
         self.uploadedAt = uploadedAt
+        self.uploadReadyAt = uploadReadyAt
+        self.endpointTrimmedAt = endpointTrimmedAt
         self.droppedByPrivacyZone = droppedByPrivacyZone
+    }
+}
+
+extension ReadingRecord {
+    var isReadyForUpload: Bool {
+        droppedByPrivacyZone == false
+            && uploadedAt == nil
+            && endpointTrimmedAt == nil
+            && (driveSessionID == nil || uploadReadyAt != nil)
     }
 }

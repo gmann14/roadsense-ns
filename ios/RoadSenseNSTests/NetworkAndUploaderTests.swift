@@ -709,6 +709,238 @@ final class NetworkAndUploaderTests: XCTestCase {
     }
 
     @MainActor
+    func testReadingStoreHidesActiveDriveSessionRowsUntilSessionIsSealed() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let sessionID = UUID()
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+
+        context.insert(
+            DriveSessionRecord(
+                id: sessionID,
+                startedAt: startedAt,
+                startLatitude: 44.6488,
+                startLongitude: -63.5752
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6800,
+                longitude: -63.6000,
+                roughnessRMS: 1.1,
+                speedKMH: 48,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_300),
+                driveSessionID: sessionID
+            )
+        )
+        try context.save()
+
+        let store = ReadingStore(container: container)
+        XCTAssertTrue(try store.pendingUploadCoordinates().isEmpty)
+
+        let summary = try store.finalizeDriveSession(
+            id: sessionID,
+            fallbackEndSample: LocationSample(
+                timestamp: 1_600,
+                latitude: 44.7090,
+                longitude: -63.6220,
+                horizontalAccuracyMeters: 5,
+                speedKmh: 0,
+                headingDegrees: 180
+            ),
+            now: Date(timeIntervalSince1970: 1_700)
+        )
+
+        XCTAssertEqual(summary?.eligibleReadingCount, 1)
+        XCTAssertEqual(summary?.trimmedReadingCount, 0)
+        XCTAssertEqual(
+            try store.pendingUploadCoordinates().map { [$0.latitude, $0.longitude] },
+            [[44.6800, -63.6000]]
+        )
+    }
+
+    @MainActor
+    func testReadingStoreFinalizeDriveSessionTrimsEndpointReadingsAndKeepsMiddle() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let sessionID = UUID()
+        let startedAt = Date(timeIntervalSince1970: 1_000)
+
+        context.insert(
+            DriveSessionRecord(
+                id: sessionID,
+                startedAt: startedAt,
+                startLatitude: 44.6488,
+                startLongitude: -63.5752
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6490,
+                longitude: -63.5751,
+                roughnessRMS: 0.9,
+                speedKMH: 42,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_030),
+                driveSessionID: sessionID
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6800,
+                longitude: -63.6000,
+                roughnessRMS: 1.1,
+                speedKMH: 48,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_300),
+                driveSessionID: sessionID
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.7088,
+                longitude: -63.6219,
+                roughnessRMS: 1.0,
+                speedKMH: 40,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_580),
+                driveSessionID: sessionID
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6500,
+                longitude: -63.5750,
+                roughnessRMS: 0,
+                speedKMH: 15,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_020),
+                driveSessionID: sessionID,
+                droppedByPrivacyZone: true
+            )
+        )
+        try context.save()
+
+        let store = ReadingStore(container: container)
+        let sealedAt = Date(timeIntervalSince1970: 1_700)
+        let summary = try XCTUnwrap(
+            try store.finalizeDriveSession(
+                id: sessionID,
+                fallbackEndSample: LocationSample(
+                    timestamp: 1_600,
+                    latitude: 44.7090,
+                    longitude: -63.6220,
+                    horizontalAccuracyMeters: 5,
+                    speedKmh: 0,
+                    headingDegrees: 180
+                ),
+                now: sealedAt
+            )
+        )
+
+        XCTAssertEqual(summary.eligibleReadingCount, 1)
+        XCTAssertEqual(summary.trimmedReadingCount, 2)
+        XCTAssertEqual(summary.privacyFilteredReadingCount, 1)
+
+        let updatedContext = ModelContext(container)
+        let readings = try updatedContext.fetch(
+            FetchDescriptor<ReadingRecord>(
+                predicate: #Predicate { $0.driveSessionID == sessionID },
+                sortBy: [SortDescriptor(\.recordedAt, order: .forward)]
+            )
+        )
+        let readingsByTimestamp = Dictionary(uniqueKeysWithValues: readings.map {
+            ($0.recordedAt.timeIntervalSince1970, $0)
+        })
+
+        XCTAssertEqual(readings.count, 4)
+        XCTAssertNotNil(readingsByTimestamp[1_030]?.endpointTrimmedAt)
+        XCTAssertNil(readingsByTimestamp[1_030]?.uploadReadyAt)
+        XCTAssertNil(readingsByTimestamp[1_300]?.endpointTrimmedAt)
+        XCTAssertEqual(readingsByTimestamp[1_300]?.uploadReadyAt, sealedAt)
+        XCTAssertNotNil(readingsByTimestamp[1_580]?.endpointTrimmedAt)
+        XCTAssertNil(readingsByTimestamp[1_580]?.uploadReadyAt)
+        XCTAssertNil(readingsByTimestamp[1_020]?.endpointTrimmedAt)
+        XCTAssertNil(readingsByTimestamp[1_020]?.uploadReadyAt)
+
+        let coordinates = try store.pendingUploadCoordinates()
+        XCTAssertEqual(
+            coordinates.map { [$0.latitude, $0.longitude] },
+            [[44.6800, -63.6000]]
+        )
+    }
+
+    @MainActor
+    func testReadingStoreFinalizeOpenDriveSessionsKeepsShortDrivePrivate() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let sessionID = UUID()
+
+        context.insert(
+            DriveSessionRecord(
+                id: sessionID,
+                startedAt: Date(timeIntervalSince1970: 2_000),
+                startLatitude: 44.6488,
+                startLongitude: -63.5752
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6490,
+                longitude: -63.5751,
+                roughnessRMS: 1.0,
+                speedKMH: 35,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 2_030),
+                driveSessionID: sessionID
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6502,
+                longitude: -63.5747,
+                roughnessRMS: 1.1,
+                speedKMH: 36,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 2_070),
+                driveSessionID: sessionID
+            )
+        )
+        try context.save()
+
+        let store = ReadingStore(container: container)
+        let summaries = try store.finalizeOpenDriveSessions(now: Date(timeIntervalSince1970: 2_120))
+
+        XCTAssertEqual(summaries.count, 1)
+        XCTAssertEqual(summaries.first?.sessionID, sessionID)
+        XCTAssertEqual(summaries.first?.eligibleReadingCount, 0)
+        XCTAssertEqual(summaries.first?.trimmedReadingCount, 2)
+        XCTAssertTrue(try store.pendingUploadCoordinates().isEmpty)
+    }
+
+    @MainActor
     func testUploaderDrainOnceUploadsQueuedPotholeAction() async throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)

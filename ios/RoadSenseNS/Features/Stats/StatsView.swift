@@ -139,8 +139,8 @@ struct StatsView: View {
     private var explainerCard: some View {
         sectionCard(title: "How to read this") {
             VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
-                Text("Accepted readings passed device-side quality filters and were stored locally for upload.")
-                Text("Privacy-filtered readings never leave the device. The count only exists so you can confirm your zones are working.")
+                Text("Accepted readings passed device-side quality filters and were stored locally first. Only the mid-drive readings that survive endpoint trimming become uploadable.")
+                Text("Privacy-filtered readings never leave the device. That count exists so you can confirm your zones are working on top of the default endpoint trimming.")
             }
             .font(.system(size: 14))
             .foregroundStyle(DesignTokens.Palette.inkMuted)

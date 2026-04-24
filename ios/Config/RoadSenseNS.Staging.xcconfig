@@ -1,6 +1,8 @@
 FORWARD_SLASH = /
 APP_ENV = STAGING
+APP_DISPLAY_NAME = RoadSense NS
 API_BASE_URL = https:$(FORWARD_SLASH)$(FORWARD_SLASH)roadsense.ca
+ROAD_SENSE_APP_BUNDLE_IDENTIFIER = ca.roadsense.ios
 MAPBOX_ACCESS_TOKEN = pk.placeholder.staging
 SUPABASE_ANON_KEY = anon.placeholder.staging
 SENTRY_DSN =

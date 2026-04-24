@@ -278,7 +278,7 @@ struct SettingsView: View {
             subtitle: nil
         ) {
             VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
-                Text("RoadSense NS passively measures road roughness while you drive and uploads only accepted readings after privacy filtering.")
+                Text("RoadSense NS passively measures road roughness while you drive and uploads only accepted readings that survive endpoint trimming and privacy filtering.")
                 Text("Background collection improves continuity, but it requires Always Location and can be turned off at any time.")
             }
             .font(.system(size: 14))

@@ -2,7 +2,7 @@
   "fixture": "privacy-zone-recovery.csv",
   "expected_windows": 1,
   "expected_pothole_flagged": false,
-  "expected_rms_range": [0.4, 1.1],
+  "expected_rms_range": [0.30, 0.34],
   "expected_max_spike_g_range": [0.0, 0.0],
   "expected_privacy_filtered_count": 1,
   "expected_rejected_count": 0,

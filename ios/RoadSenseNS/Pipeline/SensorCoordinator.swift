@@ -21,6 +21,7 @@ final class SensorCoordinator {
     private var activePrivacyZones: [PrivacyZone] = []
     private var latestLocation: LocationSample?
     private var recentPotholes: [PotholeCandidate] = []
+    private var currentDriveSessionID: UUID?
     private var isMonitoring = false
     private var isCollecting = false
     private var lastCheckpointAt: Date?
@@ -65,7 +66,10 @@ final class SensorCoordinator {
             activePrivacyZones = []
         }
 
-        restoreCheckpointIfAvailable()
+        let restoredCheckpoint = restoreCheckpointIfAvailable()
+        if !restoredCheckpoint {
+            sealOpenDriveSessionsIfNeeded()
+        }
 
         isMonitoring = true
         drivingDetector.start()
@@ -107,6 +111,7 @@ final class SensorCoordinator {
         locationTask = nil
         motionTask = nil
         drivingDetector.stop()
+        sealCurrentDriveSessionIfNeeded()
         stopServicesAndReset()
         try? checkpointStore.clear()
         logger.info("sensor monitoring stopped")
@@ -151,6 +156,7 @@ final class SensorCoordinator {
             return
         }
 
+        sealCurrentDriveSessionIfNeeded()
         stopServicesAndReset()
         logger.info("sensor collection stopped")
         scheduleUploadDrain(Date().addingTimeInterval(15 * 60))
@@ -164,6 +170,7 @@ final class SensorCoordinator {
         potholeDetector = PotholeDetector()
         recentPotholes = []
         latestLocation = nil
+        currentDriveSessionID = nil
         lastCheckpointAt = nil
     }
 
@@ -173,10 +180,11 @@ final class SensorCoordinator {
         }
 
         latestLocation = sample
+        let driveSessionID = ensureCurrentDriveSession(for: sample)
 
         if PrivacyZoneFilter.shouldDrop(sample, zones: activePrivacyZones) {
             do {
-                try readingStore.savePrivacyFilteredSample(sample)
+                try readingStore.savePrivacyFilteredSample(sample, driveSessionID: driveSessionID)
             } catch {
                 logger.error("failed to persist privacy-filtered sample: \(error.localizedDescription)")
             }
@@ -208,7 +216,7 @@ final class SensorCoordinator {
         ) {
         case let .accepted(candidate):
             do {
-                try readingStore.saveAccepted(candidate)
+                try readingStore.saveAccepted(candidate, driveSessionID: driveSessionID)
             } catch {
                 logger.error("failed to persist accepted reading: \(error.localizedDescription)")
             }
@@ -255,10 +263,11 @@ final class SensorCoordinator {
         }
     }
 
-    private func restoreCheckpointIfAvailable() {
+    private func restoreCheckpointIfAvailable() -> Bool {
         do {
             guard let checkpoint = try checkpointStore.load(maxAge: 30 * 60) else {
-                return
+                currentDriveSessionID = nil
+                return false
             }
 
             readingBuilder = ReadingBuilder(snapshot: checkpoint.readingBuilder)
@@ -266,10 +275,14 @@ final class SensorCoordinator {
             latestLocation = checkpoint.latestLocation
             recentPotholes = checkpoint.recentPotholes
             isCollecting = checkpoint.wasCollecting
+            currentDriveSessionID = try readingStore.activeDriveSessionID()
             lastCheckpointAt = checkpoint.savedAt
             logger.info("restored fresh sensor checkpoint")
+            return true
         } catch {
             logger.error("failed to restore sensor checkpoint: \(error.localizedDescription)")
+            currentDriveSessionID = nil
+            return false
         }
     }
 
@@ -293,6 +306,57 @@ final class SensorCoordinator {
             lastCheckpointAt = now
         } catch {
             logger.error("failed to save sensor checkpoint: \(error.localizedDescription)")
+        }
+    }
+
+    private func ensureCurrentDriveSession(for sample: LocationSample) -> UUID? {
+        if let currentDriveSessionID {
+            return currentDriveSessionID
+        }
+
+        do {
+            let sessionID = try readingStore.ensureActiveDriveSession(for: sample)
+            currentDriveSessionID = sessionID
+            return sessionID
+        } catch {
+            logger.error("failed to create drive session: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    private func sealCurrentDriveSessionIfNeeded() {
+        guard let currentDriveSessionID else {
+            return
+        }
+
+        do {
+            if let summary = try readingStore.finalizeDriveSession(
+                id: currentDriveSessionID,
+                fallbackEndSample: latestLocation
+            ) {
+                logger.info(
+                    "drive session sealed id=\(summary.sessionID.uuidString) eligible=\(summary.eligibleReadingCount) trimmed=\(summary.trimmedReadingCount) privacy_filtered=\(summary.privacyFilteredReadingCount)"
+                )
+            }
+        } catch {
+            logger.error("failed to seal drive session: \(error.localizedDescription)")
+        }
+
+        self.currentDriveSessionID = nil
+    }
+
+    private func sealOpenDriveSessionsIfNeeded() {
+        do {
+            let summaries = try readingStore.finalizeOpenDriveSessions()
+            guard !summaries.isEmpty else {
+                return
+            }
+
+            let eligibleCount = summaries.reduce(0) { $0 + $1.eligibleReadingCount }
+            let trimmedCount = summaries.reduce(0) { $0 + $1.trimmedReadingCount }
+            logger.info("sealed \(summaries.count) abandoned drive session(s): eligible=\(eligibleCount) trimmed=\(trimmedCount)")
+        } catch {
+            logger.error("failed to seal abandoned drive sessions: \(error.localizedDescription)")
         }
     }
 }

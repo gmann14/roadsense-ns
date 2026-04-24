@@ -350,7 +350,7 @@ Post-MVP phases:
   - implement `PotholeDetector`
 - **Acceptance**
   - scores are stable under fixture replay
-- **Current repo note:** `PotholeDetector` is now wired into the live `SensorCoordinator` path, but `RoughnessScorer` still needs to replace the current direct-RMS placeholder once fixture calibration work starts.
+- **Current repo note:** `PotholeDetector` and `RoughnessScorer` are now both wired into the live `SensorCoordinator` path. `ReadingBuilder` scores the high-pass-filtered vertical acceleration stream instead of the earlier direct-RMS placeholder, and the replay fixtures now assert that filtered scale directly. Remaining work is real-device calibration of category thresholds and speed normalization, not the scorer swap itself.
 
 ### B051 — Drive endpoint trimming and optional privacy zones
 
@@ -366,7 +366,7 @@ Post-MVP phases:
 - **Acceptance**
   - passive collection starts after the required permissions alone
   - server never receives endpoint-trimmed or filtered-zone readings
-- **Current repo note:** the optional privacy-zone path is materially implemented: onboarding/settings can open the real `PrivacyZonesView` + `PrivacyZoneStore`, the editor is map-backed, and `SensorCoordinator` already applies zone filtering before persistence/upload. Remaining work is the default endpoint-trimming pass, the updated ready-state/privacy copy, and real-device validation of the combined privacy flow.
+- **Current repo note:** this slice is now materially implemented: onboarding/settings can open the real `PrivacyZonesView` + `PrivacyZoneStore`, the editor is map-backed, `SensorCoordinator` applies zone filtering during collection, and sealed `DriveSessionRecord`s now gate readings until endpoint trimming marks them uploadable. The new unit coverage exercises the time/radius trim rules, fully-private short drives, and the abandoned-session seal path. Remaining work is real-device validation of the combined privacy flow.
 
 ### B052 — Quality filters and uploader hardening
 

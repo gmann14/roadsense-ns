@@ -45,10 +45,9 @@ final class UserStatsStore {
             predicate: #Predicate { $0.droppedByPrivacyZone == true }
         )
         let pendingDescriptor = FetchDescriptor<ReadingRecord>(
-            predicate: #Predicate {
-                $0.droppedByPrivacyZone == false && $0.uploadedAt == nil
-            }
+            predicate: #Predicate { $0.uploadedAt == nil }
         )
+        let pendingCount = try context.fetch(pendingDescriptor).filter(\.isReadyForUpload).count
 
         return UserStatsSummary(
             totalKmRecorded: stats?.totalKmRecorded ?? 0,
@@ -57,7 +56,7 @@ final class UserStatsStore {
             potholesReported: stats?.potholesReported ?? 0,
             acceptedReadingCount: try context.fetchCount(acceptedDescriptor),
             privacyFilteredCount: try context.fetchCount(filteredDescriptor),
-            pendingUploadCount: try context.fetchCount(pendingDescriptor)
+            pendingUploadCount: pendingCount
         )
     }
 }

@@ -26,11 +26,9 @@ final class UploadQueueStore {
     func pendingReadingCount() throws -> Int {
         let context = ModelContext(container)
         let descriptor = FetchDescriptor<ReadingRecord>(
-            predicate: #Predicate {
-                $0.uploadedAt == nil && $0.droppedByPrivacyZone == false
-            }
+            predicate: #Predicate { $0.uploadedAt == nil }
         )
-        return try context.fetchCount(descriptor)
+        return try context.fetch(descriptor).filter(\.isReadyForUpload).count
     }
 
     func prepareNextBatch(now: Date = Date()) throws -> QueuePreparationDecision {
@@ -57,12 +55,10 @@ final class UploadQueueStore {
     func payloadReadings(for batchID: UUID) throws -> [ReadingRecord] {
         let context = ModelContext(container)
         let descriptor = FetchDescriptor<ReadingRecord>(
-            predicate: #Predicate {
-                $0.uploadBatchID == batchID && $0.droppedByPrivacyZone == false
-            },
+            predicate: #Predicate { $0.uploadBatchID == batchID },
             sortBy: [SortDescriptor(\.recordedAt, order: .forward)]
         )
-        return try context.fetch(descriptor)
+        return try context.fetch(descriptor).filter(\.isReadyForUpload)
     }
 
     func markBatchInFlight(batchID: UUID, now: Date = Date()) throws {
@@ -129,12 +125,11 @@ final class UploadQueueStore {
 
     func statusSummary(now: Date = Date()) throws -> UploadQueueStatusSummary {
         let context = ModelContext(container)
-        let pendingDescriptor = FetchDescriptor<ReadingRecord>(
-            predicate: #Predicate {
-                $0.uploadedAt == nil && $0.droppedByPrivacyZone == false
-            }
-        )
-        let pendingCount = try context.fetchCount(pendingDescriptor)
+        let pendingCount = try context.fetch(
+            FetchDescriptor<ReadingRecord>(
+                predicate: #Predicate { $0.uploadedAt == nil }
+            )
+        ).filter(\.isReadyForUpload).count
         let batches = try context.fetch(FetchDescriptor<UploadBatch>())
 
         let failedPermanentBatchCount = batches.filter { $0.status == .failedPermanent }.count
@@ -178,12 +173,10 @@ final class UploadQueueStore {
 
     private func fetchPendingReadings(in context: ModelContext) throws -> [ReadingRecord] {
         let descriptor = FetchDescriptor<ReadingRecord>(
-            predicate: #Predicate {
-                $0.uploadedAt == nil && $0.droppedByPrivacyZone == false
-            },
+            predicate: #Predicate { $0.uploadedAt == nil },
             sortBy: [SortDescriptor(\.recordedAt, order: .forward)]
         )
-        return try context.fetch(descriptor)
+        return try context.fetch(descriptor).filter(\.isReadyForUpload)
     }
 
     private func fetchExistingPendingBatch(in context: ModelContext) throws -> UploadBatch? {

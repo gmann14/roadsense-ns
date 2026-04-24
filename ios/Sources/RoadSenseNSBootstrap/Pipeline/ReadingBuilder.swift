@@ -99,6 +99,7 @@ public struct ReadingBuilder: Sendable {
     public var maxHorizontalAccuracyMeters: Double = 20
     public var maxHeadingVarianceDegrees: Double = 60
     public var minimumSampleCount: Int = 30
+    public var roughnessScorer = RoughnessScorer()
 
     private var locationSamples: [LocationSample] = []
     private var motionSamples: [MotionSample] = []
@@ -155,7 +156,7 @@ public struct ReadingBuilder: Sendable {
         let reading = ReadingWindow(
             latitude: midpoint(for: locationSamples).latitude,
             longitude: midpoint(for: locationSamples).longitude,
-            roughnessRMS: rms(of: motionSamples),
+            roughnessRMS: roughnessScorer.score(samples: motionSamples),
             speedKmh: averageSpeed(for: locationSamples),
             headingDegrees: weightedHeading(for: locationSamples),
             gpsAccuracyMeters: locationSamples.map(\.horizontalAccuracyMeters).max() ?? sample.horizontalAccuracyMeters,
@@ -185,15 +186,6 @@ public struct ReadingBuilder: Sendable {
     private mutating func reset(startingWith sample: LocationSample? = nil) {
         locationSamples = sample.map { [$0] } ?? []
         motionSamples = []
-    }
-
-    private func rms(of samples: [MotionSample]) -> Double {
-        let meanSquare = samples.reduce(0.0) { partialResult, sample in
-            let value = sample.verticalAcceleration
-            return partialResult + (value * value)
-        } / Double(samples.count)
-
-        return sqrt(meanSquare)
     }
 
     private func averageSpeed(for samples: [LocationSample]) -> Double {

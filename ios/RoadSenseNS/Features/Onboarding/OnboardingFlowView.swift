@@ -229,9 +229,9 @@ struct OnboardingFlowView: View {
 
     private var readySubtitle: String {
         if model.readiness.showsPrivacyRiskWarning {
-            return "Privacy zones are still off. Add them later if you want extra home/work protection on top of the default filtering."
+            return "Privacy zones are still off. RoadSense still trims likely trip endpoints by default, and you can add zones later for extra home/work protection."
         }
-        return "Permissions are in place. Drive as you normally would; add privacy zones later if you want extra home/work filtering."
+        return "Permissions are in place. Drive as you normally would; RoadSense trims likely trip endpoints before upload, and privacy zones remain an optional extra filter."
     }
 
     // MARK: - Shared building blocks
