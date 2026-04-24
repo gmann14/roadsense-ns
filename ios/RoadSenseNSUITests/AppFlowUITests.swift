@@ -1,17 +1,19 @@
 import XCTest
 
 final class AppFlowUITests: XCTestCase {
-    func testPrivacyGateCanCreateZoneAndUnlockReadyState() {
+    func testDefaultScenarioCanCreatePrivacyZoneFromReadyShell() {
         let app = makeApp(scenario: "default")
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Protect home and work before collection starts."].waitForExistence(timeout: 5))
-
-        app.buttons["Manage privacy zones"].tap()
+        XCTAssertTrue(app.buttons["map.privacy-zones-action"].waitForExistence(timeout: 8))
+        app.buttons["map.privacy-zones-action"].tap()
 
         let saveButton = app.buttons["privacy-zones.save"]
         XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
         saveButton.tap()
+
+        XCTAssertTrue(app.staticTexts["privacy-zone.Home"].waitForExistence(timeout: 5))
+        app.buttons["privacy-zones.close"].tap()
 
         XCTAssertTrue(app.buttons["map.settings-button"].waitForExistence(timeout: 5))
     }
@@ -74,16 +76,19 @@ final class AppFlowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["stats.segments-contributed"].label.contains("0"))
     }
 
-    func testPrivacyGateRemainsUsableAtAccessibilitySize() {
+    func testDefaultPrivacyZoneFlowRemainsUsableAtAccessibilitySize() {
         let app = makeApp(scenario: "default", dynamicTypeSize: "accessibility5")
         app.launch()
 
-        XCTAssertTrue(app.buttons["onboarding.manage-privacy-zones"].waitForExistence(timeout: 5))
-        app.buttons["onboarding.manage-privacy-zones"].tap()
+        XCTAssertTrue(app.buttons["map.privacy-zones-action"].waitForExistence(timeout: 8))
+        app.buttons["map.privacy-zones-action"].tap()
 
         XCTAssertTrue(app.buttons["privacy-zones.save"].waitForExistence(timeout: 5))
         app.buttons["privacy-zones.save"].tap()
+        XCTAssertTrue(app.staticTexts["privacy-zone.Home"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["privacy-zones.close"].waitForExistence(timeout: 5))
 
+        app.buttons["privacy-zones.close"].tap()
         XCTAssertTrue(app.buttons["map.settings-button"].waitForExistence(timeout: 5))
     }
 
