@@ -1,6 +1,6 @@
 # 05 — Deployment & Observability
 
-*Last updated: 2026-04-20*
+*Last updated: 2026-04-23*
 
 Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what to do when something breaks at 11pm" playbook.
 
@@ -13,6 +13,12 @@ Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what 
 | `production` | Real users | `roadsense-prod` | `RoadSenseNS` | production key |
 
 `staging` and `production` are **physically separate Supabase projects**. No shared database, no RLS multi-tenancy trickery. Keeps blast radius small.
+
+Current repo note:
+
+- GitHub Environments named `staging` and `production` now exist in the repo.
+- Remote deploy automation is ready to use them, but the dedicated hosted `roadsense-staging` Supabase project still has to be provisioned.
+- If the Supabase org is at its free-project cap, the workflow will remain repo-ready but infra-blocked until an existing project is deleted/paused or the org is upgraded.
 
 ## Secrets Management
 
@@ -83,13 +89,13 @@ roadsense-ns/
 │       ├── web-ci.yml           # Phase-2
 │       ├── deploy-staging.yml
 │       ├── deploy-production.yml
-│       └── testflight.yml
+│       └── ...
 └── README.md
 ```
 
 ## CI/CD Pipelines
 
-### `ios-ci.yml` (every PR once macOS minutes are re-enabled; manual-only during bootstrap)
+### `ios-ci.yml` (PRs touching `ios/**`, plus pushes to `main`)
 
 ```
 1. Checkout
@@ -97,12 +103,12 @@ roadsense-ns/
 3. Run `swift test` in `ios/` to validate bootstrap seams
 4. Install XcodeGen
 5. Run `xcodegen generate`
-6. `xcodebuild build-for-testing` for the `RoadSenseNS` scheme on iPhone simulator
+6. `xcodebuild test` for the full `RoadSenseNS` scheme on iPhone simulator
 ```
 
 Runs on `macos-14` runners. Target: < 15 min.
 
-### `backend-ci.yml` (every PR)
+### `backend-ci.yml` (PRs touching backend paths, plus pushes to `main`)
 
 ```
 1. Checkout
@@ -117,32 +123,40 @@ Runs on `macos-14` runners. Target: < 15 min.
 
 Runs on `ubuntu-22.04`. Target: < 10 min.
 
-Current bootstrap reality: both workflows are still `workflow_dispatch` only to avoid burning minutes on every commit, but a manual run should execute the exact steps above.
-
-### `web-ci.yml` (Phase 2, every PR touching `apps/web/**`)
+### `web-ci.yml` (Phase 2, PRs touching `apps/web/**`, plus pushes to `main`)
 
 ```text
 1. Checkout
 2. Install Node dependencies
-3. Typecheck
-4. Lint
-5. Vitest (unit + integration)
-6. Playwright smoke tests against mocked APIs
+3. `npx tsc --noEmit`
+4. Vitest (unit + integration)
+5. `next build`
+6. Lighthouse trust-page checks
+7. Playwright smoke tests against mocked APIs
 ```
 
 Runs on `ubuntu-22.04`. Target: < 10 min. Add preview-URL Playwright smoke only after Vercel previews are live.
 
-### `deploy-staging.yml` (on merge to `main`)
+### `deploy-staging.yml` (push to `main` or manual dispatch)
 
 ```
-1. supabase db push --project-ref staging-ref
-2. supabase functions deploy --project-ref staging-ref
-3. If OSM source changed (osm2pgsql-style.lua, segmentize.sql, tag-*.sql): queue the
-   OSM re-import job on a separate worker (long-running, ~30-60 min) rather than
-   running inline — see §OSM Re-import.
-4. Run smoke test: hit /health, /stats, /tiles/10/320/390.mvt
-5. Post Slack (if configured) or GitHub comment with deploy summary
+1. Use the `staging` GitHub Environment and require:
+   - `SUPABASE_ACCESS_TOKEN`
+   - `SUPABASE_PROJECT_REF`
+   - `SUPABASE_DB_PASSWORD`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_TOKEN_PEPPER`
+   - optional `SENTRY_DSN`
+   - optional `OSM_SNAPSHOT_URL`
+2. `supabase link --project-ref "$SUPABASE_PROJECT_REF" -p "$SUPABASE_DB_PASSWORD"`
+3. `supabase db push`
+4. `supabase secrets set` for function-only secrets
+5. deploy every function under `supabase/functions/` except `_shared`
+6. run `./scripts/api-smoke.sh`
+7. run `./scripts/seeded-e2e-smoke.sh`
 ```
+
+If the required environment secrets are absent, the workflow should skip rather than fail.
 
 ### OSM Re-import
 
@@ -162,23 +176,15 @@ Staging runs on schedule to catch drift early; production runs only after stagin
 
 ### `deploy-production.yml` (manual dispatch only)
 
-Requires an explicit GitHub Environment approval from Graham before it runs. Same steps as staging but against prod. Always preceded by:
+Uses the `production` GitHub Environment with the same secret names as staging. Requires an explicit GitHub Environment approval before it runs. Same steps as staging but against prod. Always preceded by:
 
 1. Manual smoke test on staging
 2. Tag the commit `prod-<date>`
 3. Dispatch workflow
 
-### `testflight.yml` (manual dispatch or tag push)
+### TestFlight release automation
 
-```
-1. Checkout
-2. xcodebuild archive RoadSenseNS scheme (production config)
-3. fastlane pilot upload → TestFlight
-4. Upload dSYM to Sentry
-5. Post release notes to GitHub Releases
-```
-
-Target: < 30min end-to-end. Done by the human on release day.
+Still manual. The repo does not currently ship a `testflight.yml`; archive/upload remains a human release-day task until signing, App Store Connect API credentials, and the release shape are stable enough to automate without guessing.
 
 ## Observability Verification Checklist
 

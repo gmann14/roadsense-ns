@@ -2,16 +2,31 @@ name: iOS CI
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-ci.yml"
+
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   scaffold-check:
     runs-on: macos-14
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: CI mode note
-        run: echo "Manual-only for now to avoid burning GitHub macOS minutes during early scaffolding."
 
       - name: Verify iOS scaffold exists
         shell: bash
@@ -35,7 +50,7 @@ jobs:
 
       - name: Install XcodeGen
         shell: bash
-        run: brew install xcodegen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
 
       - name: Generate Xcode project
         shell: bash
@@ -53,15 +68,15 @@ jobs:
             exit 1
           fi
 
-      - name: Build for testing
+      - name: Run full simulator test suite
         shell: bash
         run: |
           cd ios
-          xcodebuild build-for-testing \
+          xcodebuild test \
             -project RoadSenseNS.xcodeproj \
             -scheme RoadSenseNS \
             -configuration "Local Debug" \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             ENABLE_PREVIEWS=NO

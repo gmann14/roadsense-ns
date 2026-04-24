@@ -1,6 +1,6 @@
 # 09 — Internal Field-Test Pack
 
-*Last updated: 2026-04-20*
+*Last updated: 2026-04-23*
 
 Covers: the concrete checklist for internal dogfooding once Apple signing/TestFlight are available. This is intentionally operational rather than architectural: the goal is that a tester can run through it without inventing their own procedure.
 
@@ -22,14 +22,15 @@ Before any human drive:
 - latest `main` build installs successfully on the target iPhone
 - local simulator checks are green:
   - `cd ios && swift test`
-  - `xcodebuild build-for-testing -project ios/RoadSenseNS.xcodeproj -scheme RoadSenseNS -configuration "Local Debug" -destination 'platform=iOS Simulator,name=iPhone 17 Pro' CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO ENABLE_PREVIEWS=NO`
+  - `cd ios && xcodegen generate`
+  - `xcodebuild test -project ios/RoadSenseNS.xcodeproj -scheme RoadSenseNS -configuration "Local Debug" -destination 'platform=iOS Simulator,name=iPhone 17 Pro' CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO ENABLE_PREVIEWS=NO`
 - backend checks are green:
   - `supabase db reset`
   - `supabase test db`
   - `deno test -A $(find supabase/functions -type f -name '*_test.ts' | sort)`
   - `./scripts/api-smoke.sh`
   - `./scripts/seeded-e2e-smoke.sh`
-- staging environment exists if the test is not pointed at local backend
+- staging deploy + smoke checks have passed if the test is not pointed at local backend
 - privacy policy URL resolves
 - tester knows this is a road-quality beta, not turn-by-turn navigation
 
@@ -46,7 +47,7 @@ Per tester / device:
   - Low Power Mode off for baseline runs
 - open app once on Wi‑Fi before driving
 - complete onboarding
-- create at least one privacy zone before passive collection starts
+- create at least one privacy zone if the tester wants extra endpoint protection beyond the default privacy trimming
 - verify the home shell shows the ready state
 - verify map tiles load
 - verify Stats and Settings open

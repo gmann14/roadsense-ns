@@ -1,6 +1,6 @@
 # 08 — Implementation Backlog
 
-*Last updated: 2026-04-20*
+*Last updated: 2026-04-23*
 
 Covers: the literal execution backlog for implementing the spec set in [00](00-execution-plan.md) through [07](07-web-dashboard-implementation.md).
 
@@ -72,6 +72,7 @@ Post-MVP phases:
 - **Acceptance**
   - all credentials/secrets named in [05](05-deployment-and-observability.md) are provisioned
   - privacy policy placeholder URL is resolvable at `roadsense.ca/privacy` before external TestFlight
+- **Current repo note:** The repo-side environment plumbing is now in place: GitHub Environments named `staging` and `production` exist, and deploy workflows target them. The remaining blocker is infra, not repository code: creating a dedicated hosted `roadsense-staging` Supabase project currently requires free-project capacity (or a paid upgrade) in the owning Supabase org.
 
 ### B002 — Repo scaffold and CI skeleton
 
@@ -87,6 +88,7 @@ Post-MVP phases:
 - **Acceptance**
   - PRs run CI
   - CI fails loudly on broken migrations, Deno tests, or iOS build breaks
+- **Current repo note:** This is now materially implemented rather than skeleton-only. `backend-ci.yml`, `ios-ci.yml`, and `web-ci.yml` run on path-scoped PRs and on `main`, with `ios-ci` executing the full generated-project simulator suite (`swift test` + `xcodegen generate` + `xcodebuild test`) and `backend-ci` exercising migrations, pgTAP, Deno, and the scripted smoke checks.
 
 ## Phase 2 — Backend Foundation
 
@@ -318,7 +320,7 @@ Post-MVP phases:
   - send hardcoded or stubbed readings first, then real assembled readings
 - **Acceptance**
   - iOS can upload a batch and receive a valid response
-- **Current repo note:** `UploadRequestFactory`, `UploadResponseParser`, `APIClient`, and `Uploader` now exist. `RoadSenseNSTests` now has first app-target upload-path coverage, and the host app enters an inert in-memory bootstrap mode under XCTest. What remains is a stable local/staging runtime smoke and full wiring from real assembled readings.
+- **Current repo note:** `UploadRequestFactory`, `UploadResponseParser`, `APIClient`, and `Uploader` now exist. `RoadSenseNSTests` has upload-path coverage, the host app enters an inert in-memory bootstrap mode under XCTest, and the local simulator path is green under the full `RoadSenseNS` scheme. What remains is ongoing real-device/staging validation rather than the absence of a local runtime smoke path.
 
 ### B042 — End-to-end smoke from phone to map
 
@@ -332,6 +334,7 @@ Post-MVP phases:
   - drive or replay data through full path
 - **Acceptance**
   - one real or replayed batch appears in `readings`, aggregates update, tile renders, app map can display it
+- **Current repo note:** The deterministic backend smoke layer is now in place: `./scripts/api-smoke.sh` and `./scripts/seeded-e2e-smoke.sh` run in backend CI, and the repo now includes `deploy-staging.yml` / `deploy-production.yml` for remote migration + function deploys plus the same smoke checks. What still remains is provisioning the persistent hosted environments and executing the human drive/replay pass against them.
 
 ## Phase 6 — Scoring, Privacy, And Publishability
 
@@ -462,7 +465,7 @@ Post-MVP phases:
   - validate battery drain, background collection, and aggregate believability
 - **Acceptance**
   - internal testers can dogfood daily
-- **Current repo note:** the repo now includes an explicit execution checklist in [09-internal-field-test-pack.md](09-internal-field-test-pack.md), so the remaining work here is human execution on signed devices rather than inventing the procedure from scratch.
+- **Current repo note:** the repo now includes an explicit execution checklist in [09-internal-field-test-pack.md](09-internal-field-test-pack.md), and the CI/deploy side now covers the full simulator suite plus backend smoke before a build is handed to humans. The remaining work here is signed-device execution and evidence capture, not missing repo automation.
 
 ### B071 — App Store privacy and metadata lock
 

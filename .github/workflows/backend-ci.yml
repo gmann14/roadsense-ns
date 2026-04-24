@@ -2,16 +2,33 @@ name: Backend CI
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "scripts/**"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - "scripts/**"
+      - ".github/workflows/backend-ci.yml"
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   backend-check:
     runs-on: ubuntu-22.04
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: CI mode note
-        run: echo "Manual-only for now to avoid burning GitHub minutes during early scaffolding."
 
       - name: Verify backend scaffold exists
         run: |

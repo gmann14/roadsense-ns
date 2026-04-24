@@ -191,6 +191,8 @@
 		56EBF67158E7FCDE38E6E04F /* SimHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimHarnessView.swift; sourceTree = "<group>"; };
 		583510BB6B1BABFA95ACB79D /* PrivacyZonesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyZonesView.swift; sourceTree = "<group>"; };
 		5A148A1535E38E0F509C75CB /* UploadStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadStatus.swift; sourceTree = "<group>"; };
+		5A325CD10157DA933DF82404 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5F9B3A1E4D8232E728FC985D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		637B4BB438A6B26C00C8A6E3 /* RoadSenseNS.Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Local.xcconfig; sourceTree = "<group>"; };
 		659C7BBB94CC6DB51D4B2730 /* RoadSenseLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseLogger.swift; sourceTree = "<group>"; };
 		68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
@@ -483,6 +485,7 @@
 			isa = PBXGroup;
 			children = (
 				3729474480B72BA41C2B5D8C /* AppModelTests.swift */,
+				5F9B3A1E4D8232E728FC985D /* Info.plist */,
 				324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */,
 				EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */,
 				0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */,
@@ -586,6 +589,7 @@
 			isa = PBXGroup;
 			children = (
 				F7648F667665CDF25B279C81 /* AppFlowUITests.swift */,
+				5A325CD10157DA933DF82404 /* Info.plist */,
 			);
 			path = RoadSenseNSUITests;
 			sourceTree = "<group>";
