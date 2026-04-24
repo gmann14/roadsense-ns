@@ -250,9 +250,9 @@ Current repo note:
 
 ## Integration Tests
 
-### iOS → Staging backend
+### iOS → Shared backend
 
-On pushes to `main`, `deploy-staging.yml` is intended to push migrations/functions and run staging smoke checks once the `staging` GitHub Environment is populated with the required Supabase secrets.
+When a hosted shared backend exists, `deploy-staging.yml` can push migrations/functions and run remote smoke checks. Until Apple approval and signed multi-device testing make that worthwhile, local Supabase plus backend CI is the default verification path.
 
 Before a real drive or simulator-harness replay is required, keep one deterministic backend smoke in the loop:
 

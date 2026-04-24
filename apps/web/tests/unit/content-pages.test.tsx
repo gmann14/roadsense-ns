@@ -19,5 +19,10 @@ describe("content pages", () => {
 
     expect(screen.getByText(/filters privacy zones on-device before upload/i)).toBeInTheDocument();
     expect(screen.getByText(/does not use ad trackers or session replay tools/i)).toBeInTheDocument();
+    expect(screen.getByText(/raw readings are kept for up to 6 months/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /graham\.mann14@gmail\.com/i })).toHaveAttribute(
+      "href",
+      "mailto:graham.mann14@gmail.com",
+    );
   });
 });

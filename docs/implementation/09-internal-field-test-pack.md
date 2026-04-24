@@ -10,10 +10,10 @@ Use this pack for:
 
 - first signed on-device installs
 - family / friend internal dogfood
-- pre-TestFlight staging validation
+- pre-TestFlight shared-backend validation
 - repeatable regression checks after sensor, privacy, upload, or map changes
 
-Do not use this as a substitute for unit, simulator-harness, or staging smoke coverage. It sits on top of those layers.
+Do not use this as a substitute for unit, simulator-harness, or backend smoke coverage. It sits on top of those layers.
 
 ## Entry Criteria
 
@@ -30,7 +30,7 @@ Before any human drive:
   - `deno test -A $(find supabase/functions -type f -name '*_test.ts' | sort)`
   - `./scripts/api-smoke.sh`
   - `./scripts/seeded-e2e-smoke.sh`
-- staging deploy + smoke checks have passed if the test is not pointed at local backend
+- if the run uses a hosted shared backend, its deploy + smoke checks have already passed
 - privacy policy URL resolves
 - tester knows this is a road-quality beta, not turn-by-turn navigation
 
@@ -130,7 +130,7 @@ Immediately after each run:
 - confirm privacy-filtered count increased if the drive crossed a protected zone
 - confirm pending uploads either drain or remain queued with an understandable state
 - confirm the local dashed-drive overlay appears before upload and disappears after successful upload
-- if pointing at staging/local backend:
+- if pointing at local or staging backend:
   - verify `/stats`
   - verify `/segments/{id}` for a touched segment if known
   - verify quality tile presence in the test area

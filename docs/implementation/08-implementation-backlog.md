@@ -72,7 +72,7 @@ Post-MVP phases:
 - **Acceptance**
   - all credentials/secrets named in [05](05-deployment-and-observability.md) are provisioned
   - privacy policy placeholder URL is resolvable at `roadsense.ca/privacy` before external TestFlight
-- **Current repo note:** The repo-side environment plumbing is now in place: GitHub Environments named `staging` and `production` exist, and deploy workflows target them. The remaining blocker is infra, not repository code: creating a dedicated hosted `roadsense-staging` Supabase project currently requires free-project capacity (or a paid upgrade) in the owning Supabase org.
+- **Current repo note:** The repo-side environment plumbing is now in place: GitHub Environments named `staging` and `production` exist, and deploy workflows target them. A dedicated hosted `roadsense-staging` project is intentionally deferred until Apple approval and signed multi-device testing make a shared backend worthwhile. Until then, local Supabase plus CI is the default.
 
 ### B002 — Repo scaffold and CI skeleton
 
@@ -320,7 +320,7 @@ Post-MVP phases:
   - send hardcoded or stubbed readings first, then real assembled readings
 - **Acceptance**
   - iOS can upload a batch and receive a valid response
-- **Current repo note:** `UploadRequestFactory`, `UploadResponseParser`, `APIClient`, and `Uploader` now exist. `RoadSenseNSTests` has upload-path coverage, the host app enters an inert in-memory bootstrap mode under XCTest, and the local simulator path is green under the full `RoadSenseNS` scheme. What remains is ongoing real-device/staging validation rather than the absence of a local runtime smoke path.
+- **Current repo note:** `UploadRequestFactory`, `UploadResponseParser`, `APIClient`, and `Uploader` now exist. `RoadSenseNSTests` has upload-path coverage, the host app enters an inert in-memory bootstrap mode under XCTest, and the local simulator path is green. What remains is ongoing real-device/shared-backend validation rather than the absence of a local runtime smoke path.
 
 ### B042 — End-to-end smoke from phone to map
 
@@ -334,7 +334,7 @@ Post-MVP phases:
   - drive or replay data through full path
 - **Acceptance**
   - one real or replayed batch appears in `readings`, aggregates update, tile renders, app map can display it
-- **Current repo note:** The deterministic backend smoke layer is now in place: `./scripts/api-smoke.sh` and `./scripts/seeded-e2e-smoke.sh` run in backend CI, and the repo now includes `deploy-staging.yml` / `deploy-production.yml` for remote migration + function deploys plus the same smoke checks. What still remains is provisioning the persistent hosted environments and executing the human drive/replay pass against them.
+- **Current repo note:** The deterministic backend smoke layer is now in place: `./scripts/api-smoke.sh` and `./scripts/seeded-e2e-smoke.sh` run in backend CI, and the repo now includes `deploy-staging.yml` / `deploy-production.yml` for later hosted deploys. What still remains is the human drive/replay pass and, later, provisioning a shared hosted env if signed testers need one.
 
 ## Phase 6 — Scoring, Privacy, And Publishability
 
@@ -479,6 +479,7 @@ Post-MVP phases:
   - complete Test Information and screenshots
 - **Acceptance**
   - App Store Connect answers match the implementation docs exactly
+- **Current repo note:** The repo now has a dedicated source-of-truth checklist in [10-app-store-and-testflight-readiness.md](10-app-store-and-testflight-readiness.md) covering App Store Connect fields, privacy labels, reviewer notes, archive checks, and internal/external TestFlight prep. The public web `/privacy` route also now carries fuller policy content instead of only trust-marketing copy. The remaining work is Apple-account execution, not deciding the answers from scratch.
 
 ### B072 — External TestFlight launch
 
@@ -491,6 +492,7 @@ Post-MVP phases:
   - distribute to external testers on approval
 - **Acceptance**
   - testers can install and submit reproducible bug reports
+- **Current repo note:** This remains blocked on Apple Developer approval and the first signed internal build cycle. The repo-side release checklist and privacy-label/source-of-truth work can be completed before that approval lands.
 
 ## Phase 9 — Web Backend Additions
 

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, IBM_Plex_Mono, Manrope } from "next/font/google";
 
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -27,6 +27,9 @@ export const metadata: Metadata = {
   title: "RoadSense NS — community road quality for Nova Scotia",
   description:
     "A public, crowdsourced map of Nova Scotia road roughness, potholes, and coverage. Built by drivers, refreshed nightly.",
+};
+
+export const viewport: Viewport = {
   themeColor: "#0E3B4A",
 };
 

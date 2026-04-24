@@ -9,7 +9,7 @@ Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what 
 | Env | Purpose | Supabase project | iOS scheme | Maps key |
 |---|---|---|---|---|
 | `local` | Local dev (`supabase start`) | auto | `RoadSenseNS-Local` | personal dev key |
-| `staging` | Persistent integration env | `roadsense-staging` | `RoadSenseNS-Staging` | staging key |
+| `staging` | Optional shared integration env | `roadsense-staging` | `RoadSenseNS-Staging` | staging key |
 | `production` | Real users | `roadsense-prod` | `RoadSenseNS` | production key |
 
 `staging` and `production` are **physically separate Supabase projects**. No shared database, no RLS multi-tenancy trickery. Keeps blast radius small.
@@ -17,8 +17,8 @@ Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what 
 Current repo note:
 
 - GitHub Environments named `staging` and `production` now exist in the repo.
-- Remote deploy automation is ready to use them, but the dedicated hosted `roadsense-staging` Supabase project still has to be provisioned.
-- If the Supabase org is at its free-project cap, the workflow will remain repo-ready but infra-blocked until an existing project is deleted/paused or the org is upgraded.
+- Remote deploy automation is ready to use them, but a dedicated hosted `roadsense-staging` project is intentionally deferred until signed installs or shared-backend smoke tests make it worth the cost/ops overhead.
+- While Apple Developer approval is still pending and there are no outside testers, local Supabase plus backend CI is the default environment strategy.
 
 ## Secrets Management
 
@@ -137,7 +137,7 @@ Runs on `ubuntu-22.04`. Target: < 10 min.
 
 Runs on `ubuntu-22.04`. Target: < 10 min. Add preview-URL Playwright smoke only after Vercel previews are live.
 
-### `deploy-staging.yml` (push to `main` or manual dispatch)
+### `deploy-staging.yml` (push to `main` or manual dispatch, when staging exists)
 
 ```
 1. Use the `staging` GitHub Environment and require:
@@ -156,7 +156,7 @@ Runs on `ubuntu-22.04`. Target: < 10 min. Add preview-URL Playwright smoke only 
 7. run `./scripts/seeded-e2e-smoke.sh`
 ```
 
-If the required environment secrets are absent, the workflow should skip rather than fail.
+If the required environment secrets are absent, the workflow should skip rather than fail. This is intentional while staging is deferred.
 
 ### OSM Re-import
 
@@ -172,13 +172,13 @@ Not part of the normal deploy. Triggered manually (`workflow_dispatch`) or quart
 7. Call `nightly_recompute_aggregates(<touched_segment_ids>)` to rebuild only the impacted aggregates
 ```
 
-Staging runs on schedule to catch drift early; production runs only after staging passes a manual smoke test.
+Once staging exists, it runs on schedule to catch drift early; production runs only after staging passes a manual smoke test.
 
 ### `deploy-production.yml` (manual dispatch only)
 
-Uses the `production` GitHub Environment with the same secret names as staging. Requires an explicit GitHub Environment approval before it runs. Same steps as staging but against prod. Always preceded by:
+Uses the `production` GitHub Environment with the same secret names as staging. Requires an explicit GitHub Environment approval before it runs. Same steps as staging but against prod once real users exist. Always preceded by:
 
-1. Manual smoke test on staging
+1. Manual smoke test on staging if staging exists; otherwise do not use production yet
 2. Tag the commit `prod-<date>`
 3. Dispatch workflow
 
@@ -188,7 +188,7 @@ Still manual. The repo does not currently ship a `testflight.yml`; archive/uploa
 
 ## Observability Verification Checklist
 
-Before inviting wider testers, run this checklist once against a signed build and once against staging/backend logs.
+Before inviting wider testers, run this checklist once against a signed build and once against whichever backend environment is actually shared by testers (`staging` if it exists, otherwise the first hosted env you use).
 
 ### iOS
 
@@ -391,10 +391,11 @@ Pager-style alerts (SMS/phone) are overkill for MVP. Email + checking in once a 
 
 ## Deploy Playbook — Normal Day
 
-1. PR merged to main → `deploy-staging.yml` auto-runs
-2. Engineer manually smoke-tests staging (drive, check data arrives, check map)
-3. Engineer manually dispatches `deploy-production.yml`
-4. Engineer tags `prod-<date>`, posts summary in GitHub Discussions/wherever
+1. Before shared hosted environments exist: rely on CI + local Supabase + signed-device smoke
+2. Once staging exists: PR merged to main → `deploy-staging.yml` auto-runs
+3. Engineer manually smoke-tests staging (drive, check data arrives, check map)
+4. Engineer manually dispatches `deploy-production.yml`
+5. Engineer tags `prod-<date>`, posts summary in GitHub Discussions/wherever
 
 ## Deploy Playbook — Incident
 

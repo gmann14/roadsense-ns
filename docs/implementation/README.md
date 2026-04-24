@@ -18,6 +18,7 @@ These docs translate [product-spec.md](../product-spec.md) into concrete, action
 | 07 | [Web Dashboard Implementation](07-web-dashboard-implementation.md) | Future public + municipal web UX, IA, visual system, data presentation patterns |
 | 08 | [Implementation Backlog](08-implementation-backlog.md) | Literal task order, dependencies, red/green plan, and acceptance criteria |
 | 09 | [Internal Field-Test Pack](09-internal-field-test-pack.md) | Operational checklist for signed-device dogfooding and evidence capture |
+| 10 | [App Store & TestFlight Readiness](10-app-store-and-testflight-readiness.md) | App Store Connect fields, privacy labels, reviewer notes, and release checklists |
 
 ## Conventions Used Across Specs
 
