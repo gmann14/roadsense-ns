@@ -68,10 +68,16 @@ final class APIClient {
         deviceToken: String,
         readings: [UploadReadingPayload]
     ) async throws -> UploadAttemptSummary {
+        let clientOSVersion = await MainActor.run {
+            "iOS \(UIDevice.current.systemVersion)"
+        }
         let request = try UploadRequestFactory.makeRequest(
             endpoints: endpoints,
             batchID: batchID,
             deviceToken: deviceToken,
+            clientSentAt: Date(),
+            clientAppVersion: appVersionString(),
+            clientOSVersion: clientOSVersion,
             readings: readings
         )
         let (data, response) = try await session.data(for: request)

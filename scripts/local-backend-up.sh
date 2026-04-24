@@ -76,10 +76,22 @@ if [[ -z "${anon_key}" ]]; then
   fi
 fi
 
+functions_env_file="${ROOT_DIR}/supabase/functions/.env"
+
 require_cmd supabase
 require_cmd docker
 require_cmd curl
 require_cmd awk
+
+ensure_local_function_secrets() {
+  if [[ ! -f "${functions_env_file}" ]]; then
+    fail "missing ${functions_env_file}. Add TOKEN_PEPPER for local Edge Functions."
+  fi
+
+  if ! awk -F' *= *' '/^TOKEN_PEPPER *=/ && length($2) > 0 { found=1 } END { exit(found ? 0 : 1) }' "${functions_env_file}"; then
+    fail "${functions_env_file} is missing TOKEN_PEPPER."
+  fi
+}
 
 ensure_edge_runtime_running() {
   if ! docker container inspect "${edge_container}" >/dev/null 2>&1; then
@@ -127,6 +139,7 @@ print_edge_logs() {
 }
 
 log "starting local Supabase stack"
+ensure_local_function_secrets
 if ! supabase start >"${TMPDIR_PATH}/supabase-start.log" 2>&1; then
   cat "${TMPDIR_PATH}/supabase-start.log" >&2
   fail "'supabase start' failed."

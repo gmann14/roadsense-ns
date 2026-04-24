@@ -36,3 +36,5 @@ Use `./scripts/local-backend-up.sh` for normal local development rather than raw
 For local Edge Function secrets such as `TOKEN_PEPPER`, use `supabase/functions/.env` during development. The local edge runtime reliably picks that file up; shell-exporting secrets before `supabase start` is not enough on this machine.
 
 The OSM import scripts are designed for a manual worker or self-hosted runner, not the normal request path. They also depend on external reference geography (`ref.municipalities`) that must be loaded separately before the first import.
+
+The import path is now parameterized for any single Canadian province or territory via `REGION_KEY` plus `./scripts/load-municipalities.sh` and `./scripts/osm-import.sh`. It is not yet a true all-Canada deployment path, because public municipality surfaces are still keyed by display name alone and the app/backend runtime still contains Nova Scotia-specific bounds and copy.

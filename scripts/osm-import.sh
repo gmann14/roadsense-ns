@@ -4,11 +4,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+source "${SCRIPT_DIR}/canada-region-config.sh"
+
 : "${DATABASE_URL:?DATABASE_URL must be set}"
 
-SNAPSHOT_URL="${SNAPSHOT_URL:-https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf}"
-WORKDIR="${WORKDIR:-/tmp/roadsense-osm}"
-OSM_FILE="${WORKDIR}/nova-scotia.osm.pbf"
+REGION_KEY="${REGION_KEY:-nova-scotia}"
+roadsense_load_region_config "${REGION_KEY}"
+
+SNAPSHOT_URL="${SNAPSHOT_URL:-${ROAD_SENSE_GEOFABRIK_URL}}"
+WORKDIR="${WORKDIR:-/tmp/roadsense-osm/${ROAD_SENSE_REGION_KEY}}"
+OSM_FILE="${OSM_FILE:-${WORKDIR}/${ROAD_SENSE_GEOFABRIK_SLUG}.osm.pbf}"
 
 require_cmd() {
     if ! command -v "$1" >/dev/null 2>&1; then
@@ -22,6 +27,8 @@ require_cmd osm2pgsql
 require_cmd psql
 
 mkdir -p "${WORKDIR}"
+
+echo "→ Import region: ${ROAD_SENSE_REGION_NAME}"
 
 if ! psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('ref.municipalities') IS NOT NULL"; then
     echo "Unable to verify ref.municipalities" >&2
@@ -46,6 +53,9 @@ osm2pgsql \
     --middle-schema=osm \
     --style="${SCRIPT_DIR}/osm2pgsql-style.lua" \
     "${OSM_FILE}"
+
+echo "→ Preparing OSM feature-node indexes"
+psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${SCRIPT_DIR}/index-osm-nodes.sql"
 
 echo "→ Clearing staging table"
 psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -c "TRUNCATE road_segments_staging"

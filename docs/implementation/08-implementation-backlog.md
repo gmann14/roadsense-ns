@@ -120,6 +120,7 @@ Post-MVP phases:
 - **Acceptance**
   - Halifax fixture import produces stable segment rows
   - production-scale import path is documented and re-runnable
+- **Current repo note:** this slice is implemented and the import path is now parameterized for any single Canadian province/territory via `REGION_KEY`, `load-municipalities.sh`, and `osm-import.sh`. It also includes local fixes for modern `osm2pgsql` `way_id` output and scalable feature tagging on million-segment imports. A true multi-province / national deployment is still a separate slice because the public municipality surface is name-only today and the app/backend runtime still contains Nova Scotia-specific bounds and copy.
 
 ### B013 — Batch ingestion stored procedure
 

@@ -33,7 +33,6 @@ final class NetworkAndUploaderTests: XCTestCase {
             potholeMagnitude: nil,
             recordedAt: Date(timeIntervalSince1970: 1_713_000_000)
         )
-
         MockURLProtocol.requestHandler = { request in
             XCTAssertEqual(request.url?.path, "/functions/v1/upload-readings")
             XCTAssertEqual(request.value(forHTTPHeaderField: "apikey"), "anon.test")
@@ -45,6 +44,8 @@ final class NetworkAndUploaderTests: XCTestCase {
             )
             XCTAssertEqual(payload.batchID, batchID)
             XCTAssertEqual(payload.deviceToken, deviceToken)
+            XCTAssertFalse(payload.clientAppVersion.isEmpty)
+            XCTAssertTrue(payload.clientOSVersion.hasPrefix("iOS "))
             XCTAssertEqual(payload.readings.count, 1)
 
             let encoder = UploadCodec.makeEncoder()
@@ -941,6 +942,201 @@ final class NetworkAndUploaderTests: XCTestCase {
     }
 
     @MainActor
+    func testReadingStoreRepairFragmentedDriveSessionsRecoversMergedDriveMiddle() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let trimmedAt = Date(timeIntervalSince1970: 2_000)
+        let repairedAt = Date(timeIntervalSince1970: 2_500)
+
+        let session1 = UUID()
+        context.insert(
+            DriveSessionRecord(
+                id: session1,
+                startedAt: Date(timeIntervalSince1970: 1_000),
+                endedAt: Date(timeIntervalSince1970: 1_060),
+                startLatitude: 44.6488,
+                startLongitude: -63.5752,
+                endLatitude: 44.6555,
+                endLongitude: -63.5820,
+                isSealed: true
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6490,
+                longitude: -63.5753,
+                roughnessRMS: 1.0,
+                speedKMH: 42,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_030),
+                driveSessionID: session1,
+                endpointTrimmedAt: trimmedAt
+            )
+        )
+
+        let session2 = UUID()
+        context.insert(
+            DriveSessionRecord(
+                id: session2,
+                startedAt: Date(timeIntervalSince1970: 1_065),
+                endedAt: Date(timeIntervalSince1970: 1_125),
+                startLatitude: 44.6557,
+                startLongitude: -63.5822,
+                endLatitude: 44.6648,
+                endLongitude: -63.5915,
+                isSealed: true
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6600,
+                longitude: -63.5865,
+                roughnessRMS: 1.1,
+                speedKMH: 48,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_085),
+                driveSessionID: session2,
+                endpointTrimmedAt: trimmedAt
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6625,
+                longitude: -63.5892,
+                roughnessRMS: 1.2,
+                speedKMH: 50,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_100),
+                driveSessionID: session2,
+                endpointTrimmedAt: trimmedAt
+            )
+        )
+
+        let session3 = UUID()
+        context.insert(
+            DriveSessionRecord(
+                id: session3,
+                startedAt: Date(timeIntervalSince1970: 1_130),
+                endedAt: Date(timeIntervalSince1970: 1_190),
+                startLatitude: 44.6649,
+                startLongitude: -63.5916,
+                endLatitude: 44.6718,
+                endLongitude: -63.5988,
+                isSealed: true
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6716,
+                longitude: -63.5986,
+                roughnessRMS: 0.9,
+                speedKMH: 39,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_160),
+                driveSessionID: session3,
+                endpointTrimmedAt: trimmedAt
+            )
+        )
+        try context.save()
+
+        let store = ReadingStore(container: container)
+        let summary = try store.repairFragmentedDriveSessions(
+            now: repairedAt,
+            maximumGapSeconds: 10
+        )
+
+        XCTAssertEqual(summary.fragmentedGroupCount, 1)
+        XCTAssertEqual(summary.recoveredEligibleReadingCount, 2)
+        XCTAssertEqual(summary.eligibleReadingCount, 2)
+        XCTAssertEqual(summary.trimmedReadingCount, 2)
+
+        let updatedContext = ModelContext(container)
+        let readings = try updatedContext.fetch(
+            FetchDescriptor<ReadingRecord>(
+                sortBy: [SortDescriptor(\.recordedAt, order: .forward)]
+            )
+        )
+        let readingsByTimestamp = Dictionary(uniqueKeysWithValues: readings.map {
+            ($0.recordedAt.timeIntervalSince1970, $0)
+        })
+
+        XCTAssertNotNil(readingsByTimestamp[1_030]?.endpointTrimmedAt)
+        XCTAssertNil(readingsByTimestamp[1_030]?.uploadReadyAt)
+        XCTAssertNil(readingsByTimestamp[1_085]?.endpointTrimmedAt)
+        XCTAssertEqual(readingsByTimestamp[1_085]?.uploadReadyAt, repairedAt)
+        XCTAssertNil(readingsByTimestamp[1_100]?.endpointTrimmedAt)
+        XCTAssertEqual(readingsByTimestamp[1_100]?.uploadReadyAt, repairedAt)
+        XCTAssertNotNil(readingsByTimestamp[1_160]?.endpointTrimmedAt)
+        XCTAssertNil(readingsByTimestamp[1_160]?.uploadReadyAt)
+
+        let coordinates = try store.pendingUploadCoordinates()
+        XCTAssertEqual(
+            coordinates.map { [$0.latitude, $0.longitude] },
+            [
+                [44.6600, -63.5865],
+                [44.6625, -63.5892]
+            ]
+        )
+    }
+
+    @MainActor
+    func testSensorCoordinatorIgnoresBriefDrivingFalseBlip() async throws {
+        let container = try makeInMemoryContainer()
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let drivingDetector = StreamDrivingDetector()
+        let checkpointStore = SensorCheckpointStore()
+        try? checkpointStore.clear()
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            stopCollectionGracePeriod: .milliseconds(50),
+            scheduleUploadDrain: { _ in }
+        )
+
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(10))
+        XCTAssertTrue(coordinator.monitoringState.isCollecting)
+        XCTAssertEqual(locationService.startCount, 1)
+
+        drivingDetector.send(false)
+        try? await Task.sleep(for: .milliseconds(20))
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(70))
+
+        XCTAssertTrue(coordinator.monitoringState.isCollecting)
+        XCTAssertEqual(locationService.startCount, 1)
+        XCTAssertEqual(locationService.stopCount, 0)
+        XCTAssertEqual(motionService.startCount, 1)
+        XCTAssertEqual(motionService.stopCount, 0)
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
     func testUploaderDrainOnceUploadsQueuedPotholeAction() async throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)
@@ -1219,4 +1415,67 @@ private func requestBody(for request: URLRequest) throws -> Data {
     }
 
     return data
+}
+
+@MainActor
+private final class StreamDrivingDetector: DrivingDetecting {
+    private let continuation: AsyncStream<Bool>.Continuation
+    let events: AsyncStream<Bool>
+
+    init() {
+        var captured: AsyncStream<Bool>.Continuation?
+        self.events = AsyncStream<Bool> { continuation in
+            captured = continuation
+        }
+        self.continuation = captured!
+    }
+
+    func start() {}
+    func stop() {}
+
+    func send(_ isDriving: Bool) {
+        continuation.yield(isDriving)
+    }
+}
+
+@MainActor
+private final class CountingLocationService: LocationServicing {
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    var samples: AsyncStream<LocationSample> { AsyncStream { _ in } }
+    var authorizationStatus: CLAuthorizationStatus { .authorizedAlways }
+    var latestSample: LocationSample? { nil }
+    var recentSamples: [LocationSample] { [] }
+
+    func start() throws {
+        startCount += 1
+    }
+
+    func stop() {
+        stopCount += 1
+    }
+
+    func requestAlwaysUpgrade() {}
+}
+
+@MainActor
+private final class CountingMotionService: MotionServicing {
+    private(set) var startCount = 0
+    private(set) var stopCount = 0
+
+    var samples: AsyncStream<MotionSample> { AsyncStream { _ in } }
+
+    func start(hz: Double) throws {
+        startCount += 1
+    }
+
+    func stop() {
+        stopCount += 1
+    }
+}
+
+@MainActor
+private struct StubThermalMonitor: ThermalMonitoring {
+    var currentState: ProcessInfo.ThermalState { .nominal }
 }

@@ -5,6 +5,9 @@ public enum UploadRequestFactory {
         endpoints: Endpoints,
         batchID: UUID,
         deviceToken: String,
+        clientSentAt: Date,
+        clientAppVersion: String,
+        clientOSVersion: String,
         readings: [UploadReadingPayload],
         encoder: JSONEncoder? = nil
     ) throws -> URLRequest {
@@ -18,6 +21,9 @@ public enum UploadRequestFactory {
         let payload = UploadReadingsRequest(
             batchID: batchID,
             deviceToken: deviceToken,
+            clientSentAt: clientSentAt,
+            clientAppVersion: clientAppVersion,
+            clientOSVersion: clientOSVersion,
             readings: readings
         )
         request.httpBody = try (encoder ?? UploadCodec.makeEncoder()).encode(payload)

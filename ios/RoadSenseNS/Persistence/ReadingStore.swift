@@ -9,6 +9,20 @@ struct DriveSessionFinalizationSummary: Equatable {
     let privacyFilteredReadingCount: Int
 }
 
+struct DriveSessionFragmentRepairSummary: Equatable {
+    let fragmentedGroupCount: Int
+    let recoveredEligibleReadingCount: Int
+    let eligibleReadingCount: Int
+    let trimmedReadingCount: Int
+
+    static let empty = DriveSessionFragmentRepairSummary(
+        fragmentedGroupCount: 0,
+        recoveredEligibleReadingCount: 0,
+        eligibleReadingCount: 0,
+        trimmedReadingCount: 0
+    )
+}
+
 @MainActor
 final class ReadingStore {
     private let container: ModelContainer
@@ -134,6 +148,98 @@ final class ReadingStore {
         return summaries
     }
 
+    func repairFragmentedDriveSessions(
+        now: Date = Date(),
+        maximumGapSeconds: TimeInterval = 60
+    ) throws -> DriveSessionFragmentRepairSummary {
+        let context = ModelContext(container)
+        let sessions = try context.fetch(
+            FetchDescriptor<DriveSessionRecord>(
+                predicate: #Predicate { $0.isSealed == true },
+                sortBy: [SortDescriptor(\.startedAt, order: .forward)]
+            )
+        ).filter { $0.endedAt != nil && $0.endLatitude != nil && $0.endLongitude != nil }
+
+        let fragmentedGroups = groupedFragmentedSessions(
+            from: sessions,
+            maximumGapSeconds: maximumGapSeconds
+        )
+        guard !fragmentedGroups.isEmpty else {
+            return .empty
+        }
+
+        let readings = try context.fetch(
+            FetchDescriptor<ReadingRecord>(
+                predicate: #Predicate { $0.uploadedAt == nil }
+            )
+        )
+
+        var recoveredEligibleCount = 0
+        var eligibleCount = 0
+        var trimmedCount = 0
+        var didMutate = false
+
+        for group in fragmentedGroups {
+            let sessionIDs = Set(group.map(\.id))
+            let endpoints = DriveSessionEndpoints(
+                startedAt: group[0].startedAt,
+                endedAt: group[group.count - 1].endedAt ?? group[group.count - 1].startedAt,
+                startLatitude: group[0].startLatitude,
+                startLongitude: group[0].startLongitude,
+                endLatitude: group[group.count - 1].endLatitude ?? group[group.count - 1].startLatitude,
+                endLongitude: group[group.count - 1].endLongitude ?? group[group.count - 1].startLongitude
+            )
+
+            for reading in readings where reading.droppedByPrivacyZone == false {
+                guard let driveSessionID = reading.driveSessionID,
+                      sessionIDs.contains(driveSessionID) else {
+                    continue
+                }
+
+                if DriveEndpointTrimmer.shouldTrim(
+                    readingRecordedAt: reading.recordedAt,
+                    latitude: reading.latitude,
+                    longitude: reading.longitude,
+                    session: endpoints
+                ) {
+                    trimmedCount += 1
+                    if reading.endpointTrimmedAt == nil
+                        || reading.uploadReadyAt != nil
+                        || reading.uploadBatchID != nil {
+                        didMutate = true
+                    }
+                    reading.endpointTrimmedAt = now
+                    reading.uploadReadyAt = nil
+                    reading.uploadBatchID = nil
+                } else {
+                    eligibleCount += 1
+                    if reading.endpointTrimmedAt != nil {
+                        recoveredEligibleCount += 1
+                    }
+                    if reading.endpointTrimmedAt != nil
+                        || reading.uploadReadyAt == nil
+                        || reading.uploadBatchID != nil {
+                        didMutate = true
+                    }
+                    reading.endpointTrimmedAt = nil
+                    reading.uploadReadyAt = now
+                    reading.uploadBatchID = nil
+                }
+            }
+        }
+
+        if didMutate {
+            try context.save()
+        }
+
+        return DriveSessionFragmentRepairSummary(
+            fragmentedGroupCount: fragmentedGroups.count,
+            recoveredEligibleReadingCount: recoveredEligibleCount,
+            eligibleReadingCount: eligibleCount,
+            trimmedReadingCount: trimmedCount
+        )
+    }
+
     func saveAccepted(
         _ candidate: PersistedReadingCandidate,
         driveSessionID: UUID? = nil
@@ -216,6 +322,42 @@ final class ReadingStore {
         return readings.map { (record: ReadingRecord) in
             CLLocationCoordinate2D(latitude: record.latitude, longitude: record.longitude)
         }
+    }
+
+    private func groupedFragmentedSessions(
+        from sessions: [DriveSessionRecord],
+        maximumGapSeconds: TimeInterval
+    ) -> [[DriveSessionRecord]] {
+        guard !sessions.isEmpty else {
+            return []
+        }
+
+        var groups: [[DriveSessionRecord]] = []
+        var currentGroup: [DriveSessionRecord] = []
+
+        for session in sessions {
+            guard session.endedAt != nil else {
+                continue
+            }
+
+            if let previous = currentGroup.last,
+               let previousEndedAt = previous.endedAt,
+               session.startedAt.timeIntervalSince(previousEndedAt) <= maximumGapSeconds {
+                currentGroup.append(session)
+            } else {
+                if currentGroup.count > 1 {
+                    groups.append(currentGroup)
+                }
+                currentGroup = [session]
+            }
+
+        }
+
+        if currentGroup.count > 1 {
+            groups.append(currentGroup)
+        }
+
+        return groups
     }
 
     func deleteAllContributionData() throws {

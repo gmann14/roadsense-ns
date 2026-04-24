@@ -2,6 +2,8 @@ import Foundation
 
 @MainActor
 final class SensorCoordinator {
+    private static let fragmentedSessionMergeGapSeconds: TimeInterval = 60
+
     private let locationService: LocationServicing
     private let motionService: MotionServicing
     private let drivingDetector: DrivingDetecting
@@ -11,11 +13,13 @@ final class SensorCoordinator {
     private let logger: RoadSenseLogger
     private let checkpointStore: SensorCheckpointStore
     private let scheduleUploadDrain: @MainActor (Date) -> Void
+    private let stopCollectionGracePeriod: Duration
     var stateDidChange: (@MainActor () -> Void)?
 
     private var drivingTask: Task<Void, Never>?
     private var locationTask: Task<Void, Never>?
     private var motionTask: Task<Void, Never>?
+    private var pendingStopTask: Task<Void, Never>?
 
     private var readingBuilder = ReadingBuilder()
     private var potholeDetector = PotholeDetector()
@@ -36,6 +40,7 @@ final class SensorCoordinator {
         readingStore: ReadingStore,
         logger: RoadSenseLogger,
         checkpointStore: SensorCheckpointStore,
+        stopCollectionGracePeriod: Duration = .seconds(60),
         scheduleUploadDrain: @escaping @MainActor (Date) -> Void
     ) {
         self.locationService = locationService
@@ -46,7 +51,33 @@ final class SensorCoordinator {
         self.readingStore = readingStore
         self.logger = logger
         self.checkpointStore = checkpointStore
+        self.stopCollectionGracePeriod = stopCollectionGracePeriod
         self.scheduleUploadDrain = scheduleUploadDrain
+    }
+
+    convenience init(
+        locationService: LocationServicing,
+        motionService: MotionServicing,
+        drivingDetector: DrivingDetecting,
+        thermalMonitor: ThermalMonitoring,
+        privacyZoneStore: PrivacyZoneStoring,
+        readingStore: ReadingStore,
+        logger: RoadSenseLogger,
+        checkpointStore: SensorCheckpointStore,
+        scheduleUploadDrain: @escaping @MainActor (Date) -> Void
+    ) {
+        self.init(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: thermalMonitor,
+            privacyZoneStore: privacyZoneStore,
+            readingStore: readingStore,
+            logger: logger,
+            checkpointStore: checkpointStore,
+            stopCollectionGracePeriod: .seconds(60),
+            scheduleUploadDrain: scheduleUploadDrain
+        )
     }
 
     func startMonitoring() {
@@ -71,6 +102,7 @@ final class SensorCoordinator {
         if !restoredCheckpoint {
             sealOpenDriveSessionsIfNeeded()
         }
+        repairFragmentedDriveSessionsIfNeeded()
 
         isMonitoring = true
         stateDidChange?()
@@ -94,9 +126,10 @@ final class SensorCoordinator {
             guard let self else { return }
             for await isDriving in drivingDetector.events {
                 if isDriving {
+                    await self.cancelPendingStopCollection()
                     await self.startCollection()
                 } else {
-                    await self.stopCollection()
+                    await self.scheduleStopCollectionIfNeeded()
                 }
             }
         }
@@ -113,6 +146,8 @@ final class SensorCoordinator {
         drivingTask = nil
         locationTask = nil
         motionTask = nil
+        pendingStopTask?.cancel()
+        pendingStopTask = nil
         drivingDetector.stop()
         sealCurrentDriveSessionIfNeeded()
         stopServicesAndReset()
@@ -139,6 +174,7 @@ final class SensorCoordinator {
     }
 
     private func startCollection() async {
+        await cancelPendingStopCollection()
         guard isMonitoring, !isCollecting else {
             return
         }
@@ -167,6 +203,8 @@ final class SensorCoordinator {
     }
 
     private func stopServicesAndReset() {
+        pendingStopTask?.cancel()
+        pendingStopTask = nil
         locationService.stop()
         motionService.stop()
         isCollecting = false
@@ -349,6 +387,7 @@ final class SensorCoordinator {
         }
 
         self.currentDriveSessionID = nil
+        repairFragmentedDriveSessionsIfNeeded()
     }
 
     private func sealOpenDriveSessionsIfNeeded() {
@@ -363,6 +402,54 @@ final class SensorCoordinator {
             logger.info("sealed \(summaries.count) abandoned drive session(s): eligible=\(eligibleCount) trimmed=\(trimmedCount)")
         } catch {
             logger.error("failed to seal abandoned drive sessions: \(error.localizedDescription)")
+        }
+    }
+
+    private func scheduleStopCollectionIfNeeded() async {
+        guard isCollecting, pendingStopTask == nil else {
+            return
+        }
+
+        pendingStopTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            do {
+                try await Task.sleep(for: stopCollectionGracePeriod)
+            } catch is CancellationError {
+                return
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled else {
+                return
+            }
+
+            self.pendingStopTask = nil
+            await self.stopCollection()
+        }
+    }
+
+    private func cancelPendingStopCollection() async {
+        pendingStopTask?.cancel()
+        pendingStopTask = nil
+    }
+
+    private func repairFragmentedDriveSessionsIfNeeded() {
+        do {
+            let summary = try readingStore.repairFragmentedDriveSessions(
+                now: Date(),
+                maximumGapSeconds: Self.fragmentedSessionMergeGapSeconds
+            )
+            guard summary.fragmentedGroupCount > 0 else {
+                return
+            }
+
+            logger.info(
+                "repaired fragmented drive sessions groups=\(summary.fragmentedGroupCount) recovered=\(summary.recoveredEligibleReadingCount) eligible=\(summary.eligibleReadingCount) trimmed=\(summary.trimmedReadingCount)"
+            )
+        } catch {
+            logger.error("failed to repair fragmented drive sessions: \(error.localizedDescription)")
         }
     }
 }
