@@ -7,6 +7,7 @@ private let uploaderNowProvider: @Sendable () -> Date = { Date() }
 final class Uploader: UploadDrainPerforming {
     private let container: ModelContainer
     private let potholeActionStore: PotholeActionStore
+    private let potholePhotoStore: PotholePhotoStore
     private let queueStore: UploadQueueStore
     private let client: APIClient
     private let logger: RoadSenseLogger
@@ -14,12 +15,14 @@ final class Uploader: UploadDrainPerforming {
     init(
         container: ModelContainer,
         potholeActionStore: PotholeActionStore,
+        potholePhotoStore: PotholePhotoStore,
         queueStore: UploadQueueStore,
         client: APIClient,
         logger: RoadSenseLogger
     ) {
         self.container = container
         self.potholeActionStore = potholeActionStore
+        self.potholePhotoStore = potholePhotoStore
         self.queueStore = queueStore
         self.client = client
         self.logger = logger
@@ -41,11 +44,20 @@ final class Uploader: UploadDrainPerforming {
             }
 
             let potholeDecision = try potholeActionStore.prepareNextAction(now: now)
-            guard case let .ready(action) = potholeDecision else {
+            if case let .ready(action) = potholeDecision {
+                let shouldContinue = try await uploadPotholeAction(action, nowProvider: nowProvider)
+                guard shouldContinue else {
+                    return
+                }
+                continue
+            }
+
+            let photoDecision = try potholePhotoStore.prepareNextReport(now: now)
+            guard case let .ready(report) = photoDecision else {
                 return
             }
 
-            let shouldContinue = try await uploadPotholeAction(action, nowProvider: nowProvider)
+            let shouldContinue = try await uploadPotholePhoto(report, nowProvider: nowProvider)
             guard shouldContinue else {
                 return
             }
@@ -182,6 +194,113 @@ final class Uploader: UploadDrainPerforming {
                 now: now
             )
             logger.error("pothole_action_failed id=\(action.id.uuidString) result=\(String(describing: attemptResult)) message=\(errorEnvelope?.error ?? "unknown")")
+            return false
+        }
+    }
+
+    private func uploadPotholePhoto(
+        _ report: PotholeReportRecord,
+        nowProvider: @escaping @Sendable () -> Date
+    ) async throws -> Bool {
+        let context = ModelContext(container)
+        let deviceToken = try DeviceTokenStore.currentToken(in: context).token
+
+        let metadataSummary: PotholePhotoMetadataAttemptSummary
+        do {
+            metadataSummary = try await client.beginPotholePhotoUpload(
+                report: report,
+                deviceToken: deviceToken,
+                now: nowProvider()
+            )
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            let now = nowProvider()
+            let attemptResult = UploadAttemptResult.networkError
+            let disposition = UploadPolicy.evaluate(attemptResult, attemptNumber: report.uploadAttemptCount + 1)
+            try potholePhotoStore.applyUploadFailure(
+                id: report.id,
+                disposition: disposition,
+                attemptResult: attemptResult,
+                requestID: nil,
+                now: now
+            )
+            logger.error("pothole_photo_failed id=\(report.id.uuidString) result=\(String(describing: attemptResult)) message=\(error.localizedDescription)")
+            return false
+        }
+
+        switch metadataSummary.result {
+        case let .ready(response):
+            let putSummary: SignedUploadAttemptSummary
+            do {
+                putSummary = try await client.uploadPotholePhotoFile(
+                    fileURL: report.photoFileURL,
+                    uploadURL: response.uploadURL
+                )
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                let now = nowProvider()
+                let attemptResult = UploadAttemptResult.networkError
+                let disposition = UploadPolicy.evaluate(attemptResult, attemptNumber: report.uploadAttemptCount + 1)
+                try potholePhotoStore.applyUploadFailure(
+                    id: report.id,
+                    disposition: disposition,
+                    attemptResult: attemptResult,
+                    requestID: metadataSummary.requestID,
+                    now: now
+                )
+                logger.error("pothole_photo_failed id=\(report.id.uuidString) result=\(String(describing: attemptResult)) message=\(error.localizedDescription)")
+                return false
+            }
+
+            let now = nowProvider()
+            switch putSummary.statusCode {
+            case 200, 201, 204:
+                try potholePhotoStore.applyUploadSuccess(
+                    id: report.id,
+                    expectedObjectPath: response.expectedObjectPath,
+                    requestID: metadataSummary.requestID,
+                    now: now
+                )
+                logger.info("pothole_photo_succeeded id=\(report.id.uuidString)")
+                return true
+            default:
+                let attemptResult = UploadAttemptResult.http(statusCode: putSummary.statusCode, retryAfterSeconds: nil)
+                let disposition = UploadPolicy.evaluate(attemptResult, attemptNumber: report.uploadAttemptCount + 1)
+                try potholePhotoStore.applyUploadFailure(
+                    id: report.id,
+                    disposition: disposition,
+                    attemptResult: attemptResult,
+                    requestID: metadataSummary.requestID,
+                    now: now
+                )
+                logger.error("pothole_photo_failed id=\(report.id.uuidString) result=\(String(describing: attemptResult)) message=put_failed")
+                return false
+            }
+        case .alreadyUploaded:
+            try potholePhotoStore.applyUploadSuccess(
+                id: report.id,
+                expectedObjectPath: report.expectedObjectPath,
+                requestID: metadataSummary.requestID,
+                now: nowProvider()
+            )
+            logger.info("pothole_photo_already_uploaded id=\(report.id.uuidString)")
+            return true
+        case let .failure(errorEnvelope):
+            let attemptResult = UploadAttemptResult.http(
+                statusCode: metadataSummary.statusCode,
+                retryAfterSeconds: metadataSummary.retryAfterSeconds
+            )
+            let disposition = UploadPolicy.evaluate(attemptResult, attemptNumber: report.uploadAttemptCount + 1)
+            try potholePhotoStore.applyUploadFailure(
+                id: report.id,
+                disposition: disposition,
+                attemptResult: attemptResult,
+                requestID: metadataSummary.requestID,
+                now: nowProvider()
+            )
+            logger.error("pothole_photo_failed id=\(report.id.uuidString) result=\(String(describing: attemptResult)) message=\(errorEnvelope?.error ?? "unknown")")
             return false
         }
     }

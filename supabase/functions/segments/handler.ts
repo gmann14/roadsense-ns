@@ -24,6 +24,17 @@ export type SegmentDetail = {
     has_rail_crossing: boolean;
     surface_type: string | null;
     aggregate: SegmentAggregate;
+    potholes: SegmentPothole[];
+};
+
+export type SegmentPothole = {
+    id: string;
+    status: string;
+    lat: number;
+    lng: number;
+    confirmation_count: number;
+    unique_reporters: number;
+    last_confirmed_at: string;
 };
 
 export function parseSegmentPath(pathname: string): string | null {

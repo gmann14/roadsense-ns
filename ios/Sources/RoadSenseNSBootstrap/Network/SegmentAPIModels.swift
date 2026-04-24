@@ -10,6 +10,7 @@ public struct SegmentDetailResponse: Codable, Equatable, Sendable, Identifiable 
     public let hasRailCrossing: Bool
     public let surfaceType: String
     public let aggregate: SegmentAggregate
+    public let potholes: [SegmentPothole]
     public let history: [SegmentHistoryPoint]
     public let neighbors: SegmentNeighbors?
 
@@ -23,6 +24,7 @@ public struct SegmentDetailResponse: Codable, Equatable, Sendable, Identifiable 
         hasRailCrossing: Bool,
         surfaceType: String,
         aggregate: SegmentAggregate,
+        potholes: [SegmentPothole],
         history: [SegmentHistoryPoint],
         neighbors: SegmentNeighbors?
     ) {
@@ -35,6 +37,7 @@ public struct SegmentDetailResponse: Codable, Equatable, Sendable, Identifiable 
         self.hasRailCrossing = hasRailCrossing
         self.surfaceType = surfaceType
         self.aggregate = aggregate
+        self.potholes = potholes
         self.history = history
         self.neighbors = neighbors
     }
@@ -49,8 +52,47 @@ public struct SegmentDetailResponse: Codable, Equatable, Sendable, Identifiable 
         case hasRailCrossing = "has_rail_crossing"
         case surfaceType = "surface_type"
         case aggregate
+        case potholes
         case history
         case neighbors
+    }
+}
+
+public struct SegmentPothole: Codable, Equatable, Sendable, Identifiable {
+    public let id: UUID
+    public let status: String
+    public let latitude: Double
+    public let longitude: Double
+    public let confirmationCount: Int
+    public let uniqueReporters: Int
+    public let lastConfirmedAt: Date
+
+    public init(
+        id: UUID,
+        status: String,
+        latitude: Double,
+        longitude: Double,
+        confirmationCount: Int,
+        uniqueReporters: Int,
+        lastConfirmedAt: Date
+    ) {
+        self.id = id
+        self.status = status
+        self.latitude = latitude
+        self.longitude = longitude
+        self.confirmationCount = confirmationCount
+        self.uniqueReporters = uniqueReporters
+        self.lastConfirmedAt = lastConfirmedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case status
+        case latitude = "lat"
+        case longitude = "lng"
+        case confirmationCount = "confirmation_count"
+        case uniqueReporters = "unique_reporters"
+        case lastConfirmedAt = "last_confirmed_at"
     }
 }
 

@@ -34,6 +34,23 @@ struct PotholeActionAttemptSummary: Sendable {
     let retryAfterSeconds: TimeInterval?
 }
 
+enum PotholePhotoMetadataParsingResult: Sendable {
+    case ready(PotholePhotoUploadResponse)
+    case alreadyUploaded(UploadErrorEnvelope?)
+    case failure(UploadErrorEnvelope?)
+}
+
+struct PotholePhotoMetadataAttemptSummary: Sendable {
+    let statusCode: Int
+    let requestID: String?
+    let result: PotholePhotoMetadataParsingResult
+    let retryAfterSeconds: TimeInterval?
+}
+
+struct SignedUploadAttemptSummary: Sendable {
+    let statusCode: Int
+}
+
 final class APIClient {
     private let endpoints: Endpoints
     private let session: URLSession
@@ -155,6 +172,88 @@ final class APIClient {
                 message: errorEnvelope?.error
             )
         }
+    }
+
+    func beginPotholePhotoUpload(
+        report: PotholeReportRecord,
+        deviceToken: String,
+        now: Date = Date()
+    ) async throws -> PotholePhotoMetadataAttemptSummary {
+        let clientOSVersion = await MainActor.run {
+            "iOS \(UIDevice.current.systemVersion)"
+        }
+        var request = URLRequest(url: endpoints.potholePhotosURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(endpoints.config.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(endpoints.config.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try UploadCodec.makeEncoder().encode(
+            PotholePhotoUploadRequest(
+                reportID: report.id,
+                segmentID: report.segmentID,
+                deviceToken: deviceToken,
+                clientSentAt: now,
+                clientAppVersion: appVersionString(),
+                clientOSVersion: clientOSVersion,
+                lat: report.latitude,
+                lng: report.longitude,
+                accuracyM: report.accuracyM,
+                capturedAt: report.capturedAt,
+                contentType: "image/jpeg",
+                byteSize: report.byteSize,
+                sha256: report.sha256Hex
+            )
+        )
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+
+        let requestID = httpResponse.value(forHTTPHeaderField: "x-request-id")
+        let retryAfterSeconds = retryAfter(from: httpResponse.allHeaderFields)
+        let decoder = UploadCodec.makeDecoder()
+
+        switch httpResponse.statusCode {
+        case 200:
+            return PotholePhotoMetadataAttemptSummary(
+                statusCode: httpResponse.statusCode,
+                requestID: requestID,
+                result: .ready(try decoder.decode(PotholePhotoUploadResponse.self, from: data)),
+                retryAfterSeconds: retryAfterSeconds
+            )
+        case 409:
+            return PotholePhotoMetadataAttemptSummary(
+                statusCode: httpResponse.statusCode,
+                requestID: requestID,
+                result: .alreadyUploaded(try? decoder.decode(UploadErrorEnvelope.self, from: data)),
+                retryAfterSeconds: retryAfterSeconds
+            )
+        default:
+            return PotholePhotoMetadataAttemptSummary(
+                statusCode: httpResponse.statusCode,
+                requestID: requestID,
+                result: .failure(try? decoder.decode(UploadErrorEnvelope.self, from: data)),
+                retryAfterSeconds: retryAfterSeconds
+            )
+        }
+    }
+
+    func uploadPotholePhotoFile(
+        fileURL: URL,
+        uploadURL: URL
+    ) async throws -> SignedUploadAttemptSummary {
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "PUT"
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+
+        let (_, response) = try await session.upload(for: request, fromFile: fileURL)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+
+        return SignedUploadAttemptSummary(statusCode: httpResponse.statusCode)
     }
 
     private func appVersionString() -> String {

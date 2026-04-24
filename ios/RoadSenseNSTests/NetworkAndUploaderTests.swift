@@ -172,6 +172,87 @@ final class NetworkAndUploaderTests: XCTestCase {
         }
     }
 
+    func testAPIClientBeginsPotholePhotoUploadAndParsesSuccess() async throws {
+        let session = makeMockSession()
+        let endpoints = Endpoints(
+            config: AppConfig(
+                environment: .local,
+                apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
+                mapboxAccessToken: "pk.test",
+                supabaseAnonKey: "anon.test"
+            )
+        )
+        let reportID = UUID()
+        let segmentID = UUID()
+        let capturedAt = Date(timeIntervalSince1970: 1_713_000_000)
+        let requestNow = Date(timeIntervalSince1970: 1_713_000_100)
+        let report = PotholeReportRecord(
+            id: reportID,
+            segmentID: segmentID,
+            photoFilePath: "/tmp/photo.jpg",
+            latitude: 44.6488,
+            longitude: -63.5752,
+            accuracyM: 5,
+            capturedAt: capturedAt,
+            uploadState: .pendingMetadata,
+            byteSize: 321_000,
+            sha256Hex: String(repeating: "a", count: 64)
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/functions/v1/pothole-photos")
+
+            let decoder = UploadCodec.makeDecoder()
+            let payload = try decoder.decode(
+                PotholePhotoUploadRequest.self,
+                from: try requestBody(for: request)
+            )
+            XCTAssertEqual(payload.reportID, reportID)
+            XCTAssertEqual(payload.segmentID, segmentID)
+            XCTAssertEqual(payload.deviceToken, "device-token")
+            XCTAssertEqual(payload.clientSentAt, requestNow)
+            XCTAssertEqual(payload.contentType, "image/jpeg")
+            XCTAssertEqual(payload.byteSize, 321_000)
+            XCTAssertEqual(payload.sha256, String(repeating: "a", count: 64))
+
+            let encoder = UploadCodec.makeEncoder()
+            let data = try encoder.encode(
+                PotholePhotoUploadResponse(
+                    reportID: reportID,
+                    uploadURL: URL(string: "https://example.supabase.co/upload")!,
+                    uploadExpiresAt: Date(timeIntervalSince1970: 1_713_007_300),
+                    expectedObjectPath: "pending/\(reportID.uuidString.lowercased()).jpg"
+                )
+            )
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["x-request-id": "req-photo-1"]
+                )!,
+                data
+            )
+        }
+
+        let client = APIClient(endpoints: endpoints, session: session)
+        let summary = try await client.beginPotholePhotoUpload(
+            report: report,
+            deviceToken: "device-token",
+            now: requestNow
+        )
+
+        XCTAssertEqual(summary.statusCode, 200)
+        XCTAssertEqual(summary.requestID, "req-photo-1")
+        switch summary.result {
+        case let .ready(response):
+            XCTAssertEqual(response.reportID, reportID)
+            XCTAssertEqual(response.expectedObjectPath, "pending/\(reportID.uuidString.lowercased()).jpg")
+        default:
+            XCTFail("Expected ready response")
+        }
+    }
+
     @MainActor
     func testUploaderDrainOnceMarksBatchSucceeded() async throws {
         let container = try makeInMemoryContainer()
@@ -239,6 +320,7 @@ final class NetworkAndUploaderTests: XCTestCase {
         let uploader = Uploader(
             container: container,
             potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
             queueStore: UploadQueueStore(container: container),
             client: APIClient(endpoints: endpoints, session: session),
             logger: .upload
@@ -317,6 +399,7 @@ final class NetworkAndUploaderTests: XCTestCase {
         let uploader = Uploader(
             container: container,
             potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
             queueStore: UploadQueueStore(container: container),
             client: APIClient(endpoints: endpoints, session: session),
             logger: .upload
@@ -382,6 +465,7 @@ final class NetworkAndUploaderTests: XCTestCase {
         let uploader = Uploader(
             container: container,
             potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
             queueStore: UploadQueueStore(container: container),
             client: APIClient(endpoints: endpoints, session: session),
             logger: .upload
@@ -487,6 +571,7 @@ final class NetworkAndUploaderTests: XCTestCase {
         let uploader = Uploader(
             container: container,
             potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
             queueStore: UploadQueueStore(container: container),
             client: APIClient(endpoints: endpoints, session: session),
             logger: .upload
@@ -690,6 +775,7 @@ final class NetworkAndUploaderTests: XCTestCase {
         let uploader = Uploader(
             container: container,
             potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
             queueStore: UploadQueueStore(container: container),
             client: APIClient(endpoints: endpoints, session: session),
             logger: .upload
@@ -704,6 +790,101 @@ final class NetworkAndUploaderTests: XCTestCase {
 
         XCTAssertTrue(remainingActions.isEmpty)
         XCTAssertTrue(batches.isEmpty)
+    }
+
+    @MainActor
+    func testUploaderDrainOnceUploadsQueuedPotholePhoto() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        _ = try DeviceTokenStore.currentToken(
+            in: context,
+            now: Date(timeIntervalSince1970: 1_713_000_000),
+            makeUUID: { "device-token" }
+        )
+
+        let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+        let fileURL = tempDirectory.appendingPathComponent("photo.jpg")
+        try Data([0x01, 0x02, 0x03, 0x04]).write(to: fileURL)
+
+        let reportID = UUID()
+        context.insert(
+            PotholeReportRecord(
+                id: reportID,
+                photoFilePath: fileURL.path,
+                latitude: 44.6488,
+                longitude: -63.5752,
+                accuracyM: 5,
+                capturedAt: Date(timeIntervalSince1970: 1_713_000_010),
+                uploadState: .pendingMetadata,
+                byteSize: 4,
+                sha256Hex: String(repeating: "a", count: 64)
+            )
+        )
+        try context.save()
+
+        let session = makeMockSession()
+        MockURLProtocol.requestHandler = { request in
+            if request.url?.path == "/functions/v1/pothole-photos" {
+                let encoder = UploadCodec.makeEncoder()
+                let data = try encoder.encode(
+                    PotholePhotoUploadResponse(
+                        reportID: reportID,
+                        uploadURL: URL(string: "https://uploads.example.invalid/pothole.jpg")!,
+                        uploadExpiresAt: Date(timeIntervalSince1970: 1_713_007_300),
+                        expectedObjectPath: "pending/\(reportID.uuidString.lowercased()).jpg"
+                    )
+                )
+                return (
+                    HTTPURLResponse(
+                        url: try XCTUnwrap(request.url),
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["x-request-id": "req-photo-1"]
+                    )!,
+                    data
+                )
+            }
+
+            XCTAssertEqual(request.url?.host, "uploads.example.invalid")
+            XCTAssertEqual(request.httpMethod, "PUT")
+            XCTAssertNil(request.value(forHTTPHeaderField: "Content-SHA256"))
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: [:]
+                )!,
+                Data()
+            )
+        }
+
+        let endpoints = Endpoints(
+            config: AppConfig(
+                environment: .local,
+                apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
+                mapboxAccessToken: "pk.test",
+                supabaseAnonKey: "anon.test"
+            )
+        )
+        let uploader = Uploader(
+            container: container,
+            potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
+            queueStore: UploadQueueStore(container: container),
+            client: APIClient(endpoints: endpoints, session: session),
+            logger: .upload
+        )
+
+        await uploader.drainOnce(now: Date(timeIntervalSince1970: 1_713_000_100))
+
+        let updatedContext = ModelContext(container)
+        let reports = try updatedContext.fetch(FetchDescriptor<PotholeReportRecord>())
+        XCTAssertEqual(reports.count, 1)
+        XCTAssertEqual(reports.first?.uploadState, .pendingModeration)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
     }
 
     @MainActor

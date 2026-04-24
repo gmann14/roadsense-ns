@@ -15,6 +15,10 @@ public struct Endpoints: Equatable, Sendable {
         config.functionsBaseURL.appendingPathComponent("pothole-actions", isDirectory: false)
     }
 
+    public var potholePhotosURL: URL {
+        config.functionsBaseURL.appendingPathComponent("pothole-photos", isDirectory: false)
+    }
+
     public func segmentDetailURL(id: UUID) -> URL {
         config.functionsBaseURL
             .appendingPathComponent("segments", isDirectory: true)

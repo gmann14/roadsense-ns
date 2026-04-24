@@ -29,6 +29,17 @@ struct SegmentDetailResponseParserTests {
             "last_reading_at": "2026-04-16T22:15:00Z",
             "updated_at": "2026-04-17T03:15:00Z"
           },
+          "potholes": [
+            {
+              "id": "a8f6e5c4-9999-8888-7777-666666666666",
+              "status": "active",
+              "lat": 44.64882,
+              "lng": -63.57512,
+              "confirmation_count": 3,
+              "unique_reporters": 2,
+              "last_confirmed_at": "2026-04-17T02:15:00Z"
+            }
+          ],
           "history": [],
           "neighbors": null
         }
@@ -46,6 +57,9 @@ struct SegmentDetailResponseParserTests {
         #expect(response.aggregate.category == "rough")
         #expect(response.aggregate.confidence == "high")
         #expect(response.aggregate.totalReadings == 137)
+        #expect(response.potholes.count == 1)
+        #expect(response.potholes.first?.status == "active")
+        #expect(response.potholes.first?.latitude == 44.64882)
         #expect(response.history.isEmpty)
         #expect(response.neighbors == nil)
     }

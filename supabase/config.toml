@@ -371,6 +371,12 @@ verify_jwt = false
 [functions.tiles]
 verify_jwt = false
 
+[functions.pothole-photo-moderation]
+verify_jwt = false
+
+[functions.pothole-photo-image]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

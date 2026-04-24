@@ -63,6 +63,7 @@ extension AppContainer {
 
         let privacyZoneStore = PrivacyZoneStore(container: modelContainer)
         let potholeActionStore = PotholeActionStore(container: modelContainer)
+        let potholePhotoStore = PotholePhotoStore(container: modelContainer)
         let readingStore = ReadingStore(container: modelContainer)
         let userStatsStore = UserStatsStore(container: modelContainer)
         let uploadQueueStore = UploadQueueStore(container: modelContainer)
@@ -75,6 +76,7 @@ extension AppContainer {
         let uploader = Uploader(
             container: modelContainer,
             potholeActionStore: potholeActionStore,
+            potholePhotoStore: potholePhotoStore,
             queueStore: uploadQueueStore,
             client: apiClient,
             logger: .upload
@@ -96,6 +98,7 @@ extension AppContainer {
             modelContainer: modelContainer,
             privacyZoneStore: privacyZoneStore,
             potholeActionStore: potholeActionStore,
+            potholePhotoStore: potholePhotoStore,
             readingStore: readingStore,
             userStatsStore: userStatsStore,
             uploadQueueStore: uploadQueueStore,

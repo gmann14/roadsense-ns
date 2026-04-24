@@ -1,5 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { createSegmentsHandler, type SegmentAggregate, type SegmentDetail } from "./handler.ts";
+import {
+    createSegmentsHandler,
+    type SegmentAggregate,
+    type SegmentDetail,
+    type SegmentPothole,
+} from "./handler.ts";
 
 function createFetchSegmentDetail() {
     const supabase = createClient(
@@ -63,9 +68,39 @@ function createFetchSegmentDetail() {
             updated_at: aggregate.updated_at,
         };
 
+        const { data: potholes, error: potholesError } = await supabase
+            .from("pothole_reports")
+            .select(`
+                id,
+                status,
+                geom,
+                confirmation_count,
+                unique_reporters,
+                last_confirmed_at
+            `)
+            .eq("segment_id", segmentId)
+            .in("status", ["active", "resolved"])
+            .order("last_confirmed_at", { ascending: false })
+            .limit(6);
+
+        if (potholesError) {
+            return null;
+        }
+
+        const potholePayload: SegmentPothole[] = (potholes ?? []).map((pothole) => ({
+            id: pothole.id,
+            status: pothole.status,
+            lat: pothole.geom.coordinates[1],
+            lng: pothole.geom.coordinates[0],
+            confirmation_count: pothole.confirmation_count,
+            unique_reporters: pothole.unique_reporters,
+            last_confirmed_at: pothole.last_confirmed_at,
+        }));
+
         return {
             ...segment,
             aggregate: aggregatePayload,
+            potholes: potholePayload,
         };
     };
 }

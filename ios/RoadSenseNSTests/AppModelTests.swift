@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 import SwiftData
+import UIKit
 import XCTest
 @testable import RoadSense_NS
 
@@ -142,7 +143,10 @@ final class AppModelTests: XCTestCase {
             return XCTFail("Expected queued pothole action")
         }
 
-        model.undoPotholeReport(id: id)
+        model.undoPotholeReport(
+            id: id,
+            now: now.addingTimeInterval(1)
+        )
 
         let context = ModelContext(container.modelContainer)
         let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
@@ -183,6 +187,212 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(records.count, 1)
     }
 
+    func testQueuePotholeFollowUpCreatesPendingUploadAction() throws {
+        let defaults = try makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let sample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.4,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 5,
+            speedKmh: 40,
+            headingDegrees: 180
+        )
+        let potholeID = UUID()
+        let container = try makeContainer(
+            locationService: TestLocationService(
+                latestSample: sample,
+                recentSamples: [sample]
+            )
+        )
+
+        let model = AppModel(container: container, defaults: defaults)
+        let result = model.queuePotholeFollowUp(
+            potholeReportID: potholeID,
+            actionType: .confirmPresent,
+            now: now
+        )
+
+        guard case let .queued(actionID) = result else {
+            return XCTFail("Expected queued follow-up action")
+        }
+
+        let context = ModelContext(container.modelContainer)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.id, actionID)
+        XCTAssertEqual(records.first?.potholeReportID, potholeID)
+        XCTAssertEqual(records.first?.actionType, .confirmPresent)
+        XCTAssertEqual(records.first?.uploadState, .pendingUpload)
+    }
+
+    func testQueuePotholeFollowUpRejectsPrivacyZoneOverlap() throws {
+        let defaults = try makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let sample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.4,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 5,
+            speedKmh: 40,
+            headingDegrees: 180
+        )
+        let container = try makeContainer(
+            locationService: TestLocationService(
+                latestSample: sample,
+                recentSamples: [sample]
+            ),
+            seedPrivacyZone: true
+        )
+
+        let model = AppModel(container: container, defaults: defaults)
+        let result = model.queuePotholeFollowUp(
+            potholeReportID: UUID(),
+            actionType: .confirmFixed,
+            now: now
+        )
+
+        XCTAssertEqual(result, .insidePrivacyZone)
+    }
+
+    func testFollowUpPromptCandidateRequiresStoppedFreshLocation() throws {
+        let defaults = try makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let movingSample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.4,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 5,
+            speedKmh: 42,
+            headingDegrees: 180
+        )
+        let candidate = SegmentPothole(
+            id: UUID(),
+            status: "active",
+            latitude: 44.64881,
+            longitude: -63.57521,
+            confirmationCount: 2,
+            uniqueReporters: 2,
+            lastConfirmedAt: now
+        )
+        let movingModel = AppModel(
+            container: try makeContainer(
+                locationService: TestLocationService(
+                    latestSample: movingSample,
+                    recentSamples: [movingSample]
+                )
+            ),
+            defaults: defaults
+        )
+
+        XCTAssertNil(movingModel.followUpPromptCandidate(for: [candidate], now: now))
+
+        let stoppedSample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.4,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 5,
+            speedKmh: 0,
+            headingDegrees: 180
+        )
+        let stoppedModel = AppModel(
+            container: try makeContainer(
+                locationService: TestLocationService(
+                    latestSample: stoppedSample,
+                    recentSamples: [stoppedSample]
+                )
+            ),
+            defaults: defaults
+        )
+
+        XCTAssertEqual(stoppedModel.followUpPromptCandidate(for: [candidate], now: now)?.id, candidate.id)
+    }
+
+    func testSubmitPotholePhotoQueuesPendingMetadataReport() async throws {
+        let defaults = try makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let sample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.5,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 0,
+            headingDegrees: 180
+        )
+        let container = try makeContainer(
+            locationService: TestLocationService(
+                latestSample: sample,
+                recentSamples: [sample]
+            )
+        )
+        let model = AppModel(container: container, defaults: defaults)
+
+        let result = await model.submitPotholePhoto(
+            rawImageData: try makeJPEGData(),
+            segmentID: UUID(),
+            now: now
+        )
+
+        guard case let .queued(id) = result else {
+            return XCTFail("Expected queued pothole photo")
+        }
+
+        let context = ModelContext(container.modelContainer)
+        let reports = try context.fetch(FetchDescriptor<PotholeReportRecord>())
+        XCTAssertEqual(reports.count, 1)
+        XCTAssertEqual(reports.first?.id, id)
+        XCTAssertEqual(try XCTUnwrap(reports.first).latitude, sample.latitude, accuracy: 0.000001)
+        XCTAssertEqual(try XCTUnwrap(reports.first).longitude, sample.longitude, accuracy: 0.000001)
+        XCTAssertEqual(reports.first?.uploadState, .pendingMetadata)
+    }
+
+    func testSubmitPotholePhotoRejectsPrivacyZoneOverlap() async throws {
+        let defaults = try makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let sample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.5,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 0,
+            headingDegrees: 180
+        )
+        let container = try makeContainer(
+            locationService: TestLocationService(
+                latestSample: sample,
+                recentSamples: [sample]
+            ),
+            seedPrivacyZone: true
+        )
+        let model = AppModel(container: container, defaults: defaults)
+        let result = await model.submitPotholePhoto(rawImageData: try makeJPEGData(), now: now)
+
+        XCTAssertEqual(result, .insidePrivacyZone)
+    }
+
+    func testSubmitPotholePhotoRejectsOutsideNovaScotiaCoverage() async throws {
+        let defaults = try makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let sample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.5,
+            latitude: 48.4284,
+            longitude: -123.3656,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 0,
+            headingDegrees: 180
+        )
+        let container = try makeContainer(
+            locationService: TestLocationService(
+                latestSample: sample,
+                recentSamples: [sample]
+            )
+        )
+        let model = AppModel(container: container, defaults: defaults)
+        let result = await model.submitPotholePhoto(rawImageData: try makeJPEGData(), now: now)
+
+        XCTAssertEqual(result, .outsideCoverage)
+    }
+
     private func makeDefaults(file: StaticString = #filePath, line: UInt = #line) throws -> UserDefaults {
         let suiteName = "AppModelTests.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -219,6 +429,7 @@ final class AppModelTests: XCTestCase {
             )
         }
         let potholeActionStore = PotholeActionStore(container: modelContainer)
+        let potholePhotoStore = PotholePhotoStore(container: modelContainer)
         let readingStore = ReadingStore(container: modelContainer)
         let userStatsStore = UserStatsStore(container: modelContainer)
         let uploadQueueStore = UploadQueueStore(container: modelContainer)
@@ -239,6 +450,7 @@ final class AppModelTests: XCTestCase {
             modelContainer: modelContainer,
             privacyZoneStore: privacyZoneStore,
             potholeActionStore: potholeActionStore,
+            potholePhotoStore: potholePhotoStore,
             readingStore: readingStore,
             userStatsStore: userStatsStore,
             uploadQueueStore: uploadQueueStore,
@@ -246,6 +458,7 @@ final class AppModelTests: XCTestCase {
             uploader: Uploader(
                 container: modelContainer,
                 potholeActionStore: potholeActionStore,
+                potholePhotoStore: potholePhotoStore,
                 queueStore: uploadQueueStore,
                 client: apiClient,
                 logger: .upload
@@ -269,6 +482,19 @@ final class AppModelTests: XCTestCase {
             logger: .app
         )
     }
+}
+
+private func makeJPEGData() throws -> Data {
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8))
+    let image = renderer.image { context in
+        UIColor.systemOrange.setFill()
+        context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+    }
+
+    guard let data = image.jpegData(compressionQuality: 0.9) else {
+        throw NSError(domain: "AppModelTests", code: 2)
+    }
+    return data
 }
 
 @MainActor
