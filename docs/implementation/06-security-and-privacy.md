@@ -86,6 +86,11 @@ If frontend error monitoring is added later, keep it to error capture only and a
 
 ## App Store Privacy Labels
 
+Operational note:
+
+- [10-app-store-and-testflight-readiness.md](10-app-store-and-testflight-readiness.md) is the release-day checklist and copy source-of-truth for App Store Connect fields.
+- This section remains the canonical policy decision for what the answers must be.
+
 What we enter in App Store Connect:
 
 **Data Types Collected:**
@@ -218,7 +223,7 @@ Contact form at `https://roadsense.ca/privacy#contact` (or a simple `mailto:`). 
 - [ ] `.github/CODEOWNERS` lists Graham for sensitive paths (migrations, functions, Info.plist)
 - [ ] Dependabot enabled for SPM + npm + deno deps
 - [ ] Secret scanning enabled (GitHub default); pre-commit gitleaks hook for local catches
-- [ ] One manual staging log review confirms no raw token, IP, or exact coordinate leakage in structured logs
+- [ ] One manual shared-backend log review confirms no raw token, IP, or exact coordinate leakage in structured logs (`staging` if it exists; otherwise the first hosted env used by signed testers)
 
 ### Infrastructure
 
