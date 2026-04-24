@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 import Observation
+import UIKit
 
 enum PotholeActionSubmissionResult: Equatable {
     case queued(UUID)
@@ -220,6 +221,13 @@ final class AppModel {
                     break
                 }
             }
+
+            guard readiness.backgroundCollection == .upgradeRequired,
+                  let settingsURL = URL(string: UIApplication.openSettingsURLString) else {
+                return
+            }
+
+            _ = await UIApplication.shared.open(settingsURL)
         }
     }
 

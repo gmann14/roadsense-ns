@@ -1,7 +1,6 @@
-FORWARD_SLASH = /
 APP_ENV = LOCAL
 APP_DISPLAY_NAME = RoadSense NS Local
-API_BASE_URL = http:$(FORWARD_SLASH)$(FORWARD_SLASH)127.0.0.1:54321
+API_BASE_URL = http:/$()/127.0.0.1:54321
 ROAD_SENSE_APP_BUNDLE_IDENTIFIER = ca.roadsense.ios.localdebug
 MAPBOX_ACCESS_TOKEN = pk.placeholder.local
 SUPABASE_ANON_KEY = anon.placeholder.local

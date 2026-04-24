@@ -36,8 +36,15 @@
 	<string>RoadSense NS uses background location to keep collecting road quality readings during a drive.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>RoadSense NS uses your location to measure road quality while you drive.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>RoadSense NS local builds can connect to your Mac on the same Wi-Fi for local map and upload testing.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>RoadSense NS uses motion data to score road roughness and detect potholes.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>SENTRY_DSN</key>
 	<string>$(SENTRY_DSN)</string>
 	<key>UIApplicationSceneManifest</key>

@@ -28,6 +28,8 @@ final class LocationService: NSObject, LocationServicing {
         self.continuation = captured!
         super.init()
         manager.delegate = self
+        manager.activityType = .automotiveNavigation
+        manager.allowsBackgroundLocationUpdates = true
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
         manager.distanceFilter = 5
         manager.pausesLocationUpdatesAutomatically = false
