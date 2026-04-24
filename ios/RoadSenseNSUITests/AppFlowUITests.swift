@@ -5,8 +5,10 @@ final class AppFlowUITests: XCTestCase {
         let app = makeApp(scenario: "default")
         app.launch()
 
-        XCTAssertTrue(app.buttons["map.privacy-zones-action"].waitForExistence(timeout: 8))
-        app.buttons["map.privacy-zones-action"].tap()
+        XCTAssertTrue(app.buttons["map.settings-button"].waitForExistence(timeout: 8))
+        app.buttons["map.settings-button"].tap()
+        XCTAssertTrue(app.buttons["settings.manage-privacy-zones"].waitForExistence(timeout: 5))
+        app.buttons["settings.manage-privacy-zones"].tap()
 
         let saveButton = app.buttons["privacy-zones.save"]
         XCTAssertTrue(saveButton.waitForExistence(timeout: 5))
@@ -80,8 +82,10 @@ final class AppFlowUITests: XCTestCase {
         let app = makeApp(scenario: "default", dynamicTypeSize: "accessibility5")
         app.launch()
 
-        XCTAssertTrue(app.buttons["map.privacy-zones-action"].waitForExistence(timeout: 8))
-        app.buttons["map.privacy-zones-action"].tap()
+        XCTAssertTrue(app.buttons["map.settings-button"].waitForExistence(timeout: 8))
+        app.buttons["map.settings-button"].tap()
+        XCTAssertTrue(app.buttons["settings.manage-privacy-zones"].waitForExistence(timeout: 5))
+        app.buttons["settings.manage-privacy-zones"].tap()
 
         XCTAssertTrue(app.buttons["privacy-zones.save"].waitForExistence(timeout: 5))
         app.buttons["privacy-zones.save"].tap()
