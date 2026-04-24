@@ -2,16 +2,6 @@ name: Web CI
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "apps/web/**"
-      - ".github/workflows/web-ci.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/web/**"
-      - ".github/workflows/web-ci.yml"
 
 concurrency:
   group: web-ci-${{ github.ref }}
