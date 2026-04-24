@@ -95,7 +95,7 @@ roadsense-ns/
 
 ## CI/CD Pipelines
 
-### `ios-ci.yml` (PRs touching `ios/**`, plus pushes to `main`)
+### `ios-ci.yml` (manual-only for now)
 
 ```
 1. Checkout
@@ -108,7 +108,12 @@ roadsense-ns/
 
 Runs on `macos-14` runners. Target: < 15 min.
 
-### `backend-ci.yml` (PRs touching backend paths, plus pushes to `main`)
+Current repo note:
+
+- Automatic iOS CI is intentionally disabled for now to avoid burning macOS minutes before Apple approval and signed-device testing make those failures actionable.
+- When we re-enable it, the right trigger is internal TestFlight readiness/shared testing, not "first production deploy."
+
+### `backend-ci.yml` (manual-only for now)
 
 ```
 1. Checkout
@@ -123,7 +128,11 @@ Runs on `macos-14` runners. Target: < 15 min.
 
 Runs on `ubuntu-22.04`. Target: < 10 min.
 
-### `web-ci.yml` (Phase 2, PRs touching `apps/web/**`, plus pushes to `main`)
+Current repo note:
+
+- Automatic backend CI is intentionally disabled for now to conserve Actions minutes while local Supabase + local verification remain the primary loop.
+
+### `web-ci.yml` (Phase 2, manual-only for now)
 
 ```text
 1. Checkout
@@ -137,7 +146,7 @@ Runs on `ubuntu-22.04`. Target: < 10 min.
 
 Runs on `ubuntu-22.04`. Target: < 10 min. Add preview-URL Playwright smoke only after Vercel previews are live.
 
-### `deploy-staging.yml` (push to `main` or manual dispatch, when staging exists)
+### `deploy-staging.yml` (manual dispatch, when staging exists)
 
 ```
 1. Use the `staging` GitHub Environment and require:
@@ -392,7 +401,7 @@ Pager-style alerts (SMS/phone) are overkill for MVP. Email + checking in once a 
 ## Deploy Playbook — Normal Day
 
 1. Before shared hosted environments exist: rely on CI + local Supabase + signed-device smoke
-2. Once staging exists: PR merged to main → `deploy-staging.yml` auto-runs
+2. Once staging exists: engineer manually dispatches `deploy-staging.yml`
 3. Engineer manually smoke-tests staging (drive, check data arrives, check map)
 4. Engineer manually dispatches `deploy-production.yml`
 5. Engineer tags `prod-<date>`, posts summary in GitHub Discussions/wherever

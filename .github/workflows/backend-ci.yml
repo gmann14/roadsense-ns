@@ -2,18 +2,6 @@ name: Backend CI
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "supabase/**"
-      - "scripts/**"
-      - ".github/workflows/backend-ci.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "supabase/**"
-      - "scripts/**"
-      - ".github/workflows/backend-ci.yml"
 
 concurrency:
   group: backend-ci-${{ github.ref }}
@@ -81,8 +69,8 @@ jobs:
           export DATABASE_URL="${DB_URL}"
           bash -n ./scripts/api-smoke.sh
           bash -n ./scripts/seeded-e2e-smoke.sh
-          ./scripts/api-smoke.sh
-          ./scripts/seeded-e2e-smoke.sh
+          bash ./scripts/api-smoke.sh
+          bash ./scripts/seeded-e2e-smoke.sh
 
       - name: Report scaffold status
         run: |

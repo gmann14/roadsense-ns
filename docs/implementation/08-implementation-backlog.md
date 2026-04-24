@@ -88,7 +88,7 @@ Post-MVP phases:
 - **Acceptance**
   - PRs run CI
   - CI fails loudly on broken migrations, Deno tests, or iOS build breaks
-- **Current repo note:** This is now materially implemented rather than skeleton-only. `backend-ci.yml`, `ios-ci.yml`, and `web-ci.yml` run on path-scoped PRs and on `main`, with `ios-ci` executing the full generated-project simulator suite (`swift test` + `xcodegen generate` + `xcodebuild test`) and `backend-ci` exercising migrations, pgTAP, Deno, and the scripted smoke checks.
+- **Current repo note:** The workflow files now exist and are useful, but automatic triggers are intentionally disabled again until Apple approval and signed/shared testing make the minutes worth spending. For now these remain manual guardrails, not always-on branch protection.
 
 ## Phase 2 — Backend Foundation
 
