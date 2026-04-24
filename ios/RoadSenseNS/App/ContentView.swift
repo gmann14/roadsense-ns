@@ -1,5 +1,6 @@
 import CoreLocation
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @State private var model: AppModel
@@ -31,6 +32,10 @@ struct ContentView: View {
             }
             .onChange(of: scenePhase) { _, newPhase in
                 handleScenePhaseChange(newPhase)
+                updateIdleTimer()
+            }
+            .onChange(of: model.isPassiveMonitoringEnabled) { _, _ in
+                updateIdleTimer()
             }
             .sheet(isPresented: $isShowingPrivacyZones, onDismiss: {
                 model.refreshPrivacyZones()
@@ -62,6 +67,12 @@ struct ContentView: View {
                 }
             }
         }
+        .onAppear {
+            updateIdleTimer()
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
     }
 
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
@@ -82,6 +93,13 @@ struct ContentView: View {
         default:
             break
         }
+    }
+
+    private func updateIdleTimer() {
+        UIApplication.shared.isIdleTimerDisabled =
+            scenePhase == .active
+            && model.readiness.stage == .ready
+            && model.isPassiveMonitoringEnabled
     }
 
     private var readyShell: some View {
