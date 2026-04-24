@@ -15,7 +15,6 @@ struct PotholePhotoCaptureContext: Equatable {
 
 enum PotholePhotoSubmissionResult: Equatable {
     case queued(UUID)
-    case safetyRestricted
     case unavailableLocation
     case insidePrivacyZone
     case outsideCoverage
@@ -46,6 +45,7 @@ final class AppModel {
     private(set) var snapshot: PermissionSnapshot
     private(set) var isRequestingPermissions = false
     private(set) var isPassiveMonitoringEnabled = false
+    private(set) var isActivelyCollecting = false
     private(set) var isCollectionPausedByUser = false
     private(set) var pendingUploadCount = 0
     private(set) var uploadStatusSummary = UploadQueueStatusSummary.empty
@@ -92,6 +92,9 @@ final class AppModel {
         self.pendingDriveCoordinates = (try? container.readingStore.pendingUploadCoordinates()) ?? []
         self.userStatsSummary = (try? container.userStatsStore.summary()) ?? .zero
         self.isCollectionPausedByUser = defaults.bool(forKey: collectionPausedKey)
+        self.sensorCoordinator.stateDidChange = { [weak self] in
+            self?.refreshCollectionStats()
+        }
         _ = try? potholeActionStore.promoteExpiredPendingUndoActions()
         syncPassiveMonitoringState()
         refreshCollectionStats()
@@ -336,7 +339,7 @@ final class AppModel {
 
     func potholePhotoCaptureContext(now: Date = Date()) -> PotholePhotoCaptureContext? {
         guard let sample = locationService.latestSample,
-              hasFreshStoppedLocation(sample, now: now) else {
+              hasUsableLocation(sample, now: now) else {
             return nil
         }
 
@@ -356,10 +359,6 @@ final class AppModel {
 
         guard hasUsableLocation(sample, now: now) else {
             return .unavailableLocation
-        }
-
-        guard hasFreshStoppedLocation(sample, now: now) else {
-            return .safetyRestricted
         }
 
         guard !isInsidePrivacyZone(sample) else {
@@ -424,6 +423,7 @@ final class AppModel {
         userStatsSummary = (try? userStatsStore.summary()) ?? .zero
         isCollectionPausedByUser = defaults.bool(forKey: collectionPausedKey)
         isPassiveMonitoringEnabled = sensorCoordinator.monitoringState.isMonitoring
+        isActivelyCollecting = sensorCoordinator.monitoringState.isCollecting
     }
 
     private func hasUsableLocation(_ sample: LocationSample, now: Date) -> Bool {

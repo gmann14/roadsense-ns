@@ -11,6 +11,7 @@ final class SensorCoordinator {
     private let logger: RoadSenseLogger
     private let checkpointStore: SensorCheckpointStore
     private let scheduleUploadDrain: @MainActor (Date) -> Void
+    var stateDidChange: (@MainActor () -> Void)?
 
     private var drivingTask: Task<Void, Never>?
     private var locationTask: Task<Void, Never>?
@@ -72,6 +73,7 @@ final class SensorCoordinator {
         }
 
         isMonitoring = true
+        stateDidChange?()
         drivingDetector.start()
 
         locationTask = Task { [weak self] in
@@ -104,6 +106,7 @@ final class SensorCoordinator {
 
     func stopMonitoring() {
         isMonitoring = false
+        stateDidChange?()
         drivingTask?.cancel()
         locationTask?.cancel()
         motionTask?.cancel()
@@ -144,6 +147,7 @@ final class SensorCoordinator {
             try locationService.start()
             try motionService.start(hz: 50)
             isCollecting = true
+            stateDidChange?()
             logger.info("sensor collection started")
         } catch {
             logger.error("failed to start collection: \(error.localizedDescription)")
@@ -166,6 +170,7 @@ final class SensorCoordinator {
         locationService.stop()
         motionService.stop()
         isCollecting = false
+        stateDidChange?()
         readingBuilder = ReadingBuilder()
         potholeDetector = PotholeDetector()
         recentPotholes = []
@@ -277,6 +282,7 @@ final class SensorCoordinator {
             isCollecting = checkpoint.wasCollecting
             currentDriveSessionID = try readingStore.activeDriveSessionID()
             lastCheckpointAt = checkpoint.savedAt
+            stateDidChange?()
             logger.info("restored fresh sensor checkpoint")
             return true
         } catch {

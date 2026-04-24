@@ -398,10 +398,10 @@ struct MapScreen: View {
             HStack(spacing: DesignTokens.Space.xs) {
                 Image(systemName: "camera.viewfinder")
                     .font(.system(size: 15, weight: .bold))
-                Text("Take photo")
+                Text("Add photo")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                 Spacer(minLength: DesignTokens.Space.xs)
-                Text("Stopped only")
+                Text("Optional")
                     .font(.system(size: 12, weight: .semibold))
                     .padding(.horizontal, DesignTokens.Space.xs)
                     .padding(.vertical, 5)
@@ -418,7 +418,7 @@ struct MapScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("map.take-photo-button")
-        .accessibilityHint("Opens the camera when you are safely stopped.")
+        .accessibilityHint("Opens the camera when a fresh GPS fix is available.")
     }
 
     private var primaryAction: some View {
@@ -624,21 +624,33 @@ struct MapScreen: View {
 
     private var recordingTitle: String {
         if model.readiness.backgroundCollection == .upgradeRequired { return "Needs Always Location" }
-        return model.isPassiveMonitoringEnabled ? "Recording" : "Paused"
+        if model.isCollectionPausedByUser || !model.isPassiveMonitoringEnabled { return "Paused" }
+        if model.isActivelyCollecting { return "Recording" }
+        return "Ready to record"
     }
 
     private var headerSubtitle: String {
         if !isMapLoaded && mapLoadError == nil { return "Loading community layer…" }
         if model.readiness.backgroundCollection == .upgradeRequired { return "Allow Always Location so RoadSense can keep collecting after you leave the app." }
         if model.readiness.showsPrivacyRiskWarning { return "Privacy zones are optional extra protection on top of default endpoint trimming." }
+        if model.isActivelyCollecting {
+            if model.userStatsSummary.totalKmRecorded < 0.05 {
+                return "Drive in progress · capturing road readings."
+            }
+            return "Drive in progress · " + mappedValue + " mapped"
+        }
+        if model.isCollectionPausedByUser { return "Collection is turned off until you turn it back on." }
         if model.pendingUploadCount > 0 { return "\(model.pendingUploadCount) uploads waiting" }
-        if model.userStatsSummary.acceptedReadingCount == 0 { return "No drives yet" }
-        return mappedValue + " mapped"
+        if model.userStatsSummary.acceptedReadingCount == 0 { return "Start driving to track road quality." }
+        return "Watching for your next drive."
     }
 
     private var recordingTint: Color {
         if model.readiness.backgroundCollection == .upgradeRequired { return DesignTokens.Palette.warning }
-        return model.isPassiveMonitoringEnabled ? DesignTokens.Palette.smooth : .white.opacity(0.6)
+        if model.isCollectionPausedByUser || !model.isPassiveMonitoringEnabled {
+            return .white.opacity(0.6)
+        }
+        return model.isActivelyCollecting ? DesignTokens.Palette.smooth : DesignTokens.Palette.signal
     }
 
     private var mappedValue: String {
@@ -713,8 +725,8 @@ struct MapScreen: View {
         guard let context = model.potholePhotoCaptureContext() else {
             withAnimation(DesignTokens.Motion.enter) {
                 potholeFeedback = PotholeFeedback(
-                    title: "Pull over first",
-                    message: "Photo reports only work below 5 km/h with a fresh GPS fix.",
+                    title: "Need a fresh GPS fix",
+                    message: "Keep the app open for a moment, then try again.",
                     iconName: "camera.metering.unknown",
                     tint: DesignTokens.Palette.warning,
                     dismissDelay: .seconds(3)
@@ -748,14 +760,6 @@ struct MapScreen: View {
                 iconName: "checkmark.circle.fill",
                 tint: DesignTokens.Palette.signalSoft,
                 dismissDelay: .seconds(3.5)
-            )
-        case .safetyRestricted:
-            feedback = PotholeFeedback(
-                title: "Pull over first",
-                message: "Photo reports only work below 5 km/h with a fresh GPS fix.",
-                iconName: "camera.metering.unknown",
-                tint: DesignTokens.Palette.warning,
-                dismissDelay: .seconds(3)
             )
         case .unavailableLocation:
             feedback = PotholeFeedback(
