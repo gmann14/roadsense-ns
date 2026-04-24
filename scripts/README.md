@@ -4,6 +4,7 @@ Operational and import scripts for backend maintenance live here.
 
 Current B011 pipeline:
 
+- `local-backend-up.sh` — starts local Supabase, revives the edge runtime if it died, and smoke-checks `/functions/v1/health` plus tiles
 - `api-smoke.sh` — contract smoke for `/health`, `/stats`, and duplicate-safe `/upload-readings` against local or staging Edge Functions
 - `seeded-e2e-smoke.sh` — seeded local/staging smoke that inserts a synthetic paved segment, uploads three matching batches, refreshes stats, and verifies segment detail plus tile emission
 - `osm-import.sh` — downloads the Nova Scotia Geofabrik snapshot, runs `osm2pgsql`, segmentizes roads, tags municipalities/features, and applies the staged refresh
@@ -19,6 +20,24 @@ Prerequisites for `osm-import.sh`:
 - populated `ref.municipalities` table in the target database
 
 The script intentionally fails fast if `ref.municipalities` is missing or empty, because municipality names are part of the public read surface and should not silently degrade to `NULL`.
+
+## Local backend bootstrap
+
+Use `local-backend-up.sh` instead of raw `supabase start` for day-to-day iPhone testing:
+
+```bash
+./scripts/local-backend-up.sh
+```
+
+What it does:
+
+- runs `supabase start`
+- detects and restarts the local `supabase_edge_runtime_*` container if it is stopped
+- verifies `GET /functions/v1/health`
+- verifies the `tiles` function when `SUPABASE_ANON_KEY` is available from the environment or `ios/Config/RoadSenseNS.Local.secrets.xcconfig`
+- prints the `.local` base URL the phone should use on home Wi-Fi
+
+This exists because `supabase start` can report the stack as running even when the edge runtime container has died, which causes the app to show `503 name resolution failed` for tiles and other Edge Function calls.
 
 ## API smoke
 

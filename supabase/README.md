@@ -24,12 +24,14 @@ Implemented so far:
 
 Local verification:
 
-- `supabase start`
+- `./scripts/local-backend-up.sh`
 - `supabase db reset`
 - `supabase test db`
 - `deno test -A supabase/functions/*/*_test.ts`
 - `SUPABASE_ANON_KEY=... FUNCTIONS_BASE_URL=http://127.0.0.1:54321/functions/v1 ./scripts/api-smoke.sh`
 - `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres SUPABASE_ANON_KEY=... FUNCTIONS_BASE_URL=http://127.0.0.1:54321/functions/v1 ./scripts/seeded-e2e-smoke.sh`
+
+Use `./scripts/local-backend-up.sh` for normal local development rather than raw `supabase start`. It repairs the common failure mode where Kong is up but `supabase_edge_runtime_*` has exited, which otherwise surfaces as `503 {"message":"name resolution failed"}` from Edge Function routes.
 
 For local Edge Function secrets such as `TOKEN_PEPPER`, use `supabase/functions/.env` during development. The local edge runtime reliably picks that file up; shell-exporting secrets before `supabase start` is not enough on this machine.
 
