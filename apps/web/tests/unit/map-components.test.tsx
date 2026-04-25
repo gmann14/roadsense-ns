@@ -11,6 +11,8 @@ afterEach(() => {
   cleanup();
 });
 
+const noop = vi.fn();
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
   useRouter: () => ({
@@ -47,9 +49,11 @@ describe("segment drawer accessibility", () => {
         selectedSegmentId="seg-loading"
         detail={null}
         potholes={[]}
+        topPotholes={[]}
         isLoading
         errorMessage={null}
         onClearSelection={vi.fn()}
+        onPotholeLocate={noop}
       />,
     );
 
@@ -97,9 +101,11 @@ describe("segment drawer panel", () => {
         selectedSegmentId={null}
         detail={null}
         potholes={[]}
+        topPotholes={[]}
         isLoading={false}
         errorMessage={null}
         onClearSelection={vi.fn()}
+        onPotholeLocate={noop}
       />,
     );
 
@@ -139,9 +145,11 @@ describe("segment drawer panel", () => {
         selectedSegmentId="seg-1"
         detail={detail}
         potholes={[]}
+        topPotholes={[]}
         isLoading={false}
         errorMessage={null}
         onClearSelection={vi.fn()}
+        onPotholeLocate={noop}
       />,
     );
 
@@ -160,9 +168,11 @@ describe("segment drawer panel", () => {
         selectedSegmentId="seg-404"
         detail={null}
         potholes={[]}
+        topPotholes={[]}
         isLoading={false}
         errorMessage="We could not load details for this road segment."
         onClearSelection={onClearSelection}
+        onPotholeLocate={noop}
       />,
     );
 
@@ -189,32 +199,49 @@ describe("segment drawer panel", () => {
             segment_id: "seg-1",
           },
         ]}
+        topPotholes={[]}
         isLoading={false}
         errorMessage={null}
         onClearSelection={vi.fn()}
+        onPotholeLocate={noop}
       />,
     );
 
-    expect(screen.getByText(/active community potholes in this view/i)).toBeInTheDocument();
+    expect(screen.getByText(/active potholes in this view/i)).toBeInTheDocument();
     expect(screen.getByText(/7 confirmations/i)).toBeInTheDocument();
   });
 
-  it("asks users to zoom in when the pothole viewport is too wide", () => {
+  it("falls back to the pothole leaderboard when the viewport is too wide", () => {
     render(
       <SegmentDrawerPanel
         mode="potholes"
         selectedSegmentId={null}
         detail={null}
         potholes={[]}
+        topPotholes={[
+          {
+            id: "p-2",
+            lat: 44.4,
+            lng: -64.3,
+            magnitude: 1.7,
+            confirmation_count: 3,
+            first_reported_at: "2026-04-01T12:00:00Z",
+            last_confirmed_at: "2026-04-16T08:00:00Z",
+            status: "active",
+            segment_id: null,
+          },
+        ]}
         isLoading={false}
         errorMessage={null}
         isPotholeViewportTooWide
         onClearSelection={vi.fn()}
+        onPotholeLocate={noop}
       />,
     );
 
-    expect(screen.getByText(/zoom in to inspect active potholes/i)).toBeInTheDocument();
-    expect(screen.getByText(/roughly 10 km viewport/i)).toBeInTheDocument();
+    expect(screen.getByText(/top active potholes/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 confirmations/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /show on map/i })).toBeInTheDocument();
   });
 
   it("calls the drawer close handler from the close button", () => {
@@ -226,9 +253,11 @@ describe("segment drawer panel", () => {
         selectedSegmentId={null}
         detail={null}
         potholes={[]}
+        topPotholes={[]}
         isLoading={false}
         errorMessage={null}
         onClearSelection={vi.fn()}
+        onPotholeLocate={noop}
         onClose={onClose}
       />,
     );

@@ -9,6 +9,13 @@ Deno.test("stats handler returns 200 with cache headers", async () => {
             segments_scored: 28743,
             active_potholes: 213,
             municipalities_covered: 4,
+            map_bounds: {
+                minLng: -64.34,
+                minLat: 44.37,
+                maxLng: -64.31,
+                maxLat: 44.41,
+            },
+            pothole_bounds: null,
             generated_at: "2026-04-17T14:00:00Z",
         }),
     });
@@ -22,7 +29,9 @@ Deno.test("stats handler returns 200 with cache headers", async () => {
     assertEquals(response.status, 200);
     assertEquals(response.headers.get("cache-control"), "public, max-age=300");
     assertEquals(response.headers.get("x-request-id"), "req-stats");
-    assertEquals((await response.json()).active_potholes, 213);
+    const body = await response.json();
+    assertEquals(body.active_potholes, 213);
+    assertEquals(body.map_bounds.minLng, -64.34);
 });
 
 Deno.test("stats handler returns 503 when stats are unavailable", async () => {

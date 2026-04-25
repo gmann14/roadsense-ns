@@ -6,7 +6,16 @@ export type PublicStats = {
     segments_scored: number;
     active_potholes: number;
     municipalities_covered: number;
+    map_bounds: PublicMapBounds | null;
+    pothole_bounds: PublicMapBounds | null;
     generated_at: string;
+};
+
+export type PublicMapBounds = {
+    minLng: number;
+    minLat: number;
+    maxLng: number;
+    maxLat: number;
 };
 
 export function createStatsHandler(
