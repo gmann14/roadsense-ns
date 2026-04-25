@@ -72,6 +72,125 @@ final class PotholeActionStoreTests: XCTestCase {
         XCTAssertNil(saved?.undoExpiresAt)
     }
 
+    func testManualReportStatsReflectPendingUndoAndPersistAfterPromotion() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let statsStore = UserStatsStore(container: container)
+        let sample = LocationSample(
+            timestamp: 1_713_000_000.0,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 50,
+            headingDegrees: 180
+        )
+
+        let record = try store.queueManualReport(
+            sample: sample,
+            now: Date(timeIntervalSince1970: 1_713_000_000.0)
+        )
+
+        XCTAssertEqual(try statsStore.summary().potholesReported, 1)
+
+        _ = try store.promoteExpiredPendingUndoActions(
+            now: Date(timeIntervalSince1970: 1_713_000_006.0)
+        )
+
+        XCTAssertEqual(try statsStore.summary().potholesReported, 1)
+
+        try store.applyUploadSuccess(id: record.id)
+
+        XCTAssertEqual(try statsStore.summary().potholesReported, 1)
+    }
+
+    func testDiscardPendingUndoRemovesTemporaryStatsCount() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let statsStore = UserStatsStore(container: container)
+        let sample = LocationSample(
+            timestamp: 1_713_000_000.0,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 50,
+            headingDegrees: 180
+        )
+
+        let record = try store.queueManualReport(
+            sample: sample,
+            now: Date(timeIntervalSince1970: 1_713_000_000.0)
+        )
+
+        XCTAssertEqual(try statsStore.summary().potholesReported, 1)
+
+        try store.discard(
+            id: record.id,
+            now: Date(timeIntervalSince1970: 1_713_000_001.0)
+        )
+
+        XCTAssertEqual(try statsStore.summary().potholesReported, 0)
+    }
+
+    func testReconcileManualReportStatsRecoversCommittedLocalActions() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let statsStore = UserStatsStore(container: container)
+        let context = ModelContext(container)
+        context.insert(
+            PotholeActionRecord(
+                actionType: .manualReport,
+                latitude: 44.6488,
+                longitude: -63.5752,
+                accuracyM: 6,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+                createdAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+                uploadState: .pendingUpload
+            )
+        )
+        context.insert(
+            PotholeActionRecord(
+                actionType: .manualReport,
+                latitude: 44.6490,
+                longitude: -63.5750,
+                accuracyM: 5,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_010.0),
+                createdAt: Date(timeIntervalSince1970: 1_713_000_010.0),
+                uploadState: .failedPermanent
+            )
+        )
+        context.insert(
+            PotholeActionRecord(
+                potholeReportID: UUID(),
+                actionType: .confirmPresent,
+                latitude: 44.6492,
+                longitude: -63.5748,
+                accuracyM: 5,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_020.0),
+                createdAt: Date(timeIntervalSince1970: 1_713_000_020.0),
+                uploadState: .pendingUpload
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6494,
+                longitude: -63.5746,
+                roughnessRMS: 1.1,
+                speedKMH: 45,
+                heading: 180,
+                gpsAccuracyM: 6,
+                isPothole: true,
+                potholeMagnitude: 2.5,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_030.0)
+            )
+        )
+        try context.save()
+
+        XCTAssertEqual(try store.reconcileManualReportStats(), 3)
+        XCTAssertEqual(try statsStore.summary().potholesReported, 3)
+        XCTAssertEqual(try store.reconcileManualReportStats(), 0)
+        XCTAssertEqual(try statsStore.summary().potholesReported, 3)
+    }
+
     func testQueueFollowUpActionCreatesPendingUploadRecord() throws {
         let container = try ModelContainerProvider.makeInMemory()
         let store = PotholeActionStore(container: container)

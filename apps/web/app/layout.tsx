@@ -27,6 +27,10 @@ export const metadata: Metadata = {
   title: "RoadSense NS — community road quality for Nova Scotia",
   description:
     "A public, crowdsourced map of Nova Scotia road roughness, potholes, and coverage. Built by drivers, refreshed nightly.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    shortcut: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export const viewport: Viewport = {

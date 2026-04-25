@@ -84,6 +84,9 @@ final class AppModel {
             privacyZoneStore: container.privacyZoneStore
         )
         self.snapshot = container.permissions.currentSnapshot(privacyZones: privacyZones)
+        _ = try? container.potholeActionStore.promoteExpiredPendingUndoActions()
+        _ = try? container.potholeActionStore.recoverRecoverableFailures()
+        _ = try? container.potholeActionStore.reconcileManualReportStats()
         self.uploadStatusSummary = (try? container.uploadQueueStore.statusSummary()) ?? .empty
         self.potholeActionStatusSummary = (try? container.potholeActionStore.statusSummary()) ?? .empty
         self.potholePhotoStatusSummary = (try? container.potholePhotoStore.statusSummary()) ?? .empty
@@ -101,8 +104,6 @@ final class AppModel {
         self.sensorCoordinator.stateDidChange = { [weak self] in
             self?.refreshCollectionStats()
         }
-        _ = try? potholeActionStore.promoteExpiredPendingUndoActions()
-        _ = try? potholeActionStore.recoverRecoverableFailures()
         syncPassiveMonitoringState()
         refreshCollectionStats()
     }
@@ -194,7 +195,9 @@ final class AppModel {
     }
 
     func handleAppDidBecomeActive() async {
+        _ = try? potholeActionStore.promoteExpiredPendingUndoActions()
         _ = try? potholeActionStore.recoverRecoverableFailures()
+        _ = try? potholeActionStore.reconcileManualReportStats()
         refreshPermissions()
         _ = await uploadDrainCoordinator.requestDrain(reason: .foreground)
         refreshCollectionStats()
@@ -429,6 +432,7 @@ final class AppModel {
 
     private func refreshCollectionStats() {
         _ = try? potholeActionStore.promoteExpiredPendingUndoActions()
+        _ = try? potholeActionStore.reconcileManualReportStats()
         uploadStatusSummary = (try? uploadQueueStore.statusSummary()) ?? .empty
         potholeActionStatusSummary = (try? potholeActionStore.statusSummary()) ?? .empty
         potholePhotoStatusSummary = (try? potholePhotoStore.statusSummary()) ?? .empty

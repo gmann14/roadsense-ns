@@ -55,11 +55,26 @@ export function RoadQualityMapView({
 }: RoadQualityMapViewProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const modeRef = useRef(mode);
+  const municipalityRef = useRef(municipality);
+  const routeStateRef = useRef(routeState);
   const [mapSupported, setMapSupported] = useState(true);
   const handleMapReadyChange = useEffectEvent(onMapReadyChange);
   const handleMapErrorChange = useEffectEvent(onMapErrorChange);
   const handleSegmentSelect = useEffectEvent(onSegmentSelect);
   const handleViewportCommit = useEffectEvent(onViewportCommit);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
+  useEffect(() => {
+    municipalityRef.current = municipality;
+  }, [municipality]);
+
+  useEffect(() => {
+    routeStateRef.current = routeState;
+  }, [routeState]);
 
   useEffect(() => {
     const mapboxToken = getMapboxToken();
@@ -75,7 +90,7 @@ export function RoadQualityMapView({
     }
 
     let cancelled = false;
-    const initialViewport = resolveInitialViewport(routeState, municipality);
+    const initialViewport = resolveInitialViewport(routeStateRef.current, municipalityRef.current);
     let mapInstance: mapboxgl.Map | null = null;
 
     void import("mapbox-gl").then(({ default: mapboxglRuntime }) => {
@@ -183,7 +198,7 @@ export function RoadQualityMapView({
           });
         }
 
-        map.setFilter(SELECTED_SEGMENT_LAYER_ID, ["==", ["get", "id"], routeState.segment ?? ""]);
+        map.setFilter(SELECTED_SEGMENT_LAYER_ID, ["==", ["get", "id"], routeStateRef.current.segment ?? ""]);
 
         if (!map.getLayer(POTHOLE_LAYER_ID)) {
           map.addLayer({
@@ -229,6 +244,8 @@ export function RoadQualityMapView({
             },
           });
         }
+
+        applyLayerVisibility(map, modeRef.current);
 
         map.on("mouseenter", SEGMENT_LAYER_ID, () => {
           map.getCanvas().style.cursor = "pointer";
@@ -295,7 +312,7 @@ export function RoadQualityMapView({
       mapInstance?.remove();
       mapRef.current = null;
     };
-  }, [handleMapErrorChange, handleMapReadyChange, handleSegmentSelect, handleViewportCommit, municipality, routeState.lat, routeState.lng, routeState.z]);
+  }, [handleMapErrorChange, handleMapReadyChange, handleSegmentSelect, handleViewportCommit]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -309,31 +326,40 @@ export function RoadQualityMapView({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (
+      !map ||
+      routeState.lat === null ||
+      routeState.lng === null ||
+      routeState.z === null
+    ) {
+      return;
+    }
+
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+    const isAlreadySynced =
+      Math.abs(center.lat - routeState.lat) < 0.00002 &&
+      Math.abs(center.lng - routeState.lng) < 0.00002 &&
+      Math.abs(zoom - routeState.z) < 0.02;
+    if (isAlreadySynced) {
+      return;
+    }
+
+    map.easeTo({
+      center: [routeState.lng, routeState.lat],
+      zoom: routeState.z,
+      duration: 450,
+      essential: true,
+    });
+  }, [routeState.lat, routeState.lng, routeState.z]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map) {
       return;
     }
 
-    const visibleLayerIds = new Set<string>();
-    if (mode === "quality") {
-      visibleLayerIds.add(SEGMENT_LAYER_ID);
-      visibleLayerIds.add(SELECTED_SEGMENT_LAYER_ID);
-      visibleLayerIds.add(POTHOLE_LAYER_ID);
-    } else if (mode === "potholes") {
-      visibleLayerIds.add(POTHOLE_LAYER_ID);
-    } else if (mode === "coverage") {
-      visibleLayerIds.add(COVERAGE_LAYER_ID);
-    }
-
-    for (const layerId of [
-      SEGMENT_LAYER_ID,
-      SELECTED_SEGMENT_LAYER_ID,
-      POTHOLE_LAYER_ID,
-      COVERAGE_LAYER_ID,
-    ]) {
-      if (map.getLayer(layerId)) {
-        map.setLayoutProperty(layerId, "visibility", visibleLayerIds.has(layerId) ? "visible" : "none");
-      }
-    }
+    applyLayerVisibility(map, mode);
   }, [mode]);
 
   return (
@@ -360,6 +386,30 @@ export function RoadQualityMapView({
       ) : null}
     </div>
   );
+}
+
+function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
+  const visibleLayerIds = new Set<string>();
+  if (mode === "quality") {
+    visibleLayerIds.add(SEGMENT_LAYER_ID);
+    visibleLayerIds.add(SELECTED_SEGMENT_LAYER_ID);
+    visibleLayerIds.add(POTHOLE_LAYER_ID);
+  } else if (mode === "potholes") {
+    visibleLayerIds.add(POTHOLE_LAYER_ID);
+  } else if (mode === "coverage") {
+    visibleLayerIds.add(COVERAGE_LAYER_ID);
+  }
+
+  for (const layerId of [
+    SEGMENT_LAYER_ID,
+    SELECTED_SEGMENT_LAYER_ID,
+    POTHOLE_LAYER_ID,
+    COVERAGE_LAYER_ID,
+  ]) {
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, "visibility", visibleLayerIds.has(layerId) ? "visible" : "none");
+    }
+  }
 }
 
 function resolveInitialViewport(
