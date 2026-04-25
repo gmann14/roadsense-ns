@@ -67,12 +67,18 @@ describe("municipality search", () => {
     expect(searchMunicipalities("cape breton")[0]?.municipality.slug).toBe(
       "cape-breton-regional-municipality",
     );
+    expect(searchMunicipalities("MODL")[0]?.municipality.slug).toBe(
+      "municipality-of-the-district-of-lunenburg",
+    );
+    expect(searchMunicipalities("Lunenburg")[0]?.municipality.name).toBe(
+      "Municipality of the District of Lunenburg",
+    );
   });
 
   it("renders a municipality-first quick-jump input", () => {
     render(<MunicipalitySearch activeMode="quality" currentQuery="Halifax" />);
 
-    expect(screen.getByPlaceholderText(/halifax, truro, kentville/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/halifax, truro, lunenburg/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue("Halifax")).toBeInTheDocument();
   });
 
