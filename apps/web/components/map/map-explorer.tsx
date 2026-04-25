@@ -57,6 +57,16 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
   const routeState = parseViewportState(baseSearchParams);
 
   const navigate = (nextParams: URLSearchParams, action: "push" | "replace") => {
+    // Mapbox can emit a late viewport commit after a route transition starts.
+    // Do not let the previous page replace the new pathname.
+    if (
+      action === "replace" &&
+      typeof window !== "undefined" &&
+      window.location.pathname !== pathname
+    ) {
+      return;
+    }
+
     const nextQuery = nextParams.toString();
     const nextUrl = nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname;
     const currentQuery = liveSearchParams.toString();
