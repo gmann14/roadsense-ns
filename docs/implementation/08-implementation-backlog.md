@@ -1,6 +1,6 @@
 # 08 — Implementation Backlog
 
-*Last updated: 2026-04-23*
+*Last updated: 2026-04-25*
 
 Covers: the literal execution backlog for implementing the spec set in [00](00-execution-plan.md) through [07](07-web-dashboard-implementation.md).
 
@@ -639,7 +639,7 @@ Start only after the iOS/TestFlight MVP is live or intentionally paused.
 
 ## Phase 11a — Upload execution (ship-blocking for internal TestFlight)
 
-These tasks finish the background-upload loop that today is partially stubbed. They block internal TestFlight but not necessarily the first signed build for team testing.
+These tasks track the background-upload loop and its remaining device-validation evidence. The app-side implementation is now in place; signed-device background behavior still blocks internal TestFlight confidence.
 
 ### B070 — Wire real `upload-drain` background task handler
 
@@ -656,6 +656,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 - **Acceptance**
   - Xcode → Debug → Simulate Background Fetch triggers the real drain path on a signed build
   - drains surface progress in Settings → Uploads → Diagnostics on a device where they previously stalled
+- **Current repo note:** the handler is now wired through `BackgroundUploadDrainRunner` to `UploadDrainCoordinator.requestDrain(.backgroundTask)`, cancellation calls `cancelActiveDrain()`, and both success and cancellation reschedule the next `BGAppRefreshTaskRequest`. `UploadRuntimeTests` covers clean completion, cancellation completion, rescheduling, and coalescing concurrent drains. Remaining proof is signed-device background-fetch simulation.
 
 ### B071 — Drive-end + foreground drain triggers
 
@@ -672,6 +673,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 - **Acceptance**
   - a simulated drive on device results in a queued `BGAppRefreshTaskRequest` in Xcode → Debug → Background Tasks
   - a cold open with queued data does not produce concurrent drain attempts
+- **Current repo note:** drive-end scheduling is implemented and now covered by a deterministic `SensorCoordinator` test that asserts `DrivingDetector.events -> false` schedules `now + 15m`. Foreground activation routes through `AppModel.handleAppDidBecomeActive()` and now has a counting-drainer test proving it requests a foreground upload drain. Concurrent foreground/background drains still funnel through the same coordinator and are covered by the coalescing test.
 
 ### B072 — Persist retry/backoff eligibility and passive upload status
 
@@ -690,6 +692,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
   - one 5xx on a drive-end trigger does not block the next eligible cycle after backoff expires
   - an app relaunch after a killed in-flight upload does not strand the batch forever in `.inFlight`
   - on both cellular and Wi-Fi, eligible batches upload automatically without user intervention
+- **Current repo note:** persisted `nextAttemptAt`, stale `.inFlight` recovery, retry summaries, and Settings upload status are implemented for readings, pothole actions, and photo reports. The uploader now drains user-initiated pothole actions and photos before larger reading batches, with an XCTest covering request order when both a manual pothole and reading batch are queued. Remaining validation is real-device cellular/Wi-Fi behavior.
 
 ## Phase 11b — Manual pothole reporting and follow-up
 

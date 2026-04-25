@@ -752,7 +752,7 @@ This is intentional — the user should see exactly what the server saw, in plai
 
 ### Upload Execution — Triggers, Background, Foreground
 
-*Status: partially implemented. `BackgroundTaskRegistrar` today registers both identifiers but the `upload-drain` handler only calls `setTaskCompleted(success: true)`. This section is the contract for wiring it to the real `Uploader`.*
+*Status: implemented in the current branch for the app-side upload loop. `BackgroundTaskRegistrar` registers the upload-drain task, routes it through `UploadDrainCoordinator`, cancels active drains on expiration, and reschedules the next `BGAppRefreshTaskRequest` from the completion path. Remaining proof is signed-device background-fetch validation.*
 
 The user should never have to think about uploading. There is no "Upload now" button; there is no spinner the user has to wait on. Uploads happen opportunistically and quietly. Every trigger below funnels into a single `UploadDrainCoordinator` actor so foreground activation, queued BG refreshes, and drive-end scheduling cannot start concurrent drains against the same queue.
 

@@ -33,16 +33,6 @@ final class Uploader: UploadDrainPerforming {
             try Task.checkCancellation()
 
             let now = nowProvider()
-            let readingDecision = try queueStore.prepareNextBatch(now: now)
-            if case let .ready(batch, _) = readingDecision {
-                try queueStore.markBatchInFlight(batchID: batch.id, now: now)
-                let shouldContinue = try await uploadBatch(batch, nowProvider: nowProvider)
-                guard shouldContinue else {
-                    return
-                }
-                continue
-            }
-
             let potholeDecision = try potholeActionStore.prepareNextAction(now: now)
             if case let .ready(action) = potholeDecision {
                 let shouldContinue = try await uploadPotholeAction(action, nowProvider: nowProvider)
@@ -53,11 +43,21 @@ final class Uploader: UploadDrainPerforming {
             }
 
             let photoDecision = try potholePhotoStore.prepareNextReport(now: now)
-            guard case let .ready(report) = photoDecision else {
+            if case let .ready(report) = photoDecision {
+                let shouldContinue = try await uploadPotholePhoto(report, nowProvider: nowProvider)
+                guard shouldContinue else {
+                    return
+                }
+                continue
+            }
+
+            let readingDecision = try queueStore.prepareNextBatch(now: now)
+            guard case let .ready(batch, _) = readingDecision else {
                 return
             }
 
-            let shouldContinue = try await uploadPotholePhoto(report, nowProvider: nowProvider)
+            try queueStore.markBatchInFlight(batchID: batch.id, now: now)
+            let shouldContinue = try await uploadBatch(batch, nowProvider: nowProvider)
             guard shouldContinue else {
                 return
             }

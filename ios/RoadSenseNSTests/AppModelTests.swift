@@ -29,6 +29,19 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.isCollectionPausedByUser)
     }
 
+    func testForegroundActivationRequestsUploadDrain() async throws {
+        let defaults = try makeDefaults()
+        let uploadDrainer = CountingUploadDrainer()
+        let model = AppModel(
+            container: try makeContainer(uploadDrainer: uploadDrainer),
+            defaults: defaults
+        )
+
+        await model.handleAppDidBecomeActive()
+
+        XCTAssertEqual(uploadDrainer.callCount, 1)
+    }
+
     func testManualStartClearsPausedPreferenceAndRestartsMonitoring() throws {
         let defaults = try makeDefaults()
         let model = AppModel(container: try makeContainer(), defaults: defaults)
@@ -409,6 +422,7 @@ final class AppModelTests: XCTestCase {
 
     private func makeContainer(
         locationService: TestLocationService? = nil,
+        uploadDrainer: (any UploadDrainPerforming)? = nil,
         seedPrivacyZone: Bool = false
     ) throws -> AppContainer {
         let locationService = locationService ?? TestLocationService()
@@ -438,7 +452,7 @@ final class AppModelTests: XCTestCase {
         let drivingDetector = TestDrivingDetector()
         let thermalMonitor = TestThermalMonitor()
         let checkpointStore = SensorCheckpointStore()
-        let uploader = IdleUploadDrainer()
+        let uploader = uploadDrainer ?? IdleUploadDrainer()
         let uploadDrainCoordinator = UploadDrainCoordinator(
             uploader: uploader,
             logger: .upload
@@ -557,4 +571,13 @@ private struct TestThermalMonitor: ThermalMonitoring {
 @MainActor
 private final class IdleUploadDrainer: UploadDrainPerforming {
     func drainUntilBlocked(nowProvider: @escaping @Sendable () -> Date) async throws {}
+}
+
+@MainActor
+private final class CountingUploadDrainer: UploadDrainPerforming {
+    private(set) var callCount = 0
+
+    func drainUntilBlocked(nowProvider: @escaping @Sendable () -> Date) async throws {
+        callCount += 1
+    }
 }

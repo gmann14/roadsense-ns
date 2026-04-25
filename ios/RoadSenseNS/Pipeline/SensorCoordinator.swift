@@ -12,6 +12,7 @@ final class SensorCoordinator {
     private let readingStore: ReadingStore
     private let logger: RoadSenseLogger
     private let checkpointStore: SensorCheckpointStore
+    private let nowProvider: @Sendable () -> Date
     private let scheduleUploadDrain: @MainActor (Date) -> Void
     private let stopCollectionGracePeriod: Duration
     var stateDidChange: (@MainActor () -> Void)?
@@ -41,6 +42,7 @@ final class SensorCoordinator {
         logger: RoadSenseLogger,
         checkpointStore: SensorCheckpointStore,
         stopCollectionGracePeriod: Duration = .seconds(60),
+        nowProvider: @escaping @Sendable () -> Date = { Date() },
         scheduleUploadDrain: @escaping @MainActor (Date) -> Void
     ) {
         self.locationService = locationService
@@ -51,6 +53,7 @@ final class SensorCoordinator {
         self.readingStore = readingStore
         self.logger = logger
         self.checkpointStore = checkpointStore
+        self.nowProvider = nowProvider
         self.stopCollectionGracePeriod = stopCollectionGracePeriod
         self.scheduleUploadDrain = scheduleUploadDrain
     }
@@ -199,7 +202,7 @@ final class SensorCoordinator {
         sealCurrentDriveSessionIfNeeded()
         stopServicesAndReset()
         logger.info("sensor collection stopped")
-        scheduleUploadDrain(Date().addingTimeInterval(15 * 60))
+        scheduleUploadDrain(nowProvider().addingTimeInterval(15 * 60))
     }
 
     private func stopServicesAndReset() {
@@ -331,7 +334,7 @@ final class SensorCoordinator {
     }
 
     private func persistCheckpointIfNeeded(force: Bool) {
-        let now = Date()
+        let now = nowProvider()
         if !force, let lastCheckpointAt, now.timeIntervalSince(lastCheckpointAt) < 60 {
             return
         }
@@ -438,7 +441,7 @@ final class SensorCoordinator {
     private func repairFragmentedDriveSessionsIfNeeded() {
         do {
             let summary = try readingStore.repairFragmentedDriveSessions(
-                now: Date(),
+                now: nowProvider(),
                 maximumGapSeconds: Self.fragmentedSessionMergeGapSeconds
             )
             guard summary.fragmentedGroupCount > 0 else {

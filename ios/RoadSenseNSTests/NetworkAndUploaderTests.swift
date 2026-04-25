@@ -345,6 +345,123 @@ final class NetworkAndUploaderTests: XCTestCase {
     }
 
     @MainActor
+    func testUploaderDrainPrioritizesPotholeActionsBeforeReadingBatches() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        _ = try DeviceTokenStore.currentToken(
+            in: context,
+            now: Date(timeIntervalSince1970: 1_713_000_000),
+            makeUUID: { "device-token" }
+        )
+
+        let actionID = UUID()
+        context.insert(
+            PotholeActionRecord(
+                id: actionID,
+                actionType: .manualReport,
+                latitude: 44.6488,
+                longitude: -63.5752,
+                accuracyM: 4,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_010),
+                createdAt: Date(timeIntervalSince1970: 1_713_000_011),
+                uploadState: .pendingUpload
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6488,
+                longitude: -63.5752,
+                roughnessRMS: 1.6,
+                speedKMH: 48,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_012)
+            )
+        )
+        try context.save()
+
+        let session = makeMockSession()
+        var requestPaths: [String] = []
+        MockURLProtocol.requestHandler = { request in
+            requestPaths.append(request.url?.path ?? "")
+            let encoder = UploadCodec.makeEncoder()
+
+            if request.url?.path == "/functions/v1/pothole-actions" {
+                let decoder = UploadCodec.makeDecoder()
+                let payload = try decoder.decode(
+                    PotholeActionUploadRequest.self,
+                    from: try requestBody(for: request)
+                )
+                XCTAssertEqual(payload.actionID, actionID)
+                let data = try encoder.encode(
+                    PotholeActionUploadResponse(
+                        actionID: payload.actionID,
+                        potholeReportID: UUID(),
+                        status: "accepted"
+                    )
+                )
+                return (
+                    HTTPURLResponse(
+                        url: try XCTUnwrap(request.url),
+                        statusCode: 200,
+                        httpVersion: nil,
+                        headerFields: ["x-request-id": "req-pothole-priority"]
+                    )!,
+                    data
+                )
+            }
+
+            XCTAssertEqual(request.url?.path, "/functions/v1/upload-readings")
+            let decoder = UploadCodec.makeDecoder()
+            let payload = try decoder.decode(
+                UploadReadingsRequest.self,
+                from: try requestBody(for: request)
+            )
+            let data = try encoder.encode(
+                UploadReadingsResponse(
+                    batchID: payload.batchID,
+                    accepted: 1,
+                    rejected: 0,
+                    duplicate: false,
+                    rejectedReasons: [:]
+                )
+            )
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: [:]
+                )!,
+                data
+            )
+        }
+
+        let endpoints = Endpoints(
+            config: AppConfig(
+                environment: .local,
+                apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
+                mapboxAccessToken: "pk.test",
+                supabaseAnonKey: "anon.test"
+            )
+        )
+        let uploader = Uploader(
+            container: container,
+            potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
+            queueStore: UploadQueueStore(container: container),
+            client: APIClient(endpoints: endpoints, session: session),
+            logger: .upload
+        )
+
+        try await uploader.drainUntilBlocked(nowProvider: { Date(timeIntervalSince1970: 1_713_000_100) })
+
+        XCTAssertEqual(requestPaths, ["/functions/v1/pothole-actions", "/functions/v1/upload-readings"])
+    }
+
+    @MainActor
     func testUploaderDrainOnceLeavesBatchPendingAfterRateLimit() async throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)
@@ -1131,6 +1248,54 @@ final class NetworkAndUploaderTests: XCTestCase {
         XCTAssertEqual(locationService.stopCount, 0)
         XCTAssertEqual(motionService.startCount, 1)
         XCTAssertEqual(motionService.stopCount, 0)
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
+    func testSensorCoordinatorSchedulesUploadDrainAfterDrivingStops() async throws {
+        let container = try makeInMemoryContainer()
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let drivingDetector = StreamDrivingDetector()
+        let checkpointStore = SensorCheckpointStore()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        var scheduledDates: [Date] = []
+        try? checkpointStore.clear()
+
+        let uploadDrainScheduled = expectation(description: "upload drain scheduled")
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            stopCollectionGracePeriod: .milliseconds(20),
+            nowProvider: { now },
+            scheduleUploadDrain: {
+                scheduledDates.append($0)
+                uploadDrainScheduled.fulfill()
+            }
+        )
+
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(10))
+        XCTAssertTrue(coordinator.monitoringState.isCollecting)
+
+        drivingDetector.send(false)
+        await fulfillment(of: [uploadDrainScheduled], timeout: 1.0)
+
+        XCTAssertFalse(coordinator.monitoringState.isCollecting)
+        XCTAssertEqual(locationService.stopCount, 1)
+        XCTAssertEqual(motionService.stopCount, 1)
+        XCTAssertEqual(scheduledDates, [now.addingTimeInterval(15 * 60)])
 
         coordinator.stopMonitoring()
         try? checkpointStore.clear()
