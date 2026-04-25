@@ -53,6 +53,7 @@ Post-MVP phases:
 9. Web dashboard backend additions
 10. Web dashboard frontend
 11. Quarterly operational procedures (OSM refresh rematch, etc.) — runs on a calendar, not a release
+12. Android follow-on once iOS collection/scoring is stable
 
 ## Phase 1 — Project And Environment Setup
 
@@ -863,6 +864,32 @@ These tasks ship **after** MVP TestFlight launch. They exist on a quarterly cade
   - quarterly refresh completes inside its documented operational budget on production-scale data
   - `/stats` and the quality map reflect the post-refresh world within one nightly cycle
 
+## Phase 12 — Android Follow-On
+
+Android is explicitly post-iOS MVP. Do not start this until the iOS app has proven background collection, upload reliability, and roughness calibration on real drives; otherwise we duplicate unsettled platform decisions.
+
+### B120 — Android collector app
+
+- **Spec refs:** [00](00-execution-plan.md#android-follow-on-weeks-13-18), [01](01-ios-implementation.md), [03](03-api-contracts.md), [06](06-security-and-privacy.md)
+- **Depends on:** B050, B060, Phase 11a B070-B072 upload execution, Phase 8 App Store/TestFlight readiness outcome, and at least one stable iOS calibration dataset
+- **Status:** backlog. Android is valuable for tester reach and cross-vehicle/sensor diversity, but it should consume the same backend contracts rather than force new ingestion semantics.
+- **RED**
+  - JVM/Kotlin tests for the ported roughness scorer and pothole detector using shared CSV fixtures also used by the iOS harness
+  - Android instrumentation tests for permission onboarding, foreground-service recording state, local queue persistence, and retry/backoff behavior
+  - backend compatibility smoke proving Android uploads use the same `upload-readings`, `pothole-actions`, and photo/feedback contracts without Android-only branches
+  - privacy checklist proving Android backups exclude Room queues and no precise location is uploaded before the same trimming/privacy-zone gates pass
+- **GREEN**
+  - Kotlin native project with Jetpack Compose, Room, WorkManager, Retrofit/OkHttp, and Mapbox Maps SDK for Android
+  - foreground-service collection model with clear persistent notification and Android 14+ `FOREGROUND_SERVICE_LOCATION` handling
+  - port sensor pipeline using `Sensor.TYPE_LINEAR_ACCELERATION` or accelerometer+gravity fallback plus fused location updates
+  - port upload queue, privacy zones, device-token rotation, manual pothole actions, and map rendering against existing backend endpoints
+  - add CI lane for unit tests and a minimal Android build once the project exists
+- **Acceptance**
+  - Android and iOS produce roughness scores within the agreed tolerance on the same fixture/drive replay
+  - a real Android test drive uploads readings that appear on the same public map without backend changes
+  - battery drain and foreground-service UX are documented on at least one Pixel-class and one Samsung-class device
+  - Google Play internal/closed testing path is documented, including any current new-developer testing requirements
+
 ## Suggested PR Slicing
 
 Keep changes narrow. A good slicing strategy:
@@ -879,6 +906,7 @@ Keep changes narrow. A good slicing strategy:
 10. observability + release polish
 11. web backend additions only
 12. web frontend vertical slices
+13. Android scaffold and shared-fixture scorer parity
 
 ## Hard Stop Rules
 
