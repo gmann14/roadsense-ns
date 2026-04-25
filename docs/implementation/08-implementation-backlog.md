@@ -495,23 +495,25 @@ Post-MVP phases:
   - testers can install and submit reproducible bug reports
 - **Current repo note:** This remains blocked on Apple Developer approval and the first signed internal build cycle. The repo-side release checklist and privacy-label/source-of-truth work can be completed before that approval lands.
 
-### B072a — In-app feedback and issue submission
+### B072a — Feedback and issue submission across app and web
 
 - **Spec refs:** [00](00-execution-plan.md), [05](05-deployment-and-observability.md), [06](06-security-and-privacy.md)
 - **Depends on:** B071, B072
-- **Why public-readiness:** once testers/users are outside the immediate team, screenshots and chat notes are not enough. The app needs a low-friction way to send feature ideas, bug reports, confusing-map feedback, and local road-quality corrections into a triage queue.
+- **Why public-readiness:** once testers/users are outside the immediate team, screenshots and chat notes are not enough. The iOS app and public web map both need a low-friction way to send feature ideas, bug reports, confusing-map feedback, and local road-quality corrections into one triage queue.
 - **RED**
   - iOS view-model tests for required text, category selection, optional email/reply consent, offline queueing, retry, and submission success/failure states
+  - web component/route tests for opening feedback from the public map/report pages, submitting validation errors, and showing a non-blocking success state
   - Deno/SQL tests for `POST /feedback`: payload validation, rate limiting, spam-sized body rejection, request-id capture, and no public read access
   - privacy test/checklist proving feedback does not automatically attach precise location, raw sensor data, screenshots, or device logs unless the user explicitly opts in
 - **GREEN**
-  - add Settings/help entry point: `Submit feedback`
+  - add iOS Settings/help entry point: `Submit feedback`
+  - add web entry points from the footer/top nav and map/report surfaces, using the same categories and backend contract
   - categories: bug, feature suggestion, map/road data issue, pothole issue, privacy/safety concern, other
-  - collect typed message plus optional reply email; include app version, OS version, coarse locale/municipality, and current route/screen for debugging
+  - collect typed message plus optional reply email; include app/web version, platform, coarse locale/municipality, and current route/screen for debugging
   - add a private backend table/Edge Function for feedback, protected by rate limits and service-role-only reads
   - define the triage sink for MVP, e.g. private GitHub issue creation, email digest, or internal admin export; do not expose feedback publicly
 - **Acceptance**
-  - a public tester can submit useful feedback from the app without leaving the app or emailing manually
+  - a public tester can submit useful feedback from iOS or the web map without leaving the product or emailing manually
   - feedback is visible to maintainers with enough context to reproduce or prioritize
   - the user-facing copy clearly says what metadata is included and whether they can be contacted
 
