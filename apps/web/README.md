@@ -9,7 +9,7 @@ Implemented so far:
 - `B092` municipality/place search and pothole drawer feed
 - `B093` coverage mode and live worst-roads report
 - `B094` accessibility/deploy hardening groundwork
-- static municipality manifest
+- static municipality manifest with display-name aliases for backend import keys
 - typed URL-state parsing
 - client-side route-state sync for `mode`, `segment`, and viewport params
 - route shells for:
@@ -42,7 +42,7 @@ Environment:
 Current scope note:
 
 - Quality mode is now wired to the public vector-tile and segment-detail contracts.
-- Municipality-first search/jump is live against the static manifest, including alias matching and ranked suggestions.
+- Municipality-first search/jump is live against the static manifest, including alias matching, ranked suggestions, and a public label for Municipality of the District of Lunenburg that maps to the backend `Lunenburg` import key.
 - An optional Nova Scotia-scoped Mapbox place-search fallback now activates when there is no municipality match, including a recoverable no-results state and clear-search path.
 - Potholes mode isolates active markers and fetches a viewport-bounded pothole list with explicit trust/empty-state framing in the drawer.
 - Coverage mode is wired to the dedicated coverage tile contract.

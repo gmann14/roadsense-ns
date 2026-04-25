@@ -1,6 +1,7 @@
 export type MunicipalityConfig = {
   slug: string;
   name: string;
+  backendName?: string;
   aliases: string[];
   bbox: [minLng: number, minLat: number, maxLng: number, maxLat: number];
   center: [lng: number, lat: number];
@@ -11,6 +12,7 @@ export const municipalityManifest: MunicipalityConfig[] = [
   {
     slug: "halifax",
     name: "Halifax",
+    backendName: "Halifax",
     aliases: ["Halifax Regional Municipality", "HRM", "Halifax NS"],
     bbox: [-64.05, 44.38, -63.1, 45.05],
     center: [-63.5752, 44.6488],
@@ -19,6 +21,7 @@ export const municipalityManifest: MunicipalityConfig[] = [
   {
     slug: "cape-breton-regional-municipality",
     name: "Cape Breton Regional Municipality",
+    backendName: "Cape Breton",
     aliases: ["CBRM", "Cape Breton"],
     bbox: [-60.72, 46.02, -59.73, 46.45],
     center: [-60.1942, 46.1368],
@@ -27,6 +30,7 @@ export const municipalityManifest: MunicipalityConfig[] = [
   {
     slug: "truro",
     name: "Truro",
+    backendName: "Truro",
     aliases: ["Town of Truro"],
     bbox: [-63.35, 45.32, -63.18, 45.4],
     center: [-63.2871, 45.3656],
@@ -35,10 +39,27 @@ export const municipalityManifest: MunicipalityConfig[] = [
   {
     slug: "kentville",
     name: "Kentville",
+    backendName: "Kentville",
     aliases: ["Town of Kentville"],
     bbox: [-64.58, 45.04, -64.45, 45.12],
     center: [-64.496, 45.0772],
     defaultZoom: 12.8,
+  },
+  {
+    slug: "municipality-of-the-district-of-lunenburg",
+    name: "Municipality of the District of Lunenburg",
+    backendName: "Lunenburg",
+    aliases: [
+      "District of Lunenburg",
+      "Municipality of District of Lunenburg",
+      "Municipality of Lunenburg",
+      "MODL",
+      "Lunenburg County",
+      "Lunenburg",
+    ],
+    bbox: [-64.9452, 44.1413, -64.0787, 44.7332],
+    center: [-64.327, 44.3918],
+    defaultZoom: 10.6,
   },
 ];
 
@@ -53,6 +74,10 @@ export function getMunicipalityByName(name: string): MunicipalityConfig | null {
       [entry.name, ...entry.aliases].some((candidate) => normalizeMunicipalityQuery(candidate) === normalized),
     ) ?? null
   );
+}
+
+export function getMunicipalityBackendName(municipality: MunicipalityConfig): string {
+  return municipality.backendName ?? municipality.name;
 }
 
 export type MunicipalitySearchResult = {

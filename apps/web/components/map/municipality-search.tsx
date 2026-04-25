@@ -150,7 +150,7 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
           <input
             className="search-input"
             list="municipality-options"
-            placeholder="Halifax, Truro, Kentville…"
+            placeholder="Halifax, Truro, Lunenburg…"
             aria-label="Search municipalities or places"
             aria-describedby="municipality-search-help"
             value={value}

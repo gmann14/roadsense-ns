@@ -25,20 +25,22 @@ test("mode switching updates route state", async ({ page }) => {
 test("municipality jump search routes correctly", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByPlaceholder("Halifax, Truro, Kentville…").fill("Halifax");
+  await page.getByPlaceholder("Halifax, Truro, Lunenburg…").fill("MODL");
   await page.getByRole("button", { name: "Go" }).click();
 
-  await expect(page).toHaveURL(/\/municipality\/halifax/);
-  await expect(page.locator("#main-content").getByText("Halifax").first()).toBeVisible();
+  await expect(page).toHaveURL(/\/municipality\/municipality-of-the-district-of-lunenburg/);
+  await expect(
+    page.locator("#main-content").getByText("Municipality of the District of Lunenburg").first(),
+  ).toBeVisible();
 });
 
 test("search exposes a recoverable no-results state", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByPlaceholder("Halifax, Truro, Kentville…").fill("zzzzzz");
+  await page.getByPlaceholder("Halifax, Truro, Lunenburg…").fill("zzzzzz");
   await expect(page.getByText(/no municipality or place match/i)).toBeVisible();
   await page.getByRole("button", { name: "Clear" }).click();
-  await expect(page.getByPlaceholder("Halifax, Truro, Kentville…")).toHaveValue("");
+  await expect(page.getByPlaceholder("Halifax, Truro, Lunenburg…")).toHaveValue("");
 });
 
 test("worst roads report filter round-trips through the URL", async ({ page }) => {
@@ -46,10 +48,10 @@ test("worst roads report filter round-trips through the URL", async ({ page }) =
 
   await expect(page.getByRole("link", { name: "Worst Roads" })).toBeVisible();
   await expect(page.locator("#main-content").getByText("Worst Roads")).toBeVisible();
-  await page.getByLabel("Municipality").selectOption("Kentville");
+  await page.getByLabel("Municipality").selectOption("Municipality of the District of Lunenburg");
   await page.getByRole("button", { name: "Update report" }).click();
 
-  await expect(page).toHaveURL(/municipality=Kentville/);
+  await expect(page).toHaveURL(/municipality=Municipality\+of\+the\+District\+of\+Lunenburg/);
 });
 
 test("methodology and privacy pages expose trust copy", async ({ page }) => {
@@ -69,7 +71,7 @@ test("keyboard users can reach skip link, nav, mode controls, and search", async
   await tabUntilFocused(page, page.getByRole("button", { name: "Quality" }));
   await tabUntilFocused(page, page.getByRole("button", { name: "Potholes" }));
   await tabUntilFocused(page, page.getByRole("button", { name: "Coverage" }));
-  await tabUntilFocused(page, page.getByPlaceholder("Halifax, Truro, Kentville…"));
+  await tabUntilFocused(page, page.getByPlaceholder("Halifax, Truro, Lunenburg…"));
 });
 
 test.describe("mobile", () => {

@@ -8,7 +8,11 @@ import MunicipalityPage, { generateMetadata } from "@/app/municipality/[slug]/pa
 import PrivacyPage from "@/app/privacy/page";
 import MostReportedPotholesPage from "@/app/reports/potholes/page";
 import WorstRoadsPage from "@/app/reports/worst-roads/page";
-import { getMunicipalityBySlug, municipalityManifest } from "@/lib/municipality-manifest";
+import {
+  getMunicipalityBackendName,
+  getMunicipalityBySlug,
+  municipalityManifest,
+} from "@/lib/municipality-manifest";
 import { parseViewportState, withUpdatedRouteState } from "@/lib/url-state";
 
 vi.mock("next/navigation", () => ({
@@ -58,7 +62,16 @@ describe("web route shells", () => {
 describe("web route helpers", () => {
   it("returns municipality metadata for a known slug", () => {
     expect(getMunicipalityBySlug("halifax")?.name).toBe("Halifax");
+    expect(getMunicipalityBySlug("municipality-of-the-district-of-lunenburg")?.name).toBe(
+      "Municipality of the District of Lunenburg",
+    );
     expect(getMunicipalityBySlug("missing")).toBeNull();
+  });
+
+  it("maps public municipality labels to backend import names", () => {
+    const lunenburg = getMunicipalityBySlug("municipality-of-the-district-of-lunenburg");
+
+    expect(lunenburg ? getMunicipalityBackendName(lunenburg) : null).toBe("Lunenburg");
   });
 
   it("keeps municipality names and slugs unique", () => {
