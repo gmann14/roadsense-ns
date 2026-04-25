@@ -32,6 +32,8 @@ test("municipality jump search routes correctly", async ({ page }) => {
   await expect(
     page.locator("#main-content").getByText("Municipality of the District of Lunenburg").first(),
   ).toBeVisible();
+  await page.waitForTimeout(1_000);
+  await expect(page).toHaveURL(/\/municipality\/municipality-of-the-district-of-lunenburg/);
 });
 
 test("search exposes a recoverable no-results state", async ({ page }) => {
