@@ -287,6 +287,14 @@ Before writing any scoring thresholds, drive known roads:
 
 Drive each road 3× at different speeds (40, 60, 80 where possible). Record raw data. Import into simulator harness. Tune thresholds.
 
+Current early-device snapshot (2026-04-25, single tester, `.context/device-live-latest/default.store`) is directionally believable but not enough to lock calibration:
+
+- 602 accepted readings, 27.9 km, 7 grouped trips after merging short detector fragments
+- roughness RMS: p50 `0.057`, p75 `0.081`, p90 `0.104`, p95 `0.119`, max `0.194`
+- current backend category thresholds produce: 43.7% smooth, 37.2% fair, 15.6% rough, 3.5% very rough
+
+Use `./scripts/local-ios-quality-report.sh [path/to/default.store]` after each copied device dump to compare future drives against this baseline. Do not retune thresholds from this one dataset alone; wait for the known-road loop above plus repeated passes over at least one intentionally rough road.
+
 ### Battery Benchmark (week 6)
 
 Two phone models, both fully charged:

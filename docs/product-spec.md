@@ -674,7 +674,7 @@ The app should feel **simple, beautiful, and modern** — approachable for non-t
 │─────────────────────────────────────────│
 │  ┌─────────────────────────────────┐    │
 │  │ Your Contributions              │    │
-│  │ 142 km recorded · 67 segments   │    │
+│  │ 142 km recorded · 8 trips       │    │
 │  │ 3 potholes · Last: Today 2:30pm│    │
 │  └─────────────────────────────────┘    │
 └─────────────────────────────────────────┘
@@ -766,7 +766,7 @@ The app should feel **simple, beautiful, and modern** — approachable for non-t
 - [ ] Privacy zone implementation (500m default, randomized offset)
 - [ ] Cold start / empty map experience with onboarding messaging
 - [ ] Segment detail view (tap for score, confidence, trend)
-- [ ] Basic stats screen (km recorded, segments scored)
+- [ ] Basic stats screen (km recorded, trips recorded)
 - [ ] Offline tile pack download for user's municipality
 - [ ] Zoom-level feature filtering (major roads only at low zoom)
 

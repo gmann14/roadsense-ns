@@ -752,6 +752,89 @@ final class NetworkAndUploaderTests: XCTestCase {
     }
 
     @MainActor
+    func testUserStatsSummaryGroupsFragmentedDriveSessionsAsTrips() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let firstSessionID = UUID()
+        let secondSessionID = UUID()
+        let thirdSessionID = UUID()
+
+        context.insert(
+            DriveSessionRecord(
+                id: firstSessionID,
+                startedAt: Date(timeIntervalSince1970: 1_713_000_000),
+                endedAt: Date(timeIntervalSince1970: 1_713_000_120),
+                startLatitude: 44.6488,
+                startLongitude: -63.5752,
+                endLatitude: 44.6498,
+                endLongitude: -63.5762,
+                isSealed: true
+            )
+        )
+        context.insert(
+            DriveSessionRecord(
+                id: secondSessionID,
+                startedAt: Date(timeIntervalSince1970: 1_713_000_150),
+                endedAt: Date(timeIntervalSince1970: 1_713_000_300),
+                startLatitude: 44.6498,
+                startLongitude: -63.5762,
+                endLatitude: 44.6508,
+                endLongitude: -63.5772,
+                isSealed: true
+            )
+        )
+        context.insert(
+            DriveSessionRecord(
+                id: thirdSessionID,
+                startedAt: Date(timeIntervalSince1970: 1_713_001_000),
+                endedAt: Date(timeIntervalSince1970: 1_713_001_180),
+                startLatitude: 44.6600,
+                startLongitude: -63.5865,
+                endLatitude: 44.6610,
+                endLongitude: -63.5875,
+                isSealed: true
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6488,
+                longitude: -63.5752,
+                roughnessRMS: 0.06,
+                speedKMH: 45,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_060),
+                driveSessionID: firstSessionID,
+                uploadReadyAt: Date(timeIntervalSince1970: 1_713_000_400)
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6600,
+                longitude: -63.5865,
+                roughnessRMS: 0.11,
+                speedKMH: 50,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_713_001_060),
+                driveSessionID: thirdSessionID,
+                uploadReadyAt: Date(timeIntervalSince1970: 1_713_001_400)
+            )
+        )
+        try context.save()
+
+        let summary = try UserStatsStore(container: container).summary()
+
+        XCTAssertEqual(summary.totalTripsRecorded, 2)
+        XCTAssertEqual(summary.pendingTripUploadCount, 2)
+        XCTAssertEqual(summary.pendingUploadCount, 2)
+    }
+
+    @MainActor
     func testReadingStorePendingUploadCoordinatesReturnsOrderedUnuploadedReadings() throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)

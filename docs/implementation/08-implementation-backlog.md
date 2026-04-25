@@ -352,7 +352,7 @@ Post-MVP phases:
   - implement `PotholeDetector`
 - **Acceptance**
   - scores are stable under fixture replay
-- **Current repo note:** `PotholeDetector` and `RoughnessScorer` are now both wired into the live `SensorCoordinator` path. `ReadingBuilder` scores the high-pass-filtered vertical acceleration stream instead of the earlier direct-RMS placeholder, and the replay fixtures now assert that filtered scale directly. Remaining work is real-device calibration of category thresholds, speed normalization, and future per-vehicle normalization if harsher-riding cars prove to bias the score distribution.
+- **Current repo note:** `PotholeDetector` and `RoughnessScorer` are now both wired into the live `SensorCoordinator` path. `ReadingBuilder` scores the high-pass-filtered vertical acceleration stream instead of the earlier direct-RMS placeholder, and the replay fixtures now assert that filtered scale directly. The first single-tester iPhone dump looks directionally believable under the current thresholds, and `scripts/local-ios-quality-report.sh` now captures the repeatable local analysis path. Remaining work is known-road real-device calibration, speed normalization, and future per-vehicle normalization if harsher-riding cars prove to bias the score distribution.
 
 ### B051 — Drive endpoint trimming and optional privacy zones
 

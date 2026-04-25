@@ -54,7 +54,7 @@ struct StatsView: View {
         VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: DesignTokens.Space.xs) {
-                    Text("KILOMETRES RECORDED")
+                    Text("KILOMETRES DRIVEN")
                         .font(.system(size: 11, weight: .bold))
                         .tracking(1.4)
                         .foregroundStyle(DesignTokens.Palette.inkMuted)
@@ -96,25 +96,34 @@ struct StatsView: View {
                 .frame(width: 84, height: 84)
             VStack(spacing: 4) {
                 BrandMark(size: 32)
-                Text("\(summary.totalSegmentsContributed)")
+                Text("\(summary.totalTripsRecorded)")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(DesignTokens.Palette.deep)
-                    .accessibilityIdentifier("stats.segments-contributed")
+                    .accessibilityIdentifier("stats.trips-recorded")
+                Text(summary.totalTripsRecorded == 1 ? "trip" : "trips")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
             }
         }
     }
 
     private var contributionCard: some View {
-        sectionCard(title: "Your readings") {
+        sectionCard(title: "Your trips") {
             statRow(
-                label: "Accepted readings",
+                label: "Trips recorded",
+                value: "\(summary.totalTripsRecorded)",
+                identifier: "stats.trip-count"
+            )
+            Divider()
+            statRow(
+                label: "Road readings saved",
                 value: "\(summary.acceptedReadingCount)",
                 identifier: "stats.accepted-readings"
             )
             Divider()
             statRow(
-                label: "Pending uploads",
-                value: "\(summary.pendingUploadCount)",
+                label: "Trips waiting to upload",
+                value: "\(summary.pendingTripUploadCount)",
                 identifier: "stats.pending-uploads"
             )
             Divider()
@@ -141,7 +150,8 @@ struct StatsView: View {
     private var explainerCard: some View {
         sectionCard(title: "How to read this") {
             VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
-                Text("Accepted readings passed device-side quality filters and were stored locally first. Only the mid-drive readings that survive endpoint trimming become uploadable.")
+                Text("A trip can contain many internal road readings. RoadSense groups short detector pauses so your stats line up with how you think about a drive.")
+                Text("Only the mid-drive readings that survive endpoint trimming become uploadable.")
                 Text("Privacy-filtered readings never leave the device. That count exists so you can confirm your zones are working on top of the default endpoint trimming.")
             }
             .font(.system(size: 14))

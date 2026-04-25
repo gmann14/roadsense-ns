@@ -204,11 +204,11 @@ Remaining product work is refinement: deeper retry/empty-state handling around t
 ### Current Stats / Settings Surfaces
 
 - `StatsView` now shows:
-  - kilometres mapped
+  - kilometres driven
+  - grouped trips recorded
   - accepted reading count
-  - pending uploads
+  - trips waiting to upload
   - privacy-filtered local count
-  - segments contributed
   - potholes flagged
   - last drive timestamp
 - `SettingsView` now exposes:
@@ -986,7 +986,7 @@ Design decisions should bias toward these principles:
 
 - Use **New York** for large headings and explanatory editorial copy blocks ("How RoadSense works", segment detail title).
 - Use **SF Pro** for controls, metrics, compact labels, and dense map UI.
-- Large stats should be bold and calm, not gamified: `12.4 km mapped`, `43 segments helped`, `2 potholes confirmed`.
+- Large stats should be bold and calm, not gamified: `12.4 km driven`, `3 trips recorded`, `2 potholes confirmed`.
 
 ### Color Tokens
 
@@ -1161,8 +1161,8 @@ Stats should answer "is this app doing anything?" faster than it answers "how ma
 
 Order:
 
-1. `You've mapped X km`
-2. `Segments you've helped score`
+1. `You've driven X km`
+2. `Trips recorded`
 3. `Uploads pending / last upload`
 4. `Potholes flagged`
 5. community context (`Halifax coverage`, `active rough segments nearby`) only after personal stats
