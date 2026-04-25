@@ -11,7 +11,7 @@ export function TrustStrip({
 }: TrustStripProps) {
   return (
     <section className="card trust-strip" aria-label="Trust summary">
-      <TrustMetric label="Mapped distance" value={totalKmMapped} />
+      <TrustMetric label="Unique road coverage" value={totalKmMapped} />
       <TrustMetric label="Municipalities covered" value={municipalitiesCovered} />
       <TrustMetric label="Last refresh" value={freshness} />
     </section>

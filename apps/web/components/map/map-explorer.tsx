@@ -100,7 +100,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
   const drawerOpen = routeState.mode === "potholes" || Boolean(routeState.segment);
   const statusMessage = mapError ?? (mapReady ? "Map loaded." : "Loading map surface…");
   const statsSummary = stats
-    ? `${stats.total_km_mapped.toFixed(1)} km mapped · ${stats.municipalities_covered} municipalities`
+    ? `${stats.total_km_mapped.toFixed(1)} unique road km · ${stats.segments_scored} scored segments`
     : "Stats loading";
 
   return (
@@ -137,11 +137,15 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
         ) : null}
         <div className="trust-line" aria-label="Dataset snapshot">
           <span>
-            <strong>{stats ? `${stats.total_km_mapped.toFixed(1)} km` : "—"}</strong> mapped
+            <strong>{stats ? `${stats.total_km_mapped.toFixed(1)} km` : "—"}</strong> unique road coverage
           </span>
           <span className="trust-line-divider" aria-hidden="true" />
           <span>
-            <strong>{stats ? stats.municipalities_covered : "—"}</strong> municipalities
+            <strong>{stats ? stats.segments_scored : "—"}</strong> scored segments
+          </span>
+          <span className="trust-line-divider" aria-hidden="true" />
+          <span>
+            <strong>{stats ? stats.total_readings : "—"}</strong> accepted readings
           </span>
           <span className="trust-line-divider" aria-hidden="true" />
           <span>

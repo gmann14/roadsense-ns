@@ -717,7 +717,7 @@ struct MapScreen: View {
             if model.userStatsSummary.totalKmRecorded < 0.05 {
                 return "Drive in progress · GPS and motion are active."
             }
-            return "Drive in progress · \(mappedValue) mapped on this device."
+            return "Drive in progress · \(mappedValue) recorded on this device."
         }
         if model.isCollectionPausedByUser { return "Collection is turned off until you turn it back on." }
         if model.pendingUploadCount > 0 { return "\(model.pendingUploadCount) uploads waiting" }
