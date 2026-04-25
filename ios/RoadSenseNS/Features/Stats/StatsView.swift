@@ -50,7 +50,7 @@ struct StatsView: View {
         VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: DesignTokens.Space.xs) {
-                    Text("KILOMETRES MAPPED")
+                    Text("KILOMETRES RECORDED")
                         .font(.system(size: 11, weight: .bold))
                         .tracking(1.4)
                         .foregroundStyle(DesignTokens.Palette.inkMuted)
