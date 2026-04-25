@@ -326,7 +326,7 @@ struct MapScreen: View {
         HStack(spacing: DesignTokens.Space.sm) {
             metaCell(label: "Mapped", value: mappedValue)
             Divider().frame(height: 24).background(Color.white.opacity(0.14))
-            metaCell(label: "Segments", value: segmentsValue)
+            metaCell(label: "Trips", value: tripsValue)
             Divider().frame(height: 24).background(Color.white.opacity(0.14))
             metaCell(label: "Last drive", value: lastDriveValue)
         }
@@ -720,6 +720,9 @@ struct MapScreen: View {
             return "Drive in progress · \(mappedValue) recorded on this device."
         }
         if model.isCollectionPausedByUser { return "Collection is turned off until you turn it back on." }
+        if model.userStatsSummary.pendingTripUploadCount > 0 {
+            return "\(model.userStatsSummary.pendingTripUploadCount) \(model.userStatsSummary.pendingTripUploadCount == 1 ? "trip" : "trips") waiting to upload"
+        }
         if model.pendingUploadCount > 0 { return "\(model.pendingUploadCount) uploads waiting" }
         if model.userStatsSummary.acceptedReadingCount == 0 { return "Start driving to track road quality." }
         return "Watching for your next drive."
@@ -739,8 +742,8 @@ struct MapScreen: View {
         return "\(km.formatted(.number.precision(.fractionLength(1)))) km"
     }
 
-    private var segmentsValue: String {
-        "\(model.userStatsSummary.totalSegmentsContributed)"
+    private var tripsValue: String {
+        "\(model.userStatsSummary.totalTripsRecorded)"
     }
 
     private var lastDriveValue: String {

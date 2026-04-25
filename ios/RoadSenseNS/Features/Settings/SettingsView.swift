@@ -49,7 +49,7 @@ struct SettingsView: View {
             Button("Delete", role: .destructive) { deleteLocalData() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This clears locally stored readings, pothole reports, upload queue state, and stats. It does not touch your privacy zones.")
+            Text("This clears locally stored drive data, pothole reports, upload queue state, and stats. It does not touch your privacy zones.")
         }
     }
 
@@ -142,8 +142,8 @@ struct SettingsView: View {
         ) {
             VStack(spacing: 0) {
                 statusRow(
-                    label: "Uploads waiting",
-                    value: "\(model.pendingUploadCount)",
+                    label: "Trips waiting",
+                    value: "\(model.userStatsSummary.pendingTripUploadCount)",
                     valueTint: DesignTokens.Palette.ink
                 )
                 Divider()
@@ -182,7 +182,7 @@ struct SettingsView: View {
                             ProgressView()
                                 .tint(DesignTokens.Palette.deep)
                         }
-                        Text(isRetryingFailedUploads ? "Retrying failed batches…" : "Retry failed batches")
+                        Text(isRetryingFailedUploads ? "Retrying failed drive uploads…" : "Retry failed drive uploads")
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .frame(maxWidth: .infinity)
@@ -269,7 +269,7 @@ struct SettingsView: View {
             iconSystemName: "trash.circle.fill",
             iconTint: DesignTokens.Palette.warning,
             title: "Data management",
-            subtitle: "Locally stored readings, pothole reports, upload queue state, and stats only. Privacy zones stay in place."
+            subtitle: "Locally stored drive data, pothole reports, upload queue state, and stats only. Privacy zones stay in place."
         ) {
             Button {
                 isConfirmingDelete = true
@@ -437,6 +437,10 @@ struct SettingsView: View {
 
         if let nextRetryAt = nextRetryAt {
             return "Retrying at \(nextRetryAt.formatted(date: .omitted, time: .shortened))"
+        }
+
+        if model.userStatsSummary.pendingTripUploadCount > 0 {
+            return "Waiting to upload trips"
         }
 
         if model.pendingUploadCount > 0 {
