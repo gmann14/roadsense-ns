@@ -1565,3 +1565,19 @@ docs/reviews/assets/
 ```
 
 Plus the App Icon at `ios/RoadSenseNS/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png` (1024×1024, opaque, ready for App Store submission).
+
+### 14.10 Post-Phase-3 corrections (2026-04-25)
+
+Three follow-ups landed after the first device pass. None are in §13.11 — they came from real-device feedback that the redesign's first pass missed.
+
+**Idle stat well dimensions.** The 56pt monospace headline in a 320pt-wide scrim was visually heavy enough to obscure map coverage. Tightened to 38pt / 240pt-wide with `Palette.deep` opacity dropped from 0.66 → 0.42. The well now reads as a subtle headline rather than a near-modal layer.
+
+**Rejection banner ("Need a fresh GPS fix" et al.).** First version was a flat `Color.black.opacity(0.78)` rounded rect with the failure tint as a bare SF Symbol. Restyled to match the rest of the redesign's surface language: tinted icon disc (32pt) with the failure colour at 0.22 fill / 0.5 stroke, ultra-thin material under a `Palette.deep.opacity(0.78)` scrim, `.lg` corner radius. Banner copy is unchanged.
+
+**Manual-mark stat preservation — soft-delete on upload (§ARCH).** `PotholeActionRecord` gained a `uploadedAt: Date?` field; `PotholeActionStore.applyUploadSuccess` now sets `uploadedAt = now` instead of `context.delete(record)`. All "is this work pending" queries (`pendingCount`, `statusSummary.pendingCount`, `pendingManualReportCoordinates`, `prepareNextAction`, `findPendingFollowUpDuplicate`) gain an `uploadedAt == nil` filter so uploaded rows don't show as outstanding work. `statusSummary.lastSuccessfulUploadAt` now derives from `uploadedAt` directly — semantically cleaner than the old "max `lastAttemptAt` of non-failed records" heuristic.
+
+This closes a stat-loss bug discovered post-merge: before commit b2e3913 (2026-04-25 08:59) the `stats.potholesReported += 1` path didn't fire for manual marks at all. Once a mark uploaded successfully, the row was deleted and `reconcileManualReportStats` had nothing left to recover from. The soft-delete keeps the audit trail intact so reconcile remains the safety floor for any future stat-increment regression.
+
+This does not recover historical marks that were already deleted before the fix landed — those are gone from the device. A server-side `/stats/me` endpoint is the only path to recover them and is deferred to Phase 5 analytics.
+
+Schema change is additive per ADR 0001 (new optional field with a default of nil; existing rows migrate cleanly with `uploadedAt = nil`). Tests: `testApplyUploadSuccessSoftDeletesRecordSoReconcilePreservesCount` covers the new behavior end-to-end (queue → promote → upload-success → reset stat → reconcile recovers count from the soft-deleted row). Existing `testStatusSummaryCountsPendingAndFailedPermanentActions` extended with an uploaded record to assert that uploaded rows are excluded from pending/failed counts and feed `lastSuccessfulUploadAt` correctly.

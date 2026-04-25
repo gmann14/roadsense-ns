@@ -1216,7 +1216,11 @@ final class NetworkAndUploaderTests: XCTestCase {
         let remainingActions = try updatedContext.fetch(FetchDescriptor<PotholeActionRecord>())
         let batches = try updatedContext.fetch(FetchDescriptor<UploadBatch>())
 
-        XCTAssertTrue(remainingActions.isEmpty)
+        // Successful uploads soft-delete (set uploadedAt) instead of removing
+        // the row, so reconcileManualReportStats can recover the count if the
+        // stat is ever lost.
+        XCTAssertEqual(remainingActions.count, 1)
+        XCTAssertNotNil(remainingActions.first?.uploadedAt)
         XCTAssertTrue(batches.isEmpty)
     }
 
