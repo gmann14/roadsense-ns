@@ -332,16 +332,37 @@ struct SettingsView: View {
         groupedCard(
             iconSystemName: "info.circle.fill",
             iconTint: DesignTokens.Palette.inkMuted,
-            title: "About",
+            title: BrandVoice.Settings.aboutTitle,
             subtitle: nil
         ) {
-            VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
-                Text("RoadSense NS passively measures road roughness while you drive and uploads only accepted readings that survive endpoint trimming and privacy filtering.")
-                Text("Background collection improves continuity, but it requires Always Location and can be turned off at any time.")
+            VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
+                Text(BrandVoice.Settings.aboutBody)
+                    .font(.system(size: 14))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                NavigationLink {
+                    LicensesView()
+                } label: {
+                    HStack {
+                        Text("Open-source licenses")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(DesignTokens.Palette.deep)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    }
+                    .padding(.horizontal, DesignTokens.Space.md)
+                    .padding(.vertical, DesignTokens.Space.sm)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                            .fill(DesignTokens.Palette.canvasSunken)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("settings.open-licenses")
             }
-            .font(.system(size: 14))
-            .foregroundStyle(DesignTokens.Palette.inkMuted)
-            .fixedSize(horizontal: false, vertical: true)
         }
     }
 

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct OnboardingFlowView: View {
     @Bindable var model: AppModel
-    @State private var isShowingPrivacyZones = false
 
     var body: some View {
         ZStack {
@@ -12,6 +11,7 @@ struct OnboardingFlowView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: DesignTokens.Space.xl) {
                     header
+                    missionHook
                     stageContent
                     progressTrail
                 }
@@ -20,16 +20,6 @@ struct OnboardingFlowView: View {
                 .padding(.top, DesignTokens.Space.xxl)
                 .padding(.bottom, DesignTokens.Space.xxxl)
             }
-        }
-        .sheet(isPresented: $isShowingPrivacyZones, onDismiss: {
-            model.refreshPrivacyZones()
-        }) {
-            PrivacyZonesView(
-                store: model.privacyZoneStore,
-                onChange: { model.refreshPrivacyZones() }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
     }
 
@@ -62,21 +52,24 @@ struct OnboardingFlowView: View {
     }
 
     private var brandMark: some View {
-        ZStack {
-            Circle()
-                .fill(DesignTokens.Palette.deep)
-                .frame(width: 28, height: 28)
-            Image(systemName: "road.lanes")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(DesignTokens.Palette.signal)
-        }
+        BrandMark(size: 28)
+    }
+
+    /// One-line mission hook from §7.O4. Sets the civic-pride frame
+    /// before the first stage card.
+    private var missionHook: some View {
+        Text(BrandVoice.Onboarding.missionHook)
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(DesignTokens.Palette.inkMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("onboarding.mission-hook")
     }
 
     private var eyebrow: String {
         switch model.readiness.stage {
-        case .permissionsRequired: return "Step 1 of 2 · Permissions"
-        case .permissionHelp:      return "Step 1 of 2 · Permissions"
-        case .ready:               return "Step 2 of 2 · Ready"
+        case .permissionsRequired: return BrandVoice.Onboarding.stepEyebrowPermissions
+        case .permissionHelp:      return BrandVoice.Onboarding.stepEyebrowPermissions
+        case .ready:               return BrandVoice.Onboarding.stepEyebrowReady
         }
     }
 
@@ -132,13 +125,13 @@ struct OnboardingFlowView: View {
             VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
                 permissionTip(
                     icon: "location.fill",
-                    title: "Location",
-                    guidance: "Tap **Allow While Using App**. Allow Once resets every launch, so you’d be re-prompted forever."
+                    title: BrandVoice.Onboarding.locationPermissionTitle,
+                    guidance: BrandVoice.Onboarding.locationPermissionGuidance
                 )
                 permissionTip(
                     icon: "figure.walk.motion",
-                    title: "Motion & Fitness",
-                    guidance: "Tap **OK**. Motion is the core signal for scoring road roughness."
+                    title: BrandVoice.Onboarding.motionPermissionTitle,
+                    guidance: BrandVoice.Onboarding.motionPermissionGuidance
                 )
 
                 Button {
@@ -149,7 +142,7 @@ struct OnboardingFlowView: View {
                             .tint(.white)
                             .frame(maxWidth: .infinity)
                     } else {
-                        Text("Continue")
+                        Text(BrandVoice.Onboarding.continueButton)
                             .font(.system(size: 16, weight: .semibold))
                             .frame(maxWidth: .infinity)
                     }
@@ -191,13 +184,13 @@ struct OnboardingFlowView: View {
         stageCard(
             iconSystemName: "exclamationmark.triangle.fill",
             iconTint: DesignTokens.Palette.warning,
-            title: "Permissions are still incomplete.",
-            body: "Open iOS Settings and enable Location + Motion for RoadSense NS. Passive collection stays off until both are granted."
+            title: BrandVoice.Onboarding.permissionsIncompleteTitle,
+            body: BrandVoice.Onboarding.permissionsIncompleteBody
         ) {
             VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
                 permissionStatusSummary
 
-                Button("Refresh status") { model.refreshPermissions() }
+                Button(BrandVoice.Onboarding.refreshStatusButton) { model.refreshPermissions() }
                     .buttonStyle(.borderedProminent)
                     .tint(DesignTokens.Palette.deep)
                     .controlSize(.large)
@@ -207,31 +200,25 @@ struct OnboardingFlowView: View {
         }
     }
 
+    /// Ready state: §7.O3 drops the "Optional: manage privacy zones" CTA;
+    /// §7.O1's Always-Location contract line lives in `readySubtitle` below.
     private var readyState: some View {
         stageCard(
             iconSystemName: "checkmark.seal.fill",
             iconTint: DesignTokens.Palette.smooth,
-            title: "Ready to collect.",
+            title: BrandVoice.Onboarding.readyTitle,
             body: readySubtitle
         ) {
             VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
                 permissionStatusSummary
-
-                Button("Optional: manage privacy zones") { isShowingPrivacyZones = true }
-                    .buttonStyle(.bordered)
-                    .tint(DesignTokens.Palette.deep)
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity)
-                    .accessibilityIdentifier("onboarding.manage-privacy-zones")
             }
         }
     }
 
     private var readySubtitle: String {
-        if model.readiness.showsPrivacyRiskWarning {
-            return "Privacy zones are still off. RoadSense still trims likely trip endpoints by default, and you can add zones later for extra home/work protection."
-        }
-        return "Permissions are in place. Drive as you normally would; RoadSense trims likely trip endpoints before upload, and privacy zones remain an optional extra filter."
+        BrandVoice.Onboarding.readySubtitleDefault
+            + "\n\n"
+            + BrandVoice.Onboarding.alwaysLocationContract
     }
 
     // MARK: - Shared building blocks

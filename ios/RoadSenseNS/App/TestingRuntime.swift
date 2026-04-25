@@ -120,6 +120,7 @@ extension AppContainer {
             motionService: motionService,
             drivingDetector: drivingDetector,
             thermalMonitor: thermalMonitor,
+            haptics: NoOpHaptics(),
             logger: logger
         )
     }

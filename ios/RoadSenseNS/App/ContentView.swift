@@ -102,19 +102,23 @@ struct ContentView: View {
             && model.isPassiveMonitoringEnabled
     }
 
+    @ViewBuilder
     private var readyShell: some View {
-        MapScreen(
-            model: model,
-            onShowStats: {
-                isShowingStats = true
-            },
-            onShowSettings: {
-                isShowingSettings = true
-            },
-            onShowPrivacyZones: {
-                isShowingPrivacyZones = true
-            }
-        )
+        if FeatureFlags.drivingRedesignEnabled {
+            MapScreenRedesign(
+                model: model,
+                onShowStats: { isShowingStats = true },
+                onShowSettings: { isShowingSettings = true },
+                onShowPrivacyZones: { isShowingPrivacyZones = true }
+            )
+        } else {
+            MapScreen(
+                model: model,
+                onShowStats: { isShowingStats = true },
+                onShowSettings: { isShowingSettings = true },
+                onShowPrivacyZones: { isShowingPrivacyZones = true }
+            )
+        }
     }
 }
 
@@ -236,6 +240,7 @@ func makePreviewContainer() -> AppContainer {
         motionService: PreviewMotionService(),
         drivingDetector: PreviewDrivingDetector(),
         thermalMonitor: ThermalMonitor(),
+        haptics: NoOpHaptics(),
         logger: .app
     )
 }
