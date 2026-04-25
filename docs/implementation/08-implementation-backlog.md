@@ -717,6 +717,25 @@ These tasks finish the background-upload loop that today is partially stubbed. T
   - follow-up prompts expire automatically and never fire while driving
   - prompt actions and marker-sheet actions produce the same server-side result
 
+### B075a — Sensor-backed manual pothole severity
+
+- **Spec refs:** [01](01-ios-implementation.md#pothole-detection), [02](02-backend-implementation.md#explicit-pothole-actions-apply_pothole_action), [03](03-api-contracts.md)
+- **Depends on:** B050, B073, B074
+- **Status:** backlog. Today, manual `Mark pothole` reports upload location/time/accuracy only, and backend-created manual reports default to `magnitude = 1.00`. Auto-detected sensor potholes can merge with manual reports later by spatial proximity, but there is no explicit "bump then tap" association or sensor-backed severity on the manual action itself.
+- **RED**
+  - unit test that tapping `Mark pothole` within a short time/distance window of a local `PotholeCandidate` includes the strongest candidate magnitude in the queued action
+  - unit test that stale or distant sensor candidates do not attach to a manual report
+  - backend pgTAP/Deno test that `apply_pothole_action(...)` preserves manual default `1.00` when no sensor magnitude is provided, but raises report magnitude when a valid manual sensor magnitude is present
+- **GREEN**
+  - extend `PotholeActionRecord` / upload payload with optional `sensor_backed_magnitude_g` and `sensor_backed_at`
+  - on `Mark pothole`, look back over recent local pothole candidates, e.g. last 10-20s and within roughly 25m of the compensated manual location, and attach the highest magnitude candidate
+  - extend `pothole_actions` and `apply_pothole_action(...)` so manual reports can update `pothole_reports.magnitude = GREATEST(existing, sensor_backed_magnitude_g)` without changing confirmation semantics
+  - update public/web copy so manual-only `1.0` is not presented as measured impact; distinguish `manual`, `sensor`, and `manual + sensor-backed`
+- **Acceptance**
+  - a manual tap immediately after driving over a detected pothole creates or updates one canonical pothole with measured magnitude rather than the default `1.00`
+  - manual-only reports remain valid but are clearly labelled as unmeasured/default severity in public surfaces
+  - late taps, passenger taps far from the detected bump, and repeated taps do not inflate magnitude or confirmations incorrectly
+
 ## Phase 11c — Pothole photo capture (post-MVP feature)
 
 ### B076 — Photo capture client surface
