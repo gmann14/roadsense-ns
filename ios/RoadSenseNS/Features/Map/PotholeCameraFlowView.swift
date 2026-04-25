@@ -4,12 +4,26 @@ import UIKit
 
 struct PotholeCameraFlowView: View {
     let coordinateLabel: String
+    let isLikelyMoving: Bool
     let onCancel: () -> Void
     let onSubmit: (Data) -> Void
 
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var camera = CameraCaptureModel()
     @State private var capturedData: Data?
+    @State private var safetyBannerDismissed: Bool = false
+
+    init(
+        coordinateLabel: String,
+        isLikelyMoving: Bool = false,
+        onCancel: @escaping () -> Void,
+        onSubmit: @escaping (Data) -> Void
+    ) {
+        self.coordinateLabel = coordinateLabel
+        self.isLikelyMoving = isLikelyMoving
+        self.onCancel = onCancel
+        self.onSubmit = onSubmit
+    }
 
     var body: some View {
         ZStack {
@@ -92,9 +106,17 @@ struct PotholeCameraFlowView: View {
                         }
                         .accessibilityLabel("Close camera")
                     }
+                    .overlay(alignment: .top) {
+                        if isLikelyMoving && !safetyBannerDismissed {
+                            safetyBanner
+                                .padding(.top, DesignTokens.Space.xxxl)
+                                .padding(.horizontal, DesignTokens.Space.lg)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
                     .overlay(alignment: .bottom) {
                         VStack(spacing: DesignTokens.Space.md) {
-                            Text("Slow down or pull over first. Daylight works best.")
+                            Text(BrandVoice.Camera.captureGuidance)
                                 .font(.system(.callout, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.82))
                                 .multilineTextAlignment(.center)
@@ -123,6 +145,47 @@ struct PotholeCameraFlowView: View {
                     }
             }
         }
+    }
+
+    /// Soft, dismissable warning shown over the camera preview when the device's
+    /// reported speed suggests the user might be driving. Capture stays available;
+    /// this is a nudge, not a block. Per §13.4 of the design audit.
+    private var safetyBanner: some View {
+        HStack(alignment: .center, spacing: DesignTokens.Space.sm) {
+            Image(systemName: "car.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text(BrandVoice.Camera.safetyWarningWhileMoving)
+                .font(.system(.footnote, design: .rounded, weight: .semibold))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: DesignTokens.Space.xs)
+
+            Button {
+                withAnimation(DesignTokens.Motion.standard) {
+                    safetyBannerDismissed = true
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(6)
+                    .background(Circle().fill(.white.opacity(0.18)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss warning")
+        }
+        .padding(.horizontal, DesignTokens.Space.md)
+        .padding(.vertical, DesignTokens.Space.sm)
+        .background(
+            Capsule().fill(DesignTokens.Palette.warning)
+        )
+        .overlay(
+            Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.32), radius: 12, y: 4)
     }
 
     private var deniedBody: some View {

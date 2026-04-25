@@ -30,6 +30,7 @@
 		3957B51C67FCB5FF1CEC7628 /* DriveEndpointTrimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1B35DE8F53433B4BCCB9A0 /* DriveEndpointTrimmer.swift */; };
 		3E1EAD8552D8141AAAF82DC8 /* PotholeActionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89EE7E2252FD9D4C1984BC93 /* PotholeActionStore.swift */; };
 		3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CE5D67A573F4B606118C23 /* SettingsView.swift */; };
+		BEEF0022CAFE0022DEAD0022 /* LicensesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0022DEAD0023FEED0022 /* LicensesView.swift */; };
 		4030CA59DBFD2BD1002A939A /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
 		415EED346262E91866151E11 /* UploadResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */; };
 		4233C35F3626F4B3635D657A /* RoadSenseSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B4E2F0BBA75CCC42516100B /* RoadSenseSchema.swift */; };
@@ -95,6 +96,7 @@
 		B8393B14BAC87209E1414CD7 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */; };
 		B84C0C037E20BD97BD457AB5 /* UploadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCAA398E4BA72123985282C /* UploadPolicy.swift */; };
 		BCED38C029DC23CD8CF965DB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95DBAC276591544789D06C3E /* DesignTokens.swift */; };
+		BEEF0011CAFE0011DEAD0011 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0011DEAD0012FEED0011 /* BrandMark.swift */; };
 		BE7DBD83E05D54A627C6B4E6 /* SegmentDetailResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06C075253EF1F1E69FC89030 /* SegmentDetailResponseParser.swift */; };
 		C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */; };
 		C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1269DDDE04E2FB4239384BC9 /* ContentView.swift */; };
@@ -110,6 +112,10 @@
 		D341480EFFBE39FDAF32552F /* ReadingBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */; };
 		D3654C639B341A125F6F764E /* MapScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */; };
 		DEAD0001BEEF0001CAFE0001 /* MapScreenRedesignPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEED0001FACE0001DEAD0002 /* MapScreenRedesignPreview.swift */; };
+		BEEF0020CAFE0020DEAD0020 /* AttentionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0020DEAD0021FEED0020 /* AttentionState.swift */; };
+		BEEF0021CAFE0021DEAD0021 /* NeedsAttentionPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0021DEAD0022FEED0021 /* NeedsAttentionPill.swift */; };
+		BEEF0023CAFE0023DEAD0023 /* DrivingScreenComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0023DEAD0024FEED0023 /* DrivingScreenComponents.swift */; };
+		BEEF0025CAFE0025DEAD0025 /* MapScreenRedesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0025DEAD0026FEED0025 /* MapScreenRedesign.swift */; };
 		D4C185705B6C67577E3128F9 /* PrivacyZonesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 583510BB6B1BABFA95ACB79D /* PrivacyZonesView.swift */; };
 		D6B093D0428291818D29B050 /* SensorCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A83AAFA6806FFC7DA4C2528 /* SensorCoordinator.swift */; };
 		D6CAFA8A14152FE2A077BFF3 /* RejectedReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */; };
@@ -125,6 +131,9 @@
 		E1DCB9FC2A5B640B1B58F385 /* PotholePhotoStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4242FA58E0DE0AE3062BF2B /* PotholePhotoStoreTests.swift */; };
 		EB26C71EB8CF4A2C2C9247A0 /* HighPassBiquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70A04456020333C21483C47 /* HighPassBiquad.swift */; };
 		EB46566139FD4C04A594EA96 /* AppBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06554CA351911A995764AA76 /* AppBootstrap.swift */; };
+		BEEF0010CAFE0010DEAD0010 /* BrandVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0010DEAD0011FEED0010 /* BrandVoice.swift */; };
+		BEEF0012CAFE0012DEAD0012 /* HapticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0012DEAD0013FEED0012 /* HapticsService.swift */; };
+		BEEF0024CAFE0024DEAD0024 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0024DEAD0025FEED0024 /* FeatureFlags.swift */; };
 		ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */; };
 		F005FBB0C3E992990AEBC2D6 /* IngestHealthEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */; };
 		F196DEC71004CA063E17D458 /* SegmentAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5510C3BC3010F7CA1DBD337A /* SegmentAPIModels.swift */; };
@@ -162,6 +171,9 @@
 		029336ECC82481F844689FD4 /* PotholeReportRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeReportRecord.swift; sourceTree = "<group>"; };
 		04E0FAC175D9CB0D942CCED4 /* DriveSessionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionRecord.swift; sourceTree = "<group>"; };
 		06554CA351911A995764AA76 /* AppBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBootstrap.swift; sourceTree = "<group>"; };
+		FACE0010DEAD0011FEED0010 /* BrandVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandVoice.swift; sourceTree = "<group>"; };
+		FACE0012DEAD0013FEED0012 /* HapticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticsService.swift; sourceTree = "<group>"; };
+		FACE0024DEAD0025FEED0024 /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
 		06C075253EF1F1E69FC89030 /* SegmentDetailResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentDetailResponseParser.swift; sourceTree = "<group>"; };
 		0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderTests.swift; sourceTree = "<group>"; };
 		0AFFFE8ED069250BF48A1547 /* UploadAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadAPIModels.swift; sourceTree = "<group>"; };
@@ -171,6 +183,10 @@
 		1A63DB84BA5E66CE3F794D25 /* SentryBootstrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentryBootstrapper.swift; sourceTree = "<group>"; };
 		1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreen.swift; sourceTree = "<group>"; };
 		FEED0001FACE0001DEAD0002 /* MapScreenRedesignPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreenRedesignPreview.swift; sourceTree = "<group>"; };
+		FACE0020DEAD0021FEED0020 /* AttentionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionState.swift; sourceTree = "<group>"; };
+		FACE0021DEAD0022FEED0021 /* NeedsAttentionPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeedsAttentionPill.swift; sourceTree = "<group>"; };
+		FACE0023DEAD0024FEED0023 /* DrivingScreenComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingScreenComponents.swift; sourceTree = "<group>"; };
+		FACE0025DEAD0026FEED0025 /* MapScreenRedesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreenRedesign.swift; sourceTree = "<group>"; };
 		1EFAC01C66B9C992BC2313A7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1F57C6D76B7E595FE412BC87 /* ManualPotholeLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualPotholeLocator.swift; sourceTree = "<group>"; };
 		1FB9B9294F92A70C11D0FB1B /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -219,11 +235,13 @@
 		8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadQualityMapView.swift; sourceTree = "<group>"; };
 		9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingBuilder.swift; sourceTree = "<group>"; };
 		95DBAC276591544789D06C3E /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		FACE0011DEAD0012FEED0011 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
 		998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenRecord.swift; sourceTree = "<group>"; };
 		99BE4E2399EF31135224A3E8 /* PotholePhotoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoProcessor.swift; sourceTree = "<group>"; };
 		9A192B2CFE9054A42D255FF3 /* RoadSense NS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RoadSense NS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2D445C6696ED6F082B33288 /* TestingRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestingRuntime.swift; sourceTree = "<group>"; };
 		A4CE5D67A573F4B606118C23 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		FACE0022DEAD0023FEED0022 /* LicensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensesView.swift; sourceTree = "<group>"; };
 		A68D28C0E187AB48C62D0AC3 /* RoadSenseNS.Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Staging.xcconfig; sourceTree = "<group>"; };
 		A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadEligibilityPolicy.swift; sourceTree = "<group>"; };
 		A96B8343D20095BCEF65D89C /* ReadingRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingRecord.swift; sourceTree = "<group>"; };
@@ -310,8 +328,12 @@
 		1345EEAF9D9B0ED9D1BCB755 /* Map */ = {
 			isa = PBXGroup;
 			children = (
+				FACE0020DEAD0021FEED0020 /* AttentionState.swift */,
+				FACE0023DEAD0024FEED0023 /* DrivingScreenComponents.swift */,
 				1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */,
+				FACE0025DEAD0026FEED0025 /* MapScreenRedesign.swift */,
 				FEED0001FACE0001DEAD0002 /* MapScreenRedesignPreview.swift */,
+				FACE0021DEAD0022FEED0021 /* NeedsAttentionPill.swift */,
 				D4FAA04CA9D8B3BCE9A9CC19 /* PotholeCameraFlowView.swift */,
 				99BE4E2399EF31135224A3E8 /* PotholePhotoProcessor.swift */,
 				8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */,
@@ -440,7 +462,10 @@
 				CEC86C13C16A0385D36E47FD /* AppContainer.swift */,
 				E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */,
 				4B2199FED8B8DBD6F6FD265B /* BackgroundTaskRegistrar.swift */,
+				FACE0010DEAD0011FEED0010 /* BrandVoice.swift */,
 				1269DDDE04E2FB4239384BC9 /* ContentView.swift */,
+				FACE0012DEAD0013FEED0012 /* HapticsService.swift */,
+				FACE0024DEAD0025FEED0024 /* FeatureFlags.swift */,
 				659C7BBB94CC6DB51D4B2730 /* RoadSenseLogger.swift */,
 				C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */,
 				1A63DB84BA5E66CE3F794D25 /* SentryBootstrapper.swift */,
@@ -535,6 +560,7 @@
 		7E8E84022CD1A16A9D70D26B /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
+				FACE0011DEAD0012FEED0011 /* BrandMark.swift */,
 				95DBAC276591544789D06C3E /* DesignTokens.swift */,
 			);
 			path = DesignSystem;
@@ -544,6 +570,7 @@
 			isa = PBXGroup;
 			children = (
 				A4CE5D67A573F4B606118C23 /* SettingsView.swift */,
+				FACE0022DEAD0023FEED0022 /* LicensesView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -843,6 +870,9 @@
 			files = (
 				2E1B6D32ED2B5BB95BBBDC7E /* APIClient.swift in Sources */,
 				EB46566139FD4C04A594EA96 /* AppBootstrap.swift in Sources */,
+				BEEF0010CAFE0010DEAD0010 /* BrandVoice.swift in Sources */,
+				BEEF0012CAFE0012DEAD0012 /* HapticsService.swift in Sources */,
+				BEEF0024CAFE0024DEAD0024 /* FeatureFlags.swift in Sources */,
 				F95AA84B2BCBC6B15BA91532 /* AppConfig.swift in Sources */,
 				9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */,
 				6B42654DBC077FAC55F09FD3 /* AppEnvironment.swift in Sources */,
@@ -851,6 +881,7 @@
 				D9D68063F1304D636E7E2814 /* BackgroundTaskRegistrar.swift in Sources */,
 				C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */,
 				C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */,
+				BEEF0011CAFE0011DEAD0011 /* BrandMark.swift in Sources */,
 				BCED38C029DC23CD8CF965DB /* DesignTokens.swift in Sources */,
 				E0A858EAF54B726D7480CB88 /* DeviceTokenManager.swift in Sources */,
 				63608FF99D0642C8081C5D41 /* DeviceTokenRecord.swift in Sources */,
@@ -866,6 +897,10 @@
 				9EABEA30417F41AE694F52D1 /* ManualPotholeLocator.swift in Sources */,
 				D3654C639B341A125F6F764E /* MapScreen.swift in Sources */,
 				DEAD0001BEEF0001CAFE0001 /* MapScreenRedesignPreview.swift in Sources */,
+				BEEF0020CAFE0020DEAD0020 /* AttentionState.swift in Sources */,
+				BEEF0021CAFE0021DEAD0021 /* NeedsAttentionPill.swift in Sources */,
+				BEEF0023CAFE0023DEAD0023 /* DrivingScreenComponents.swift in Sources */,
+				BEEF0025CAFE0025DEAD0025 /* MapScreenRedesign.swift in Sources */,
 				CAFAF51DC3E1A3AF7854919C /* ModelContainerProvider.swift in Sources */,
 				1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */,
 				B2D9E6BCD21611B708C78F26 /* MotionService.swift in Sources */,
@@ -905,6 +940,7 @@
 				FA4334D50A1F3340EDF35A2A /* SensorFixtureRunner.swift in Sources */,
 				825EF8A058DF7DA06B8A89CE /* SentryBootstrapper.swift in Sources */,
 				3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */,
+				BEEF0022CAFE0022DEAD0022 /* LicensesView.swift in Sources */,
 				6CB12F83F061BDDB1FAD352A /* StatsView.swift in Sources */,
 				269DDA3BBA30325BA96F619C /* TestingRuntime.swift in Sources */,
 				0005F6455CB1194DA77528C2 /* ThermalMonitor.swift in Sources */,
