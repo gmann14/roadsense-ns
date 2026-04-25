@@ -135,7 +135,7 @@ final class PotholeActionStore {
     func pendingCount() throws -> Int {
         let context = ModelContext(container)
         return try context.fetch(FetchDescriptor<PotholeActionRecord>())
-            .filter { $0.uploadState != .failedPermanent }
+            .filter { $0.uploadedAt == nil && $0.uploadState != .failedPermanent }
             .count
     }
 
@@ -143,17 +143,18 @@ final class PotholeActionStore {
         let context = ModelContext(container)
         let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
 
-        let pendingCount = records.filter { $0.uploadState != .failedPermanent }.count
-        let failedPermanentCount = records.filter { $0.uploadState == .failedPermanent }.count
+        let pendingCount = records
+            .filter { $0.uploadedAt == nil && $0.uploadState != .failedPermanent }
+            .count
+        let failedPermanentCount = records
+            .filter { $0.uploadedAt == nil && $0.uploadState == .failedPermanent }
+            .count
         let nextRetryAt = records
-            .filter { $0.uploadState == .pendingUpload }
+            .filter { $0.uploadedAt == nil && $0.uploadState == .pendingUpload }
             .compactMap(\.nextAttemptAt)
             .filter { $0 > now }
             .min()
-        let lastSuccessfulUploadAt = records
-            .filter { $0.uploadState != .failedPermanent }
-            .compactMap(\.lastAttemptAt)
-            .max()
+        let lastSuccessfulUploadAt = records.compactMap(\.uploadedAt).max()
 
         return PotholeActionStatusSummary(
             pendingCount: pendingCount,
@@ -170,7 +171,7 @@ final class PotholeActionStore {
         ))
 
         return records
-            .filter { $0.uploadState == .failedPermanent }
+            .filter { $0.uploadedAt == nil && $0.uploadState == .failedPermanent }
             .prefix(max(limit, 0))
             .map { record in
                 FailedPotholeActionSummary(
@@ -191,7 +192,9 @@ final class PotholeActionStore {
 
         return records
             .filter { record in
-                record.actionType == .manualReport && record.uploadState != .failedPermanent
+                record.uploadedAt == nil &&
+                    record.actionType == .manualReport &&
+                    record.uploadState != .failedPermanent
             }
             .prefix(max(limit, 0))
             .map { record in
@@ -349,7 +352,9 @@ final class PotholeActionStore {
         let descriptor = FetchDescriptor<PotholeActionRecord>(
             sortBy: [SortDescriptor(\.createdAt)]
         )
-        let records = try context.fetch(descriptor).sorted(by: compareDrainOrder)
+        let records = try context.fetch(descriptor)
+            .filter { $0.uploadedAt == nil }
+            .sorted(by: compareDrainOrder)
 
         for record in records {
             switch record.uploadState {
@@ -378,13 +383,16 @@ final class PotholeActionStore {
         return .none
     }
 
-    func applyUploadSuccess(id: UUID) throws {
+    func applyUploadSuccess(id: UUID, now: Date = Date()) throws {
         let context = ModelContext(container)
         guard let record = try fetchRecord(id: id, in: context) else {
             return
         }
 
-        context.delete(record)
+        // Soft-delete: keep the row but mark it uploaded so reconcileManualReportStats
+        // can still see the count even after a clean server accept.
+        record.uploadedAt = now
+        record.nextAttemptAt = nil
         try context.save()
     }
 
@@ -409,7 +417,8 @@ final class PotholeActionStore {
 
         switch disposition {
         case .succeeded:
-            context.delete(record)
+            record.uploadedAt = now
+            record.nextAttemptAt = nil
         case let .retry(afterSeconds):
             record.uploadState = .pendingUpload
             record.nextAttemptAt = now.addingTimeInterval(afterSeconds)
@@ -474,7 +483,8 @@ final class PotholeActionStore {
             predicate: #Predicate {
                 $0.potholeReportID == potholeReportID &&
                     $0.actionTypeRawValue == actionType.rawValue &&
-                    $0.uploadStateRawValue != "failed_permanent"
+                    $0.uploadStateRawValue != "failed_permanent" &&
+                    $0.uploadedAt == nil
             },
             sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
         )

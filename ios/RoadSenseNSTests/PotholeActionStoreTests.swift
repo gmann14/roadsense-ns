@@ -348,16 +348,78 @@ final class PotholeActionStoreTests: XCTestCase {
             lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030.0),
             lastHTTPStatusCode: 404
         )
+        let uploaded = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6491,
+            longitude: -63.5749,
+            accuracyM: 4,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_005.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_005.0),
+            uploadState: .pendingUpload,
+            uploadAttemptCount: 1,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_025.0),
+            uploadedAt: Date(timeIntervalSince1970: 1_713_000_025.0)
+        )
         context.insert(pending)
         context.insert(failed)
+        context.insert(uploaded)
         try context.save()
 
         let summary = try store.statusSummary(now: Date(timeIntervalSince1970: 1_713_000_040.0))
 
+        // Uploaded records are kept around for stat reconciliation but must not
+        // count as pending work or failed work.
         XCTAssertEqual(summary.pendingCount, 1)
         XCTAssertEqual(summary.failedPermanentCount, 1)
         XCTAssertEqual(summary.nextRetryAt, Date(timeIntervalSince1970: 1_713_000_060.0))
-        XCTAssertEqual(summary.lastSuccessfulUploadAt, Date(timeIntervalSince1970: 1_713_000_020.0))
+        XCTAssertEqual(summary.lastSuccessfulUploadAt, Date(timeIntervalSince1970: 1_713_000_025.0))
+    }
+
+    func testApplyUploadSuccessSoftDeletesRecordSoReconcilePreservesCount() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let statsStore = UserStatsStore(container: container)
+        let sample = LocationSample(
+            timestamp: 1_713_000_000.0,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 50,
+            headingDegrees: 180
+        )
+
+        let record = try store.queueManualReport(
+            sample: sample,
+            now: Date(timeIntervalSince1970: 1_713_000_000.0)
+        )
+        _ = try store.promoteExpiredPendingUndoActions(
+            now: Date(timeIntervalSince1970: 1_713_000_006.0)
+        )
+        try store.applyUploadSuccess(
+            id: record.id,
+            now: Date(timeIntervalSince1970: 1_713_000_010.0)
+        )
+
+        // Row stays in the table after a clean upload.
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.uploadedAt, Date(timeIntervalSince1970: 1_713_000_010.0))
+
+        // Pending work counters exclude uploaded rows.
+        XCTAssertEqual(try store.pendingCount(), 0)
+        XCTAssertTrue(try store.pendingManualReportCoordinates().isEmpty)
+
+        // Stat survives — and stays correct after a stat reset (the original bug).
+        XCTAssertEqual(try statsStore.summary().potholesReported, 1)
+
+        let stats = try context.fetch(FetchDescriptor<UserStats>()).first
+        stats?.potholesReported = 0
+        try context.save()
+
+        let recovered = try store.reconcileManualReportStats()
+        XCTAssertEqual(recovered, 1)
+        XCTAssertEqual(try statsStore.summary().potholesReported, 1)
     }
 
     func testRetryFailedActionsMovesRecordsBackToPendingUpload() throws {
