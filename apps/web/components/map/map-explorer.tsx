@@ -201,6 +201,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
           routeState={routeState}
           mapBounds={stats?.map_bounds ?? null}
           potholeBounds={stats?.pothole_bounds ?? null}
+          topPotholes={topPotholes}
           onSegmentSelect={handleSegmentSelect}
           onViewportCommit={handleViewportCommit}
           onMapReadyChange={setMapReady}
