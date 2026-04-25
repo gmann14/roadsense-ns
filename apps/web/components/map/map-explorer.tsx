@@ -55,7 +55,14 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
   const routeState = parseViewportState(baseSearchParams);
 
   const navigate = (nextParams: URLSearchParams, action: "push" | "replace") => {
-    const nextUrl = nextParams.toString().length > 0 ? `${pathname}?${nextParams.toString()}` : pathname;
+    const nextQuery = nextParams.toString();
+    const nextUrl = nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname;
+    const currentQuery = liveSearchParams.toString();
+    const currentUrl = currentQuery.length > 0 ? `${pathname}?${currentQuery}` : pathname;
+    if (nextUrl === currentUrl) {
+      return;
+    }
+
     if (action === "push") {
       router.push(nextUrl, { scroll: false });
       return;

@@ -241,6 +241,39 @@ final class PotholeActionStore {
         return recovered
     }
 
+    @discardableResult
+    func reconcileManualReportStats() throws -> Int {
+        let context = ModelContext(container)
+        let committedManualReportsDescriptor = FetchDescriptor<PotholeActionRecord>(
+            predicate: #Predicate {
+                $0.actionTypeRawValue == "manual_report" &&
+                    $0.uploadStateRawValue != "pending_undo"
+            }
+        )
+        let acceptedSensorPotholesDescriptor = FetchDescriptor<ReadingRecord>(
+            predicate: #Predicate {
+                $0.droppedByPrivacyZone == false &&
+                    $0.isPothole == true
+            }
+        )
+        let committedManualReportCount = try context.fetchCount(committedManualReportsDescriptor)
+        let acceptedSensorPotholeCount = try context.fetchCount(acceptedSensorPotholesDescriptor)
+        let minimumPotholeCount = committedManualReportCount + acceptedSensorPotholeCount
+        guard minimumPotholeCount > 0 else {
+            return 0
+        }
+
+        let stats = try fetchOrCreateStats(in: context)
+        let recoveredCount = max(0, minimumPotholeCount - stats.potholesReported)
+        guard recoveredCount > 0 else {
+            return 0
+        }
+
+        stats.potholesReported += recoveredCount
+        try context.save()
+        return recoveredCount
+    }
+
     private static func isRecoverableFailureStatus(_ statusCode: Int?) -> Bool {
         guard let statusCode else {
             return false
@@ -283,6 +316,7 @@ final class PotholeActionStore {
         )
         let records = try context.fetch(descriptor)
         var promoted = 0
+        var stats: UserStats?
 
         for record in records {
             guard let undoExpiresAt = record.undoExpiresAt,
@@ -292,6 +326,12 @@ final class PotholeActionStore {
 
             record.uploadState = .pendingUpload
             record.undoExpiresAt = nil
+            if record.actionType == .manualReport {
+                if stats == nil {
+                    stats = try fetchOrCreateStats(in: context)
+                }
+                stats?.potholesReported += 1
+            }
             promoted += 1
         }
 
@@ -321,6 +361,10 @@ final class PotholeActionStore {
                 }
                 record.uploadState = .pendingUpload
                 record.undoExpiresAt = nil
+                if record.actionType == .manualReport {
+                    let stats = try fetchOrCreateStats(in: context)
+                    stats.potholesReported += 1
+                }
                 try context.save()
                 return .ready(record)
             case .pendingUpload:
@@ -404,6 +448,21 @@ final class PotholeActionStore {
         )
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first
+    }
+
+    private func fetchOrCreateStats(in context: ModelContext) throws -> UserStats {
+        var descriptor = FetchDescriptor<UserStats>(
+            sortBy: [SortDescriptor(\.id, order: .forward)]
+        )
+        descriptor.fetchLimit = 1
+
+        if let stats = try context.fetch(descriptor).first {
+            return stats
+        }
+
+        let stats = UserStats()
+        context.insert(stats)
+        return stats
     }
 
     private func findPendingFollowUpDuplicate(

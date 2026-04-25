@@ -48,12 +48,19 @@ final class UserStatsStore {
             predicate: #Predicate { $0.uploadedAt == nil }
         )
         let pendingCount = try context.fetch(pendingDescriptor).filter(\.isReadyForUpload).count
+        let undoableManualPotholesDescriptor = FetchDescriptor<PotholeActionRecord>(
+            predicate: #Predicate {
+                $0.actionTypeRawValue == "manual_report" &&
+                    $0.uploadStateRawValue == "pending_undo"
+            }
+        )
+        let undoableManualPotholeCount = try context.fetchCount(undoableManualPotholesDescriptor)
 
         return UserStatsSummary(
             totalKmRecorded: stats?.totalKmRecorded ?? 0,
             totalSegmentsContributed: stats?.totalSegmentsContributed ?? 0,
             lastDriveAt: stats?.lastDriveAt,
-            potholesReported: stats?.potholesReported ?? 0,
+            potholesReported: (stats?.potholesReported ?? 0) + undoableManualPotholeCount,
             acceptedReadingCount: try context.fetchCount(acceptedDescriptor),
             privacyFilteredCount: try context.fetchCount(filteredDescriptor),
             pendingUploadCount: pendingCount
