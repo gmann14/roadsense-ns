@@ -5,6 +5,7 @@ import type * as mapboxgl from "mapbox-gl";
 
 import {
   type Bbox,
+  type PotholeRow,
   getCoverageTileUrlTemplate,
   getMapboxStyleUrl,
   getMapboxToken,
@@ -33,6 +34,7 @@ type RoadQualityMapViewProps = {
   routeState: UrlViewportState;
   mapBounds: Bbox | null;
   potholeBounds: Bbox | null;
+  topPotholes: PotholeRow[];
   onViewportCommit: (viewport: ViewportCommit) => void;
   onSegmentSelect: (segmentId: string) => void;
   onMapReadyChange: (isReady: boolean) => void;
@@ -44,6 +46,8 @@ const COVERAGE_SOURCE_ID = "roadsense-coverage";
 const SEGMENT_LAYER_ID = "roadsense-segments";
 const SELECTED_SEGMENT_LAYER_ID = "roadsense-segments-selected";
 const POTHOLE_LAYER_ID = "roadsense-potholes";
+const TOP_POTHOLES_SOURCE_ID = "roadsense-top-potholes";
+const TOP_POTHOLES_LAYER_ID = "roadsense-top-potholes-points";
 const COVERAGE_LAYER_ID = "roadsense-coverage-segments";
 const DATA_BOUNDS_MAX_ZOOM = 13.1;
 const POTHOLE_MARKER_MIN_ZOOM = 13.35;
@@ -55,6 +59,7 @@ export function RoadQualityMapView({
   routeState,
   mapBounds,
   potholeBounds,
+  topPotholes,
   onViewportCommit,
   onSegmentSelect,
   onMapReadyChange,
@@ -67,6 +72,7 @@ export function RoadQualityMapView({
   const routeStateRef = useRef(routeState);
   const mapBoundsRef = useRef(mapBounds);
   const potholeBoundsRef = useRef(potholeBounds);
+  const topPotholesRef = useRef(topPotholes);
   const [mapSupported, setMapSupported] = useState(true);
   const handleMapReadyChange = useEffectEvent(onMapReadyChange);
   const handleMapErrorChange = useEffectEvent(onMapErrorChange);
@@ -92,6 +98,15 @@ export function RoadQualityMapView({
   useEffect(() => {
     potholeBoundsRef.current = potholeBounds;
   }, [potholeBounds]);
+
+  useEffect(() => {
+    topPotholesRef.current = topPotholes;
+    const map = mapRef.current;
+    const source = map?.getSource(TOP_POTHOLES_SOURCE_ID);
+    if (source && "setData" in source) {
+      (source as mapboxgl.GeoJSONSource).setData(topPotholesToFeatureCollection(topPotholes));
+    }
+  }, [topPotholes]);
 
   useEffect(() => {
     const mapboxToken = getMapboxToken();
@@ -252,6 +267,31 @@ export function RoadQualityMapView({
           });
         }
 
+        if (!map.getSource(TOP_POTHOLES_SOURCE_ID)) {
+          map.addSource(TOP_POTHOLES_SOURCE_ID, {
+            type: "geojson",
+            data: topPotholesToFeatureCollection(topPotholesRef.current),
+          });
+        }
+
+        if (!map.getLayer(TOP_POTHOLES_LAYER_ID)) {
+          map.addLayer({
+            id: TOP_POTHOLES_LAYER_ID,
+            type: "circle",
+            source: TOP_POTHOLES_SOURCE_ID,
+            layout: {
+              visibility: "none",
+            },
+            paint: {
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 5.5, 10, 7, 14, 10],
+              "circle-color": "#c53d45",
+              "circle-stroke-color": "#fffaf1",
+              "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 1.5, 12, 2.5],
+              "circle-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.78, 10, 0.92],
+            },
+          });
+        }
+
         if (!map.getLayer(COVERAGE_LAYER_ID)) {
           map.addLayer({
             id: COVERAGE_LAYER_ID,
@@ -289,6 +329,29 @@ export function RoadQualityMapView({
 
         map.on("mouseleave", SEGMENT_LAYER_ID, () => {
           map.getCanvas().style.cursor = "";
+        });
+
+        map.on("mouseenter", TOP_POTHOLES_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+
+        map.on("mouseleave", TOP_POTHOLES_LAYER_ID, () => {
+          map.getCanvas().style.cursor = "";
+        });
+
+        map.on("click", TOP_POTHOLES_LAYER_ID, (event) => {
+          const feature = event.features?.[0];
+          const coordinates = feature?.geometry.type === "Point" ? feature.geometry.coordinates : null;
+          if (!coordinates || coordinates.length < 2) {
+            return;
+          }
+
+          map.easeTo({
+            center: [coordinates[0], coordinates[1]],
+            zoom: Math.max(map.getZoom(), 13.75),
+            duration: 350,
+            essential: true,
+          });
         });
 
         map.on("click", SEGMENT_LAYER_ID, (event) => {
@@ -447,6 +510,7 @@ function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
     visibleLayerIds.add(POTHOLE_LAYER_ID);
   } else if (mode === "potholes") {
     visibleLayerIds.add(POTHOLE_LAYER_ID);
+    visibleLayerIds.add(TOP_POTHOLES_LAYER_ID);
   } else if (mode === "coverage") {
     visibleLayerIds.add(COVERAGE_LAYER_ID);
   }
@@ -455,6 +519,7 @@ function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
     SEGMENT_LAYER_ID,
     SELECTED_SEGMENT_LAYER_ID,
     POTHOLE_LAYER_ID,
+    TOP_POTHOLES_LAYER_ID,
     COVERAGE_LAYER_ID,
   ]) {
     if (map.getLayer(layerId)) {
@@ -537,4 +602,23 @@ function mapBoundsOverlap(bounds: mapboxgl.LngLatBounds, bbox: Bbox): boolean {
     bounds.getSouth() <= bbox.maxLat &&
     bounds.getNorth() >= bbox.minLat
   );
+}
+
+function topPotholesToFeatureCollection(potholes: PotholeRow[]): Parameters<mapboxgl.GeoJSONSource["setData"]>[0] {
+  return {
+    type: "FeatureCollection",
+    features: potholes.map((pothole) => ({
+      type: "Feature",
+      properties: {
+        id: pothole.id,
+        magnitude: pothole.magnitude,
+        confirmation_count: pothole.confirmation_count,
+        last_confirmed_at: pothole.last_confirmed_at,
+      },
+      geometry: {
+        type: "Point",
+        coordinates: [pothole.lng, pothole.lat],
+      },
+    })),
+  } as Parameters<mapboxgl.GeoJSONSource["setData"]>[0];
 }

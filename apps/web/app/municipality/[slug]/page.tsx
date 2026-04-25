@@ -37,7 +37,7 @@ export default async function MunicipalityPage({
   const municipality = getMunicipalityBySlug(slug);
   const [stats, topPotholes] = await Promise.all([
     getPublicStats(),
-    getTopPotholes(12),
+    getTopPotholes(50),
   ]);
   const resolvedSearchParams = searchParams ? await searchParams : {};
 

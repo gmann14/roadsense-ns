@@ -10,7 +10,7 @@ export default async function HomePage({
 } = {}) {
   const [stats, topPotholes] = await Promise.all([
     getPublicStats(),
-    getTopPotholes(12),
+    getTopPotholes(50),
   ]);
   const resolvedSearchParams = searchParams ? await searchParams : {};
 
