@@ -451,7 +451,9 @@ One-tap pothole report endpoint plus follow-up actions against existing pothole 
     "lat": 44.6488,
     "lng": -63.5752,
     "accuracy_m": 6.8,
-    "recorded_at": "2026-04-21T18:22:00Z"
+    "recorded_at": "2026-04-21T18:22:00Z",
+    "sensor_backed_magnitude_g": 2.7,
+    "sensor_backed_at": "2026-04-21T18:21:58Z"
 }
 ```
 
@@ -461,6 +463,7 @@ One-tap pothole report endpoint plus follow-up actions against existing pothole 
 - `action_type` values: `manual_report`, `confirm_present`, `confirm_fixed`.
 - `pothole_report_id` is required for `confirm_present` and `confirm_fixed`, omitted for `manual_report`.
 - `lat` / `lng` are the precise client coordinates after privacy-zone filtering. Do not randomize them.
+- `sensor_backed_magnitude_g` and `sensor_backed_at` are optional and valid only for `manual_report`; provide both or neither. They represent a local accelerometer pothole candidate matched to the explicit tap and are omitted for follow-up actions.
 - repeating the same action type from the same device against the same pothole within 24 hours may return `200` without incrementing public counters again
 
 **Response — 200 OK**

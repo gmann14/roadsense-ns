@@ -409,8 +409,7 @@ Post-MVP phases:
   - implement SLC bootstrap and safe background behavior
 - **Acceptance**
   - app survives documented background scenarios short of user force-quit
-- **Current repo note:** `BackgroundCollectionPolicy` and `BackgroundTaskRegistrar` now exist, and the project emits `BGTaskSchedulerPermittedIdentifiers`. Significant-location-change orchestration and real-device validation remain.
-- **Current repo note:** Background task IDs are now aligned with the spec (`nightly-cleanup`, `upload-drain`). Significant-location-change orchestration and real-device validation still remain.
+- **Current repo note:** `BackgroundCollectionPolicy`, `BackgroundTaskRegistrar`, aligned background task IDs (`nightly-cleanup`, `upload-drain`), significant-location-change passive monitoring, moving-GPS collection bootstrap, and fresh-checkpoint service resume are now implemented. Settings also exposes drive diagnostics for the last GPS sample, driving signal, collection start/stop, and bump candidate. Remaining work is signed real-device validation for lock-screen, background, and system-termination scenarios.
 
 ### B061 — Sentry, structured logs, and ops metrics
 
@@ -747,7 +746,7 @@ These tasks track the background-upload loop and its remaining device-validation
 
 - **Spec refs:** [01](01-ios-implementation.md#pothole-detection), [02](02-backend-implementation.md#explicit-pothole-actions-apply_pothole_action), [03](03-api-contracts.md)
 - **Depends on:** B050, B073, B074
-- **Status:** backlog. Today, manual `Mark pothole` reports upload location/time/accuracy only, and backend-created manual reports default to `magnitude = 1.00`. Auto-detected sensor potholes can merge with manual reports later by spatial proximity, but there is no explicit "bump then tap" association or sensor-backed severity on the manual action itself.
+- **Status:** implemented for the first sensor-backed pass. Manual `Mark pothole` now attaches the strongest local `PotholeCandidate` within the short time/distance window, uploads optional `sensor_backed_magnitude_g` + `sensor_backed_at`, and the backend preserves that audit data while raising canonical `pothole_reports.magnitude` for valid manual sensor-backed reports. Manual-only reports still default to `1.00`; public/web copy that distinguishes default vs measured severity remains polish.
 - **RED**
   - unit test that tapping `Mark pothole` within a short time/distance window of a local `PotholeCandidate` includes the strongest candidate magnitude in the queued action
   - unit test that stale or distant sensor candidates do not attach to a manual report

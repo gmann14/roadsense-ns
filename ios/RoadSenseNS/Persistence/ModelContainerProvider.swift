@@ -4,7 +4,7 @@ import SwiftData
 enum ModelContainerProvider {
     @MainActor
     static func schema() -> Schema {
-        Schema(versionedSchema: RoadSenseSchemaV4.self)
+        Schema(versionedSchema: RoadSenseSchemaV5.self)
     }
 
     @MainActor

@@ -160,6 +160,8 @@ private struct PreviewLocationService: LocationServicing {
     var authorizationStatus: CLAuthorizationStatus { .authorizedWhenInUse }
     var latestSample: LocationSample? { nil }
     var recentSamples: [LocationSample] { [] }
+    func startPassiveMonitoring() {}
+    func stopPassiveMonitoring() {}
     func start() throws {}
     func stop() {}
     func requestAlwaysUpgrade() {}

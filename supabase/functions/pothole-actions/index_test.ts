@@ -59,6 +59,47 @@ Deno.test("validatePotholeActionPayload requires pothole_report_id for follow-up
     }
 });
 
+Deno.test("validatePotholeActionPayload accepts sensor-backed manual severity", () => {
+    const result = validatePotholeActionPayload({
+        ...validPayload,
+        sensor_backed_magnitude_g: 2.6,
+        sensor_backed_at: "2026-04-21T18:21:57Z",
+    });
+
+    assertEquals(result.ok, true);
+    if (result.ok) {
+        assertEquals(result.payload.sensor_backed_magnitude_g, 2.6);
+        assertEquals(result.payload.sensor_backed_at, "2026-04-21T18:21:57Z");
+    }
+});
+
+Deno.test("validatePotholeActionPayload rejects partial sensor-backed severity", () => {
+    const result = validatePotholeActionPayload({
+        ...validPayload,
+        sensor_backed_magnitude_g: 2.6,
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+        assertEquals(result.fieldErrors.sensor_backed, "magnitude and timestamp must be provided together");
+    }
+});
+
+Deno.test("validatePotholeActionPayload rejects sensor-backed severity for follow-up actions", () => {
+    const result = validatePotholeActionPayload({
+        ...validPayload,
+        action_type: "confirm_present",
+        pothole_report_id: "123e4567-e89b-12d3-a456-426614174000",
+        sensor_backed_magnitude_g: 2.6,
+        sensor_backed_at: "2026-04-21T18:21:57Z",
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+        assertEquals(result.fieldErrors.sensor_backed, "must be omitted for follow-up actions");
+    }
+});
+
 Deno.test("pothole action handler returns 400 for invalid JSON", async () => {
     const handler = createPotholeActionsHandler({
         hashDeviceToken: async () => "ignored",
@@ -140,6 +181,7 @@ Deno.test("pothole action handler returns 200 on success", async () => {
         applyAction: async ({ payload, tokenHashHex }) => {
             assertEquals(tokenHashHex, "deadbeef");
             assertEquals(payload.action_type, "manual_report");
+            assertEquals(payload.sensor_backed_magnitude_g, null);
             return {
                 action_id: payload.action_id,
                 pothole_report_id: "00000000-0000-0000-0000-000000001234",
@@ -167,6 +209,36 @@ Deno.test("pothole action handler returns 200 on success", async () => {
         pothole_report_id: "00000000-0000-0000-0000-000000001234",
         status: "active",
     });
+});
+
+Deno.test("pothole action handler passes sensor-backed severity to applyAction", async () => {
+    const handler = createPotholeActionsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        applyAction: async ({ payload }) => {
+            assertEquals(payload.sensor_backed_magnitude_g, 2.6);
+            assertEquals(payload.sensor_backed_at, "2026-04-21T18:21:57Z");
+            return {
+                action_id: payload.action_id,
+                pothole_report_id: "00000000-0000-0000-0000-000000001234",
+                status: "active",
+            };
+        },
+    });
+
+    const response = await handler(
+        new Request("http://localhost/functions/v1/pothole-actions", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                ...validPayload,
+                sensor_backed_magnitude_g: 2.6,
+                sensor_backed_at: "2026-04-21T18:21:57Z",
+            }),
+        }),
+    );
+
+    assertEquals(response.status, 200);
 });
 
 Deno.test("pothole action handler preserves duplicate action responses", async () => {

@@ -6,10 +6,17 @@ final class SensorCheckpointStore {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(fileManager: FileManager = .default) {
-        let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        self.fileURL = baseURL.appendingPathComponent("SensorCheckpoint.json", isDirectory: false)
+    init(
+        fileURL: URL? = nil,
+        fileManager: FileManager = .default
+    ) {
+        if let fileURL {
+            self.fileURL = fileURL
+        } else {
+            let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+                ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            self.fileURL = baseURL.appendingPathComponent("SensorCheckpoint.json", isDirectory: false)
+        }
         encoder.outputFormatting = [.sortedKeys]
     }
 

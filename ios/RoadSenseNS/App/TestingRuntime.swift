@@ -28,6 +28,8 @@ private struct TestingLocationService: LocationServicing {
     var authorizationStatus: CLAuthorizationStatus { .authorizedAlways }
     var latestSample: LocationSample? { nil }
     var recentSamples: [LocationSample] { [] }
+    func startPassiveMonitoring() {}
+    func stopPassiveMonitoring() {}
     func start() throws {}
     func stop() {}
     func requestAlwaysUpgrade() {}

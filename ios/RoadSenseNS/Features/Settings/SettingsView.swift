@@ -16,6 +16,7 @@ struct SettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Space.xl) {
                 collectionCard
+                diagnosticsCard
                 uploadsCard
                 privacyCard
                 dataCard
@@ -130,6 +131,54 @@ struct SettingsView: View {
             .controlSize(.large)
             .frame(maxWidth: .infinity)
             .accessibilityIdentifier("settings.manage-privacy-zones")
+        }
+    }
+
+    private var diagnosticsCard: some View {
+        groupedCard(
+            iconSystemName: "stethoscope",
+            iconTint: DesignTokens.Palette.warning,
+            title: "Drive diagnostics",
+            subtitle: "Use this after a test drive to confirm the app saw movement, started collection, and detected bumps."
+        ) {
+            VStack(spacing: 0) {
+                statusRow(
+                    label: "Current state",
+                    value: collectionStateLabel,
+                    valueTint: model.collectionDiagnostics.isCollecting ? DesignTokens.Palette.smooth : DesignTokens.Palette.inkMuted
+                )
+                Divider()
+                statusRow(
+                    label: "Last GPS sample",
+                    value: formattedDiagnosticsTime(model.collectionDiagnostics.lastLocationSampleAt),
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
+                Divider()
+                statusRow(
+                    label: "Last driving signal",
+                    value: drivingSignalLabel,
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
+                Divider()
+                statusRow(
+                    label: "Last collection start",
+                    value: formattedDiagnosticsTime(model.collectionDiagnostics.lastCollectionStartedAt),
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
+                Divider()
+                statusRow(
+                    label: "Last collection stop",
+                    value: formattedDiagnosticsTime(model.collectionDiagnostics.lastCollectionStoppedAt),
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
+                Divider()
+                statusRow(
+                    label: "Last bump candidate",
+                    value: formattedDiagnosticsTime(model.collectionDiagnostics.lastPotholeCandidateAt),
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
+            }
+            .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
         }
     }
 
@@ -481,12 +530,41 @@ struct SettingsView: View {
         }
     }
 
+    private var collectionStateLabel: String {
+        if model.collectionDiagnostics.isCollecting {
+            return "Collecting"
+        }
+
+        if model.collectionDiagnostics.isMonitoring {
+            return "Watching for drives"
+        }
+
+        return "Paused"
+    }
+
+    private var drivingSignalLabel: String {
+        guard let lastDrivingEventAt = model.collectionDiagnostics.lastDrivingEventAt else {
+            return "Not seen yet"
+        }
+
+        let state = model.collectionDiagnostics.lastDrivingEventWasDriving == true ? "driving" : "not driving"
+        return "\(state) · \(lastDrivingEventAt.formatted(date: .omitted, time: .shortened))"
+    }
+
     private func formattedUploadTime(_ date: Date?) -> String {
         guard let date else {
             return "Never"
         }
 
         return date.formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private func formattedDiagnosticsTime(_ date: Date?) -> String {
+        guard let date else {
+            return "Not seen yet"
+        }
+
+        return date.formatted(date: .omitted, time: .shortened)
     }
 
     private func deleteLocalData() {

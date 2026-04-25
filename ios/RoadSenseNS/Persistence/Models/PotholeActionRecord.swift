@@ -30,6 +30,8 @@ final class PotholeActionRecord {
     var nextAttemptAt: Date?
     var lastHTTPStatusCode: Int?
     var lastRequestID: String?
+    var sensorBackedMagnitudeG: Double?
+    var sensorBackedAt: Date?
     /// Set when the server has accepted this action. We keep the row around
     /// rather than deleting it so `reconcileManualReportStats` can recover the
     /// count even after a clean upload — see ADR 0001 (additive schema rule)
@@ -62,6 +64,8 @@ final class PotholeActionRecord {
         nextAttemptAt: Date? = nil,
         lastHTTPStatusCode: Int? = nil,
         lastRequestID: String? = nil,
+        sensorBackedMagnitudeG: Double? = nil,
+        sensorBackedAt: Date? = nil,
         uploadedAt: Date? = nil
     ) {
         self.id = id
@@ -79,6 +83,8 @@ final class PotholeActionRecord {
         self.nextAttemptAt = nextAttemptAt
         self.lastHTTPStatusCode = lastHTTPStatusCode
         self.lastRequestID = lastRequestID
+        self.sensorBackedMagnitudeG = sensorBackedMagnitudeG
+        self.sensorBackedAt = sensorBackedAt
         self.uploadedAt = uploadedAt
     }
 }

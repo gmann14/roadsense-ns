@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(17);
+SELECT plan(22);
 
 DELETE FROM pothole_actions
 WHERE action_id IN (
@@ -10,7 +10,10 @@ WHERE action_id IN (
     '00000000-0000-0000-0000-000000001504'::UUID,
     '00000000-0000-0000-0000-000000001505'::UUID,
     '00000000-0000-0000-0000-000000001506'::UUID,
-    '00000000-0000-0000-0000-000000001507'::UUID
+    '00000000-0000-0000-0000-000000001507'::UUID,
+    '00000000-0000-0000-0000-000000001508'::UUID,
+    '00000000-0000-0000-0000-000000001509'::UUID,
+    '00000000-0000-0000-0000-000000001510'::UUID
 );
 
 DELETE FROM pothole_reports
@@ -18,7 +21,12 @@ WHERE id IN (
     '00000000-0000-0000-0000-000000001401'::UUID,
     '00000000-0000-0000-0000-000000001402'::UUID
 )
-   OR segment_id = '00000000-0000-0000-0000-000000001301'::UUID;
+   OR segment_id = '00000000-0000-0000-0000-000000001301'::UUID
+   OR ST_DWithin(
+       geom::geography,
+       ST_SetSRID(ST_MakePoint(-63.5752, 44.6488), 4326)::geography,
+       50
+   );
 
 DELETE FROM road_segments
 WHERE id = '00000000-0000-0000-0000-000000001301'::UUID;
@@ -257,6 +265,80 @@ SELECT is(
     (SELECT confirmation_count::TEXT FROM pothole_reports WHERE id = '00000000-0000-0000-0000-000000001401'),
     '4',
     'reactivation increments confirmation count exactly once'
+);
+
+SELECT throws_ok(
+    $sql$
+    SELECT apply_pothole_action(
+        '00000000-0000-0000-0000-000000001509'::UUID,
+        decode('ab', 'hex'),
+        'manual_report',
+        44.64880,
+        -63.57485,
+        4.0,
+        '2026-04-21T21:40:00Z'::TIMESTAMPTZ,
+        NULL,
+        2.70,
+        NULL
+    )
+    $sql$,
+    '22023',
+    'sensor_backed_fields_required_together',
+    'sensor-backed SQL fields must be provided together'
+);
+
+SELECT throws_ok(
+    $sql$
+    SELECT apply_pothole_action(
+        '00000000-0000-0000-0000-000000001510'::UUID,
+        decode('ab', 'hex'),
+        'confirm_present',
+        44.64880,
+        -63.57485,
+        4.0,
+        '2026-04-21T21:40:00Z'::TIMESTAMPTZ,
+        '00000000-0000-0000-0000-000000001401'::UUID,
+        2.70,
+        '2026-04-21T21:39:54Z'::TIMESTAMPTZ
+    )
+    $sql$,
+    '22023',
+    'sensor_backed_manual_report_only',
+    'sensor-backed SQL fields are manual-report only'
+);
+
+SELECT lives_ok(
+    $sql$
+    SELECT apply_pothole_action(
+        '00000000-0000-0000-0000-000000001508'::UUID,
+        decode('ab', 'hex'),
+        'manual_report',
+        44.64880,
+        -63.57485,
+        4.0,
+        '2026-04-21T21:45:00Z'::TIMESTAMPTZ,
+        NULL,
+        2.70,
+        '2026-04-21T21:44:54Z'::TIMESTAMPTZ
+    )
+    $sql$,
+    'manual report can carry sensor-backed severity'
+);
+
+SELECT is(
+    (SELECT magnitude::TEXT FROM pothole_reports WHERE id = '00000000-0000-0000-0000-000000001401'),
+    '2.70',
+    'sensor-backed manual report raises pothole magnitude'
+);
+
+SELECT is(
+    (
+        SELECT sensor_backed_magnitude_g::TEXT
+        FROM pothole_actions
+        WHERE action_id = '00000000-0000-0000-0000-000000001508'
+    ),
+    '2.70',
+    'sensor-backed magnitude is preserved on the action audit row'
 );
 
 SELECT has_function(

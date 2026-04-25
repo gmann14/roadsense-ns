@@ -132,6 +132,8 @@ public struct PotholeActionUploadRequest: Codable, Equatable, Sendable {
     public let lng: Double
     public let accuracyM: Double
     public let recordedAt: Date
+    public let sensorBackedMagnitudeG: Double?
+    public let sensorBackedAt: Date?
 
     public init(
         actionID: UUID,
@@ -144,7 +146,9 @@ public struct PotholeActionUploadRequest: Codable, Equatable, Sendable {
         lat: Double,
         lng: Double,
         accuracyM: Double,
-        recordedAt: Date
+        recordedAt: Date,
+        sensorBackedMagnitudeG: Double? = nil,
+        sensorBackedAt: Date? = nil
     ) {
         self.actionID = actionID
         self.deviceToken = deviceToken
@@ -157,6 +161,8 @@ public struct PotholeActionUploadRequest: Codable, Equatable, Sendable {
         self.lng = lng
         self.accuracyM = accuracyM
         self.recordedAt = recordedAt
+        self.sensorBackedMagnitudeG = sensorBackedMagnitudeG
+        self.sensorBackedAt = sensorBackedAt
     }
 
     enum CodingKeys: String, CodingKey {
@@ -171,6 +177,8 @@ public struct PotholeActionUploadRequest: Codable, Equatable, Sendable {
         case lng
         case accuracyM = "accuracy_m"
         case recordedAt = "recorded_at"
+        case sensorBackedMagnitudeG = "sensor_backed_magnitude_g"
+        case sensorBackedAt = "sensor_backed_at"
     }
 }
 

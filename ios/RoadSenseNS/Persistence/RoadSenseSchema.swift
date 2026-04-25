@@ -71,9 +71,34 @@ enum RoadSenseSchemaV4: VersionedSchema {
     }
 }
 
+enum RoadSenseSchemaV5: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(5, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            ReadingRecord.self,
+            UploadBatch.self,
+            PrivacyZoneRecord.self,
+            UserStats.self,
+            DeviceTokenRecord.self,
+            PotholeActionRecord.self,
+            PotholeReportRecord.self,
+            DriveSessionRecord.self,
+        ]
+    }
+}
+
 enum RoadSenseSchemaMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [RoadSenseSchemaV1.self, RoadSenseSchemaV2.self, RoadSenseSchemaV3.self, RoadSenseSchemaV4.self]
+        [
+            RoadSenseSchemaV1.self,
+            RoadSenseSchemaV2.self,
+            RoadSenseSchemaV3.self,
+            RoadSenseSchemaV4.self,
+            RoadSenseSchemaV5.self,
+        ]
     }
 
     static var stages: [MigrationStage] {
@@ -81,6 +106,7 @@ enum RoadSenseSchemaMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: RoadSenseSchemaV1.self, toVersion: RoadSenseSchemaV2.self),
             .lightweight(fromVersion: RoadSenseSchemaV2.self, toVersion: RoadSenseSchemaV3.self),
             .lightweight(fromVersion: RoadSenseSchemaV3.self, toVersion: RoadSenseSchemaV4.self),
+            .lightweight(fromVersion: RoadSenseSchemaV4.self, toVersion: RoadSenseSchemaV5.self),
         ]
     }
 }

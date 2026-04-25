@@ -544,6 +544,8 @@ private struct TestLocationService: LocationServicing {
     var authorizationStatus: CLAuthorizationStatus { .authorizedAlways }
     var latestSample: LocationSample? { latestSampleOverride }
     var recentSamples: [LocationSample] { recentSamplesOverride }
+    func startPassiveMonitoring() {}
+    func stopPassiveMonitoring() {}
     func start() throws {}
     func stop() {}
     func requestAlwaysUpgrade() {}
