@@ -51,7 +51,10 @@ struct ContentView: View {
             }
             .sheet(isPresented: $isShowingStats) {
                 NavigationStack {
-                    StatsView(statsStore: model.userStatsStore)
+                    StatsView(
+                        statsStore: model.userStatsStore,
+                        onAppear: { model.refreshCollectionStats() }
+                    )
                 }
             }
             .sheet(isPresented: $isShowingSettings, onDismiss: {

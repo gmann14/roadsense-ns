@@ -335,40 +335,37 @@ struct IdleStatWell: View {
     let communityDriversThisWeek: Int
 
     var body: some View {
-        VStack(alignment: .center, spacing: DesignTokens.Space.md) {
+        VStack(alignment: .center, spacing: 6) {
             Text(BrandVoice.Stats.yourContributionEyebrow)
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.3)
                 .foregroundStyle(.white.opacity(0.7))
 
             Text(formattedKm)
-                .font(.system(size: 56, weight: .bold, design: .rounded).monospacedDigit())
+                .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+                .shadow(color: .black.opacity(0.25), radius: 4, y: 1)
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
             Text(BrandVoice.Stats.thisMonthMappedSubtitle)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.white.opacity(0.88))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
                 .multilineTextAlignment(.center)
 
             if communityKmThisWeek > 0 || communityDriversThisWeek > 0 {
-                Divider()
-                    .overlay(Color.white.opacity(0.15))
-                    .padding(.vertical, DesignTokens.Space.xs)
-                    .frame(width: 120)
-
                 Text(BrandVoice.Stats.communityThisWeek(
                     km: communityKmThisWeek,
                     drivers: communityDriversThisWeek
                 ))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white.opacity(0.72))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.7))
                 .multilineTextAlignment(.center)
+                .padding(.top, 2)
             }
         }
-        .frame(maxWidth: 320)
-        .padding(DesignTokens.Space.xl)
+        .frame(maxWidth: 240)
+        .padding(.horizontal, DesignTokens.Space.lg)
+        .padding(.vertical, DesignTokens.Space.md)
         .accessibilityElement(children: .combine)
     }
 

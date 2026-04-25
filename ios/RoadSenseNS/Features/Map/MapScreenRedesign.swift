@@ -228,19 +228,21 @@ struct MapScreenRedesign: View {
     }
 
     /// Soft pill-shaped backdrop behind center-stage content so the white type
-    /// stays legible over bright Mapbox tiles.
+    /// stays legible over bright Mapbox tiles. Kept narrow + low-opacity so the
+    /// map underneath remains readable — the well is a subtle headline, not a
+    /// modal layer.
     private var centerScrimBackground: some View {
         RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
             .fill(.ultraThinMaterial)
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                    .fill(DesignTokens.Palette.deep.opacity(0.66))
+                    .fill(DesignTokens.Palette.deep.opacity(0.42))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
-                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
             )
-            .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+            .shadow(color: .black.opacity(0.14), radius: 14, y: 6)
     }
 
     // MARK: - Bottom FAB cluster
@@ -308,32 +310,44 @@ struct MapScreenRedesign: View {
     // MARK: - Banners
 
     private func rejectionBanner(_ feedback: RedesignRejectionFeedback) -> some View {
-        HStack(alignment: .center, spacing: DesignTokens.Space.sm) {
-            Image(systemName: feedback.iconName)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(feedback.tint)
+        HStack(alignment: .center, spacing: DesignTokens.Space.md) {
+            ZStack {
+                Circle()
+                    .fill(feedback.tint.opacity(0.22))
+                Circle()
+                    .strokeBorder(feedback.tint.opacity(0.5), lineWidth: 1)
+                Image(systemName: feedback.iconName)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(feedback.tint)
+            }
+            .frame(width: 32, height: 32)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(feedback.title)
-                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                 Text(feedback.message)
-                    .font(.caption)
-                    .foregroundStyle(DesignTokens.Palette.surface)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.78))
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: DesignTokens.Space.xs)
         }
-        .padding(DesignTokens.Space.md)
+        .padding(.horizontal, DesignTokens.Space.md)
+        .padding(.vertical, DesignTokens.Space.sm)
         .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                .fill(Color.black.opacity(0.78))
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                        .fill(DesignTokens.Palette.deep.opacity(0.78))
+                )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
+        .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
     }
 
     private func followUpPromptBanner(_ prompt: RedesignFollowUpPrompt) -> some View {

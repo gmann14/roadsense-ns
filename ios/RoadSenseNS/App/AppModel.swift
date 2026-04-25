@@ -443,7 +443,7 @@ final class AppModel {
         snapshot = resolvedPermissionSnapshot(privacyZones: state)
     }
 
-    private func refreshCollectionStats() {
+    func refreshCollectionStats() {
         _ = try? potholeActionStore.promoteExpiredPendingUndoActions()
         _ = try? potholeActionStore.reconcileManualReportStats()
         uploadStatusSummary = (try? uploadQueueStore.statusSummary()) ?? .empty
