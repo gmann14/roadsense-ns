@@ -2,6 +2,7 @@ import SwiftUI
 
 struct StatsView: View {
     let statsStore: UserStatsStore
+    var onAppear: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var summary = UserStatsSummary.zero
@@ -35,7 +36,10 @@ struct StatsView: View {
                     .accessibilityIdentifier("stats.close")
             }
         }
-        .task { loadSummary() }
+        .task {
+            onAppear?()
+            loadSummary()
+        }
     }
 
     private var backgroundGradient: some View {
