@@ -47,6 +47,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [visibleBbox, setVisibleBbox] = useState<Bbox | null>(null);
+  const [isDrawerDismissed, setIsDrawerDismissed] = useState(false);
 
   const baseSearchParams =
     liveSearchParams.size > 0
@@ -71,10 +72,12 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
   };
 
   const handleModeSelect = (mode: MapMode) => {
+    setIsDrawerDismissed(false);
     navigate(withUpdatedRouteState(baseSearchParams, { mode, segment: null }), "push");
   };
 
   const handleSegmentSelect = (segmentId: string) => {
+    setIsDrawerDismissed(false);
     navigate(withUpdatedRouteState(baseSearchParams, { segment: segmentId }), "push");
   };
 
@@ -89,15 +92,32 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
     z: number;
     bbox: Bbox;
   }) => {
-    setVisibleBbox(bbox);
+    const normalizedBbox = normalizeBbox(bbox);
+    setVisibleBbox((current) => {
+      if (current && bboxKey(current) === bboxKey(normalizedBbox)) {
+        return current;
+      }
+
+      return normalizedBbox;
+    });
     navigate(withUpdatedRouteState(baseSearchParams, { lat, lng, z }), "replace");
   };
 
   const handleClearSelection = () => {
+    setIsDrawerDismissed(false);
     navigate(withUpdatedRouteState(baseSearchParams, { segment: null }), "push");
   };
 
-  const drawerOpen = routeState.mode === "potholes" || Boolean(routeState.segment);
+  const handleDrawerClose = () => {
+    if (routeState.segment) {
+      handleClearSelection();
+      return;
+    }
+
+    setIsDrawerDismissed(true);
+  };
+
+  const drawerOpen = !isDrawerDismissed && (routeState.mode === "potholes" || Boolean(routeState.segment));
   const statusMessage = mapError ?? (mapReady ? "Map loaded." : "Loading map surface…");
   const statsSummary = stats
     ? `${stats.total_km_mapped.toFixed(1)} unique road km · ${stats.segments_scored} scored segments`
@@ -192,8 +212,25 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
         visibleBbox={visibleBbox}
         onClearSelection={handleClearSelection}
         isOpen={drawerOpen}
-        onClose={handleClearSelection}
+        onClose={handleDrawerClose}
       />
     </section>
   );
+}
+
+function normalizeBbox(bbox: Bbox): Bbox {
+  return {
+    minLng: roundBboxCoordinate(bbox.minLng),
+    minLat: roundBboxCoordinate(bbox.minLat),
+    maxLng: roundBboxCoordinate(bbox.maxLng),
+    maxLat: roundBboxCoordinate(bbox.maxLat),
+  };
+}
+
+function bboxKey(bbox: Bbox): string {
+  return `${bbox.minLng},${bbox.minLat},${bbox.maxLng},${bbox.maxLat}`;
+}
+
+function roundBboxCoordinate(value: number): number {
+  return Number(value.toFixed(4));
 }

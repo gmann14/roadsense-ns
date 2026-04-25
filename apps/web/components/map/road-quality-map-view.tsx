@@ -312,7 +312,8 @@ export function RoadQualityMapView({
       mapInstance?.remove();
       mapRef.current = null;
     };
-  }, [handleMapErrorChange, handleMapReadyChange, handleSegmentSelect, handleViewportCommit]);
+    // Mapbox owns this DOM subtree. Route/mode updates are handled by the smaller effects below.
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current;

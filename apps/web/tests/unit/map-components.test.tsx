@@ -198,4 +198,43 @@ describe("segment drawer panel", () => {
     expect(screen.getByText(/active community potholes in this view/i)).toBeInTheDocument();
     expect(screen.getByText(/7 confirmations/i)).toBeInTheDocument();
   });
+
+  it("asks users to zoom in when the pothole viewport is too wide", () => {
+    render(
+      <SegmentDrawerPanel
+        mode="potholes"
+        selectedSegmentId={null}
+        detail={null}
+        potholes={[]}
+        isLoading={false}
+        errorMessage={null}
+        isPotholeViewportTooWide
+        onClearSelection={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/zoom in to inspect active potholes/i)).toBeInTheDocument();
+    expect(screen.getByText(/roughly 10 km viewport/i)).toBeInTheDocument();
+  });
+
+  it("calls the drawer close handler from the close button", () => {
+    const onClose = vi.fn();
+
+    render(
+      <SegmentDrawerPanel
+        mode="potholes"
+        selectedSegmentId={null}
+        detail={null}
+        potholes={[]}
+        isLoading={false}
+        errorMessage={null}
+        onClearSelection={vi.fn()}
+        onClose={onClose}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /close segment detail drawer/i }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

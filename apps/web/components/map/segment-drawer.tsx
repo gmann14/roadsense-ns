@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 
-import { getPotholes, getSegmentDetail, type Bbox, type PotholeRow, type SegmentDetail } from "@/lib/api/client";
+import {
+  getPotholes,
+  getSegmentDetail,
+  isPotholeBboxWithinLookupCap,
+  type Bbox,
+  type PotholeRow,
+  type SegmentDetail,
+} from "@/lib/api/client";
 import type { MapMode } from "@/lib/url-state";
 
 type SegmentDrawerProps = {
@@ -21,6 +28,7 @@ type SegmentDrawerPanelProps = {
   potholes: PotholeRow[];
   isLoading: boolean;
   errorMessage: string | null;
+  isPotholeViewportTooWide?: boolean;
   onClearSelection: () => void;
   isOpen?: boolean;
   onClose?: () => void;
@@ -117,6 +125,14 @@ export function SegmentDrawer({
 
     if (!visibleBbox) {
       setPotholes([]);
+      setIsLoading(false);
+      return;
+    }
+
+    if (!isPotholeBboxWithinLookupCap(visibleBbox)) {
+      setPotholes([]);
+      setIsLoading(false);
+      setErrorMessage(null);
       return;
     }
 
@@ -150,6 +166,8 @@ export function SegmentDrawer({
   }, [mode, visibleBbox]);
 
   const resolvedIsOpen = isOpen ?? Boolean(selectedSegmentId || mode === "potholes");
+  const isPotholeViewportTooWide =
+    mode === "potholes" && visibleBbox !== null && !isPotholeBboxWithinLookupCap(visibleBbox);
   const handleClose = () => {
     if (onClose) {
       onClose();
@@ -166,6 +184,7 @@ export function SegmentDrawer({
       potholes={potholes}
       isLoading={isLoading}
       errorMessage={errorMessage}
+      isPotholeViewportTooWide={isPotholeViewportTooWide}
       onClearSelection={onClearSelection}
       isOpen={resolvedIsOpen}
       onClose={handleClose}
@@ -180,6 +199,7 @@ export function SegmentDrawerPanel({
   potholes,
   isLoading,
   errorMessage,
+  isPotholeViewportTooWide = false,
   onClearSelection,
   isOpen = true,
   onClose,
@@ -210,6 +230,18 @@ export function SegmentDrawerPanel({
     }
 
     if (mode === "potholes") {
+      if (isPotholeViewportTooWide) {
+        return (
+          <div className="drawer-state">
+            <span className="eyebrow">Pothole list</span>
+            <strong>Zoom in to inspect active potholes.</strong>
+            <span className="lede">
+              Pothole lookups are capped to a roughly 10 km viewport so the public map stays responsive.
+            </span>
+          </div>
+        );
+      }
+
       if (potholes.length === 0) {
         return (
           <div className="drawer-state">
