@@ -1343,6 +1343,7 @@ Rules:
    - find the nearest `pothole_reports` row within `15m` and `status IN ('active', 'resolved')`
    - if found, increment `confirmation_count`, update `last_confirmed_at`, and force `status = 'active'`
    - if not found, create a new `active` row
+   - optional `sensor_backed_magnitude_g` + `sensor_backed_at` may be provided only for `manual_report`; the timestamp must be close to `recorded_at`, the magnitude must be in the accepted sensor range, and the canonical report magnitude becomes `GREATEST(existing, sensor_backed_magnitude_g)`
 2. `confirm_present`
    - requires `pothole_report_id`
    - reject with `409 stale_target` if the provided coordinate is > `30m` from the target cluster geom

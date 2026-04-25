@@ -19,6 +19,8 @@ export type PotholeActionPayload = {
     lng: number;
     accuracy_m: number | null;
     recorded_at: string;
+    sensor_backed_magnitude_g?: number | null;
+    sensor_backed_at?: string | null;
 };
 
 export type PotholeActionResult = {
@@ -112,13 +114,38 @@ export function validatePotholeActionPayload(payload: unknown): ValidationResult
         fieldErrors.recorded_at = "must be an RFC3339 timestamp";
     }
 
+    const sensorBackedMagnitude = input.sensor_backed_magnitude_g;
+    const sensorBackedAt = input.sensor_backed_at;
+    const hasSensorBackedMagnitude = sensorBackedMagnitude !== undefined && sensorBackedMagnitude !== null;
+    const hasSensorBackedAt = sensorBackedAt !== undefined && sensorBackedAt !== null;
+
+    if (hasSensorBackedMagnitude) {
+        if (!isFiniteNumber(sensorBackedMagnitude) || sensorBackedMagnitude <= 0 || sensorBackedMagnitude > 8) {
+            fieldErrors.sensor_backed_magnitude_g = "must be numeric between 0 and 8";
+        }
+    }
+
+    if (hasSensorBackedAt && !isIsoTimestamp(sensorBackedAt)) {
+        fieldErrors.sensor_backed_at = "must be an RFC3339 timestamp";
+    }
+
+    if (hasSensorBackedMagnitude !== hasSensorBackedAt) {
+        fieldErrors.sensor_backed = "magnitude and timestamp must be provided together";
+    }
+
     const potholeReportID = input.pothole_report_id;
     if (actionType === "manual_report") {
         if (!(potholeReportID === undefined || potholeReportID === null)) {
             fieldErrors.pothole_report_id = "must be omitted for manual_report";
         }
-    } else if (!UUID_REGEX.test(String(potholeReportID ?? ""))) {
-        fieldErrors.pothole_report_id = "must be a UUID string";
+    } else {
+        if (!UUID_REGEX.test(String(potholeReportID ?? ""))) {
+            fieldErrors.pothole_report_id = "must be a UUID string";
+        }
+
+        if (hasSensorBackedMagnitude || hasSensorBackedAt) {
+            fieldErrors.sensor_backed = "must be omitted for follow-up actions";
+        }
     }
 
     if (Object.keys(fieldErrors).length > 0) {
@@ -139,6 +166,8 @@ export function validatePotholeActionPayload(payload: unknown): ValidationResult
             lng: Number(input.lng),
             accuracy_m: input.accuracy_m == null ? null : Number(input.accuracy_m),
             recorded_at: String(input.recorded_at),
+            sensor_backed_magnitude_g: hasSensorBackedMagnitude ? Number(sensorBackedMagnitude) : null,
+            sensor_backed_at: hasSensorBackedAt ? String(sensorBackedAt) : null,
         },
     };
 }

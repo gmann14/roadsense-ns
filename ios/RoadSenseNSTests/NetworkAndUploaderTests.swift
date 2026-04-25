@@ -131,6 +131,8 @@ final class NetworkAndUploaderTests: XCTestCase {
             XCTAssertEqual(payload.lng, -63.5752, accuracy: 0.0001)
             XCTAssertEqual(payload.accuracyM, 5, accuracy: 0.001)
             XCTAssertEqual(payload.recordedAt, recordedAt)
+            XCTAssertNil(payload.sensorBackedMagnitudeG)
+            XCTAssertNil(payload.sensorBackedAt)
             XCTAssertFalse(payload.clientAppVersion.isEmpty)
             XCTAssertTrue(payload.clientOSVersion.hasPrefix("iOS "))
 
@@ -364,7 +366,9 @@ final class NetworkAndUploaderTests: XCTestCase {
                 accuracyM: 4,
                 recordedAt: Date(timeIntervalSince1970: 1_713_000_010),
                 createdAt: Date(timeIntervalSince1970: 1_713_000_011),
-                uploadState: .pendingUpload
+                uploadState: .pendingUpload,
+                sensorBackedMagnitudeG: 2.6,
+                sensorBackedAt: Date(timeIntervalSince1970: 1_713_000_008)
             )
         )
         context.insert(
@@ -696,13 +700,9 @@ final class NetworkAndUploaderTests: XCTestCase {
         )
 
         let base = Date(timeIntervalSince1970: 1_713_000_100)
-        let tickQueue = DispatchQueue(label: "NetworkAndUploaderTests.tick")
-        var tick = 0
+        let clock = LockedTickClock(base: base)
         try await uploader.drainUntilBlocked(nowProvider: {
-            tickQueue.sync {
-                defer { tick += 1 }
-                return base.addingTimeInterval(Double(tick))
-            }
+            clock.next()
         })
 
         let updatedContext = ModelContext(container)
@@ -1297,8 +1297,7 @@ final class NetworkAndUploaderTests: XCTestCase {
         let locationService = CountingLocationService()
         let motionService = CountingMotionService()
         let drivingDetector = StreamDrivingDetector()
-        let checkpointStore = SensorCheckpointStore()
-        try? checkpointStore.clear()
+        let checkpointStore = try makeIsolatedCheckpointStore()
 
         let coordinator = SensorCoordinator(
             locationService: locationService,
@@ -1337,15 +1336,133 @@ final class NetworkAndUploaderTests: XCTestCase {
     }
 
     @MainActor
+    func testSensorCoordinatorArmsPassiveLocationMonitoring() async throws {
+        let container = try makeInMemoryContainer()
+        let locationService = CountingLocationService()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: CountingMotionService(),
+            drivingDetector: StreamDrivingDetector(),
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            scheduleUploadDrain: { _ in }
+        )
+
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        XCTAssertEqual(locationService.passiveStartCount, 1)
+        XCTAssertEqual(locationService.startCount, 0)
+
+        coordinator.stopMonitoring()
+        XCTAssertEqual(locationService.passiveStopCount, 1)
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
+    func testSensorCoordinatorStartsCollectionFromMovingLocationBootstrap() async throws {
+        let container = try makeInMemoryContainer()
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: StreamDrivingDetector(),
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            scheduleUploadDrain: { _ in }
+        )
+
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        locationService.send(
+            LocationSample(
+                timestamp: 1_713_000_000,
+                latitude: 44.6488,
+                longitude: -63.5752,
+                horizontalAccuracyMeters: 12,
+                speedKmh: 42,
+                headingDegrees: 180
+            )
+        )
+        try? await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertTrue(coordinator.monitoringState.isCollecting)
+        XCTAssertEqual(locationService.startCount, 1)
+        XCTAssertEqual(motionService.startCount, 1)
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
+    func testSensorCoordinatorMatchesRecentPotholeCandidateForManualSeverity() async throws {
+        let container = try makeInMemoryContainer()
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let drivingDetector = StreamDrivingDetector()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            scheduleUploadDrain: { _ in }
+        )
+
+        let location = LocationSample(
+            timestamp: 1_713_000_000,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 8,
+            speedKmh: 35,
+            headingDegrees: 180
+        )
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(10))
+        locationService.send(location)
+        try? await Task.sleep(for: .milliseconds(10))
+        motionService.sendVerticalAcceleration(-0.8, timestamp: 1_713_000_000.1)
+        motionService.sendVerticalAcceleration(2.6, timestamp: 1_713_000_000.2)
+        try? await Task.sleep(for: .milliseconds(10))
+
+        let matched = coordinator.strongestRecentPotholeCandidate(
+            near: location,
+            now: Date(timeIntervalSince1970: 1_713_000_005)
+        )
+
+        XCTAssertEqual(matched?.magnitudeG, 2.6)
+        XCTAssertEqual(coordinator.diagnostics.lastPotholeCandidateAt, Date(timeIntervalSince1970: location.timestamp))
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
     func testSensorCoordinatorSchedulesUploadDrainAfterDrivingStops() async throws {
         let container = try makeInMemoryContainer()
         let locationService = CountingLocationService()
         let motionService = CountingMotionService()
         let drivingDetector = StreamDrivingDetector()
-        let checkpointStore = SensorCheckpointStore()
+        let checkpointStore = try makeIsolatedCheckpointStore()
         let now = Date(timeIntervalSince1970: 1_713_000_000)
         var scheduledDates: [Date] = []
-        try? checkpointStore.clear()
 
         let uploadDrainScheduled = expectation(description: "upload drain scheduled")
         let coordinator = SensorCoordinator(
@@ -1404,7 +1521,9 @@ final class NetworkAndUploaderTests: XCTestCase {
                 accuracyM: 4,
                 recordedAt: Date(timeIntervalSince1970: 1_713_000_010),
                 createdAt: Date(timeIntervalSince1970: 1_713_000_011),
-                uploadState: .pendingUpload
+                uploadState: .pendingUpload,
+                sensorBackedMagnitudeG: 2.6,
+                sensorBackedAt: Date(timeIntervalSince1970: 1_713_000_008)
             )
         )
         try context.save()
@@ -1419,6 +1538,8 @@ final class NetworkAndUploaderTests: XCTestCase {
             )
             XCTAssertEqual(payload.actionID, actionID)
             XCTAssertEqual(payload.actionType, PotholeActionType.manualReport.rawValue)
+            XCTAssertEqual(payload.sensorBackedMagnitudeG, 2.6)
+            XCTAssertEqual(payload.sensorBackedAt, Date(timeIntervalSince1970: 1_713_000_008))
             XCTAssertFalse(payload.deviceToken.isEmpty)
 
             let encoder = UploadCodec.makeEncoder()
@@ -1591,6 +1712,19 @@ final class NetworkAndUploaderTests: XCTestCase {
         try ModelContainerProvider.makeInMemory()
     }
 
+    @MainActor
+    private func makeIsolatedCheckpointStore() throws -> SensorCheckpointStore {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RoadSenseNSTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        return SensorCheckpointStore(
+            fileURL: directory.appendingPathComponent("SensorCheckpoint.json", isDirectory: false)
+        )
+    }
+
     private func makeMockSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
@@ -1630,6 +1764,23 @@ private final class MockURLProtocol: URLProtocol {
 
 private enum MockRequestBodyError: Error {
     case missingBody
+}
+
+private final class LockedTickClock: @unchecked Sendable {
+    private let base: Date
+    private let lock = NSLock()
+    private var tick = 0
+
+    init(base: Date) {
+        self.base = base
+    }
+
+    func next() -> Date {
+        lock.lock()
+        defer { lock.unlock() }
+        defer { tick += 1 }
+        return base.addingTimeInterval(Double(tick))
+    }
 }
 
 private func requestBody(for request: URLRequest) throws -> Data {
@@ -1692,13 +1843,34 @@ private final class StreamDrivingDetector: DrivingDetecting {
 
 @MainActor
 private final class CountingLocationService: LocationServicing {
+    private let continuation: AsyncStream<LocationSample>.Continuation
+
     private(set) var startCount = 0
     private(set) var stopCount = 0
+    private(set) var passiveStartCount = 0
+    private(set) var passiveStopCount = 0
+    private var bufferedSamples: [LocationSample] = []
 
-    var samples: AsyncStream<LocationSample> { AsyncStream { _ in } }
+    let samples: AsyncStream<LocationSample>
     var authorizationStatus: CLAuthorizationStatus { .authorizedAlways }
-    var latestSample: LocationSample? { nil }
-    var recentSamples: [LocationSample] { [] }
+    var latestSample: LocationSample? { bufferedSamples.last }
+    var recentSamples: [LocationSample] { bufferedSamples }
+
+    init() {
+        var captured: AsyncStream<LocationSample>.Continuation?
+        self.samples = AsyncStream<LocationSample> { continuation in
+            captured = continuation
+        }
+        self.continuation = captured!
+    }
+
+    func startPassiveMonitoring() {
+        passiveStartCount += 1
+    }
+
+    func stopPassiveMonitoring() {
+        passiveStopCount += 1
+    }
 
     func start() throws {
         startCount += 1
@@ -1709,14 +1881,29 @@ private final class CountingLocationService: LocationServicing {
     }
 
     func requestAlwaysUpgrade() {}
+
+    func send(_ sample: LocationSample) {
+        bufferedSamples.append(sample)
+        continuation.yield(sample)
+    }
 }
 
 @MainActor
 private final class CountingMotionService: MotionServicing {
+    private let continuation: AsyncStream<MotionSample>.Continuation
+
     private(set) var startCount = 0
     private(set) var stopCount = 0
 
-    var samples: AsyncStream<MotionSample> { AsyncStream { _ in } }
+    let samples: AsyncStream<MotionSample>
+
+    init() {
+        var captured: AsyncStream<MotionSample>.Continuation?
+        self.samples = AsyncStream<MotionSample> { continuation in
+            captured = continuation
+        }
+        self.continuation = captured!
+    }
 
     func start(hz: Double) throws {
         startCount += 1
@@ -1724,6 +1911,16 @@ private final class CountingMotionService: MotionServicing {
 
     func stop() {
         stopCount += 1
+    }
+
+    func sendVerticalAcceleration(_ value: Double, timestamp: TimeInterval) {
+        continuation.yield(
+            MotionSample(
+                timestamp: timestamp,
+                userAcceleration: MotionVector3(x: 0, y: 0, z: value),
+                gravity: MotionVector3(x: 0, y: 0, z: 1)
+            )
+        )
     }
 }
 

@@ -1,8 +1,36 @@
+import CoreLocation
 import Foundation
+
+struct SensorCollectionDiagnostics: Equatable {
+    let isMonitoring: Bool
+    let isCollecting: Bool
+    let lastMonitoringStartedAt: Date?
+    let lastCollectionStartedAt: Date?
+    let lastCollectionStoppedAt: Date?
+    let lastLocationSampleAt: Date?
+    let lastDrivingEventAt: Date?
+    let lastDrivingEventWasDriving: Bool?
+    let lastPotholeCandidateAt: Date?
+
+    static let empty = SensorCollectionDiagnostics(
+        isMonitoring: false,
+        isCollecting: false,
+        lastMonitoringStartedAt: nil,
+        lastCollectionStartedAt: nil,
+        lastCollectionStoppedAt: nil,
+        lastLocationSampleAt: nil,
+        lastDrivingEventAt: nil,
+        lastDrivingEventWasDriving: nil,
+        lastPotholeCandidateAt: nil
+    )
+}
 
 @MainActor
 final class SensorCoordinator {
     private static let fragmentedSessionMergeGapSeconds: TimeInterval = 60
+    private static let locationBootstrapSpeedKmh = 15.0
+    private static let locationBootstrapAccuracyMeters = 50.0
+    private static let manualPotholeCandidateRetentionSeconds: TimeInterval = 30
 
     private let locationService: LocationServicing
     private let motionService: MotionServicing
@@ -31,6 +59,14 @@ final class SensorCoordinator {
     private var isMonitoring = false
     private var isCollecting = false
     private var lastCheckpointAt: Date?
+    private var lastMonitoringStartedAt: Date?
+    private var lastCollectionStartedAt: Date?
+    private var lastCollectionStoppedAt: Date?
+    private var lastLocationSampleAt: Date?
+    private var lastDrivingEventAt: Date?
+    private var lastDrivingEventWasDriving: Bool?
+    private var lastPotholeCandidateAt: Date?
+    private var shouldResumeCollectionAfterRestore = false
 
     init(
         locationService: LocationServicing,
@@ -108,7 +144,9 @@ final class SensorCoordinator {
         repairFragmentedDriveSessionsIfNeeded()
 
         isMonitoring = true
+        lastMonitoringStartedAt = nowProvider()
         stateDidChange?()
+        locationService.startPassiveMonitoring()
         drivingDetector.start()
 
         locationTask = Task { [weak self] in
@@ -128,6 +166,7 @@ final class SensorCoordinator {
         drivingTask = Task { [weak self] in
             guard let self else { return }
             for await isDriving in drivingDetector.events {
+                self.handleDrivingEvent(isDriving)
                 if isDriving {
                     await self.cancelPendingStopCollection()
                     await self.startCollection()
@@ -137,11 +176,19 @@ final class SensorCoordinator {
             }
         }
 
+        if shouldResumeCollectionAfterRestore {
+            shouldResumeCollectionAfterRestore = false
+            Task { [weak self] in
+                await self?.startCollection()
+            }
+        }
+
         logger.info("sensor monitoring started")
     }
 
     func stopMonitoring() {
         isMonitoring = false
+        locationService.stopPassiveMonitoring()
         stateDidChange?()
         drivingTask?.cancel()
         locationTask?.cancel()
@@ -176,6 +223,42 @@ final class SensorCoordinator {
         (isMonitoring, isCollecting)
     }
 
+    var diagnostics: SensorCollectionDiagnostics {
+        SensorCollectionDiagnostics(
+            isMonitoring: isMonitoring,
+            isCollecting: isCollecting,
+            lastMonitoringStartedAt: lastMonitoringStartedAt,
+            lastCollectionStartedAt: lastCollectionStartedAt,
+            lastCollectionStoppedAt: lastCollectionStoppedAt,
+            lastLocationSampleAt: lastLocationSampleAt,
+            lastDrivingEventAt: lastDrivingEventAt,
+            lastDrivingEventWasDriving: lastDrivingEventWasDriving,
+            lastPotholeCandidateAt: lastPotholeCandidateAt
+        )
+    }
+
+    func strongestRecentPotholeCandidate(
+        near sample: LocationSample,
+        now: Date,
+        maxAgeSeconds: TimeInterval = 20,
+        maxDistanceMeters: CLLocationDistance = 25
+    ) -> PotholeCandidate? {
+        let tapTime = now.timeIntervalSince1970
+        let tapLocation = CLLocation(latitude: sample.latitude, longitude: sample.longitude)
+
+        return recentPotholes
+            .filter { candidate in
+                let age = tapTime - candidate.timestamp
+                guard age >= 0 && age <= maxAgeSeconds else {
+                    return false
+                }
+
+                let candidateLocation = CLLocation(latitude: candidate.latitude, longitude: candidate.longitude)
+                return tapLocation.distance(from: candidateLocation) <= maxDistanceMeters
+            }
+            .max { $0.magnitudeG < $1.magnitudeG }
+    }
+
     private func startCollection() async {
         await cancelPendingStopCollection()
         guard isMonitoring, !isCollecting else {
@@ -186,6 +269,7 @@ final class SensorCoordinator {
             try locationService.start()
             try motionService.start(hz: 50)
             isCollecting = true
+            lastCollectionStartedAt = nowProvider()
             stateDidChange?()
             logger.info("sensor collection started")
         } catch {
@@ -200,6 +284,7 @@ final class SensorCoordinator {
         }
 
         sealCurrentDriveSessionIfNeeded()
+        lastCollectionStoppedAt = nowProvider()
         stopServicesAndReset()
         logger.info("sensor collection stopped")
         scheduleUploadDrain(nowProvider().addingTimeInterval(15 * 60))
@@ -221,6 +306,17 @@ final class SensorCoordinator {
     }
 
     private func handleLocationSample(_ sample: LocationSample) async {
+        lastLocationSampleAt = Date(timeIntervalSince1970: sample.timestamp)
+        stateDidChange?()
+
+        if isMonitoring,
+           !isCollecting,
+           sample.speedKmh >= Self.locationBootstrapSpeedKmh,
+           sample.horizontalAccuracyMeters <= Self.locationBootstrapAccuracyMeters {
+            logger.info("location movement bootstrap started collection speed=\(sample.speedKmh)")
+            await startCollection()
+        }
+
         guard isCollecting else {
             return
         }
@@ -270,7 +366,9 @@ final class SensorCoordinator {
             logger.info("reading window rejected: \(String(describing: reason))")
         }
 
-        recentPotholes.removeAll { $0.timestamp <= windowEnd }
+        recentPotholes.removeAll {
+            $0.timestamp < windowEnd - Self.manualPotholeCandidateRetentionSeconds
+        }
         persistCheckpointIfNeeded(force: false)
     }
 
@@ -290,8 +388,16 @@ final class SensorCoordinator {
             currentLocation: latestLocation
         ) {
             recentPotholes.append(candidate)
+            lastPotholeCandidateAt = Date(timeIntervalSince1970: candidate.timestamp)
+            stateDidChange?()
         }
         persistCheckpointIfNeeded(force: false)
+    }
+
+    private func handleDrivingEvent(_ isDriving: Bool) {
+        lastDrivingEventAt = nowProvider()
+        lastDrivingEventWasDriving = isDriving
+        stateDidChange?()
     }
 
     private func map(_ state: ProcessInfo.ThermalState) -> ThermalCollectionState {
@@ -313,6 +419,7 @@ final class SensorCoordinator {
         do {
             guard let checkpoint = try checkpointStore.load(maxAge: 30 * 60) else {
                 currentDriveSessionID = nil
+                shouldResumeCollectionAfterRestore = false
                 return false
             }
 
@@ -320,7 +427,8 @@ final class SensorCoordinator {
             potholeDetector = PotholeDetector(snapshot: checkpoint.potholeDetector)
             latestLocation = checkpoint.latestLocation
             recentPotholes = checkpoint.recentPotholes
-            isCollecting = checkpoint.wasCollecting
+            isCollecting = false
+            shouldResumeCollectionAfterRestore = checkpoint.wasCollecting
             currentDriveSessionID = try readingStore.activeDriveSessionID()
             lastCheckpointAt = checkpoint.savedAt
             stateDidChange?()
@@ -329,6 +437,7 @@ final class SensorCoordinator {
         } catch {
             logger.error("failed to restore sensor checkpoint: \(error.localizedDescription)")
             currentDriveSessionID = nil
+            shouldResumeCollectionAfterRestore = false
             return false
         }
     }

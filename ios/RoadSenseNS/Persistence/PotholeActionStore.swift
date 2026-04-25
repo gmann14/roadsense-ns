@@ -40,10 +40,14 @@ final class PotholeActionStore {
 
     func queueManualReport(
         sample: LocationSample,
+        sensorBackedCandidate: PotholeCandidate? = nil,
         now: Date = Date()
     ) throws -> PotholeActionRecord {
         let context = ModelContext(container)
         let recordedAt = Date(timeIntervalSince1970: sample.timestamp)
+        let sensorBackedAt = sensorBackedCandidate.map {
+            Date(timeIntervalSince1970: $0.timestamp)
+        }
 
         if let existing = try findPendingUndoDuplicate(
             sample: sample,
@@ -56,6 +60,8 @@ final class PotholeActionStore {
             existing.recordedAt = recordedAt
             existing.createdAt = now
             existing.undoExpiresAt = now.addingTimeInterval(5)
+            existing.sensorBackedMagnitudeG = sensorBackedCandidate?.magnitudeG
+            existing.sensorBackedAt = sensorBackedAt
             try context.save()
             return existing
         }
@@ -68,7 +74,9 @@ final class PotholeActionStore {
             recordedAt: recordedAt,
             createdAt: now,
             undoExpiresAt: now.addingTimeInterval(5),
-            uploadState: .pendingUndo
+            uploadState: .pendingUndo,
+            sensorBackedMagnitudeG: sensorBackedCandidate?.magnitudeG,
+            sensorBackedAt: sensorBackedAt
         )
         context.insert(record)
         try context.save()

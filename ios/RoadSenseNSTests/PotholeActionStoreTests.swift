@@ -42,6 +42,37 @@ final class PotholeActionStoreTests: XCTestCase {
         XCTAssertEqual(records.first?.uploadState, .pendingUndo)
     }
 
+    func testQueueManualReportPersistsSensorBackedSeverity() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let sample = LocationSample(
+            timestamp: 1_713_000_004.0,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 50,
+            headingDegrees: 180
+        )
+        let candidate = PotholeCandidate(
+            latitude: 44.64879,
+            longitude: -63.57521,
+            magnitudeG: 2.7,
+            timestamp: 1_713_000_001.0
+        )
+
+        let record = try store.queueManualReport(
+            sample: sample,
+            sensorBackedCandidate: candidate,
+            now: Date(timeIntervalSince1970: 1_713_000_005.0)
+        )
+
+        let context = ModelContext(container)
+        let saved = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+            .first(where: { $0.id == record.id })
+        XCTAssertEqual(saved?.sensorBackedMagnitudeG, 2.7)
+        XCTAssertEqual(saved?.sensorBackedAt, Date(timeIntervalSince1970: 1_713_000_001.0))
+    }
+
     func testPromoteExpiredPendingUndoActionsMovesEligibleActionsToPendingUpload() throws {
         let container = try ModelContainerProvider.makeInMemory()
         let store = PotholeActionStore(container: container)

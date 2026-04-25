@@ -415,6 +415,8 @@ func start(onChange: @escaping (Bool) -> Void) {
 - **Bootstrap gap:** our permission flow requests `.authorizedWhenInUse` first and only escalates to `.authorizedAlways` after the user has completed a successful drive. During this pre-Always window, SLC-based relaunch does NOT work. Mitigate by keeping the "Recording" UI sticky in-app and showing a one-time banner after the first drive that explains the Always upgrade and what they gain.
 - On `locationManager(_:didUpdateLocations:)` after a significant-change-triggered relaunch, check if driving activity is `.automotive` and if so, resume normal collection
 
+*Current build note:* `SensorCoordinator.startMonitoring()` arms significant-location-change monitoring through `LocationService.startPassiveMonitoring()`. A moving GPS sample can also bootstrap active collection when motion activity is late or unavailable, and restoring a fresh "was collecting" checkpoint restarts collection services instead of only restoring UI state.
+
 ### Required Info.plist keys (single source of truth)
 
 ```xml
@@ -1233,7 +1235,7 @@ Cross-screen state (recording status, pending upload count, stats) lives on a si
 
 ## Manual Pothole Reporting And Follow-up
 
-*Status: implemented in the current iOS build for the first explicit-reporting pass: map CTA, 5-second undo, `ManualPotholeLocator`, `PotholeActionRecord`, queue persistence, upload through `POST /pothole-actions`, segment-detail `Still there` / `Looks fixed` actions against canonical pothole IDs, and a stopped-only expiring follow-up prompt when the user opens a nearby segment that already has an active pothole. The undo window is now enforced against `undoExpiresAt` rather than toast timing, and promoted actions request an upload drain immediately after the window closes. Broader proactive resurfacing prompts on later drive passes remain polish, not missing plumbing.*
+*Status: implemented in the current iOS build for the first explicit-reporting pass: map CTA, 5-second undo, `ManualPotholeLocator`, `PotholeActionRecord`, queue persistence, optional sensor-backed manual severity, upload through `POST /pothole-actions`, segment-detail `Still there` / `Looks fixed` actions against canonical pothole IDs, and a stopped-only expiring follow-up prompt when the user opens a nearby segment that already has an active pothole. The undo window is now enforced against `undoExpiresAt` rather than toast timing, and promoted actions request an upload drain immediately after the window closes. Broader proactive resurfacing prompts on later drive passes remain polish, not missing plumbing.*
 
 The passive pothole detector remains the default source of road-issue data, but it misses two things users clearly want:
 
@@ -1279,6 +1281,8 @@ Location selection for the tap is intentionally not just `latestSample`. Driver 
 
 If `hasUsableLocation == false`, tapping the button shows a non-blocking banner: `Waiting for a stronger location signal.` and no row is queued.
 
+If a local sensor pothole candidate was detected shortly before the tap, the manual action may carry measured impact as advisory severity. The current rule attaches the strongest candidate within 20 seconds and 25m of the compensated tap location. Stale or distant candidates are ignored, so passenger taps and late taps still create a valid manual report without measured severity.
+
 ### Privacy And Abuse Rules
 
 Manual pothole actions are explicit, but they do **not** override privacy protections in MVP.
@@ -1320,6 +1324,8 @@ final class PotholeActionRecord {
     var nextAttemptAt: Date?
     var lastHTTPStatusCode: Int?
     var lastRequestID: String?
+    var sensorBackedMagnitudeG: Double? // manualReport only
+    var sensorBackedAt: Date?           // manualReport only
 }
 ```
 
@@ -1342,11 +1348,15 @@ Request body sketch:
   "lat": 44.6488,
   "lng": -63.5752,
   "accuracy_m": 6.8,
-  "recorded_at": "2026-04-21T18:22:00Z"
+  "recorded_at": "2026-04-21T18:22:00Z",
+  "sensor_backed_magnitude_g": 2.7,
+  "sensor_backed_at": "2026-04-21T18:21:58Z"
 }
 ```
 
 Server response includes the canonical `pothole_report_id` that the action folded into (new or existing).
+
+`sensor_backed_magnitude_g` and `sensor_backed_at` are optional and valid only for `manual_report`. Omit them for manual-only reports and all follow-up actions.
 
 ### Pothole Action Client State Machine
 

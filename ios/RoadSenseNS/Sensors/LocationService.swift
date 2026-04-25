@@ -7,6 +7,8 @@ protocol LocationServicing {
     var authorizationStatus: CLAuthorizationStatus { get }
     var latestSample: LocationSample? { get }
     var recentSamples: [LocationSample] { get }
+    func startPassiveMonitoring()
+    func stopPassiveMonitoring()
     func start() throws
     func stop()
     func requestAlwaysUpgrade()
@@ -53,6 +55,22 @@ final class LocationService: NSObject, LocationServicing {
 
     func stop() {
         manager.stopUpdatingLocation()
+    }
+
+    func startPassiveMonitoring() {
+        guard CLLocationManager.significantLocationChangeMonitoringAvailable() else {
+            return
+        }
+
+        manager.startMonitoringSignificantLocationChanges()
+    }
+
+    func stopPassiveMonitoring() {
+        guard CLLocationManager.significantLocationChangeMonitoringAvailable() else {
+            return
+        }
+
+        manager.stopMonitoringSignificantLocationChanges()
     }
 
     func requestAlwaysUpgrade() {

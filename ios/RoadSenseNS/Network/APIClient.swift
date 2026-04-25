@@ -120,7 +120,9 @@ final class APIClient {
                 lat: action.latitude,
                 lng: action.longitude,
                 accuracyM: action.accuracyM,
-                recordedAt: action.recordedAt
+                recordedAt: action.recordedAt,
+                sensorBackedMagnitudeG: action.sensorBackedMagnitudeG,
+                sensorBackedAt: action.sensorBackedAt
             )
         )
 

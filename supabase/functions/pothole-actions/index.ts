@@ -16,6 +16,8 @@ function createApplyAction(
             p_accuracy_m: payload.accuracy_m,
             p_recorded_at: payload.recorded_at,
             p_pothole_report_id: payload.pothole_report_id,
+            p_sensor_backed_magnitude_g: payload.sensor_backed_magnitude_g,
+            p_sensor_backed_at: payload.sensor_backed_at,
         });
 
         if (result.error) {

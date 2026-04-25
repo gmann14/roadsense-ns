@@ -20,6 +20,30 @@ enum PotholePhotoSubmissionResult: Equatable {
     case outsideCoverage
 }
 
+struct CollectionDiagnosticsSummary: Equatable {
+    let isMonitoring: Bool
+    let isCollecting: Bool
+    let lastMonitoringStartedAt: Date?
+    let lastCollectionStartedAt: Date?
+    let lastCollectionStoppedAt: Date?
+    let lastLocationSampleAt: Date?
+    let lastDrivingEventAt: Date?
+    let lastDrivingEventWasDriving: Bool?
+    let lastPotholeCandidateAt: Date?
+
+    static let empty = CollectionDiagnosticsSummary(
+        isMonitoring: false,
+        isCollecting: false,
+        lastMonitoringStartedAt: nil,
+        lastCollectionStartedAt: nil,
+        lastCollectionStoppedAt: nil,
+        lastLocationSampleAt: nil,
+        lastDrivingEventAt: nil,
+        lastDrivingEventWasDriving: nil,
+        lastPotholeCandidateAt: nil
+    )
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -59,6 +83,7 @@ final class AppModel {
     private(set) var pendingDriveCoordinates: [CLLocationCoordinate2D] = []
     private(set) var pendingPotholeCoordinates: [CLLocationCoordinate2D] = []
     private(set) var userStatsSummary = UserStatsSummary.zero
+    private(set) var collectionDiagnostics = CollectionDiagnosticsSummary.empty
 
     init(
         container: AppContainer,
@@ -303,7 +328,15 @@ final class AppModel {
         }
 
         do {
-            let action = try potholeActionStore.queueManualReport(sample: chosenSample, now: now)
+            let sensorBackedCandidate = sensorCoordinator.strongestRecentPotholeCandidate(
+                near: chosenSample,
+                now: now
+            )
+            let action = try potholeActionStore.queueManualReport(
+                sample: chosenSample,
+                sensorBackedCandidate: sensorBackedCandidate,
+                now: now
+            )
             logger.info("manual pothole report queued: \(action.id.uuidString)")
             schedulePendingUndoPromotion(for: action.id)
             haptics.notification(.success)
@@ -462,6 +495,18 @@ final class AppModel {
         isCollectionPausedByUser = defaults.bool(forKey: collectionPausedKey)
         isPassiveMonitoringEnabled = sensorCoordinator.monitoringState.isMonitoring
         isActivelyCollecting = sensorCoordinator.monitoringState.isCollecting
+        let diagnostics = sensorCoordinator.diagnostics
+        collectionDiagnostics = CollectionDiagnosticsSummary(
+            isMonitoring: diagnostics.isMonitoring,
+            isCollecting: diagnostics.isCollecting,
+            lastMonitoringStartedAt: diagnostics.lastMonitoringStartedAt,
+            lastCollectionStartedAt: diagnostics.lastCollectionStartedAt,
+            lastCollectionStoppedAt: diagnostics.lastCollectionStoppedAt,
+            lastLocationSampleAt: diagnostics.lastLocationSampleAt,
+            lastDrivingEventAt: diagnostics.lastDrivingEventAt,
+            lastDrivingEventWasDriving: diagnostics.lastDrivingEventWasDriving,
+            lastPotholeCandidateAt: diagnostics.lastPotholeCandidateAt
+        )
     }
 
     private func hasUsableLocation(_ sample: LocationSample, now: Date) -> Bool {
