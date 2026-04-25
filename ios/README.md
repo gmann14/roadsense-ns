@@ -22,7 +22,7 @@ Current status:
 - gravity-projection math for motion samples is implemented in a pure Swift seam with tests
 - reading-window assembly and documented quality-gate logic are implemented in pure Swift with tests
 - upload retry/failure policy is implemented in pure Swift with tests
-- privacy-zone creation/filtering, the high-pass filter, and pothole spike detection are implemented in pure Swift with tests
+- privacy-zone creation/filtering, the high-pass filter, filtered roughness scoring, and pothole spike detection are implemented in pure Swift with tests
 - the GPS-only degraded-permission driving heuristic is implemented in pure Swift with tests
 - upload request/response encoding and background-location policy decisions are implemented in pure Swift with tests
 - the app target has a real onboarding shell split from the ready-to-collect home shell
@@ -43,6 +43,9 @@ Current status:
   - `Config/RoadSenseNS.Local.secrets.xcconfig`
   - `Config/RoadSenseNS.Staging.secrets.xcconfig`
   - `Config/RoadSenseNS.Production.secrets.xcconfig`
+- local device signing can be driven from `Config/RoadSenseNS.Local.secrets.xcconfig` without committing personal-team details:
+  - `DEVELOPMENT_TEAM = <your Apple team ID>`
+  - `ROAD_SENSE_APP_BUNDLE_IDENTIFIER = <your unique bundle ID>`
 - `.xcconfig` templates still exist under `Config/Templates/` as copy/reference material
 - a generator spec exists and can now generate `RoadSenseNS.xcodeproj`
 - the main `RoadSenseNS` app target now builds for `iphonesimulator` with the current pre-map shell; only Sentry is linked for now

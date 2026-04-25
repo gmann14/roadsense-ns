@@ -198,4 +198,187 @@ final class PotholeActionStoreTests: XCTestCase {
         XCTAssertEqual(records.first?.id, record.id)
         XCTAssertEqual(records.first?.uploadState, .pendingUndo)
     }
+
+    func testStatusSummaryCountsPendingAndFailedPermanentActions() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let context = ModelContext(container)
+
+        let pending = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            accuracyM: 6,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            uploadState: .pendingUpload,
+            uploadAttemptCount: 1,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_020.0),
+            nextAttemptAt: Date(timeIntervalSince1970: 1_713_000_060.0),
+            lastHTTPStatusCode: 503
+        )
+        let failed = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6490,
+            longitude: -63.5750,
+            accuracyM: 5,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_010.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_010.0),
+            uploadState: .failedPermanent,
+            uploadAttemptCount: 2,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030.0),
+            lastHTTPStatusCode: 404
+        )
+        context.insert(pending)
+        context.insert(failed)
+        try context.save()
+
+        let summary = try store.statusSummary(now: Date(timeIntervalSince1970: 1_713_000_040.0))
+
+        XCTAssertEqual(summary.pendingCount, 1)
+        XCTAssertEqual(summary.failedPermanentCount, 1)
+        XCTAssertEqual(summary.nextRetryAt, Date(timeIntervalSince1970: 1_713_000_060.0))
+        XCTAssertEqual(summary.lastSuccessfulUploadAt, Date(timeIntervalSince1970: 1_713_000_020.0))
+    }
+
+    func testRetryFailedActionsMovesRecordsBackToPendingUpload() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let context = ModelContext(container)
+
+        let failed = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            accuracyM: 6,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            uploadState: .failedPermanent,
+            uploadAttemptCount: 2,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030.0),
+            nextAttemptAt: Date(timeIntervalSince1970: 1_713_000_120.0),
+            lastHTTPStatusCode: 404,
+            lastRequestID: "req_404"
+        )
+        context.insert(failed)
+        try context.save()
+
+        try store.retryFailedActions()
+
+        let refreshed = try context.fetch(FetchDescriptor<PotholeActionRecord>()).first
+        XCTAssertEqual(refreshed?.uploadState, .pendingUpload)
+        XCTAssertEqual(refreshed?.uploadAttemptCount, 0)
+        XCTAssertNil(refreshed?.lastAttemptAt)
+        XCTAssertNil(refreshed?.nextAttemptAt)
+        XCTAssertNil(refreshed?.lastHTTPStatusCode)
+        XCTAssertNil(refreshed?.lastRequestID)
+    }
+
+    func testRecoverRecoverableFailuresOnlyResetsRetryableHTTPStatuses() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let context = ModelContext(container)
+
+        let retryable = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            accuracyM: 6,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            uploadState: .failedPermanent,
+            uploadAttemptCount: 2,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030.0),
+            lastHTTPStatusCode: 404,
+            lastRequestID: "req_404"
+        )
+        let permanent = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6489,
+            longitude: -63.5751,
+            accuracyM: 6,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_010.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_010.0),
+            uploadState: .failedPermanent,
+            uploadAttemptCount: 1,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_040.0),
+            lastHTTPStatusCode: 400,
+            lastRequestID: "req_400"
+        )
+        context.insert(retryable)
+        context.insert(permanent)
+        try context.save()
+
+        let recovered = try store.recoverRecoverableFailures()
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+        let refreshedRetryable = records.first(where: { $0.id == retryable.id })
+        let refreshedPermanent = records.first(where: { $0.id == permanent.id })
+
+        XCTAssertEqual(recovered, 1)
+        XCTAssertEqual(refreshedRetryable?.uploadState, .pendingUpload)
+        XCTAssertEqual(refreshedRetryable?.uploadAttemptCount, 0)
+        XCTAssertNil(refreshedRetryable?.lastAttemptAt)
+        XCTAssertNil(refreshedRetryable?.lastHTTPStatusCode)
+        XCTAssertNil(refreshedRetryable?.lastRequestID)
+        XCTAssertEqual(refreshedPermanent?.uploadState, .failedPermanent)
+        XCTAssertEqual(refreshedPermanent?.lastHTTPStatusCode, 400)
+    }
+
+    func testPendingManualReportCoordinatesIncludesOnlyNonFailedManualReports() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let context = ModelContext(container)
+
+        let pendingUndo = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            accuracyM: 6,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            undoExpiresAt: Date(timeIntervalSince1970: 1_713_000_005.0),
+            uploadState: .pendingUndo
+        )
+        let pendingUpload = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6490,
+            longitude: -63.5750,
+            accuracyM: 5,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_010.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_010.0),
+            uploadState: .pendingUpload
+        )
+        let failed = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6492,
+            longitude: -63.5748,
+            accuracyM: 5,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_020.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_020.0),
+            uploadState: .failedPermanent
+        )
+        let followUp = PotholeActionRecord(
+            potholeReportID: UUID(),
+            actionType: .confirmPresent,
+            latitude: 44.6494,
+            longitude: -63.5746,
+            accuracyM: 5,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_030.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_030.0),
+            uploadState: .pendingUpload
+        )
+        context.insert(pendingUndo)
+        context.insert(pendingUpload)
+        context.insert(failed)
+        context.insert(followUp)
+        try context.save()
+
+        let coordinates = try store.pendingManualReportCoordinates()
+
+        XCTAssertEqual(coordinates.count, 2)
+        XCTAssertEqual(coordinates.first?.latitude, pendingUndo.latitude)
+        XCTAssertEqual(coordinates.first?.longitude, pendingUndo.longitude)
+        XCTAssertEqual(coordinates.last?.latitude, pendingUpload.latitude)
+        XCTAssertEqual(coordinates.last?.longitude, pendingUpload.longitude)
+    }
 }

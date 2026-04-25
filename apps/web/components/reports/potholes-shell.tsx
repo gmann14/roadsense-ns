@@ -57,7 +57,7 @@ export function PotholesShell({ limit, rows, generatedAt }: PotholesShellProps) 
             {visibleRows.length ? (
               visibleRows.map((row, index) => {
                 const rank = index + 1;
-                const locateHref = `/?mode=potholes&segment=${row.segment_id}`;
+                const locateHref = `/?mode=potholes&lat=${row.lat.toFixed(5)}&lng=${row.lng.toFixed(5)}&z=14.2`;
 
                 return (
                   <article

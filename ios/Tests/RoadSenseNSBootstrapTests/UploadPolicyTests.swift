@@ -19,6 +19,15 @@ struct UploadPolicyTests {
         #expect(disposition == .failedPermanent)
     }
 
+    @Test("404 retries for upload routes")
+    func missingRouteRetries() {
+        let first = UploadPolicy.evaluate(.http(statusCode: 404, retryAfterSeconds: nil), attemptNumber: 1)
+        let fifth = UploadPolicy.evaluate(.http(statusCode: 404, retryAfterSeconds: nil), attemptNumber: 5)
+
+        #expect(first == .retry(afterSeconds: 1))
+        #expect(fifth == .retry(afterSeconds: 16))
+    }
+
     @Test("429 respects Retry-After when present")
     func rateLimitUsesRetryAfter() {
         let disposition = UploadPolicy.evaluate(.http(statusCode: 429, retryAfterSeconds: 3600), attemptNumber: 2)

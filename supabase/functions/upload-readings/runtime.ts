@@ -1,7 +1,56 @@
 export type RpcResponse<T> = { data: T | null; error: { message?: string } | null };
 
+let localEnvCache: Map<string, string> | null = null;
+
+function parseDotEnv(contents: string): Map<string, string> {
+    const values = new Map<string, string>();
+
+    for (const rawLine of contents.split(/\r?\n/u)) {
+        const line = rawLine.trim();
+        if (line.length === 0 || line.startsWith("#")) {
+            continue;
+        }
+
+        const separatorIndex = line.indexOf("=");
+        if (separatorIndex <= 0) {
+            continue;
+        }
+
+        const key = line.slice(0, separatorIndex).trim();
+        const value = line.slice(separatorIndex + 1).trim();
+        if (key.length > 0 && value.length > 0) {
+            values.set(key, value);
+        }
+    }
+
+    return values;
+}
+
+function readLocalFunctionEnv(): Map<string, string> {
+    if (localEnvCache) {
+        return localEnvCache;
+    }
+
+    const candidates = [
+        "supabase/functions/.env",
+        "functions/.env",
+    ];
+
+    for (const path of candidates) {
+        try {
+            localEnvCache = parseDotEnv(Deno.readTextFileSync(path));
+            return localEnvCache;
+        } catch {
+            continue;
+        }
+    }
+
+    localEnvCache = new Map();
+    return localEnvCache;
+}
+
 export function requireEnv(name: string): string {
-    const value = Deno.env.get(name);
+    const value = Deno.env.get(name) ?? readLocalFunctionEnv().get(name);
     if (!value) {
         throw new Error(`Missing required env var: ${name}`);
     }

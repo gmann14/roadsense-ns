@@ -5,21 +5,20 @@ import SwiftUI
 struct RoadQualityMapView: View {
     let config: AppConfig
     let pendingDriveCoordinates: [CLLocationCoordinate2D]
+    let pendingPotholeCoordinates: [CLLocationCoordinate2D]
     let onMapLoaded: () -> Void
     let onMapLoadingError: (String) -> Void
     let onSelectSegment: (UUID) -> Void
     let onClearSelection: () -> Void
 
-    @State private var viewport: Viewport = .camera(
-        center: CLLocationCoordinate2D(latitude: 44.6488, longitude: -63.5752),
-        zoom: 11.8
-    )
+    @State private var viewport: Viewport = .followPuck(zoom: 13.8, bearing: .constant(0))
 
     var body: some View {
         Group {
             if AppBootstrap.isRunningTests {
                 TestingRoadQualityMapView(
                     pendingDriveCoordinates: pendingDriveCoordinates,
+                    pendingPotholeCoordinates: pendingPotholeCoordinates,
                     onMapLoaded: onMapLoaded
                 )
             } else {
@@ -31,10 +30,12 @@ struct RoadQualityMapView: View {
     private var liveMap: some View {
         MapReader { proxy in
             Map(viewport: $viewport) {
-                Puck2D()
+                Puck2D(bearing: .heading)
+                    .showsAccuracyRing(true)
 
                 RoadQualityMapStyleContent(tileTemplateURL: Endpoints(config: config).tileTemplateURLString)
                 LocalDriveOverlayStyleContent(coordinates: pendingDriveCoordinates)
+                PendingPotholeOverlayStyleContent(coordinates: pendingPotholeCoordinates)
 
                 TapInteraction(.layer(RoadQualityMapStyleContent.segmentLayerID)) { feature, _ in
                     guard let map = proxy.map,
@@ -82,6 +83,7 @@ struct RoadQualityMapView: View {
 
 private struct TestingRoadQualityMapView: View {
     let pendingDriveCoordinates: [CLLocationCoordinate2D]
+    let pendingPotholeCoordinates: [CLLocationCoordinate2D]
     let onMapLoaded: () -> Void
 
     var body: some View {
@@ -105,9 +107,9 @@ private struct TestingRoadQualityMapView: View {
                     .foregroundStyle(.white)
 
                 Text(
-                    pendingDriveCoordinates.isEmpty
+                    pendingDriveCoordinates.isEmpty && pendingPotholeCoordinates.isEmpty
                         ? "UI tests run against a deterministic non-Mapbox map shell."
-                        : "Pending local drive overlay data is present in the test shell."
+                        : "Pending local drive or pothole overlay data is present in the test shell."
                 )
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
@@ -164,6 +166,47 @@ private struct LocalDriveOverlayStyleContent: MapStyleContent {
     }
 }
 
+private struct PendingPotholeOverlayStyleContent: MapStyleContent {
+    static let sourceID = "roadsense-pending-pothole-source"
+    static let layerID = "roadsense-pending-potholes"
+
+    let coordinates: [CLLocationCoordinate2D]
+
+    var body: some MapStyleContent {
+        if !coordinates.isEmpty {
+            GeoJSONSource(id: Self.sourceID)
+                .data(pendingPotholeGeoJSON)
+
+            CircleLayer(id: Self.layerID, source: Self.sourceID)
+                .circleColor(StyleColor(DesignTokens.Palette.warning))
+                .circleStrokeColor(StyleColor(.white))
+                .circleStrokeWidth(2)
+                .circleRadius(radiusExpression)
+                .circleOpacity(0.88)
+        }
+    }
+
+    private var pendingPotholeGeoJSON: GeoJSONSourceData {
+        let features = coordinates.map { coordinate in
+            Feature(geometry: Geometry(Point(coordinate)))
+        }
+        return .featureCollection(FeatureCollection(features: features))
+    }
+
+    private var radiusExpression: Exp {
+        Exp(.interpolate) {
+            Exp(.linear)
+            Exp(.zoom)
+            10
+            4.0
+            14
+            6.0
+            18
+            8.5
+        }
+    }
+}
+
 private struct RoadQualityMapStyleContent: MapStyleContent {
     static let sourceID = "roadsense-quality-source"
     static let potholeSourceID = "roadsense-pothole-source"
@@ -212,17 +255,19 @@ private struct RoadQualityMapStyleContent: MapStyleContent {
     }
 
     private var segmentColorExpression: Exp {
-        Exp(.interpolate) {
-            Exp(.linear)
-            Exp(.get) { "roughness_score" }
-            0.3
+        Exp(.match) {
+            Exp(.get) { "category" }
+            "smooth"
             UIColor(DesignTokens.Palette.smooth)
-            0.6
+            "fair"
             UIColor(DesignTokens.Palette.fair)
-            1.0
+            "rough"
             UIColor(DesignTokens.Palette.rough)
-            1.5
+            "very_rough"
             UIColor(DesignTokens.Palette.veryRough)
+            "unpaved"
+            UIColor(DesignTokens.Palette.warning)
+            UIColor(DesignTokens.Palette.inkMuted)
         }
     }
 

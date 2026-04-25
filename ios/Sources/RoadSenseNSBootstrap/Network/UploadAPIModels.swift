@@ -49,21 +49,33 @@ public struct UploadReadingPayload: Codable, Equatable, Sendable {
 public struct UploadReadingsRequest: Codable, Equatable, Sendable {
     public let batchID: UUID
     public let deviceToken: String
+    public let clientSentAt: Date
+    public let clientAppVersion: String
+    public let clientOSVersion: String
     public let readings: [UploadReadingPayload]
 
     public init(
         batchID: UUID,
         deviceToken: String,
+        clientSentAt: Date,
+        clientAppVersion: String,
+        clientOSVersion: String,
         readings: [UploadReadingPayload]
     ) {
         self.batchID = batchID
         self.deviceToken = deviceToken
+        self.clientSentAt = clientSentAt
+        self.clientAppVersion = clientAppVersion
+        self.clientOSVersion = clientOSVersion
         self.readings = readings
     }
 
     enum CodingKeys: String, CodingKey {
         case batchID = "batch_id"
         case deviceToken = "device_token"
+        case clientSentAt = "client_sent_at"
+        case clientAppVersion = "client_app_version"
+        case clientOSVersion = "client_os_version"
         case readings
     }
 }

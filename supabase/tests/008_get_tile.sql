@@ -138,13 +138,14 @@ SELECT cmp_ok(
     octet_length(get_tile(14, 5299, 5915)),
     '>',
     0,
-    'high-confidence tile returns MVT bytes'
+    'tile returns MVT bytes for visible segments'
 );
 
-SELECT is(
+SELECT cmp_ok(
     octet_length(get_tile(14, 5320, 5912)),
+    '>',
     0,
-    'tile containing only low-confidence segments is suppressed'
+    'tile containing only low-confidence segments is still emitted for bootstrap visibility'
 );
 
 SELECT is(
@@ -164,8 +165,9 @@ SELECT ok(
 );
 
 SELECT ok(
-    position('sa.confidence != ''low''' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) > 0,
-    'get_tile enforces low-confidence suppression in the function body'
+    position('sa.confidence != ''low''' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) = 0
+    AND position('sa.unique_contributors >= 3' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) = 0,
+    'get_tile no longer suppresses low-confidence bootstrap segments in-function'
 );
 
 SELECT * FROM finish();

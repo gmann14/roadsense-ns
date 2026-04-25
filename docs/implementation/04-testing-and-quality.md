@@ -35,7 +35,7 @@ Generated-project note:
 
 | Module | Coverage |
 |---|---|
-| `RoughnessScorer` | Deterministic scoring of canned signals (synthetic sine, step, real CSV clip). Asserts RMS within ±0.02g of expected. |
+| `RoughnessScorer` | Deterministic scoring of canned signals (synthetic sine, step, real CSV clip). Asserts filtered vertical-acceleration RMS against checked-in fixture envelopes. |
 | `PotholeDetector` | Synthetic dip-then-spike, synthetic braking (should NOT trigger), real pothole CSV (should trigger). |
 | `PrivacyZoneFilter` | Point in zone, point at boundary, point outside, multiple overlapping zones. |
 | `DriveEndpointTrimmer` | Prefix/suffix time trimming, start/end radius trimming, overlap of both rules, short-drive fully-trimmed behavior, and deterministic recovery after relaunch from persisted session endpoints. |
@@ -215,7 +215,7 @@ Each fixture has an accompanying `.expected.json` with the assertion targets:
     "fixture": "pothole-hit.csv",
     "expected_windows": 1,
     "expected_pothole_flagged": true,
-    "expected_rms_range": [0.6, 1.2],
+    "expected_rms_range": [0.63, 0.68],
     "expected_max_spike_g_range": [2.5, 4.0]
 }
 ```

@@ -2,6 +2,28 @@ import CoreLocation
 import Foundation
 import SwiftData
 
+struct PotholeActionStatusSummary: Equatable {
+    let pendingCount: Int
+    let failedPermanentCount: Int
+    let nextRetryAt: Date?
+    let lastSuccessfulUploadAt: Date?
+
+    static let empty = PotholeActionStatusSummary(
+        pendingCount: 0,
+        failedPermanentCount: 0,
+        nextRetryAt: nil,
+        lastSuccessfulUploadAt: nil
+    )
+}
+
+struct FailedPotholeActionSummary: Identifiable, Equatable {
+    let id: UUID
+    let latitude: Double
+    let longitude: Double
+    let recordedAt: Date
+    let lastHTTPStatusCode: Int?
+}
+
 @MainActor
 final class PotholeActionStore {
     private let container: ModelContainer
@@ -115,6 +137,129 @@ final class PotholeActionStore {
         return try context.fetch(FetchDescriptor<PotholeActionRecord>())
             .filter { $0.uploadState != .failedPermanent }
             .count
+    }
+
+    func statusSummary(now: Date = Date()) throws -> PotholeActionStatusSummary {
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+
+        let pendingCount = records.filter { $0.uploadState != .failedPermanent }.count
+        let failedPermanentCount = records.filter { $0.uploadState == .failedPermanent }.count
+        let nextRetryAt = records
+            .filter { $0.uploadState == .pendingUpload }
+            .compactMap(\.nextAttemptAt)
+            .filter { $0 > now }
+            .min()
+        let lastSuccessfulUploadAt = records
+            .filter { $0.uploadState != .failedPermanent }
+            .compactMap(\.lastAttemptAt)
+            .max()
+
+        return PotholeActionStatusSummary(
+            pendingCount: pendingCount,
+            failedPermanentCount: failedPermanentCount,
+            nextRetryAt: nextRetryAt,
+            lastSuccessfulUploadAt: lastSuccessfulUploadAt
+        )
+    }
+
+    func failedPermanentActions(limit: Int = 10) throws -> [FailedPotholeActionSummary] {
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>(
+            sortBy: [SortDescriptor(\.recordedAt, order: .reverse)]
+        ))
+
+        return records
+            .filter { $0.uploadState == .failedPermanent }
+            .prefix(max(limit, 0))
+            .map { record in
+                FailedPotholeActionSummary(
+                    id: record.id,
+                    latitude: record.latitude,
+                    longitude: record.longitude,
+                    recordedAt: record.recordedAt,
+                    lastHTTPStatusCode: record.lastHTTPStatusCode
+                )
+            }
+    }
+
+    func pendingManualReportCoordinates(limit: Int = 100) throws -> [CLLocationCoordinate2D] {
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>(
+            sortBy: [SortDescriptor(\.createdAt, order: .forward)]
+        ))
+
+        return records
+            .filter { record in
+                record.actionType == .manualReport && record.uploadState != .failedPermanent
+            }
+            .prefix(max(limit, 0))
+            .map { record in
+                CLLocationCoordinate2D(latitude: record.latitude, longitude: record.longitude)
+            }
+    }
+
+    func retryFailedActions(ids: [UUID]? = nil) throws {
+        let context = ModelContext(container)
+        let retryIDs = ids.map(Set.init)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+        var didChange = false
+
+        for record in records where record.uploadState == .failedPermanent {
+            guard retryIDs?.contains(record.id) ?? true else {
+                continue
+            }
+
+            resetForRetry(record)
+            didChange = true
+        }
+
+        if didChange {
+            try context.save()
+        }
+    }
+
+    @discardableResult
+    func recoverRecoverableFailures() throws -> Int {
+        let context = ModelContext(container)
+        let records = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+        var recovered = 0
+
+        for record in records where record.uploadState == .failedPermanent {
+            guard Self.isRecoverableFailureStatus(record.lastHTTPStatusCode) else {
+                continue
+            }
+
+            resetForRetry(record)
+            recovered += 1
+        }
+
+        if recovered > 0 {
+            try context.save()
+        }
+
+        return recovered
+    }
+
+    private static func isRecoverableFailureStatus(_ statusCode: Int?) -> Bool {
+        guard let statusCode else {
+            return false
+        }
+
+        if statusCode == 404 || statusCode == 408 || statusCode == 429 {
+            return true
+        }
+
+        return (500...599).contains(statusCode)
+    }
+
+    private func resetForRetry(_ record: PotholeActionRecord) {
+        record.uploadState = .pendingUpload
+        record.uploadAttemptCount = 0
+        record.lastAttemptAt = nil
+        record.nextAttemptAt = nil
+        record.lastHTTPStatusCode = nil
+        record.lastRequestID = nil
     }
 
     func deleteAllActions() throws {

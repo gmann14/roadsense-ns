@@ -9,11 +9,15 @@ struct ReadingBuilderTests {
     func emitsWindowAtFortyMeters() {
         var builder = ReadingBuilder()
 
-        for second in 0..<40 {
+        for index in 0..<50 {
             builder.addMotionSample(
                 MotionSample(
-                    timestamp: TimeInterval(second),
-                    userAcceleration: MotionVector3(x: 0, y: 0, z: 1),
+                    timestamp: Double(index) / 50.0,
+                    userAcceleration: MotionVector3(
+                        x: 0,
+                        y: 0,
+                        z: sin(2 * .pi * 5 * (Double(index) / 50.0))
+                    ),
                     gravity: MotionVector3(x: 0, y: 0, z: 1)
                 )
             )
@@ -27,9 +31,10 @@ struct ReadingBuilderTests {
             return
         }
 
-        #expect(reading.sampleCount == 40)
+        #expect(reading.sampleCount == 50)
         #expect(reading.durationSeconds == 10)
-        #expect(reading.roughnessRMS == 1)
+        #expect(reading.roughnessRMS >= 0.6)
+        #expect(reading.roughnessRMS <= 0.8)
         #expect(reading.latitude.isApproximately(equalTo: metersToLatitude(20), tolerance: 0.000001))
         #expect(reading.gpsAccuracyMeters == 5)
     }

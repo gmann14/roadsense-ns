@@ -1,6 +1,7 @@
-FORWARD_SLASH = /
 APP_ENV = LOCAL
-API_BASE_URL = http:$(FORWARD_SLASH)$(FORWARD_SLASH)127.0.0.1:54321
+APP_DISPLAY_NAME = RoadSense NS Local
+API_BASE_URL = http:/$()/127.0.0.1:54321
+ROAD_SENSE_APP_BUNDLE_IDENTIFIER = ca.roadsense.ios.localdebug
 MAPBOX_ACCESS_TOKEN = pk.placeholder.local
 SUPABASE_ANON_KEY = anon.placeholder.local
 SENTRY_DSN =
@@ -8,4 +9,6 @@ APP_GROUP_IDENTIFIER = group.ca.roadsense.ios.local
 
 // Create RoadSenseNS.Local.secrets.xcconfig for local overrides.
 // This file is optional and ignored by git.
+// Useful local overrides for on-device testing:
+// DEVELOPMENT_TEAM = <your Apple team ID>
 #include? "RoadSenseNS.Local.secrets.xcconfig"

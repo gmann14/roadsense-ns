@@ -23,6 +23,9 @@ public enum UploadPolicy {
         case let .http(statusCode, _) where statusCode == 400:
             return .failedPermanent
 
+        case let .http(statusCode, _) where statusCode == 404:
+            return retryOrPermanent(attemptNumber: attemptNumber)
+
         case let .http(statusCode, retryAfterSeconds) where statusCode == 429:
             return .retry(afterSeconds: retryAfterSeconds ?? 60)
 

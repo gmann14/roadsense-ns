@@ -28,6 +28,7 @@ struct MapScreen: View {
             RoadQualityMapView(
                 config: model.config,
                 pendingDriveCoordinates: model.pendingDriveCoordinates,
+                pendingPotholeCoordinates: model.pendingPotholeCoordinates,
                 onMapLoaded: {
                     isMapLoaded = true
                     mapLoadError = nil
@@ -221,14 +222,18 @@ struct MapScreen: View {
                     mapLoadBanner(message: mapLoadError)
                 }
 
-                markPotholeAction
+                if showsPrimaryAction {
+                    primaryAction
+                }
 
-                takePhotoAction
+                if showsDriveTools {
+                    driveToolsSection
+                } else if showsPassiveReadyHint {
+                    passiveReadyHint
+                }
 
-                primaryAction
-
-                if model.readiness.showsPrivacyRiskWarning {
-                    privacyZonesAction
+                if model.readiness.showsPrivacyRiskWarning || showsStatsShortcut {
+                    footerLinkRow
                 }
             }
         }
@@ -278,7 +283,7 @@ struct MapScreen: View {
                     Text(headerSubtitle)
                         .font(.caption)
                         .foregroundStyle(DesignTokens.Palette.signalSoft.opacity(0.96))
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .accessibilityIdentifier("map.pending-uploads")
                 }
 
@@ -388,7 +393,7 @@ struct MapScreen: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("map.mark-pothole-button")
-        .accessibilityHint("Queues a pothole report using your current stopped location.")
+        .accessibilityHint("Queues a pothole report using your latest precise location.")
     }
 
     private var takePhotoAction: some View {
@@ -397,28 +402,28 @@ struct MapScreen: View {
         } label: {
             HStack(spacing: DesignTokens.Space.xs) {
                 Image(systemName: "camera.viewfinder")
-                    .font(.system(size: 15, weight: .bold))
-                Text("Take photo")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                Spacer(minLength: DesignTokens.Space.xs)
-                Text("Stopped only")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 13, weight: .bold))
+                Text("Add photo")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                Text("Optional")
+                    .font(.system(size: 11, weight: .semibold))
                     .padding(.horizontal, DesignTokens.Space.xs)
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 4)
                     .background(.white.opacity(0.12), in: Capsule())
+                Spacer(minLength: DesignTokens.Space.xs)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.55))
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, DesignTokens.Space.md)
-            .padding(.vertical, DesignTokens.Space.sm)
+            .padding(.horizontal, DesignTokens.Space.sm)
+            .padding(.vertical, DesignTokens.Space.xs)
             .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
-                    .fill(Color.black.opacity(0.28))
-            )
+            .background(Color.clear)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("map.take-photo-button")
-        .accessibilityHint("Opens the camera when you are safely stopped.")
+        .accessibilityHint("Opens the camera when a fresh GPS fix is available.")
     }
 
     private var primaryAction: some View {
@@ -435,8 +440,77 @@ struct MapScreen: View {
             .buttonStyle(.plain)
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(DesignTokens.Palette.signalSoft)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("map.privacy-zones-action")
+    }
+
+    private var driveToolsSection: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+            Label("Drive tools are live", systemImage: "steeringwheel")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(DesignTokens.Palette.signalSoft)
+
+            Text("RoadSense is recording right now. Use these only when it is safe to do so.")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.82))
+                .fixedSize(horizontal: false, vertical: true)
+
+            markPotholeAction
+
+            HStack(spacing: DesignTokens.Space.sm) {
+                takePhotoAction
+
+                if model.readiness.showsPrivacyRiskWarning {
+                    privacyZonesAction
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+        }
+        .padding(DesignTokens.Space.sm)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .fill(Color.black.opacity(0.22))
+        )
+    }
+
+    private var passiveReadyHint: some View {
+        HStack(alignment: .top, spacing: DesignTokens.Space.sm) {
+            Image(systemName: "waveform.path.ecg")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(DesignTokens.Palette.signalSoft)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Passive collection is armed")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                Text("Keep the app open or leave it in the background with Always Location enabled, and RoadSense will start the next drive automatically.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(DesignTokens.Space.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .fill(Color.black.opacity(0.22))
+        )
+    }
+
+    private var footerLinkRow: some View {
+        HStack(spacing: DesignTokens.Space.md) {
+            if showsStatsShortcut {
+                Button("See stats", action: onShowStats)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Palette.signalSoft)
+            }
+
+            if model.readiness.showsPrivacyRiskWarning {
+                privacyZonesAction
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func potholeFeedbackBanner(_ feedback: PotholeFeedback) -> some View {
@@ -624,21 +698,33 @@ struct MapScreen: View {
 
     private var recordingTitle: String {
         if model.readiness.backgroundCollection == .upgradeRequired { return "Needs Always Location" }
-        return model.isPassiveMonitoringEnabled ? "Recording" : "Paused"
+        if model.isCollectionPausedByUser || !model.isPassiveMonitoringEnabled { return "Paused" }
+        if model.isActivelyCollecting { return "Recording" }
+        return "Ready to record"
     }
 
     private var headerSubtitle: String {
         if !isMapLoaded && mapLoadError == nil { return "Loading community layer…" }
         if model.readiness.backgroundCollection == .upgradeRequired { return "Allow Always Location so RoadSense can keep collecting after you leave the app." }
-        if model.readiness.showsPrivacyRiskWarning { return "Privacy zones are optional extra protection." }
+        if model.readiness.showsPrivacyRiskWarning { return "Privacy zones are optional extra protection on top of default endpoint trimming." }
+        if model.isActivelyCollecting {
+            if model.userStatsSummary.totalKmRecorded < 0.05 {
+                return "Drive in progress · GPS and motion are active."
+            }
+            return "Drive in progress · \(mappedValue) mapped on this device."
+        }
+        if model.isCollectionPausedByUser { return "Collection is turned off until you turn it back on." }
         if model.pendingUploadCount > 0 { return "\(model.pendingUploadCount) uploads waiting" }
-        if model.userStatsSummary.acceptedReadingCount == 0 { return "No drives yet" }
-        return mappedValue + " mapped"
+        if model.userStatsSummary.acceptedReadingCount == 0 { return "Start driving to track road quality." }
+        return "Watching for your next drive."
     }
 
     private var recordingTint: Color {
         if model.readiness.backgroundCollection == .upgradeRequired { return DesignTokens.Palette.warning }
-        return model.isPassiveMonitoringEnabled ? DesignTokens.Palette.smooth : .white.opacity(0.6)
+        if model.isCollectionPausedByUser || !model.isPassiveMonitoringEnabled {
+            return .white.opacity(0.6)
+        }
+        return model.isActivelyCollecting ? DesignTokens.Palette.smooth : DesignTokens.Palette.signal
     }
 
     private var mappedValue: String {
@@ -658,10 +744,31 @@ struct MapScreen: View {
         return formatter.localizedString(for: lastDriveAt, relativeTo: .now)
     }
 
+    private var showsPrimaryAction: Bool {
+        model.readiness.backgroundCollection == .upgradeRequired || model.isCollectionPausedByUser
+    }
+
+    private var showsDriveTools: Bool {
+        model.isActivelyCollecting
+            && !model.isCollectionPausedByUser
+            && model.readiness.backgroundCollection != .upgradeRequired
+    }
+
+    private var showsPassiveReadyHint: Bool {
+        !showsDriveTools
+            && !showsPrimaryAction
+            && mapLoadError == nil
+    }
+
+    private var showsStatsShortcut: Bool {
+        !model.isActivelyCollecting
+            && model.readiness.backgroundCollection != .upgradeRequired
+            && !model.isCollectionPausedByUser
+    }
+
     private var primaryActionTitle: String {
         if model.readiness.backgroundCollection == .upgradeRequired { return "Allow in background" }
-        if model.isCollectionPausedByUser { return "Turn collection back on" }
-        return "View stats"
+        return "Turn collection back on"
     }
 
     private func handlePrimaryAction() {
@@ -669,8 +776,6 @@ struct MapScreen: View {
             model.requestAlwaysLocationUpgrade()
         } else if model.isCollectionPausedByUser {
             model.startPassiveMonitoring()
-        } else {
-            onShowStats()
         }
     }
 
@@ -713,8 +818,8 @@ struct MapScreen: View {
         guard let context = model.potholePhotoCaptureContext() else {
             withAnimation(DesignTokens.Motion.enter) {
                 potholeFeedback = PotholeFeedback(
-                    title: "Pull over first",
-                    message: "Photo reports only work below 5 km/h with a fresh GPS fix.",
+                    title: "Need a fresh GPS fix",
+                    message: "Keep the app open for a moment, then try again.",
                     iconName: "camera.metering.unknown",
                     tint: DesignTokens.Palette.warning,
                     dismissDelay: .seconds(3)
@@ -748,14 +853,6 @@ struct MapScreen: View {
                 iconName: "checkmark.circle.fill",
                 tint: DesignTokens.Palette.signalSoft,
                 dismissDelay: .seconds(3.5)
-            )
-        case .safetyRestricted:
-            feedback = PotholeFeedback(
-                title: "Pull over first",
-                message: "Photo reports only work below 5 km/h with a fresh GPS fix.",
-                iconName: "camera.metering.unknown",
-                tint: DesignTokens.Palette.warning,
-                dismissDelay: .seconds(3)
             )
         case .unavailableLocation:
             feedback = PotholeFeedback(
