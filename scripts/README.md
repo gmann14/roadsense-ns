@@ -5,6 +5,8 @@ Operational and import scripts for backend maintenance live here.
 Current B011 pipeline:
 
 - `local-backend-up.sh` — starts local Supabase, revives the edge runtime if it died, and smoke-checks `/functions/v1/health` plus tiles
+- `local-quality-report.sh` — prints the latest processed batches, roughness-score distribution, aggregate coverage, and confidence buckets from the local backend
+- `local-web-up.sh` — starts the public Next.js map locally against the local Supabase stack using the existing iOS Mapbox/anon secrets
 - `api-smoke.sh` — contract smoke for `/health`, `/stats`, and duplicate-safe `/upload-readings` against local or staging Edge Functions
 - `seeded-e2e-smoke.sh` — seeded local/staging smoke that inserts a synthetic paved segment, uploads three matching batches, refreshes stats, and verifies segment detail plus tile emission
 - `canada-region-config.sh` — shared province/territory config for Geofabrik slugs and StatCan `PRUID` filters

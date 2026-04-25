@@ -38,6 +38,6 @@ These are real product needs, but punted past MVP launch to keep the critical pa
 - iOS DeviceCheck attestation — wait until abuse is a real problem
 - Gamification (leaderboards, badges)
 - Broader pothole follow-up prompt polish on top of the shipped `Mark pothole` + segment-detail follow-up actions (see [01 §Manual Pothole Reporting And Follow-up](01-ios-implementation.md) + [02 §Explicit Pothole Actions](02-backend-implementation.md))
-- Vehicle-type calibration factors — crowdsourced averaging absorbs this at MVP scale
+- Vehicle-type calibration factors / per-car normalization — crowdsourced averaging absorbs this at MVP scale, but revisit if harsher-riding vehicles bias roughness scores enough to skew cross-user comparisons
 - Supabase Row-Level Security beyond basic read-only public aggregates — no authenticated users in MVP
 - My Drives list (spec'd in [01 §My Drives List](01-ios-implementation.md), not built)

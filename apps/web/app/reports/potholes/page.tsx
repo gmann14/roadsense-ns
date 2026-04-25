@@ -1,14 +1,7 @@
 import { AppShell } from "@/components/chrome/app-shell";
 import { PotholesShell } from "@/components/reports/potholes-shell";
-import { getPotholes, getPublicStats, type PotholeRow } from "@/lib/api/client";
+import { getPublicStats, getTopPotholes, type PotholeRow } from "@/lib/api/client";
 import type { SearchParamRecord } from "@/lib/url-state";
-
-const NOVA_SCOTIA_BBOX = {
-  minLng: -66.55,
-  minLat: 43.2,
-  maxLng: -59.4,
-  maxLat: 47.1,
-};
 
 function firstValue(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) {
@@ -28,7 +21,7 @@ export default async function MostReportedPotholesPage({
 
   const [stats, potholes] = await Promise.all([
     getPublicStats(),
-    getPotholes(NOVA_SCOTIA_BBOX),
+    getTopPotholes(safeLimit),
   ]);
 
   const rankedRows: PotholeRow[] = (potholes?.potholes ?? [])

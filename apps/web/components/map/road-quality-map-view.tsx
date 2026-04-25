@@ -155,7 +155,15 @@ export function RoadQualityMapView({
                 "#97a6ad",
               ],
               "line-width": ["interpolate", ["linear"], ["zoom"], 6, 2.2, 11, 4.2, 14, 7.2],
-              "line-opacity": 0.95,
+              "line-opacity": [
+                "match",
+                ["get", "confidence"],
+                "low",
+                0.4,
+                "medium",
+                0.72,
+                0.96,
+              ],
             },
           });
         }

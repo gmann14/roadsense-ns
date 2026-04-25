@@ -351,7 +351,7 @@ Post-MVP phases:
   - implement `PotholeDetector`
 - **Acceptance**
   - scores are stable under fixture replay
-- **Current repo note:** `PotholeDetector` and `RoughnessScorer` are now both wired into the live `SensorCoordinator` path. `ReadingBuilder` scores the high-pass-filtered vertical acceleration stream instead of the earlier direct-RMS placeholder, and the replay fixtures now assert that filtered scale directly. Remaining work is real-device calibration of category thresholds and speed normalization, not the scorer swap itself.
+- **Current repo note:** `PotholeDetector` and `RoughnessScorer` are now both wired into the live `SensorCoordinator` path. `ReadingBuilder` scores the high-pass-filtered vertical acceleration stream instead of the earlier direct-RMS placeholder, and the replay fixtures now assert that filtered scale directly. Remaining work is real-device calibration of category thresholds, speed normalization, and future per-vehicle normalization if harsher-riding cars prove to bias the score distribution.
 
 ### B051 — Drive endpoint trimming and optional privacy zones
 

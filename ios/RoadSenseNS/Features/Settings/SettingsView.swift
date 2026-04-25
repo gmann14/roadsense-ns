@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isDeleting = false
     @State private var isRetryingFailedUploads = false
+    @State private var isRetryingFailedPotholeActions = false
     @State private var isRetryingFailedPhotos = false
     @State private var isConfirmingDelete = false
     @State private var errorMessage: String?
@@ -147,6 +148,12 @@ struct SettingsView: View {
                 )
                 Divider()
                 statusRow(
+                    label: "Pothole marks waiting",
+                    value: "\(model.potholeActionStatusSummary.pendingCount)",
+                    valueTint: DesignTokens.Palette.ink
+                )
+                Divider()
+                statusRow(
                     label: "Photo reports waiting",
                     value: "\(model.potholePhotoStatusSummary.pendingCount)",
                     valueTint: DesignTokens.Palette.ink
@@ -185,6 +192,42 @@ struct SettingsView: View {
                 .controlSize(.large)
                 .disabled(isRetryingFailedUploads)
                 .accessibilityIdentifier("settings.retry-failed-uploads")
+            }
+
+            if model.potholeActionStatusSummary.failedPermanentCount > 0 {
+                Button {
+                    retryFailedPotholeActions()
+                } label: {
+                    HStack {
+                        if isRetryingFailedPotholeActions {
+                            ProgressView()
+                                .tint(DesignTokens.Palette.deep)
+                        }
+                        Text(
+                            isRetryingFailedPotholeActions
+                                ? "Retrying failed pothole marks…"
+                                : "Retry failed pothole marks"
+                        )
+                        .font(.system(size: 16, weight: .semibold))
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.deep)
+                .controlSize(.large)
+                .disabled(isRetryingFailedPotholeActions)
+                .accessibilityIdentifier("settings.retry-failed-pothole-actions")
+
+                VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+                    Text("Failed pothole marks stay on-device until you retry them.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    ForEach(model.failedPotholeActions) { action in
+                        failedPotholeActionRow(action)
+                    }
+                }
             }
 
             if model.potholePhotoStatusSummary.failedPermanentCount > 0 {
@@ -264,6 +307,21 @@ struct SettingsView: View {
             }
             .buttonStyle(.bordered)
             .tint(DesignTokens.Palette.warning)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(DesignTokens.Space.md)
+        .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
+    }
+
+    private func failedPotholeActionRow(_ action: FailedPotholeActionSummary) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.xs) {
+            Text(formattedCoordinateLabel(for: action))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(DesignTokens.Palette.ink)
+            Text("Marked \(action.recordedAt.formatted(date: .abbreviated, time: .shortened))\(httpStatusLabel(for: action))")
+                .font(.system(size: 13))
+                .foregroundStyle(DesignTokens.Palette.inkMuted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DesignTokens.Space.md)
@@ -351,6 +409,7 @@ struct SettingsView: View {
 
     private var uploadWaitingReason: String {
         if model.uploadStatusSummary.failedPermanentBatchCount > 0
+            || model.potholeActionStatusSummary.failedPermanentCount > 0
             || model.potholePhotoStatusSummary.failedPermanentCount > 0 {
             return "Needs attention"
         }
@@ -367,29 +426,23 @@ struct SettingsView: View {
     }
 
     private var nextRetryAt: Date? {
-        switch (model.uploadStatusSummary.nextRetryAt, model.potholePhotoStatusSummary.nextRetryAt) {
-        case let (lhs?, rhs?):
-            return min(lhs, rhs)
-        case let (lhs?, nil):
-            return lhs
-        case let (nil, rhs?):
-            return rhs
-        case (nil, nil):
-            return nil
-        }
+        [
+            model.uploadStatusSummary.nextRetryAt,
+            model.potholeActionStatusSummary.nextRetryAt,
+            model.potholePhotoStatusSummary.nextRetryAt,
+        ]
+        .compactMap { $0 }
+        .min()
     }
 
     private var lastSuccessfulUploadAt: Date? {
-        switch (model.uploadStatusSummary.lastSuccessfulUploadAt, model.potholePhotoStatusSummary.lastSuccessfulUploadAt) {
-        case let (lhs?, rhs?):
-            return max(lhs, rhs)
-        case let (lhs?, nil):
-            return lhs
-        case let (nil, rhs?):
-            return rhs
-        case (nil, nil):
-            return nil
-        }
+        [
+            model.uploadStatusSummary.lastSuccessfulUploadAt,
+            model.potholeActionStatusSummary.lastSuccessfulUploadAt,
+            model.potholePhotoStatusSummary.lastSuccessfulUploadAt,
+        ]
+        .compactMap { $0 }
+        .max()
     }
 
     private var backgroundAccessTint: Color {
@@ -435,6 +488,18 @@ struct SettingsView: View {
         }
     }
 
+    private func retryFailedPotholeActions() {
+        isRetryingFailedPotholeActions = true
+
+        Task {
+            await model.retryFailedPotholeActions()
+            await MainActor.run {
+                isRetryingFailedPotholeActions = false
+                errorMessage = nil
+            }
+        }
+    }
+
     private func retryFailedPhotos() {
         isRetryingFailedPhotos = true
 
@@ -448,13 +513,29 @@ struct SettingsView: View {
     }
 
     private func formattedCoordinateLabel(for photo: FailedPotholePhotoSummary) -> String {
-        let lat = photo.latitude.formatted(.number.precision(.fractionLength(4)))
-        let lng = photo.longitude.formatted(.number.precision(.fractionLength(4)))
+        formattedCoordinateLabel(latitude: photo.latitude, longitude: photo.longitude)
+    }
+
+    private func formattedCoordinateLabel(for action: FailedPotholeActionSummary) -> String {
+        formattedCoordinateLabel(latitude: action.latitude, longitude: action.longitude)
+    }
+
+    private func formattedCoordinateLabel(latitude: Double, longitude: Double) -> String {
+        let lat = latitude.formatted(.number.precision(.fractionLength(4)))
+        let lng = longitude.formatted(.number.precision(.fractionLength(4)))
         return "Near \(lat), \(lng)"
     }
 
+    private func httpStatusLabel(for action: FailedPotholeActionSummary) -> String {
+        httpStatusLabel(action.lastHTTPStatusCode)
+    }
+
     private func httpStatusLabel(for photo: FailedPotholePhotoSummary) -> String {
-        guard let statusCode = photo.lastHTTPStatusCode else {
+        httpStatusLabel(photo.lastHTTPStatusCode)
+    }
+
+    private func httpStatusLabel(_ statusCode: Int?) -> String {
+        guard let statusCode else {
             return ""
         }
 

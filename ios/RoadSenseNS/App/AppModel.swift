@@ -49,11 +49,14 @@ final class AppModel {
     private(set) var isCollectionPausedByUser = false
     private(set) var pendingUploadCount = 0
     private(set) var uploadStatusSummary = UploadQueueStatusSummary.empty
+    private(set) var potholeActionStatusSummary = PotholeActionStatusSummary.empty
     private(set) var potholePhotoStatusSummary = PotholePhotoStatusSummary.empty
+    private(set) var failedPotholeActions: [FailedPotholeActionSummary] = []
     private(set) var failedPotholePhotos: [FailedPotholePhotoSummary] = []
     private(set) var acceptedReadingCount = 0
     private(set) var privacyFilteredCount = 0
     private(set) var pendingDriveCoordinates: [CLLocationCoordinate2D] = []
+    private(set) var pendingPotholeCoordinates: [CLLocationCoordinate2D] = []
     private(set) var userStatsSummary = UserStatsSummary.zero
 
     init(
@@ -82,7 +85,9 @@ final class AppModel {
         )
         self.snapshot = container.permissions.currentSnapshot(privacyZones: privacyZones)
         self.uploadStatusSummary = (try? container.uploadQueueStore.statusSummary()) ?? .empty
+        self.potholeActionStatusSummary = (try? container.potholeActionStore.statusSummary()) ?? .empty
         self.potholePhotoStatusSummary = (try? container.potholePhotoStore.statusSummary()) ?? .empty
+        self.failedPotholeActions = (try? container.potholeActionStore.failedPermanentActions()) ?? []
         self.failedPotholePhotos = (try? container.potholePhotoStore.failedPermanentReports()) ?? []
         self.pendingUploadCount = ((try? container.uploadQueueStore.pendingReadingCount()) ?? 0)
             + ((try? container.potholeActionStore.pendingCount()) ?? 0)
@@ -90,12 +95,14 @@ final class AppModel {
         self.acceptedReadingCount = (try? container.readingStore.acceptedReadingCount()) ?? 0
         self.privacyFilteredCount = (try? container.readingStore.privacyFilteredReadingCount()) ?? 0
         self.pendingDriveCoordinates = (try? container.readingStore.pendingUploadCoordinates()) ?? []
+        self.pendingPotholeCoordinates = (try? container.potholeActionStore.pendingManualReportCoordinates()) ?? []
         self.userStatsSummary = (try? container.userStatsStore.summary()) ?? .zero
         self.isCollectionPausedByUser = defaults.bool(forKey: collectionPausedKey)
         self.sensorCoordinator.stateDidChange = { [weak self] in
             self?.refreshCollectionStats()
         }
         _ = try? potholeActionStore.promoteExpiredPendingUndoActions()
+        _ = try? potholeActionStore.recoverRecoverableFailures()
         syncPassiveMonitoringState()
         refreshCollectionStats()
     }
@@ -167,6 +174,16 @@ final class AppModel {
         }
     }
 
+    func retryFailedPotholeActions(ids: [UUID]? = nil) async {
+        do {
+            try potholeActionStore.retryFailedActions(ids: ids)
+            _ = await uploadDrainCoordinator.requestDrain(reason: .diagnosticsRetry)
+            refreshCollectionStats()
+        } catch {
+            logger.error("failed to retry pothole actions: \(error.localizedDescription)")
+        }
+    }
+
     func deleteFailedPotholePhoto(id: UUID) {
         do {
             try potholePhotoStore.deleteReport(id: id)
@@ -177,6 +194,7 @@ final class AppModel {
     }
 
     func handleAppDidBecomeActive() async {
+        _ = try? potholeActionStore.recoverRecoverableFailures()
         refreshPermissions()
         _ = await uploadDrainCoordinator.requestDrain(reason: .foreground)
         refreshCollectionStats()
@@ -412,7 +430,9 @@ final class AppModel {
     private func refreshCollectionStats() {
         _ = try? potholeActionStore.promoteExpiredPendingUndoActions()
         uploadStatusSummary = (try? uploadQueueStore.statusSummary()) ?? .empty
+        potholeActionStatusSummary = (try? potholeActionStore.statusSummary()) ?? .empty
         potholePhotoStatusSummary = (try? potholePhotoStore.statusSummary()) ?? .empty
+        failedPotholeActions = (try? potholeActionStore.failedPermanentActions()) ?? []
         failedPotholePhotos = (try? potholePhotoStore.failedPermanentReports()) ?? []
         pendingUploadCount = ((try? uploadQueueStore.pendingReadingCount()) ?? 0)
             + ((try? potholeActionStore.pendingCount()) ?? 0)
@@ -420,6 +440,7 @@ final class AppModel {
         acceptedReadingCount = (try? readingStore.acceptedReadingCount()) ?? 0
         privacyFilteredCount = (try? readingStore.privacyFilteredReadingCount()) ?? 0
         pendingDriveCoordinates = (try? readingStore.pendingUploadCoordinates()) ?? []
+        pendingPotholeCoordinates = (try? potholeActionStore.pendingManualReportCoordinates()) ?? []
         userStatsSummary = (try? userStatsStore.summary()) ?? .zero
         isCollectionPausedByUser = defaults.bool(forKey: collectionPausedKey)
         isPassiveMonitoringEnabled = sensorCoordinator.monitoringState.isMonitoring

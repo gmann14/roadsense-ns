@@ -123,6 +123,12 @@ function buildEndpointUrl(path: string): string {
   return `${getApiBaseUrl().replace(/\/$/, "")}${path}`;
 }
 
+function getSupabaseRootUrl(): string {
+  return getApiBaseUrl()
+    .replace(/\/functions\/v1\/?$/, "")
+    .replace(/\/$/, "");
+}
+
 async function fetchJson<T>(path: string, nextOptions?: RequestInit & { next?: { revalidate: number } }): Promise<T | null> {
   if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") {
     return null;
@@ -135,6 +141,37 @@ async function fetchJson<T>(path: string, nextOptions?: RequestInit & { next?: {
         ...getPublicReadHeaders(),
         ...(nextOptions?.headers ?? {}),
       },
+    });
+
+    if (!response.ok || response.status === 204) {
+      return null;
+    }
+
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchRpc<T>(
+  rpcName: string,
+  body: Record<string, unknown>,
+  nextOptions?: RequestInit & { next?: { revalidate: number } },
+): Promise<T | null> {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${getSupabaseRootUrl()}/rest/v1/rpc/${rpcName}`, {
+      method: "POST",
+      ...nextOptions,
+      headers: {
+        "content-type": "application/json",
+        ...getPublicReadHeaders(),
+        ...(nextOptions?.headers ?? {}),
+      },
+      body: JSON.stringify(body),
     });
 
     if (!response.ok || response.status === 204) {
@@ -191,4 +228,16 @@ export async function getPotholes(bbox: Bbox): Promise<PotholeResponse | null> {
   });
 
   return await fetchJson<PotholeResponse>(`/potholes?${query.toString()}`);
+}
+
+export async function getTopPotholes(limit = 20): Promise<PotholeResponse | null> {
+  const rows = await fetchRpc<PotholeRow[]>(
+    "get_top_potholes",
+    { p_limit: limit },
+    { next: { revalidate: 300 } },
+  );
+
+  return {
+    potholes: rows ?? [],
+  };
 }
