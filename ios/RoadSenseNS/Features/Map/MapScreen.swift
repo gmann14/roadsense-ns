@@ -473,20 +473,26 @@ struct MapScreen: View {
     }
 
     private var passiveReadyHint: some View {
-        HStack(alignment: .top, spacing: DesignTokens.Space.sm) {
-            Image(systemName: "waveform.path.ecg")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(DesignTokens.Palette.signalSoft)
+        VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+            HStack(alignment: .top, spacing: DesignTokens.Space.sm) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(DesignTokens.Palette.signalSoft)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Passive collection is armed")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
-                Text("Keep the app open or leave it in the background with Always Location enabled, and RoadSense will start the next drive automatically.")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.82))
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Passive collection is armed")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text("Keep the app open or leave it in the background with Always Location enabled, and RoadSense will start the next drive automatically.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.82))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+
+            Divider().background(Color.white.opacity(0.12))
+
+            takePhotoAction
         }
         .padding(DesignTokens.Space.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
