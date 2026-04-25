@@ -4,6 +4,8 @@ export type PublicStats = {
   segments_scored: number;
   active_potholes: number;
   municipalities_covered: number;
+  map_bounds: Bbox | null;
+  pothole_bounds: Bbox | null;
   generated_at: string;
 };
 
@@ -73,7 +75,7 @@ export type PotholeRow = {
   first_reported_at: string;
   last_confirmed_at: string;
   status: string;
-  segment_id: string;
+  segment_id: string | null;
 };
 
 export type PotholeResponse = {

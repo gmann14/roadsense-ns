@@ -18,7 +18,8 @@ test("mode switching updates route state", async ({ page }) => {
 
   await page.getByRole("button", { name: "Potholes" }).click();
   await expect(page).toHaveURL(/mode=potholes/);
-  await expect(page.getByText(/No active potholes are published in this view yet/i)).toBeVisible();
+  await expect(page.getByText(/Potholes mode is live/i)).toBeVisible();
+  await expect(page.getByRole("complementary").getByText(/Pothole map/i)).toBeVisible();
 });
 
 test("municipality jump search routes correctly", async ({ page }) => {

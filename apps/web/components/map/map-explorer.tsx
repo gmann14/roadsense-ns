@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import type { Bbox, PublicStats } from "@/lib/api/client";
+import type { Bbox, PotholeRow, PublicStats } from "@/lib/api/client";
 import type { MunicipalityConfig } from "@/lib/municipality-manifest";
 import {
   parseViewportState,
@@ -23,6 +23,7 @@ type MapExplorerProps = {
   municipality?: MunicipalityConfig | null;
   searchParams?: SearchParamRecord;
   stats: PublicStats | null;
+  topPotholes: PotholeRow[];
 };
 
 const modeSummaryCopy: Record<MapMode, string> = {
@@ -40,7 +41,7 @@ const modeLabel: Record<MapMode, string> = {
   coverage: "Coverage tiers",
 };
 
-export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplorerProps) {
+export function MapExplorer({ municipality, searchParams = {}, stats, topPotholes }: MapExplorerProps) {
   const pathname = usePathname();
   const router = useRouter();
   const liveSearchParams = useSearchParams();
@@ -117,6 +118,20 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
     setIsDrawerDismissed(true);
   };
 
+  const handlePotholeLocate = (pothole: PotholeRow) => {
+    setIsDrawerDismissed(false);
+    navigate(
+      withUpdatedRouteState(baseSearchParams, {
+        mode: "potholes",
+        segment: null,
+        lat: pothole.lat,
+        lng: pothole.lng,
+        z: 14.4,
+      }),
+      "push",
+    );
+  };
+
   const drawerOpen = !isDrawerDismissed && (routeState.mode === "potholes" || Boolean(routeState.segment));
   const statusMessage = mapError ?? (mapReady ? "Map loaded." : "Loading map surface…");
   const statsSummary = stats
@@ -184,6 +199,8 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
           municipality={municipality}
           mode={routeState.mode}
           routeState={routeState}
+          mapBounds={stats?.map_bounds ?? null}
+          potholeBounds={stats?.pothole_bounds ?? null}
           onSegmentSelect={handleSegmentSelect}
           onViewportCommit={handleViewportCommit}
           onMapReadyChange={setMapReady}
@@ -210,7 +227,9 @@ export function MapExplorer({ municipality, searchParams = {}, stats }: MapExplo
         mode={routeState.mode}
         selectedSegmentId={routeState.segment}
         visibleBbox={visibleBbox}
+        topPotholes={topPotholes}
         onClearSelection={handleClearSelection}
+        onPotholeLocate={handlePotholeLocate}
         isOpen={drawerOpen}
         onClose={handleDrawerClose}
       />

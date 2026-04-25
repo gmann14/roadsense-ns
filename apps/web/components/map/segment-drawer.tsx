@@ -16,7 +16,9 @@ type SegmentDrawerProps = {
   mode: MapMode;
   selectedSegmentId: string | null;
   visibleBbox: Bbox | null;
+  topPotholes: PotholeRow[];
   onClearSelection: () => void;
+  onPotholeLocate: (pothole: PotholeRow) => void;
   isOpen?: boolean;
   onClose?: () => void;
 };
@@ -26,10 +28,12 @@ type SegmentDrawerPanelProps = {
   selectedSegmentId: string | null;
   detail: SegmentDetail | null;
   potholes: PotholeRow[];
+  topPotholes: PotholeRow[];
   isLoading: boolean;
   errorMessage: string | null;
   isPotholeViewportTooWide?: boolean;
   onClearSelection: () => void;
+  onPotholeLocate: (pothole: PotholeRow) => void;
   isOpen?: boolean;
   onClose?: () => void;
 };
@@ -58,7 +62,9 @@ export function SegmentDrawer({
   mode,
   selectedSegmentId,
   visibleBbox,
+  topPotholes,
   onClearSelection,
+  onPotholeLocate,
   isOpen,
   onClose,
 }: SegmentDrawerProps) {
@@ -182,10 +188,12 @@ export function SegmentDrawer({
       selectedSegmentId={selectedSegmentId}
       detail={detail}
       potholes={potholes}
+      topPotholes={topPotholes}
       isLoading={isLoading}
       errorMessage={errorMessage}
       isPotholeViewportTooWide={isPotholeViewportTooWide}
       onClearSelection={onClearSelection}
+      onPotholeLocate={onPotholeLocate}
       isOpen={resolvedIsOpen}
       onClose={handleClose}
     />
@@ -197,14 +205,43 @@ export function SegmentDrawerPanel({
   selectedSegmentId,
   detail,
   potholes,
+  topPotholes,
   isLoading,
   errorMessage,
   isPotholeViewportTooWide = false,
   onClearSelection,
+  onPotholeLocate,
   isOpen = true,
   onClose,
 }: SegmentDrawerPanelProps) {
   const handleClose = onClose ?? onClearSelection;
+  const renderPotholeRows = (rows: PotholeRow[], label: string) => (
+    <div className="pothole-list" aria-label={label}>
+      {rows.map((pothole, index) => (
+        <article key={pothole.id} className="pothole-row">
+          <div className="pothole-row__rank">#{index + 1}</div>
+          <div className="pothole-row__meta">
+            <strong>
+              {pothole.confirmation_count} confirmation{pothole.confirmation_count === 1 ? "" : "s"} · magnitude{" "}
+              {pothole.magnitude.toFixed(1)}
+            </strong>
+            <span>
+              Last seen {formatRelativeDate(pothole.last_confirmed_at)} · {pothole.lat.toFixed(4)}°N,{" "}
+              {Math.abs(pothole.lng).toFixed(4)}°W
+            </span>
+          </div>
+          <button
+            type="button"
+            className="secondary-button pothole-row__action"
+            onClick={() => onPotholeLocate(pothole)}
+          >
+            Show on map
+          </button>
+        </article>
+      ))}
+    </div>
+  );
+
   const renderBody = () => {
     if (isLoading) {
       return (
@@ -230,19 +267,52 @@ export function SegmentDrawerPanel({
     }
 
     if (mode === "potholes") {
+      const leaderboardRows = topPotholes.slice(0, 6);
+
       if (isPotholeViewportTooWide) {
+        if (leaderboardRows.length > 0) {
+          return (
+            <>
+              <div className="drawer-state">
+                <span className="eyebrow">Pothole leaderboard</span>
+                <strong>Top active potholes</strong>
+                <span className="lede">
+                  This viewport is wider than the live list cap, so the side panel is showing the strongest active
+                  reports. The map stays usable; choose a row to zoom to that marker.
+                </span>
+              </div>
+              {renderPotholeRows(leaderboardRows, "Top active potholes")}
+            </>
+          );
+        }
+
         return (
           <div className="drawer-state">
-            <span className="eyebrow">Pothole list</span>
-            <strong>Zoom in to inspect active potholes.</strong>
+            <span className="eyebrow">Pothole map</span>
+            <strong>Zoom the map to inspect active potholes.</strong>
             <span className="lede">
-              Pothole lookups are capped to a roughly 10 km viewport so the public map stays responsive.
+              Live pothole lists are capped to a roughly 10 km viewport so the public map stays responsive.
             </span>
           </div>
         );
       }
 
       if (potholes.length === 0) {
+        if (leaderboardRows.length > 0) {
+          return (
+            <>
+              <div className="drawer-state">
+                <span className="eyebrow">Pothole leaderboard</span>
+                <strong>No active potholes in this viewport yet.</strong>
+                <span className="lede">
+                  Showing the strongest active reports elsewhere. Click a row to jump the map to that marker.
+                </span>
+              </div>
+              {renderPotholeRows(leaderboardRows, "Top active potholes")}
+            </>
+          );
+        }
+
         return (
           <div className="drawer-state">
             <span className="eyebrow">Pothole list</span>
@@ -259,25 +329,13 @@ export function SegmentDrawerPanel({
         <>
           <div className="drawer-state">
             <span className="eyebrow">Pothole list</span>
-            <strong>Active community potholes in this view</strong>
+            <strong>Active potholes in this view</strong>
             <span className="lede">
-              Showing the strongest recent reports in the current viewport. These markers represent community-confirmed
-              impacts, not a government maintenance queue.
+              Showing recent community-confirmed impacts inside the current viewport. Click a row to center its marker.
             </span>
           </div>
 
-          <div style={{ display: "grid", gap: 10 }}>
-            {potholes.map((pothole, index) => (
-              <article key={pothole.id} className="metric-card" style={{ gap: 8 }}>
-                <strong style={{ fontSize: "1rem" }}>
-                  #{index + 1} · magnitude {pothole.magnitude.toFixed(1)}
-                </strong>
-                <span className="lede" style={{ margin: 0, fontSize: "0.95rem" }}>
-                  {pothole.confirmation_count} confirmations · last seen {formatRelativeDate(pothole.last_confirmed_at)}
-                </span>
-              </article>
-            ))}
-          </div>
+          {renderPotholeRows(potholes, "Potholes in current viewport")}
         </>
       );
     }
@@ -337,19 +395,23 @@ export function SegmentDrawerPanel({
 
   const headingLabel =
     mode === "potholes"
-      ? "Pothole viewport"
+      ? "Pothole map"
       : detail?.road_name ?? (selectedSegmentId ? "Loading segment" : "Segment detail");
+  const drawerVariant = mode === "potholes" ? "pothole-panel" : "detail";
 
   return (
     <>
-      <div
-        className="drawer-backdrop"
-        data-open={isOpen}
-        aria-hidden={!isOpen}
-        onClick={onClose}
-      />
+      {mode === "potholes" ? null : (
+        <div
+          className="drawer-backdrop"
+          data-open={isOpen}
+          aria-hidden={!isOpen}
+          onClick={onClose}
+        />
+      )}
       <aside
         className="drawer"
+        data-variant={drawerVariant}
         data-open={isOpen}
         aria-hidden={!isOpen}
         aria-live="polite"
@@ -379,6 +441,11 @@ export function SegmentDrawerPanel({
           <button type="button" className="secondary-button" onClick={onClearSelection}>
             {mode === "potholes" ? "Reset map focus" : "Clear selection"}
           </button>
+          {mode === "potholes" ? (
+            <a href="/reports/potholes" className="secondary-button">
+              Full report
+            </a>
+          ) : null}
         </div>
       </aside>
     </>

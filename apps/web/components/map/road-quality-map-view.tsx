@@ -31,6 +31,8 @@ type RoadQualityMapViewProps = {
   mode: MapMode;
   municipality?: MunicipalityConfig | null;
   routeState: UrlViewportState;
+  mapBounds: Bbox | null;
+  potholeBounds: Bbox | null;
   onViewportCommit: (viewport: ViewportCommit) => void;
   onSegmentSelect: (segmentId: string) => void;
   onMapReadyChange: (isReady: boolean) => void;
@@ -43,11 +45,16 @@ const SEGMENT_LAYER_ID = "roadsense-segments";
 const SELECTED_SEGMENT_LAYER_ID = "roadsense-segments-selected";
 const POTHOLE_LAYER_ID = "roadsense-potholes";
 const COVERAGE_LAYER_ID = "roadsense-coverage-segments";
+const DATA_BOUNDS_MAX_ZOOM = 13.1;
+const POTHOLE_MARKER_MIN_ZOOM = 13.35;
+const POTHOLE_MARKER_FOCUS_ZOOM = 13.75;
 
 export function RoadQualityMapView({
   mode,
   municipality,
   routeState,
+  mapBounds,
+  potholeBounds,
   onViewportCommit,
   onSegmentSelect,
   onMapReadyChange,
@@ -58,6 +65,8 @@ export function RoadQualityMapView({
   const modeRef = useRef(mode);
   const municipalityRef = useRef(municipality);
   const routeStateRef = useRef(routeState);
+  const mapBoundsRef = useRef(mapBounds);
+  const potholeBoundsRef = useRef(potholeBounds);
   const [mapSupported, setMapSupported] = useState(true);
   const handleMapReadyChange = useEffectEvent(onMapReadyChange);
   const handleMapErrorChange = useEffectEvent(onMapErrorChange);
@@ -77,6 +86,14 @@ export function RoadQualityMapView({
   }, [routeState]);
 
   useEffect(() => {
+    mapBoundsRef.current = mapBounds;
+  }, [mapBounds]);
+
+  useEffect(() => {
+    potholeBoundsRef.current = potholeBounds;
+  }, [potholeBounds]);
+
+  useEffect(() => {
     const mapboxToken = getMapboxToken();
     if (!mapboxToken) {
       setMapSupported(false);
@@ -90,7 +107,16 @@ export function RoadQualityMapView({
     }
 
     let cancelled = false;
-    const initialViewport = resolveInitialViewport(routeStateRef.current, municipalityRef.current);
+    const initialBounds = resolveInitialBounds(
+      routeStateRef.current,
+      municipalityRef.current,
+      mapBoundsRef.current,
+    );
+    const initialViewport = resolveInitialViewport(
+      routeStateRef.current,
+      municipalityRef.current,
+      mapBoundsRef.current,
+    );
     let mapInstance: mapboxgl.Map | null = null;
 
     void import("mapbox-gl").then(({ default: mapboxglRuntime }) => {
@@ -101,7 +127,7 @@ export function RoadQualityMapView({
       mapboxglRuntime.accessToken = mapboxToken;
       const sourceBaseUrl = getQualityTileUrlTemplate().replace("/tiles/{z}/{x}/{y}.mvt", "");
 
-      const map = new mapboxglRuntime.Map({
+      const mapOptions: mapboxgl.MapOptions = {
         container: mapContainerRef.current,
         style: getMapboxStyleUrl(),
         center: [initialViewport.lng, initialViewport.lat],
@@ -118,7 +144,17 @@ export function RoadQualityMapView({
             headers: getPublicReadHeaders() as Record<string, string>,
           };
         },
-      });
+      };
+
+      if (initialBounds) {
+        mapOptions.bounds = bboxToLngLatBoundsLike(initialBounds);
+        mapOptions.fitBoundsOptions = {
+          padding: 92,
+          maxZoom: DATA_BOUNDS_MAX_ZOOM,
+        };
+      }
+
+      const map = new mapboxglRuntime.Map(mapOptions);
 
       mapRef.current = map;
       mapInstance = map;
@@ -263,28 +299,12 @@ export function RoadQualityMapView({
           }
         });
 
-        const initialBounds = map.getBounds();
-        const initialCenter = map.getCenter();
-        if (initialBounds) {
-          handleViewportCommit({
-            lat: initialCenter.lat,
-            lng: initialCenter.lng,
-            z: map.getZoom(),
-            bbox: {
-              minLng: initialBounds.getWest(),
-              minLat: initialBounds.getSouth(),
-              maxLng: initialBounds.getEast(),
-              maxLat: initialBounds.getNorth(),
-            },
-          });
-        }
-
-        map.on("moveend", () => {
-          const center = map.getCenter();
+        const commitViewport = () => {
           const bounds = map.getBounds();
           if (!bounds) {
             return;
           }
+          const center = map.getCenter();
           handleViewportCommit({
             lat: center.lat,
             lng: center.lng,
@@ -296,6 +316,16 @@ export function RoadQualityMapView({
               maxLat: bounds.getNorth(),
             },
           });
+        };
+
+        if (initialBounds) {
+          map.once("idle", commitViewport);
+        } else {
+          commitViewport();
+        }
+
+        map.on("moveend", () => {
+          commitViewport();
         });
       });
 
@@ -361,6 +391,26 @@ export function RoadQualityMapView({
     }
 
     applyLayerVisibility(map, mode);
+
+    if (mode === "potholes" && map.getZoom() < POTHOLE_MARKER_MIN_ZOOM) {
+      const potholeBounds = potholeBoundsRef.current;
+      const currentBounds = map.getBounds();
+      if (potholeBounds && currentBounds && !mapBoundsOverlap(currentBounds, potholeBounds)) {
+        map.fitBounds(bboxToLngLatBoundsLike(potholeBounds), {
+          padding: 120,
+          maxZoom: POTHOLE_MARKER_FOCUS_ZOOM,
+          duration: 500,
+          essential: true,
+        });
+        return;
+      }
+
+      map.easeTo({
+        zoom: POTHOLE_MARKER_FOCUS_ZOOM,
+        duration: 450,
+        essential: true,
+      });
+    }
   }, [mode]);
 
   return (
@@ -375,8 +425,8 @@ export function RoadQualityMapView({
       {mode === "potholes" ? (
         <div className="map-overlay-banner" style={{ bottom: 24, top: "auto" }}>
           <strong>Potholes mode is live.</strong>
-          This view isolates active pothole markers and keeps the side drawer focused on recent community-confirmed
-          impacts inside the current viewport.
+          This view isolates active pothole markers and keeps the side panel focused on recent community-confirmed
+          impacts.
         </div>
       ) : null}
       {mode === "coverage" ? (
@@ -416,6 +466,7 @@ function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
 function resolveInitialViewport(
   routeState: UrlViewportState,
   municipality?: MunicipalityConfig | null,
+  mapBounds?: Bbox | null,
 ): InitialViewport {
   if (
     routeState.lat !== null &&
@@ -437,9 +488,53 @@ function resolveInitialViewport(
     };
   }
 
+  if (mapBounds) {
+    return {
+      lat: (mapBounds.minLat + mapBounds.maxLat) / 2,
+      lng: (mapBounds.minLng + mapBounds.maxLng) / 2,
+      z: DATA_BOUNDS_MAX_ZOOM,
+    };
+  }
+
   return {
     lat: 44.68199,
     lng: -63.74431,
     z: 7.2,
   };
+}
+
+function resolveInitialBounds(
+  routeState: UrlViewportState,
+  municipality?: MunicipalityConfig | null,
+  mapBounds?: Bbox | null,
+): Bbox | null {
+  if (
+    routeState.lat !== null &&
+    routeState.lng !== null &&
+    routeState.z !== null
+  ) {
+    return null;
+  }
+
+  if (municipality) {
+    return null;
+  }
+
+  return mapBounds ?? null;
+}
+
+function bboxToLngLatBoundsLike(bbox: Bbox): mapboxgl.LngLatBoundsLike {
+  return [
+    [bbox.minLng, bbox.minLat],
+    [bbox.maxLng, bbox.maxLat],
+  ];
+}
+
+function mapBoundsOverlap(bounds: mapboxgl.LngLatBounds, bbox: Bbox): boolean {
+  return (
+    bounds.getWest() <= bbox.maxLng &&
+    bounds.getEast() >= bbox.minLng &&
+    bounds.getSouth() <= bbox.maxLat &&
+    bounds.getNorth() >= bbox.minLat
+  );
 }
