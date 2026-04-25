@@ -80,6 +80,9 @@ export type PotholeResponse = {
   potholes: PotholeRow[];
 };
 
+export const POTHOLE_BBOX_MAX_LNG_SPAN = 0.12;
+export const POTHOLE_BBOX_MAX_LAT_SPAN = 0.09;
+
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:54321/functions/v1";
 const DEFAULT_MAPBOX_STYLE_URL = "mapbox://styles/mapbox/light-v11";
 
@@ -223,11 +226,20 @@ export async function getWorstSegments({
 }
 
 export async function getPotholes(bbox: Bbox): Promise<PotholeResponse | null> {
+  if (!isPotholeBboxWithinLookupCap(bbox)) {
+    return null;
+  }
+
   const query = new URLSearchParams({
     bbox: [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat].map((value) => value.toFixed(5)).join(","),
   });
 
   return await fetchJson<PotholeResponse>(`/potholes?${query.toString()}`);
+}
+
+export function isPotholeBboxWithinLookupCap(bbox: Bbox): boolean {
+  return bbox.maxLng - bbox.minLng <= POTHOLE_BBOX_MAX_LNG_SPAN &&
+    bbox.maxLat - bbox.minLat <= POTHOLE_BBOX_MAX_LAT_SPAN;
 }
 
 export async function getTopPotholes(limit = 20): Promise<PotholeResponse | null> {
