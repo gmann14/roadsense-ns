@@ -39,6 +39,7 @@ final class AppModel {
     private let uploadQueueStore: UploadQueueStore
     private let uploadDrainCoordinator: UploadDrainCoordinator
     private let sensorCoordinator: SensorCoordinator
+    private let haptics: HapticsServicing
     private let logger: RoadSenseLogger
     private let potholeLocator = ManualPotholeLocator()
 
@@ -76,6 +77,7 @@ final class AppModel {
         self.uploadQueueStore = container.uploadQueueStore
         self.uploadDrainCoordinator = container.uploadDrainCoordinator
         self.sensorCoordinator = container.sensorCoordinator
+        self.haptics = container.haptics
         self.logger = container.logger
 
         let privacyZones = Self.resolvePrivacyZoneState(
@@ -110,6 +112,13 @@ final class AppModel {
 
     var readiness: CollectionReadiness {
         CollectionReadiness.evaluate(snapshot)
+    }
+
+    /// Latest reported speed in km/h, derived from the most recent location sample.
+    /// Returns `nil` when no fresh sample is available. Used by the camera-safety
+    /// banner per `docs/reviews/2026-04-24-design-audit.md` §13.4.
+    var currentSpeedKmh: Double? {
+        locationService.latestSample?.speedKmh
     }
 
     var privacyZoneDecision: PrivacyZoneSetupState {
@@ -284,10 +293,12 @@ final class AppModel {
         )
 
         guard let chosenSample, hasUsableLocation(chosenSample, now: now) else {
+            haptics.notification(.warning)
             return .unavailableLocation
         }
 
         guard !isInsidePrivacyZone(chosenSample) else {
+            haptics.notification(.warning)
             return .insidePrivacyZone
         }
 
@@ -295,9 +306,11 @@ final class AppModel {
             let action = try potholeActionStore.queueManualReport(sample: chosenSample, now: now)
             logger.info("manual pothole report queued: \(action.id.uuidString)")
             schedulePendingUndoPromotion(for: action.id)
+            haptics.notification(.success)
             return .queued(action.id)
         } catch {
             logger.error("failed to queue pothole report: \(error.localizedDescription)")
+            haptics.notification(.warning)
             return .unavailableLocation
         }
     }

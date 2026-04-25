@@ -90,12 +90,10 @@ struct StatsView: View {
             Circle()
                 .stroke(DesignTokens.Palette.deep.opacity(0.28), lineWidth: 2)
                 .frame(width: 84, height: 84)
-            VStack(spacing: 2) {
-                Image(systemName: "road.lanes")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(DesignTokens.Palette.deep)
+            VStack(spacing: 4) {
+                BrandMark(size: 32)
                 Text("\(summary.totalSegmentsContributed)")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(DesignTokens.Palette.deep)
                     .accessibilityIdentifier("stats.segments-contributed")
             }

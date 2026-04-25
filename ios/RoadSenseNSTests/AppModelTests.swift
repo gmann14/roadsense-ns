@@ -479,6 +479,7 @@ final class AppModelTests: XCTestCase {
             motionService: motionService,
             drivingDetector: drivingDetector,
             thermalMonitor: thermalMonitor,
+            haptics: NoOpHaptics(),
             logger: .app
         )
     }

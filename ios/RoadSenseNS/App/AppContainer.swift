@@ -20,6 +20,7 @@ struct AppContainer {
     let motionService: MotionServicing
     let drivingDetector: DrivingDetecting
     let thermalMonitor: ThermalMonitoring
+    let haptics: HapticsServicing
     let logger: RoadSenseLogger
 
     static func bootstrap(config: AppConfig) -> AppContainer {
@@ -88,6 +89,7 @@ struct AppContainer {
             motionService: motionService,
             drivingDetector: drivingDetector,
             thermalMonitor: thermalMonitor,
+            haptics: UIKitHaptics(),
             logger: logger
         )
     }
