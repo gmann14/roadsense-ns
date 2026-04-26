@@ -14,11 +14,11 @@ test("mode switching updates route state", async ({ page }) => {
 
   await page.getByRole("button", { name: "Coverage" }).click();
   await expect(page).toHaveURL(/mode=coverage/);
-  await expect(page.getByText(/Where RoadSense has enough data/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Coverage" })).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Potholes" }).click();
   await expect(page).toHaveURL(/mode=potholes/);
-  await expect(page.getByText(/Active potholes from manual reports/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Potholes" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("complementary").getByText(/Pothole map/i)).toBeVisible();
 });
 
@@ -26,7 +26,7 @@ test("municipality jump search routes correctly", async ({ page }) => {
   await page.goto("/");
 
   await page.getByPlaceholder("Halifax, Truro, Lunenburg…").fill("MODL");
-  await page.getByRole("button", { name: "Go" }).click();
+  await page.getByRole("button", { name: "Search" }).click();
 
   await expect(page).toHaveURL(/\/municipality\/municipality-of-the-district-of-lunenburg/);
   await expect(

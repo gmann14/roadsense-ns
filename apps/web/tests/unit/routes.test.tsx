@@ -37,7 +37,7 @@ describe("web route shells", () => {
       await MunicipalityPage({ params: Promise.resolve({ slug: "halifax" }) }),
     );
     expect(markup).toContain("Halifax");
-    expect(markup).toContain("Road quality from local test drives");
+    expect(markup).toContain("Road quality in Halifax");
     expect(markup).toContain("Halifax");
   });
 

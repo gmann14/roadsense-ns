@@ -4,7 +4,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { startTransition, useState } from "react";
 
 import type { Bbox, PotholeRow, PublicStats } from "@/lib/api/client";
-import { formatSnapshotDate } from "@/lib/format";
 import type { MunicipalityConfig } from "@/lib/municipality-manifest";
 import {
   parseViewportState,
@@ -25,21 +24,6 @@ type MapExplorerProps = {
   searchParams?: SearchParamRecord;
   stats: PublicStats | null;
   topPotholes: PotholeRow[];
-};
-
-const modeSummaryCopy: Record<MapMode, string> = {
-  quality:
-    "Road quality from local test drives. Pan, zoom, or click a highlighted road for detail.",
-  potholes:
-    "Active potholes from manual reports and confirmed impacts.",
-  coverage:
-    "Where RoadSense has enough data to show a public signal.",
-};
-
-const modeLabel: Record<MapMode, string> = {
-  quality: "Published quality layer",
-  potholes: "Active pothole markers",
-  coverage: "Coverage tiers",
 };
 
 export function MapExplorer({ municipality, searchParams = {}, stats, topPotholes }: MapExplorerProps) {
@@ -128,7 +112,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
 
   const drawerOpen = !isDrawerDismissed && (routeState.mode === "potholes" || Boolean(routeState.segment));
   const statsSummary = stats
-    ? `${stats.total_km_mapped.toFixed(1)} road km · ${stats.segments_scored} road sections`
+    ? `${stats.total_km_mapped.toFixed(1)} km mapped`
     : "Stats loading";
 
   return (
@@ -140,7 +124,6 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
         <h1 id="map-explorer-title" className="headline">
           {municipality ? `Road quality in ${municipality.name}` : "Road quality map"}
         </h1>
-        <p className="page-header__lede">{modeSummaryCopy[routeState.mode]}</p>
         {municipality ? (
           <div
             style={{
@@ -163,23 +146,6 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
             </a>
           </div>
         ) : null}
-        <div className="trust-line" aria-label="Dataset snapshot">
-          <span>
-            <strong>{stats ? `${stats.total_km_mapped.toFixed(1)} km` : "—"}</strong> unique road coverage
-          </span>
-          <span className="trust-line-divider" aria-hidden="true" />
-          <span>
-            <strong>{stats ? stats.segments_scored : "—"}</strong> road sections
-          </span>
-          <span className="trust-line-divider" aria-hidden="true" />
-          <span>
-            <strong>{stats ? stats.total_readings : "—"}</strong> accepted readings
-          </span>
-          <span className="trust-line-divider" aria-hidden="true" />
-          <span>
-            Updated <strong>{formatSnapshotDate(stats?.generated_at)}</strong>
-          </span>
-        </div>
       </header>
 
       <div className="explorer-controls">
@@ -204,9 +170,6 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
         <div className="map-status-strip" role="status" aria-live="polite">
           <div className="pill">
             <span className={`mode-dot ${routeState.mode}`} />
-            {modeLabel[routeState.mode]}
-          </div>
-          <div className="pill pill-soft" aria-hidden="true">
             {statsSummary}
           </div>
           {mapError ? (

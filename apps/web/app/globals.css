@@ -338,7 +338,7 @@ nav a[aria-current="page"] {
 
 .page-header {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   padding: 2px 0 4px;
   margin-bottom: 0;
 }
@@ -386,11 +386,26 @@ nav a[aria-current="page"] {
 
 .explorer-controls {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+
+.municipality-search {
+  width: min(460px, 100%);
+}
+
+.municipality-search__field {
+  display: grid;
+}
+
+.municipality-search__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
 }
 
 .mode-switcher {
@@ -430,13 +445,19 @@ nav a[aria-current="page"] {
 }
 
 .search-input {
-  min-width: min(320px, 100%);
+  flex: 1;
+  min-width: 0;
   padding: 10px 13px;
   border-radius: var(--rs-radius-sm);
   border: 1px solid var(--rs-border-strong);
   background: var(--rs-surface);
   color: var(--rs-ink);
   font-size: 0.95rem;
+}
+
+.municipality-search__submit {
+  min-height: 40px;
+  padding: 8px 14px;
 }
 
 .search-input::placeholder {
@@ -471,7 +492,7 @@ nav a[aria-current="page"] {
 
 .map-explorer {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .map-stage-hero {
@@ -564,14 +585,14 @@ nav a[aria-current="page"] {
 
 .map-status-strip {
   position: absolute;
-  right: 20px;
+  left: 20px;
   top: 20px;
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  max-width: calc(100% - 40px);
+  max-width: calc(100% - 110px);
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 /* === Segment drawer (overlay) === */

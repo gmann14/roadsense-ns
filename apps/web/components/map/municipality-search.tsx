@@ -144,9 +144,9 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
         navigateToSelection();
       }}
     >
-      <label style={{ display: "grid", gap: 4 }}>
-        <span className="eyebrow">Search municipalities or places</span>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <label className="municipality-search__field">
+        <span className="sr-only">Search municipalities or places</span>
+        <div className="municipality-search__row">
           <input
             className="search-input"
             list="municipality-options"
@@ -168,8 +168,8 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
               Clear
             </button>
           ) : null}
-          <button type="submit" className="secondary-button">
-            Go
+          <button type="submit" className="secondary-button municipality-search__submit">
+            Search
           </button>
         </div>
       </label>
