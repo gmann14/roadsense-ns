@@ -981,6 +981,9 @@ serve(async (req) => {
   - `low_quality`
   - `no_segment_match`
   - `unpaved`
+  - `duplicate_reading`
+
+Cross-batch duplicate suppression is deliberately a soft reject, not a hard error: if a device retries data that was manually replayed or already accepted under a different `batch_id`, the server returns 200, records the batch in `processed_batches`, and does not insert or aggregate the duplicate physical readings.
 
 ### Rate Limits (enforced in Edge Function)
 
@@ -1304,9 +1307,9 @@ BEGIN
             ELSE 'low'::confidence_level
         END,
         roughness_category = CASE
-            WHEN sa.avg_roughness_score < 0.3 THEN 'smooth'::roughness_category
-            WHEN sa.avg_roughness_score < 0.6 THEN 'fair'::roughness_category
-            WHEN sa.avg_roughness_score < 1.0 THEN 'rough'::roughness_category
+            WHEN sa.avg_roughness_score < 0.05 THEN 'smooth'::roughness_category
+            WHEN sa.avg_roughness_score < 0.09 THEN 'fair'::roughness_category
+            WHEN sa.avg_roughness_score < 0.14 THEN 'rough'::roughness_category
             ELSE 'very_rough'::roughness_category
         END
     WHERE sa.segment_id IN (
@@ -1945,9 +1948,9 @@ BEGIN
             ELSE 'low'
         END::confidence_level,
         CASE
-            WHEN r.avg_score < 0.3 THEN 'smooth'
-            WHEN r.avg_score < 0.6 THEN 'fair'
-            WHEN r.avg_score < 1.0 THEN 'rough'
+            WHEN r.avg_score < 0.05 THEN 'smooth'
+            WHEN r.avg_score < 0.09 THEN 'fair'
+            WHEN r.avg_score < 0.14 THEN 'rough'
             ELSE 'very_rough'
         END::roughness_category,
         now()

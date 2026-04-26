@@ -31,15 +31,21 @@ struct PotholeCameraFlowView: View {
 
             switch camera.authorizationState {
             case .notDetermined, .authorized:
-                cameraBody
+                if let setupErrorMessage = camera.setupErrorMessage {
+                    unavailableBody(message: setupErrorMessage)
+                } else {
+                    cameraBody
+                }
             case .denied, .restricted:
                 deniedBody
+            @unknown default:
+                unavailableBody(message: "RoadSense received an unknown camera permission state. Close this screen and try again.")
             }
         }
         .task {
             await camera.startIfNeeded()
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task {
                 await camera.refreshAuthorizationState()
@@ -217,10 +223,34 @@ struct PotholeCameraFlowView: View {
         }
         .padding(DesignTokens.Space.xl)
     }
+
+    private func unavailableBody(message: String) -> some View {
+        VStack(spacing: DesignTokens.Space.lg) {
+            Image(systemName: "camera.badge.ellipsis")
+                .font(.system(size: 42, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text("Camera unavailable")
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.body)
+                .foregroundStyle(.white.opacity(0.82))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
+
+            Button("Close", action: onCancel)
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.signal)
+        }
+        .padding(DesignTokens.Space.xl)
+    }
 }
 
 private final class CameraCaptureModel: NSObject, ObservableObject {
     @Published var authorizationState: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+    @Published var setupErrorMessage: String?
 
     let session = AVCaptureSession()
 
@@ -250,7 +280,7 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
 
         guard !session.isRunning else { return }
 
-        configureSessionIfNeeded()
+        guard configureSessionIfNeeded() else { return }
         session.startRunning()
     }
 
@@ -262,6 +292,11 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
     }
 
     func capturePhoto(onCapture: @escaping (Data) -> Void) {
+        guard session.isRunning else {
+            setupErrorMessage = "RoadSense could not start the camera. Close this screen and try again after checking iOS camera permissions."
+            return
+        }
+
         continuation = onCapture
         let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         settings.flashMode = .off
@@ -271,21 +306,25 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
         output.capturePhoto(with: settings, delegate: self)
     }
 
-    private func configureSessionIfNeeded() {
+    private func configureSessionIfNeeded() -> Bool {
         guard session.inputs.isEmpty else {
-            return
+            return true
         }
 
         session.beginConfiguration()
         session.sessionPreset = .photo
         defer { session.commitConfiguration() }
 
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-              let input = try? AVCaptureDeviceInput(device: device),
+        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
+            setupErrorMessage = "This device does not have an available back camera."
+            return false
+        }
+
+        guard let input = try? AVCaptureDeviceInput(device: device),
               session.canAddInput(input),
               session.canAddOutput(output) else {
-            authorizationState = .denied
-            return
+            setupErrorMessage = "RoadSense could not configure the camera. Close this screen and try again."
+            return false
         }
 
         session.addInput(input)
@@ -297,6 +336,8 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
                 output.maxPhotoDimensions = maxDimensions
             }
         }
+        setupErrorMessage = nil
+        return true
     }
 }
 

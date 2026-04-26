@@ -4,7 +4,7 @@ import SwiftUI
 
 struct RoadQualityMapView: View {
     let config: AppConfig
-    let pendingDriveCoordinates: [CLLocationCoordinate2D]
+    let localDriveOverlayPoints: [LocalDriveOverlayPoint]
     let pendingPotholeCoordinates: [CLLocationCoordinate2D]
     let onMapLoaded: () -> Void
     let onMapLoadingError: (String) -> Void
@@ -17,7 +17,7 @@ struct RoadQualityMapView: View {
         Group {
             if AppBootstrap.isRunningTests {
                 TestingRoadQualityMapView(
-                    pendingDriveCoordinates: pendingDriveCoordinates,
+                    localDriveOverlayPoints: localDriveOverlayPoints,
                     pendingPotholeCoordinates: pendingPotholeCoordinates,
                     onMapLoaded: onMapLoaded
                 )
@@ -34,7 +34,7 @@ struct RoadQualityMapView: View {
                     .showsAccuracyRing(true)
 
                 RoadQualityMapStyleContent(tileTemplateURL: Endpoints(config: config).tileTemplateURLString)
-                LocalDriveOverlayStyleContent(coordinates: pendingDriveCoordinates)
+                LocalDriveOverlayStyleContent(points: localDriveOverlayPoints)
                 PendingPotholeOverlayStyleContent(coordinates: pendingPotholeCoordinates)
 
                 TapInteraction(.layer(RoadQualityMapStyleContent.segmentLayerID)) { feature, _ in
@@ -82,7 +82,7 @@ struct RoadQualityMapView: View {
 }
 
 private struct TestingRoadQualityMapView: View {
-    let pendingDriveCoordinates: [CLLocationCoordinate2D]
+    let localDriveOverlayPoints: [LocalDriveOverlayPoint]
     let pendingPotholeCoordinates: [CLLocationCoordinate2D]
     let onMapLoaded: () -> Void
 
@@ -107,7 +107,7 @@ private struct TestingRoadQualityMapView: View {
                     .foregroundStyle(.white)
 
                 Text(
-                    pendingDriveCoordinates.isEmpty && pendingPotholeCoordinates.isEmpty
+                    localDriveOverlayPoints.isEmpty && pendingPotholeCoordinates.isEmpty
                         ? "UI tests run against a deterministic non-Mapbox map shell."
                         : "Pending local drive or pothole overlay data is present in the test shell."
                 )
@@ -128,28 +128,74 @@ private struct TestingRoadQualityMapView: View {
 }
 
 private struct LocalDriveOverlayStyleContent: MapStyleContent {
-    static let sourceID = "roadsense-local-drive-source"
-    static let layerID = "roadsense-local-drive-line"
-
-    let coordinates: [CLLocationCoordinate2D]
+    let points: [LocalDriveOverlayPoint]
 
     var body: some MapStyleContent {
-        if coordinates.count >= 2 {
-            GeoJSONSource(id: Self.sourceID)
+        LocalDriveCategoryOverlayStyleContent(
+            category: "smooth",
+            color: DesignTokens.Palette.smooth,
+            segments: segments(for: "smooth")
+        )
+        LocalDriveCategoryOverlayStyleContent(
+            category: "fair",
+            color: DesignTokens.Palette.fair,
+            segments: segments(for: "fair")
+        )
+        LocalDriveCategoryOverlayStyleContent(
+            category: "rough",
+            color: DesignTokens.Palette.rough,
+            segments: segments(for: "rough")
+        )
+        LocalDriveCategoryOverlayStyleContent(
+            category: "very_rough",
+            color: DesignTokens.Palette.veryRough,
+            segments: segments(for: "very_rough")
+        )
+    }
+
+    private func segments(for category: String) -> [[CLLocationCoordinate2D]] {
+        guard points.count >= 2 else { return [] }
+
+        return zip(points, points.dropFirst()).compactMap { previous, current in
+            guard current.roughnessCategory == category else { return nil }
+            return [previous.coordinate, current.coordinate]
+        }
+    }
+}
+
+private struct LocalDriveCategoryOverlayStyleContent: MapStyleContent {
+    let category: String
+    let color: Color
+    let segments: [[CLLocationCoordinate2D]]
+
+    var body: some MapStyleContent {
+        if !segments.isEmpty {
+            GeoJSONSource(id: sourceID)
                 .data(localDriveGeoJSON)
 
-            LineLayer(id: Self.layerID, source: Self.sourceID)
+            LineLayer(id: layerID, source: sourceID)
                 .lineCap(.round)
                 .lineJoin(.round)
-                .lineColor(StyleColor(DesignTokens.Palette.signal))
+                .lineColor(StyleColor(color))
                 .lineOpacity(0.95)
                 .lineWidth(localDriveWidthExpression)
                 .lineDashArray([2.0, 2.0])
         }
     }
 
+    private var sourceID: String {
+        "roadsense-local-drive-\(category)-source"
+    }
+
+    private var layerID: String {
+        "roadsense-local-drive-\(category)-line"
+    }
+
     private var localDriveGeoJSON: GeoJSONSourceData {
-        .feature(Feature(geometry: Geometry(LineString(coordinates))))
+        let features = segments.map { coordinates in
+            Feature(geometry: Geometry(LineString(coordinates)))
+        }
+        return .featureCollection(FeatureCollection(features: features))
     }
 
     private var localDriveWidthExpression: Exp {

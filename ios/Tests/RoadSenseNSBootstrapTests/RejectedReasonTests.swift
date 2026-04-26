@@ -11,6 +11,7 @@ struct RejectedReasonTests {
             "future_timestamp",
             "stale_timestamp",
             "unpaved",
+            "duplicate_reading",
         ])
     }
 }

@@ -23,6 +23,23 @@ struct DriveSessionFragmentRepairSummary: Equatable {
     )
 }
 
+struct LocalDriveOverlayPoint: Equatable {
+    let latitude: Double
+    let longitude: Double
+    let roughnessCategory: String
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    static func category(for roughnessRMS: Double) -> String {
+        if roughnessRMS < 0.05 { return "smooth" }
+        if roughnessRMS < 0.09 { return "fair" }
+        if roughnessRMS < 0.14 { return "rough" }
+        return "very_rough"
+    }
+}
+
 @MainActor
 final class ReadingStore {
     private let container: ModelContainer
@@ -321,6 +338,27 @@ final class ReadingStore {
 
         return readings.map { (record: ReadingRecord) in
             CLLocationCoordinate2D(latitude: record.latitude, longitude: record.longitude)
+        }
+    }
+
+    func localDriveOverlayPoints(limit: Int = 500) throws -> [LocalDriveOverlayPoint] {
+        let context = ModelContext(container)
+        let descriptor = FetchDescriptor<ReadingRecord>(
+            predicate: #Predicate {
+                $0.uploadedAt == nil
+                    && $0.droppedByPrivacyZone == false
+                    && $0.endpointTrimmedAt == nil
+            },
+            sortBy: [SortDescriptor(\.recordedAt, order: .forward)]
+        )
+        let readings = try context.fetch(descriptor).prefix(max(limit, 0))
+
+        return readings.map { record in
+            LocalDriveOverlayPoint(
+                latitude: record.latitude,
+                longitude: record.longitude,
+                roughnessCategory: LocalDriveOverlayPoint.category(for: record.roughnessRMS)
+            )
         }
     }
 

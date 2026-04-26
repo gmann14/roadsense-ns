@@ -83,10 +83,11 @@ Batch upload of processed point readings.
 **Notes**
 
 - `batch_id` must be UUIDv4, generated on client. Server uses it for idempotency — retried uploads with the same `batch_id` replay the original `{accepted, rejected, duplicate, rejected_reasons}` result.
+- Cross-batch replays of the same physical reading from the same device are also suppressed. These return 200 with `duplicate: false` for the new batch and count the suppressed row under `rejected_reasons.duplicate_reading`; this prevents manual field-test replay or local queue retry from double-counting public aggregates.
 - `device_token` is a UUIDv4 generated on client, rotated monthly. It is sent over TLS to the Edge Function, hashed there with a server-side pepper, and discarded. The raw token is never persisted.
 - `readings.length ≤ 1000`. Larger → `batch_too_large` error; client must split.
 - Hard 400s are only for malformed payloads: missing required fields, non-UUID `batch_id` / `device_token`, non-numeric scalar fields, or `batch_too_large`.
-- Domain-level bad readings are soft-rejected and counted in `rejected_reasons` with a 200 response. That includes stale/future timestamps, out-of-bounds coordinates, low-quality readings, unpaved matches, and no-match cases.
+- Domain-level bad readings are soft-rejected and counted in `rejected_reasons` with a 200 response. That includes stale/future timestamps, out-of-bounds coordinates, low-quality readings, unpaved matches, no-match cases, and duplicate physical readings already accepted from the same device.
 
 **Response — 200 OK**
 
@@ -113,6 +114,7 @@ Batch upload of processed point readings.
   - `future_timestamp` — `recorded_at` in the future by > 60s
   - `stale_timestamp` — `recorded_at` older than 7 days
   - `unpaved` — matched segment surface is non-paved in OSM
+  - `duplicate_reading` — same device hash, same timestamp, and near-identical coordinate already exists from a prior batch
 
 **Intentionally removed from MVP:**
 - `invalid_value` — a full-batch `validation_failed` is returned instead; there is no per-reading "accepted-but-flagged" path.
@@ -211,7 +213,7 @@ Single segment detail for tap-on-road modal.
     "surface_type": "asphalt",
     "aggregate": {
         "avg_roughness_score": 0.72,
-        "category": "rough",
+        "category": "very_rough",
         "confidence": "high",
         "total_readings": 137,
         "unique_contributors": 34,

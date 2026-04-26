@@ -32,6 +32,13 @@
 	<string>$(MAPBOX_ACCESS_TOKEN)</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>ca.roadsense.ios.nightly-cleanup</string>
+		<string>ca.roadsense.ios.upload-drain</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>RoadSense NS uses the camera so you can submit pothole photos.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>RoadSense NS uses background location to keep collecting road quality readings during a drive.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

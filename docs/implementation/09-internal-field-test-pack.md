@@ -129,11 +129,13 @@ Immediately after each run:
 - confirm accepted readings increased plausibly
 - confirm privacy-filtered count increased if the drive crossed a protected zone
 - confirm pending uploads either drain or remain queued with an understandable state
-- confirm the local dashed-drive overlay appears before upload and disappears after successful upload
+- confirm the local roughness overlay appears before upload, uses plausible smooth/fair/rough/very-rough colors, and disappears after successful upload
 - if pointing at local or staging backend:
   - verify `/stats`
   - verify `/segments/{id}` for a touched segment if known
   - verify quality tile presence in the test area
+
+If a manual replay was used, record that explicitly. The phone may still show stale pending rows until a reconciliation pass runs, but the backend must not double-count them if the phone later retries.
 
 ## Bug Report Template
 
@@ -164,6 +166,13 @@ When a run looks wrong, gather as much of this as possible:
 - backend request ID if surfaced
 - relevant simulator or device console logs
 - if reproducible, export a sensor CSV and add it to the harness corpus
+
+For app crashes or suspicious upload states, also pull:
+
+- the app data container (`Library/Application Support/default.store`)
+- system crash logs for `RoadSense NS`
+- local Supabase counts for the same time window
+- the processed batch IDs used for any manual replay
 
 If a bug cannot be reduced to a simulator harness fixture, it is not fully closed.
 

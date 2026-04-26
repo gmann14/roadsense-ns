@@ -17,8 +17,8 @@ enum BackgroundUploadDrainRunner {
         coordinator: any UploadDrainCoordinating,
         logger: RoadSenseLogger,
         nowProvider: @escaping @Sendable () -> Date = backgroundTaskNowProvider,
-        scheduleNext: @escaping @Sendable (Date) -> Void,
-        setTaskCompleted: @escaping @Sendable (Bool) -> Void
+        scheduleNext: @escaping @MainActor @Sendable (Date) -> Void,
+        setTaskCompleted: @escaping @MainActor @Sendable (Bool) -> Void
     ) -> BackgroundUploadDrainExecution {
         let work = Task { @MainActor in
             let success = await coordinator.requestDrain(reason: .backgroundTask)
