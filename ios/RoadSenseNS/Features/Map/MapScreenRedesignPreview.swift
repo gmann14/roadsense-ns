@@ -221,7 +221,8 @@ struct StaticPreview: View {
             IdleStatWell(
                 kmThisMonth: 47,
                 communityKmThisWeek: 318,
-                communityDriversThisWeek: 812
+                communityDriversThisWeek: 812,
+                onDismiss: {}
             )
         default:
             Color.clear

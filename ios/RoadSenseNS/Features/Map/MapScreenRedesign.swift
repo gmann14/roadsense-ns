@@ -40,6 +40,11 @@ struct MapScreenRedesign: View {
     @State private var followUpPrompt: RedesignFollowUpPrompt?
     @State private var deferredRedesignFollowUpPrompt: RedesignFollowUpPrompt?
 
+    /// Whether the idle "Your contribution" well is shown full-size or
+    /// collapsed to a chip. Persisted so the user's choice survives launches —
+    /// once they hide the well to explore the map, we don't keep reopening it.
+    @AppStorage("driving.idleWellExpanded") private var idleWellExpanded: Bool = true
+
     var body: some View {
         ZStack(alignment: .top) {
             RoadQualityMapView(
@@ -62,6 +67,23 @@ struct MapScreenRedesign: View {
                     segmentLoadError = nil
                 }
             )
+
+            // Tap-to-dismiss layer — when the idle well is expanded, a tap
+            // anywhere on the map area collapses it to a chip so the user can
+            // interact with the map. Map drag/zoom gestures pass through (we
+            // only consume tap), and FABs / topBar / pills sit above this in
+            // the ZStack and consume their own taps first.
+            if showsIdleStatWell && idleWellExpanded {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(DesignTokens.Motion.standard) {
+                            idleWellExpanded = false
+                        }
+                    }
+                    .ignoresSafeArea()
+                    .accessibilityHidden(true)
+            }
 
             // Bottom gradient scrim — keeps the FAB cluster + labels legible
             // over bright Mapbox tiles. Fades to fully transparent ~40% up
@@ -94,6 +116,9 @@ struct MapScreenRedesign: View {
                     .padding(.top, DesignTokens.Space.xs)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
+
+                collapsedContributionChip
+                    .padding(.top, DesignTokens.Space.sm)
 
                 Spacer(minLength: 0)
 
@@ -218,15 +243,39 @@ struct MapScreenRedesign: View {
                 .background(centerScrimBackground)
                 .transition(.opacity)
                 .accessibilitySortPriority(3)
-        } else if showsIdleStatWell {
+        } else if showsIdleStatWell, idleWellExpanded {
             IdleStatWell(
                 kmThisMonth: model.userStatsSummary.totalKmRecorded,
                 communityKmThisWeek: 0, // §11 stats_public view will populate this
-                communityDriversThisWeek: 0
+                communityDriversThisWeek: 0,
+                onDismiss: {
+                    withAnimation(DesignTokens.Motion.standard) {
+                        idleWellExpanded = false
+                    }
+                }
             )
             .padding(DesignTokens.Space.lg)
             .background(centerScrimBackground)
-            .transition(.opacity)
+            .transition(.scale(scale: 0.92).combined(with: .opacity))
+            .accessibilitySortPriority(3)
+        }
+    }
+
+    /// Compact pill rendered near the top of the screen when the user has
+    /// dismissed `IdleStatWell` so the contribution signal is never gone — just
+    /// out of the way.
+    @ViewBuilder
+    private var collapsedContributionChip: some View {
+        if showsIdleStatWell, !idleWellExpanded {
+            ContributionChip(
+                kmThisMonth: model.userStatsSummary.totalKmRecorded,
+                onExpand: {
+                    withAnimation(DesignTokens.Motion.standard) {
+                        idleWellExpanded = true
+                    }
+                }
+            )
+            .transition(.move(edge: .top).combined(with: .opacity))
             .accessibilitySortPriority(3)
         }
     }

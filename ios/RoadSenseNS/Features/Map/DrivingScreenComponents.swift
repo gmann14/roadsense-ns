@@ -329,13 +329,40 @@ struct SecondaryFAB: View {
 
 /// Pro-social headline shown on the driving screen between drives. Replaces
 /// the previous "View stats" primary action — see §7.D5.
+///
+/// Dismissable: a chevron-down handle in the top-right collapses the well to
+/// `ContributionChip` so the user can interact with the map underneath. The
+/// dismissal also fires on a tap-to-dismiss overlay over the map area, but
+/// the explicit handle is the discoverable affordance.
 struct IdleStatWell: View {
     let kmThisMonth: Double
     let communityKmThisWeek: Double
     let communityDriversThisWeek: Int
+    var onDismiss: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .center, spacing: 6) {
+            if onDismiss != nil {
+                HStack {
+                    Spacer(minLength: 0)
+                    Button(action: { onDismiss?() }) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.78))
+                            .frame(width: 24, height: 24)
+                            .background(
+                                Circle().fill(.white.opacity(0.10))
+                            )
+                            .contentShape(Circle().inset(by: -8))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Hide contribution")
+                    .accessibilityHint("Hides the contribution headline so you can explore the map. Tap the chip to bring it back.")
+                    .accessibilityIdentifier("driving.idle-well.dismiss")
+                }
+                .padding(.bottom, 2)
+            }
+
             Text(BrandVoice.Stats.yourContributionEyebrow)
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.3)
@@ -366,7 +393,56 @@ struct IdleStatWell: View {
         .frame(maxWidth: 240)
         .padding(.horizontal, DesignTokens.Space.lg)
         .padding(.vertical, DesignTokens.Space.md)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var formattedKm: String {
+        let kmString = kmThisMonth.formatted(.number.precision(.fractionLength(kmThisMonth < 10 ? 1 : 0)))
+        return "\(kmString) km"
+    }
+}
+
+/// Compact pill that replaces `IdleStatWell` once the user dismisses it. Keeps
+/// the contribution signal alive without obscuring the map. Tap to bring the
+/// full well back.
+struct ContributionChip: View {
+    let kmThisMonth: Double
+    let onExpand: () -> Void
+
+    var body: some View {
+        Button(action: onExpand) {
+            HStack(spacing: DesignTokens.Space.xs) {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.78))
+                Text(formattedKm)
+                    .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(.white)
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .padding(.leading, 1)
+            }
+            .padding(.horizontal, DesignTokens.Space.sm)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        Capsule().fill(DesignTokens.Palette.deep.opacity(0.55))
+                    )
+            )
+            .overlay(
+                Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+            .contentShape(Capsule().inset(by: -8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Your contribution: \(formattedKm) this month")
+        .accessibilityHint("Shows the full contribution headline.")
+        .accessibilityIdentifier("driving.idle-well.expand")
     }
 
     private var formattedKm: String {
