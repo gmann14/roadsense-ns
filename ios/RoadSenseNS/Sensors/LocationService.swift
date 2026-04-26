@@ -16,9 +16,14 @@ protocol LocationServicing {
 
 @MainActor
 final class LocationService: NSObject, LocationServicing {
+    private static let bufferedSampleRetentionSeconds: TimeInterval = 30
+
     private let manager: CLLocationManager
     private let continuation: AsyncStream<LocationSample>.Continuation
     private var bufferedSamples: [LocationSample] = []
+    private var isPassiveMonitoringActive = false
+    private var isCollectionActive = false
+    private var isUpdatingLocation = false
     let samples: AsyncStream<LocationSample>
 
     init(manager: CLLocationManager = CLLocationManager()) {
@@ -50,31 +55,49 @@ final class LocationService: NSObject, LocationServicing {
     }
 
     func start() throws {
-        manager.startUpdatingLocation()
+        isCollectionActive = true
+        applyLocationUpdateState()
     }
 
     func stop() {
-        manager.stopUpdatingLocation()
+        isCollectionActive = false
+        applyLocationUpdateState()
     }
 
     func startPassiveMonitoring() {
-        guard CLLocationManager.significantLocationChangeMonitoringAvailable() else {
-            return
+        isPassiveMonitoringActive = true
+        if CLLocationManager.significantLocationChangeMonitoringAvailable() {
+            manager.startMonitoringSignificantLocationChanges()
         }
 
-        manager.startMonitoringSignificantLocationChanges()
+        applyLocationUpdateState()
     }
 
     func stopPassiveMonitoring() {
-        guard CLLocationManager.significantLocationChangeMonitoringAvailable() else {
-            return
+        isPassiveMonitoringActive = false
+        if CLLocationManager.significantLocationChangeMonitoringAvailable() {
+            manager.stopMonitoringSignificantLocationChanges()
         }
 
-        manager.stopMonitoringSignificantLocationChanges()
+        applyLocationUpdateState()
     }
 
     func requestAlwaysUpgrade() {
         manager.requestAlwaysAuthorization()
+    }
+
+    private func applyLocationUpdateState() {
+        let shouldUpdateLocation = isPassiveMonitoringActive || isCollectionActive
+        guard shouldUpdateLocation != isUpdatingLocation else {
+            return
+        }
+
+        if shouldUpdateLocation {
+            manager.startUpdatingLocation()
+        } else {
+            manager.stopUpdatingLocation()
+        }
+        isUpdatingLocation = shouldUpdateLocation
     }
 }
 
@@ -98,6 +121,6 @@ extension LocationService: @preconcurrency CLLocationManagerDelegate {
     }
 
     private func prunedBufferedSamples(referenceTime: TimeInterval) -> [LocationSample] {
-        bufferedSamples.filter { referenceTime - $0.timestamp <= 3.5 }
+        bufferedSamples.filter { referenceTime - $0.timestamp <= Self.bufferedSampleRetentionSeconds }
     }
 }

@@ -104,6 +104,10 @@ struct MapScreen: View {
                         }
                     }
                 )
+            } else {
+                PotholeCameraUnavailableView {
+                    isShowingCamera = false
+                }
             }
         }
         .overlay(alignment: .bottom) {

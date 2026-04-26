@@ -109,6 +109,25 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.markPothole(now: now), .unavailableLocation)
     }
 
+    func testLocationServiceKeepsFreshSampleLongerThanReactionBuffer() {
+        let service = LocationService()
+        let sampleDate = Date().addingTimeInterval(-8)
+        let location = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 44.6488, longitude: -63.5752),
+            altitude: 0,
+            horizontalAccuracy: 6,
+            verticalAccuracy: 8,
+            course: 180,
+            speed: 3,
+            timestamp: sampleDate
+        )
+
+        service.locationManager(CLLocationManager(), didUpdateLocations: [location])
+
+        XCTAssertEqual(service.latestSample?.timestamp, sampleDate.timeIntervalSince1970)
+        XCTAssertEqual(service.recentSamples.count, 1)
+    }
+
     func testMarkPotholeRejectsPrivacyZoneOverlap() throws {
         let defaults = try makeDefaults()
         let now = Date(timeIntervalSince1970: 1_713_000_000)

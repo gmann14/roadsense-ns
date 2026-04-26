@@ -94,10 +94,12 @@ struct PotholeCameraFlowView: View {
                 Spacer(minLength: DesignTokens.Space.lg)
             }
         } else {
-            VStack(spacing: 0) {
+            ZStack {
                 CameraPreviewView(session: camera.session)
                     .ignoresSafeArea()
-                    .overlay(alignment: .topLeading) {
+
+                VStack {
+                    HStack {
                         Button(action: onCancel) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 28, weight: .bold))
@@ -105,46 +107,109 @@ struct PotholeCameraFlowView: View {
                                 .padding(DesignTokens.Space.lg)
                         }
                         .accessibilityLabel("Close camera")
-                    }
-                    .overlay(alignment: .top) {
-                        if isLikelyMoving && !safetyBannerDismissed {
-                            safetyBanner
-                                .padding(.top, DesignTokens.Space.xxxl)
-                                .padding(.horizontal, DesignTokens.Space.lg)
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                        }
-                    }
-                    .overlay(alignment: .bottom) {
-                        VStack(spacing: DesignTokens.Space.md) {
-                            Text(BrandVoice.Camera.captureGuidance)
-                                .font(.system(.callout, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.82))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, DesignTokens.Space.lg)
 
-                            Button {
-                                camera.capturePhoto { data in
-                                    capturedData = data
-                                }
-                            } label: {
-                                Circle()
-                                    .fill(.white)
-                                    .frame(width: 78, height: 78)
-                                    .overlay(
-                                        Circle()
-                                            .strokeBorder(.black.opacity(0.18), lineWidth: 2)
-                                            .padding(6)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("camera.shutter")
-                            .accessibilityLabel("Take pothole photo")
-                            .accessibilityHint("Captures a photo for the pothole report.")
-                            .padding(.bottom, DesignTokens.Space.xl)
-                        }
+                        Spacer()
                     }
+
+                    Spacer()
+                }
+
+                if isLikelyMoving && !safetyBannerDismissed && camera.startupState == .running {
+                    VStack {
+                        safetyBanner
+                            .padding(.top, DesignTokens.Space.xxxl)
+                            .padding(.horizontal, DesignTokens.Space.lg)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        Spacer()
+                    }
+                }
+
+                switch camera.startupState {
+                case .idle, .starting:
+                    cameraLoadingBody
+                case .running:
+                    cameraControls
+                case let .failed(message):
+                    cameraFailureBody(message)
+                }
             }
         }
+    }
+
+    private var cameraLoadingBody: some View {
+        VStack(spacing: DesignTokens.Space.md) {
+            ProgressView()
+                .tint(.white)
+                .scaleEffect(1.15)
+            Text("Starting camera…")
+                .font(.system(.headline, design: .rounded, weight: .semibold))
+                .foregroundStyle(.white)
+            Text("If iOS shows a camera prompt, allow access to continue.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.76))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 260)
+        }
+        .padding(DesignTokens.Space.xl)
+        .background(.black.opacity(0.58), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
+    private var cameraControls: some View {
+        VStack(spacing: DesignTokens.Space.md) {
+            Spacer()
+
+            Text(BrandVoice.Camera.captureGuidance)
+                .font(.system(.callout, weight: .medium))
+                .foregroundStyle(.white.opacity(0.82))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, DesignTokens.Space.lg)
+
+            Button {
+                camera.capturePhoto { data in
+                    capturedData = data
+                }
+            } label: {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 78, height: 78)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(.black.opacity(0.18), lineWidth: 2)
+                            .padding(6)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("camera.shutter")
+            .accessibilityLabel("Take pothole photo")
+            .accessibilityHint("Captures a photo for the pothole report.")
+            .padding(.bottom, DesignTokens.Space.xl)
+        }
+    }
+
+    private func cameraFailureBody(_ message: String) -> some View {
+        VStack(spacing: DesignTokens.Space.lg) {
+            Image(systemName: "camera.metering.unknown")
+                .font(.system(size: 42, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text("Camera did not start")
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.body)
+                .foregroundStyle(.white.opacity(0.82))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
+
+            Button("Close", action: onCancel)
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.signal)
+        }
+        .padding(DesignTokens.Space.xl)
+        .background(.black.opacity(0.68), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous))
+        .padding(DesignTokens.Space.lg)
     }
 
     /// Soft, dismissable warning shown over the camera preview when the device's
@@ -219,13 +284,55 @@ struct PotholeCameraFlowView: View {
     }
 }
 
+struct PotholeCameraUnavailableView: View {
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: DesignTokens.Space.lg) {
+                Image(systemName: "camera.metering.unknown")
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Text("Camera unavailable")
+                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .foregroundStyle(.white)
+
+                Text("RoadSense lost the photo location context before the camera opened. Close this and try again.")
+                    .font(.body)
+                    .foregroundStyle(.white.opacity(0.82))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+
+                Button("Close", action: onClose)
+                    .buttonStyle(.borderedProminent)
+                    .tint(DesignTokens.Palette.signal)
+            }
+            .padding(DesignTokens.Space.xl)
+        }
+    }
+}
+
+private enum CameraStartupState: Equatable {
+    case idle
+    case starting
+    case running
+    case failed(String)
+}
+
 private final class CameraCaptureModel: NSObject, ObservableObject {
     @Published var authorizationState: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+    @Published private(set) var startupState: CameraStartupState = .idle
 
     let session = AVCaptureSession()
 
+    private let sessionQueue = DispatchQueue(label: "ca.roadsense.camera.session")
     private let output = AVCapturePhotoOutput()
     private var continuation: ((Data) -> Void)?
+    private var isConfigured = false
+    private var sessionGeneration = 0
 
     @MainActor
     func startIfNeeded() async {
@@ -248,20 +355,25 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
             return
         }
 
-        guard !session.isRunning else { return }
-
-        configureSessionIfNeeded()
-        session.startRunning()
+        startSessionIfNeeded()
     }
 
     @MainActor
     func stop() {
-        if session.isRunning {
-            session.stopRunning()
+        sessionGeneration += 1
+        startupState = .idle
+        sessionQueue.async { [weak self] in
+            guard let self, self.session.isRunning else { return }
+            self.session.stopRunning()
         }
     }
 
+    @MainActor
     func capturePhoto(onCapture: @escaping (Data) -> Void) {
+        guard startupState == .running else {
+            return
+        }
+
         continuation = onCapture
         let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         settings.flashMode = .off
@@ -271,21 +383,70 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
         output.capturePhoto(with: settings, delegate: self)
     }
 
-    private func configureSessionIfNeeded() {
-        guard session.inputs.isEmpty else {
+    @MainActor
+    private func startSessionIfNeeded() {
+        switch startupState {
+        case .starting, .running:
             return
+        case .idle, .failed:
+            break
+        }
+
+        startupState = .starting
+        sessionGeneration += 1
+        let generation = sessionGeneration
+
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+
+            if let failureMessage = self.configureSessionIfNeeded() {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.sessionGeneration == generation else { return }
+                    self.startupState = .failed(failureMessage)
+                }
+                return
+            }
+
+            if !self.session.isRunning {
+                self.session.startRunning()
+            }
+
+            let didStart = self.session.isRunning
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.sessionGeneration == generation else { return }
+                self.startupState = didStart
+                    ? .running
+                    : .failed("iOS did not return an active camera preview. Close and try again.")
+            }
+        }
+    }
+
+    private func configureSessionIfNeeded() -> String? {
+        guard !isConfigured else {
+            return nil
+        }
+
+        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
+            return "No back camera is available on this device."
+        }
+
+        let input: AVCaptureDeviceInput
+        do {
+            input = try AVCaptureDeviceInput(device: device)
+        } catch {
+            return "iOS could not open the back camera: \(error.localizedDescription)"
         }
 
         session.beginConfiguration()
         session.sessionPreset = .photo
         defer { session.commitConfiguration() }
 
-        guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-              let input = try? AVCaptureDeviceInput(device: device),
-              session.canAddInput(input),
-              session.canAddOutput(output) else {
-            authorizationState = .denied
-            return
+        guard session.canAddInput(input) else {
+            return "The camera input could not be added to the capture session."
+        }
+
+        guard session.canAddOutput(output) else {
+            return "The photo output could not be added to the capture session."
         }
 
         session.addInput(input)
@@ -297,6 +458,9 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
                 output.maxPhotoDimensions = maxDimensions
             }
         }
+
+        isConfigured = true
+        return nil
     }
 }
 

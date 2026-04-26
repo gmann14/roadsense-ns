@@ -141,6 +141,10 @@ struct MapScreenRedesign: View {
                         }
                     }
                 )
+            } else {
+                PotholeCameraUnavailableView {
+                    isShowingCamera = false
+                }
             }
         }
         .overlay(alignment: .bottom) {

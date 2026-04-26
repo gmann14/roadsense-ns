@@ -409,7 +409,7 @@ Post-MVP phases:
   - implement SLC bootstrap and safe background behavior
 - **Acceptance**
   - app survives documented background scenarios short of user force-quit
-- **Current repo note:** `BackgroundCollectionPolicy`, `BackgroundTaskRegistrar`, aligned background task IDs (`nightly-cleanup`, `upload-drain`), significant-location-change passive monitoring, moving-GPS collection bootstrap, and fresh-checkpoint service resume are now implemented. Settings also exposes drive diagnostics for the last GPS sample, driving signal, collection start/stop, and bump candidate. Remaining work is signed real-device validation for lock-screen, background, and system-termination scenarios.
+- **Current repo note:** `BackgroundCollectionPolicy`, `BackgroundTaskRegistrar`, aligned background task IDs (`nightly-cleanup`, `upload-drain`), significant-location-change passive monitoring, moving-GPS collection bootstrap, fresh-checkpoint service resume, continuous location updates while monitoring is enabled, and longer local sample retention for mark/photo actions are now implemented. Settings also exposes drive diagnostics for the last GPS sample, driving signal, collection start/stop, and bump candidate. Remaining work is signed real-device validation for lock-screen, background, and system-termination scenarios.
 
 ### B061 — Sentry, structured logs, and ops metrics
 
@@ -767,7 +767,7 @@ These tasks track the background-upload loop and its remaining device-validation
 
 - **Spec refs:** [01](01-ios-implementation.md#pothole-photo-capture-post-mvp)
 - **Depends on:** B070, B072, B074
-- **Status:** implemented. `Take photo` is available from the map, `Add photo` is available from segment detail for any opened segment, camera access runs through `PotholeCameraFlowView`, and confirmed captures queue `PotholeReportRecord` rows with processed JPEGs and precise coordinates. The current build also fixes sheet/camera presentation sequencing, re-checks camera authorization on return from Settings, exposes failed-photo retry/remove controls in Settings, and adds VoiceOver + Dynamic Type coverage to the camera flow and map banners.
+- **Status:** implemented. `Take photo` is available from the map, `Add photo` is available from segment detail for any opened segment, camera access runs through `PotholeCameraFlowView`, and confirmed captures queue `PotholeReportRecord` rows with processed JPEGs and precise coordinates. The current build also fixes sheet/camera presentation sequencing, re-checks camera authorization on return from Settings, uses explicit camera startup/failure states instead of an unlabeled black preview, exposes failed-photo retry/remove controls in Settings, and adds VoiceOver + Dynamic Type coverage to the camera flow and map banners.
 - **RED**
   - UI test that tapping `Take photo` while `latestSpeedKmh >= 5` or the latest speed sample is older than 10s shows the safety interstitial, while a fresh `< 5` sample presents the camera
   - UI test that segment-detail photo capture dismisses the sheet before presenting the full-screen camera
