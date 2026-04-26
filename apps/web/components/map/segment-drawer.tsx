@@ -100,7 +100,7 @@ export function SegmentDrawer({
 
         if (!result) {
           setDetail(null);
-          setErrorMessage("We could not load details for this road segment.");
+          setErrorMessage("We could not load details for this road.");
           return;
         }
 
@@ -109,7 +109,7 @@ export function SegmentDrawer({
       .catch(() => {
         if (!controller.signal.aborted) {
           setDetail(null);
-          setErrorMessage("We could not load details for this road segment.");
+          setErrorMessage("We could not load details for this road.");
         }
       })
       .finally(() => {
@@ -246,11 +246,11 @@ export function SegmentDrawerPanel({
     if (isLoading) {
       return (
         <div className="drawer-state">
-          <span className="eyebrow">{mode === "potholes" ? "Loading potholes" : "Loading segment"}</span>
+          <span className="eyebrow">{mode === "potholes" ? "Loading potholes" : "Loading road"}</span>
           <strong>
             {mode === "potholes"
               ? "Fetching active pothole reports for this map view"
-              : `Fetching community detail for ${selectedSegmentId}`}
+              : "Fetching road details"}
           </strong>
           <span className="lede">The drawer will fill without shifting the rest of the map layout.</span>
         </div>
@@ -260,7 +260,7 @@ export function SegmentDrawerPanel({
     if (errorMessage) {
       return (
         <div className="drawer-state">
-          <span className="eyebrow">{mode === "potholes" ? "Potholes unavailable" : "Segment unavailable"}</span>
+          <span className="eyebrow">{mode === "potholes" ? "Potholes unavailable" : "Road unavailable"}</span>
           <strong>{errorMessage}</strong>
         </div>
       );
@@ -371,10 +371,10 @@ export function SegmentDrawerPanel({
           </p>
         </div>
 
-        <div className="drawer-grid" aria-label="Segment detail stats">
+        <div className="drawer-grid" aria-label="Road detail stats">
           <Metric label="Roughness score" value={detail.aggregate.avg_roughness_score.toFixed(2)} />
-          <Metric label="Readings" value={String(detail.aggregate.total_readings)} />
-          <Metric label="Contributors" value={String(detail.aggregate.unique_contributors)} />
+          <Metric label="Drive samples" value={String(detail.aggregate.total_readings)} />
+          <Metric label="Drivers" value={String(detail.aggregate.unique_contributors)} />
           <Metric label="Potholes" value={String(detail.aggregate.pothole_count)} />
           <Metric label="Road type" value={detail.road_type} />
           <Metric label="Surface" value={detail.surface_type ?? "Unknown"} />
@@ -386,7 +386,7 @@ export function SegmentDrawerPanel({
             Last community reading {detail.aggregate.last_reading_at ? formatRelativeDate(detail.aggregate.last_reading_at) : "not available"}
           </strong>
           <span className="lede">
-            Road-section scores may evolve as more contributors drive the same area.
+            Scores may evolve as more drivers cover the same road.
           </span>
         </div>
       </>
@@ -421,7 +421,7 @@ export function SegmentDrawerPanel({
         <div className="drawer__header">
           <div style={{ display: "grid", gap: 2 }}>
             <span className="eyebrow">
-              {mode === "potholes" ? "Potholes mode" : detail?.municipality ?? "Segment"}
+              {mode === "potholes" ? "Potholes mode" : detail?.municipality ?? "Road"}
             </span>
             <strong style={{ fontSize: "1.05rem", lineHeight: 1.2 }}>{headingLabel}</strong>
           </div>

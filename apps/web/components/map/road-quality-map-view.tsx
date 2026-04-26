@@ -43,6 +43,7 @@ type RoadQualityMapViewProps = {
 
 const QUALITY_SOURCE_ID = "roadsense-quality";
 const COVERAGE_SOURCE_ID = "roadsense-coverage";
+const QUALITY_CORRIDOR_LAYER_ID = "roadsense-quality-corridors";
 const SEGMENT_LAYER_ID = "roadsense-segments";
 const SELECTED_SEGMENT_LAYER_ID = "roadsense-segments-selected";
 const POTHOLE_LAYER_ID = "roadsense-potholes";
@@ -198,12 +199,35 @@ export function RoadQualityMapView({
           });
         }
 
+        if (!map.getLayer(QUALITY_CORRIDOR_LAYER_ID)) {
+          map.addLayer({
+            id: QUALITY_CORRIDOR_LAYER_ID,
+            type: "line",
+            source: QUALITY_SOURCE_ID,
+            "source-layer": "quality_corridors",
+            layout: {
+              "line-cap": "round",
+              "line-join": "round",
+            },
+            paint: {
+              "line-color": "#c89a50",
+              "line-width": ["interpolate", ["linear"], ["zoom"], 6, 4, 10, 6.4, 14, 9.4],
+              "line-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.22, 10, 0.34, 14, 0.42],
+              "line-blur": ["interpolate", ["linear"], ["zoom"], 6, 0.6, 14, 1],
+            },
+          });
+        }
+
         if (!map.getLayer(SEGMENT_LAYER_ID)) {
           map.addLayer({
             id: SEGMENT_LAYER_ID,
             type: "line",
             source: QUALITY_SOURCE_ID,
             "source-layer": "segment_aggregates",
+            layout: {
+              "line-cap": "round",
+              "line-join": "round",
+            },
             paint: {
               "line-color": [
                 "match",
@@ -220,16 +244,17 @@ export function RoadQualityMapView({
                 "#7a6754",
                 "#97a6ad",
               ],
-              "line-width": ["interpolate", ["linear"], ["zoom"], 6, 3.2, 10, 5, 14, 8.2],
+              "line-width": ["interpolate", ["linear"], ["zoom"], 6, 2.4, 10, 3.6, 14, 5.8],
               "line-opacity": [
                 "match",
                 ["get", "confidence"],
                 "low",
-                0.72,
+                0.78,
                 "medium",
-                0.9,
+                0.92,
                 0.96,
               ],
+              "line-blur": ["interpolate", ["linear"], ["zoom"], 6, 0.1, 14, 0.25],
             },
           });
         }
@@ -240,6 +265,10 @@ export function RoadQualityMapView({
             type: "line",
             source: QUALITY_SOURCE_ID,
             "source-layer": "segment_aggregates",
+            layout: {
+              "line-cap": "round",
+              "line-join": "round",
+            },
             filter: ["==", ["get", "id"], ""],
             paint: {
               "line-color": "#142830",
@@ -299,6 +328,8 @@ export function RoadQualityMapView({
             source: COVERAGE_SOURCE_ID,
             "source-layer": "segment_coverage",
             layout: {
+              "line-cap": "round",
+              "line-join": "round",
               visibility: "none",
             },
             paint: {
@@ -491,6 +522,7 @@ export function RoadQualityMapView({
 function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
   const visibleLayerIds = new Set<string>();
   if (mode === "quality") {
+    visibleLayerIds.add(QUALITY_CORRIDOR_LAYER_ID);
     visibleLayerIds.add(SEGMENT_LAYER_ID);
     visibleLayerIds.add(SELECTED_SEGMENT_LAYER_ID);
     visibleLayerIds.add(POTHOLE_LAYER_ID);
@@ -503,6 +535,7 @@ function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
   }
 
   for (const layerId of [
+    QUALITY_CORRIDOR_LAYER_ID,
     SEGMENT_LAYER_ID,
     SELECTED_SEGMENT_LAYER_ID,
     POTHOLE_LAYER_ID,

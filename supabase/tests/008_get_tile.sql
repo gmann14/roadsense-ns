@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(9);
+SELECT plan(10);
 
 DELETE FROM pothole_reports
 WHERE id = '00000000-0000-0000-0000-000000001801'::UUID;
@@ -204,6 +204,11 @@ SELECT ok(
     position('sa.confidence != ''low''' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) = 0
     AND position('sa.unique_contributors >= 3' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) = 0,
     'get_tile no longer suppresses low-confidence bootstrap segments in-function'
+);
+
+SELECT ok(
+    position('quality_corridors' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) > 0,
+    'get_tile emits a continuous corridor layer beneath scored samples'
 );
 
 SELECT * FROM finish();

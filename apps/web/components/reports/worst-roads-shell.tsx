@@ -125,7 +125,7 @@ export function WorstRoadsShell({ municipalityName, limit, result }: WorstRoadsS
                       </span>
                       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                         <span style={pillStyle}>{row.pothole_count} potholes</span>
-                        <span style={pillStyle}>{row.total_readings} readings</span>
+                        <span style={pillStyle}>{row.total_readings} drive samples</span>
                         <Link href={locateHref} className="secondary-button" style={{ marginLeft: "auto" }}>
                           Locate on map
                         </Link>

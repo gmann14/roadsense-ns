@@ -42,7 +42,7 @@ export function PrivacyContent() {
         </p>
         <div className="drawer-callout">
           <span className="eyebrow">Why this data exists</span>
-          <strong>We use motion plus location to match roughness readings to road segments.</strong>
+          <strong>We use motion plus location to match roughness samples to roads.</strong>
           <span className="lede">
             Without those two signal types together, the service cannot tell whether a bump happened on Barrington
             Street, Robie Street, or in a driveway that should never be published.
@@ -74,7 +74,7 @@ export function PrivacyContent() {
           <span className="eyebrow">Built in, not bolted on</span>
           <strong>Zones are evaluated locally in the app.</strong>
           <span className="lede">
-            Readings inside a zone are discarded before the upload queue is even touched. The server never receives a
+            Drive samples inside a zone are discarded before the upload queue is even touched. The server never receives a
             signal that a zone exists near you.
           </span>
         </div>
@@ -84,7 +84,7 @@ export function PrivacyContent() {
         <span className="eyebrow">04 · Retention and deletion</span>
         <h2 style={{ margin: 0, fontSize: "1.6rem" }}>Short-lived raw data, longer-lived aggregates</h2>
         <p className="lede" style={{ margin: 0 }}>
-          Contributors can delete all local data from inside the app at any time. On the server, raw readings are kept
+          Contributors can delete all local data from inside the app at any time. On the server, raw drive samples are kept
           for up to 6 months and then deleted on a rolling basis. Aggregate road-quality outputs may remain longer
           because they are published community statistics rather than personal trip histories.
         </p>

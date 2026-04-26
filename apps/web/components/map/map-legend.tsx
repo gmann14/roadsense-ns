@@ -7,10 +7,10 @@ type MapLegendProps = {
 };
 
 const items = [
-  { className: "smooth", label: "Smooth", description: "Community readings suggest a comparatively steady surface." },
-  { className: "fair", label: "Fair", description: "Noticeable roughness, but not among the harshest road sections." },
+  { className: "smooth", label: "Smooth", description: "Recent drives suggest a comparatively steady surface." },
+  { className: "fair", label: "Fair", description: "Noticeable roughness, but not among the harshest mapped roads." },
   { className: "rough", label: "Rough", description: "Consistently rough enough to stand out in the public signal." },
-  { className: "very-rough", label: "Very rough", description: "Among the harshest community-published road sections." },
+  { className: "very-rough", label: "Very rough", description: "Among the harshest mapped roads." },
 ];
 
 export function MapLegend({ defaultExpanded = false }: MapLegendProps) {
