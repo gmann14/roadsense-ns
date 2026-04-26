@@ -342,27 +342,6 @@ struct IdleStatWell: View {
 
     var body: some View {
         VStack(alignment: .center, spacing: 6) {
-            if onDismiss != nil {
-                HStack {
-                    Spacer(minLength: 0)
-                    Button(action: { onDismiss?() }) {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.78))
-                            .frame(width: 24, height: 24)
-                            .background(
-                                Circle().fill(.white.opacity(0.10))
-                            )
-                            .contentShape(Circle().inset(by: -8))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Hide contribution")
-                    .accessibilityHint("Hides the contribution headline so you can explore the map. Tap the chip to bring it back.")
-                    .accessibilityIdentifier("driving.idle-well.dismiss")
-                }
-                .padding(.bottom, 2)
-            }
-
             Text(BrandVoice.Stats.yourContributionEyebrow)
                 .font(.system(size: 10, weight: .bold))
                 .tracking(1.3)
@@ -393,6 +372,27 @@ struct IdleStatWell: View {
         .frame(maxWidth: 240)
         .padding(.horizontal, DesignTokens.Space.lg)
         .padding(.vertical, DesignTokens.Space.md)
+        // Dismiss handle floats in the top-trailing corner so the headline
+        // copy stays visually centred. The button uses an inset content shape
+        // for tap-forgiveness and only renders when a dismiss callback is wired.
+        .overlay(alignment: .topTrailing) {
+            if let onDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.78))
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(.white.opacity(0.10)))
+                        .contentShape(Circle().inset(by: -8))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+                .padding(.trailing, 8)
+                .accessibilityLabel("Hide contribution")
+                .accessibilityHint("Hides the contribution headline so you can explore the map. Tap the chip to bring it back.")
+                .accessibilityIdentifier("driving.idle-well.dismiss")
+            }
+        }
         .accessibilityElement(children: .contain)
     }
 
