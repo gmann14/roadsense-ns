@@ -351,7 +351,8 @@ private enum CameraStartupState: Equatable {
     case failed(String)
 }
 
-private final class CameraCaptureModel: NSObject, ObservableObject {
+// AVCaptureSession work is serialized on sessionQueue; UI state is updated on the main actor.
+private final class CameraCaptureModel: NSObject, ObservableObject, @unchecked Sendable {
     @Published var authorizationState: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     @Published private(set) var startupState: CameraStartupState = .idle
     @Published var setupErrorMessage: String?
