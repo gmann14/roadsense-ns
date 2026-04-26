@@ -399,6 +399,79 @@ Post-MVP phases:
 
 ## Phase 7 — Reliability, Observability, And UX Hardening
 
+### B064 — Field-test hardening gate: crash containment, local truth, and upload reconciliation
+
+- **Spec refs:** [01](01-ios-implementation.md), [03](03-api-contracts.md), [04](04-testing-and-quality.md), [09](09-internal-field-test-pack.md)
+- **Depends on:** B053, B060, B072-range upload execution
+- **Why now:** the first real-device field test exposed fragility that is more important than new features: a missing camera usage key caused a TCC kill mid-drive, SwiftData schema drift caused launch crashes on rebuild, manually replayed readings stayed pending on-device, and the phone map did not make it obvious what had been captured locally.
+- **RED**
+  - app-target migration tests prove legacy SwiftData stores open under the current schema and unreadable stores are backed up before reset
+  - XCTest for local map overlay data: accepted in-progress / upload-ready readings are visible locally; uploaded, privacy-zone-dropped, and endpoint-trimmed readings are hidden from the local overlay
+  - pgTAP test for cross-batch replay: the same device/coordinate/timestamp readings uploaded under a different `batch_id` do not create new `readings` rows or double-fold `segment_aggregates`
+  - plist/build verification asserts the final built app contains `NSCameraUsageDescription` and all `BGTaskSchedulerPermittedIdentifiers`
+  - manual real-device checklist: camera denied/allowed, foreground drive, lock-screen drive, app relaunch after crash, and upload retry after network loss
+- **GREEN**
+  - keep explicit SwiftData schema versions for every shipped local model version and recover unreadable stores by backup-and-reset instead of crashing on launch
+  - show a local roughness-colored route overlay from on-device readings before upload so a tester can confirm capture without waiting for the backend tile loop
+  - harden backend ingestion with cross-batch duplicate suppression keyed by device hash, recorded timestamp, and near-identical coordinate
+  - preflight camera authorization and make camera setup failures user-visible, not a black-screen dead end
+  - add diagnostics copy that distinguishes "recorded locally", "ready to upload", "uploaded", "server rejected", and "manually replayed / stale pending"
+- **Acceptance**
+  - rebuild/install/open cycles do not crash even when a device already has prior local data
+  - a tester can see the route being captured on the phone map during or immediately after a drive
+  - retrying or manually replaying a captured batch cannot double-count public roughness data
+  - tapping camera without prior permission prompts or shows a recoverable Settings state; it never kills collection
+  - pending-upload counts are no longer treated as the source of truth without corresponding diagnostics
+
+### B065 — Recording-state UX and drive/session language cleanup
+
+- **Spec refs:** [01](01-ios-implementation.md), [04](04-testing-and-quality.md)
+- **Depends on:** B064
+- **Why now:** users think in trips/drives, not backend segments. The active-drive state must answer "is it working?" in under five seconds.
+- **RED**
+  - UI/view-model tests for state copy: idle, waiting for movement, recording, GPS stale, paused by user, background permission missing, upload retrying, and upload complete
+  - XCTest for grouped-trip stats: short detector fragments separated by small gaps count as one user-visible trip
+  - manual Dynamic Type/VoiceOver check for the active-drive banner and mark/photo CTAs
+- **GREEN**
+  - rename user-facing "segments" and "uploads waiting" copy to trips/drives/readings where appropriate
+  - make the in-progress recording state persistent and prominent while the app is open
+  - show last GPS fix age and last recorded reading age in diagnostics, not in the primary UI
+  - keep `Mark pothole` prominent only while actively driving/open; keep `Take photo` lower-priority and available when a fresh location exists
+- **Acceptance**
+  - a first-time tester can tell whether RoadSense is recording, waiting, blocked, or uploading without opening Settings
+  - stats describe drives/trips and km, not implementation-only segment counts
+
+### B066 — Camera and manual-report fault isolation
+
+- **Spec refs:** [01](01-ios-implementation.md), [04](04-testing-and-quality.md), [06](06-security-and-privacy.md)
+- **Depends on:** B064
+- **RED**
+  - XCTest or reducer tests for photo preflight states: authorized, not determined, denied, restricted, unavailable camera hardware, and setup failure
+  - app-target test that photo submission uses the same fresh-location validator as manual pothole marking but does not require the device to be stopped
+  - manual real-device test: camera open/cancel/submit does not break subsequent `Mark pothole`
+- **GREEN**
+  - separate camera authorization from capture-session setup and surface setup failure as a closeable error state
+  - keep photo capture optional and passenger-friendly: warn while moving but do not block solely on speed
+  - preserve the latest usable GPS sample for mark/photo flows even if Mapbox still has an older puck location
+  - ensure dismissing a failed camera flow returns to the map with pothole marking still enabled
+- **Acceptance**
+  - no black camera screen without explanatory copy
+  - no camera path can poison GPS state or disable manual pothole marking for the rest of a drive
+
+### B067 — Internal diagnostics and data offload tooling
+
+- **Spec refs:** [04](04-testing-and-quality.md), [05](05-deployment-and-observability.md), [09](09-internal-field-test-pack.md)
+- **Depends on:** B064
+- **RED**
+  - script test against a copied `default.store` fixture covering reading counts, last reading time, upload-ready counts, endpoint-trimmed counts, pothole action states, and drive-session ranges
+  - docs checklist that every field-test issue records build, backend target, route window, pending queue counts, and whether a manual replay was used
+- **GREEN**
+  - add a local script that summarizes a pulled iOS SwiftData store without requiring ad hoc SQL
+  - write offload/replay notes into `.context/` for each manual field-test import
+  - expose the same key counts in Settings diagnostics for tester self-reporting
+- **Acceptance**
+  - after a test drive, we can answer "what exists on phone?", "what landed in backend?", and "what is stale/pending?" from one repeatable workflow
+
 ### B060 — Background execution and relaunch handling
 
 - **Spec refs:** [01](01-ios-implementation.md), [04](04-testing-and-quality.md)

@@ -1,17 +1,19 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(21);
+SELECT plan(25);
 
 DELETE FROM readings
 WHERE batch_id IN (
     '00000000-0000-0000-0000-00000000e501'::UUID,
-    '00000000-0000-0000-0000-00000000e502'::UUID
+    '00000000-0000-0000-0000-00000000e502'::UUID,
+    '00000000-0000-0000-0000-00000000e503'::UUID
 );
 
 DELETE FROM processed_batches
 WHERE batch_id IN (
     '00000000-0000-0000-0000-00000000e501'::UUID,
-    '00000000-0000-0000-0000-00000000e502'::UUID
+    '00000000-0000-0000-0000-00000000e502'::UUID,
+    '00000000-0000-0000-0000-00000000e503'::UUID
 );
 
 DELETE FROM road_segments
@@ -71,11 +73,11 @@ SELECT ingest_reading_batch(
         {
             "lat": 44.6490,
             "lng": -63.5794,
-            "roughness_rms": 0.72,
+            "roughness_rms": 0.12,
             "speed_kmh": 52.0,
             "heading": 90.0,
             "gps_accuracy_m": 6.0,
-            "recorded_at": "2026-04-18T13:00:00Z",
+            "recorded_at": "2026-04-25T13:00:00Z",
             "is_pothole": false,
             "pothole_magnitude": null
         },
@@ -86,7 +88,7 @@ SELECT ingest_reading_batch(
             "speed_kmh": 48.0,
             "heading": 90.0,
             "gps_accuracy_m": 7.0,
-            "recorded_at": "2026-04-18T13:01:00Z",
+            "recorded_at": "2026-04-25T13:01:00Z",
             "is_pothole": false,
             "pothole_magnitude": null
         },
@@ -97,7 +99,7 @@ SELECT ingest_reading_batch(
             "speed_kmh": 55.0,
             "heading": 90.0,
             "gps_accuracy_m": 5.0,
-            "recorded_at": "2026-04-18T13:02:00Z",
+            "recorded_at": "2026-04-25T13:02:00Z",
             "is_pothole": false,
             "pothole_magnitude": null
         },
@@ -108,7 +110,7 @@ SELECT ingest_reading_batch(
             "speed_kmh": 55.0,
             "heading": 90.0,
             "gps_accuracy_m": 25.0,
-            "recorded_at": "2026-04-18T13:03:00Z",
+            "recorded_at": "2026-04-25T13:03:00Z",
             "is_pothole": false,
             "pothole_magnitude": null
         },
@@ -119,7 +121,7 @@ SELECT ingest_reading_batch(
             "speed_kmh": 55.0,
             "heading": 90.0,
             "gps_accuracy_m": 5.0,
-            "recorded_at": "2026-04-18T13:04:00Z",
+            "recorded_at": "2026-04-25T13:04:00Z",
             "is_pothole": false,
             "pothole_magnitude": null
         },
@@ -135,7 +137,7 @@ SELECT ingest_reading_batch(
             "pothole_magnitude": null
         }
     ]'::JSONB,
-    '2026-04-18T13:10:00Z'::TIMESTAMPTZ,
+    '2026-04-25T13:10:00Z'::TIMESTAMPTZ,
     '0.1.0 (1)',
     'iOS 18.0'
 ) AS payload;
@@ -250,7 +252,7 @@ SELECT ingest_reading_batch(
     '00000000-0000-0000-0000-00000000e501'::UUID,
     decode('aa', 'hex'),
     '[]'::JSONB,
-    '2026-04-18T13:10:00Z'::TIMESTAMPTZ,
+    '2026-04-25T13:10:00Z'::TIMESTAMPTZ,
     '0.1.0 (1)',
     'iOS 18.0'
 ) AS payload;
@@ -273,12 +275,62 @@ SELECT is(
     'duplicate replay does not insert additional readings'
 );
 
+CREATE TEMP TABLE tmp_cross_batch_duplicate_result AS
+SELECT ingest_reading_batch(
+    '00000000-0000-0000-0000-00000000e503'::UUID,
+    decode('aa', 'hex'),
+    '[
+        {
+            "lat": 44.6490,
+            "lng": -63.5794,
+            "roughness_rms": 0.12,
+            "speed_kmh": 52.0,
+            "heading": 90.0,
+            "gps_accuracy_m": 6.0,
+            "recorded_at": "2026-04-25T13:00:00Z",
+            "is_pothole": false,
+            "pothole_magnitude": null
+        }
+    ]'::JSONB,
+    '2026-04-25T13:10:00Z'::TIMESTAMPTZ,
+    '0.1.0 (1)',
+    'iOS 18.0'
+) AS payload;
+
+SELECT is(
+    (SELECT (payload->>'accepted')::INTEGER FROM tmp_cross_batch_duplicate_result),
+    0,
+    'cross-batch duplicate physical readings are not accepted again'
+);
+
+SELECT is(
+    (SELECT payload->'rejected_reasons'->>'duplicate_reading' FROM tmp_cross_batch_duplicate_result),
+    '1',
+    'cross-batch duplicate physical readings are counted as duplicate_reading'
+);
+
+SELECT is(
+    (SELECT COUNT(*)::INTEGER FROM readings WHERE device_token_hash = decode('aa', 'hex') AND recorded_at = '2026-04-25T13:00:00Z'::TIMESTAMPTZ),
+    1,
+    'cross-batch duplicate suppression prevents extra reading rows'
+);
+
+SELECT is(
+    (
+        SELECT total_readings::TEXT
+        FROM segment_aggregates
+        WHERE segment_id = '00000000-0000-0000-0000-00000000f001'::UUID
+    ),
+    '1',
+    'cross-batch duplicate suppression prevents aggregate double-counting'
+);
+
 SELECT throws_ok(
     $$SELECT ingest_reading_batch(
         '00000000-0000-0000-0000-00000000e502'::UUID,
         decode('bb', 'hex'),
         '{"not":"an-array"}'::JSONB,
-        '2026-04-18T13:10:00Z'::TIMESTAMPTZ,
+        '2026-04-25T13:10:00Z'::TIMESTAMPTZ,
         '0.1.0 (1)',
         'iOS 18.0'
     )$$,

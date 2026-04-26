@@ -340,6 +340,29 @@ Acceptance:
 - `nextAttemptAt` advances correctly after 429 / 5xx
 - once the retry window expires, the next drain resumes automatically without user action
 
+### Field-Test Fragility Regression Pack
+
+Run this pack after any change to permissions, SwiftData models, camera, upload queueing, or map overlays. It exists because the first sideloaded device run found failures that unit tests alone did not catch.
+
+1. Rebuild over an existing device install with prior local data
+2. Open the app twice: once immediately after install and once after force-closing it from the app switcher
+3. Start a short foreground drive with the app open
+4. Confirm the local roughness overlay appears before upload and uses visible smooth/fair/rough/very-rough colors
+5. Tap `Mark pothole` once while driving with a fresh GPS fix
+6. Stop safely, open camera, deny camera permission, close the flow, then verify `Mark pothole` still works
+7. Re-enable camera permission, open camera, cancel, then submit one photo if safe
+8. Turn Wi-Fi/cellular off, create upload-ready data, turn network back on, and foreground the app
+9. Pull the device store and compare it with backend `readings`, `processed_batches`, `pothole_actions`, and `pothole_reports`
+
+Acceptance:
+
+- no launch crash after rebuild
+- no TCC/permission crash after camera access
+- no black camera surface without recoverable explanatory copy
+- map shows local captured readings before backend tiles catch up
+- backend has no duplicate `readings` rows if the same physical readings are manually replayed and later retried by the phone
+- phone diagnostics explain stale pending/manual replay states instead of implying data loss
+
 ### Manual Pothole Tap Accuracy Test (post-MVP)
 
 1. run the app with the map open on a real drive over a known pothole

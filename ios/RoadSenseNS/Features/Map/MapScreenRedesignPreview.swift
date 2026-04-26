@@ -101,7 +101,7 @@ struct MapPlaceholderLayer: View {
 }
 
 /// Mockup-only ribbon sketch. Production renders this from real
-/// `pendingDriveCoordinates` via a Mapbox `LineLayer`.
+/// `localDriveOverlayPoints` via Mapbox `LineLayer`s.
 struct RoadRibbonSketch: View {
     var body: some View {
         GeometryReader { geo in

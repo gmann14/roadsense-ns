@@ -42,6 +42,91 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(uploadDrainer.callCount, 1)
     }
 
+    func testLocalDriveOverlayShowsOnlyVisibleUnuploadedReadings() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let context = ModelContext(container)
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let activeSessionID = UUID()
+
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6488,
+                longitude: -63.5752,
+                roughnessRMS: 0.03,
+                speedKMH: 45,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: now,
+                driveSessionID: activeSessionID
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6490,
+                longitude: -63.5750,
+                roughnessRMS: 0.11,
+                speedKMH: 45,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: now.addingTimeInterval(10),
+                uploadReadyAt: now.addingTimeInterval(60)
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6492,
+                longitude: -63.5748,
+                roughnessRMS: 0.18,
+                speedKMH: 45,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: now.addingTimeInterval(20),
+                uploadedAt: now.addingTimeInterval(120),
+                uploadReadyAt: now.addingTimeInterval(60)
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6494,
+                longitude: -63.5746,
+                roughnessRMS: 0.07,
+                speedKMH: 45,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: now.addingTimeInterval(30),
+                endpointTrimmedAt: now.addingTimeInterval(90)
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6496,
+                longitude: -63.5744,
+                roughnessRMS: 0.07,
+                speedKMH: 45,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: now.addingTimeInterval(40),
+                droppedByPrivacyZone: true
+            )
+        )
+        try context.save()
+
+        let overlayPoints = try ReadingStore(container: container).localDriveOverlayPoints()
+
+        XCTAssertEqual(overlayPoints.map(\.roughnessCategory), ["smooth", "rough"])
+        XCTAssertEqual(overlayPoints.map(\.latitude), [44.6488, 44.6490])
+    }
+
     func testManualStartClearsPausedPreferenceAndRestartsMonitoring() throws {
         let defaults = try makeDefaults()
         let model = AppModel(container: try makeContainer(), defaults: defaults)

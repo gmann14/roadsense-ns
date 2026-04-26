@@ -201,6 +201,18 @@ This is now credible product UI with the first real live map loop in place. The 
 
 Remaining product work is refinement: deeper retry/empty-state handling around the live map, richer selection-state/UI coverage, additional captured-drive fixtures beyond the current simulator corpus, and real-device validation.
 
+### Local Map Truth During Field Tests
+
+For internal field testing, the phone map has to be more truthful than the public aggregate tile layer:
+
+- backend tiles show only successfully ingested, aggregate-backed public data
+- the local overlay shows on-device readings that are not privacy-zone dropped, endpoint trimmed, or uploaded yet
+- in-progress readings are allowed to appear locally before endpoint trimming has decided upload eligibility, because this is the tester's own device and is the only immediate "yes, it is recording" signal
+- once a reading uploads successfully, it disappears from the local overlay and should become visible through backend tiles after aggregate/tile refresh
+- if data was manually replayed into the backend, Diagnostics must label the phone queue as stale/pending rather than implying that the backend is missing it
+
+The local overlay should use the same roughness category thresholds as the backend calibration function (`smooth < 0.05`, `fair < 0.09`, `rough < 0.14`, otherwise `very_rough`) so the tester sees the same roughness shape before and after upload.
+
 ### Current Stats / Settings Surfaces
 
 - `StatsView` now shows:
@@ -717,7 +729,9 @@ drainUntilBlocked(now):
           stop
 ```
 
-**Idempotency:** `batch_id` is the dedup key server-side. Client retries send the same batch_id; the server returns 200 with the original `{accepted, rejected, duplicate: true, rejected_reasons}` result on re-submit. The client stores `wasDuplicateOnResubmit` so Diagnostics can distinguish between "server dropped 47 rows" and "we already uploaded this batch and the retry was a no-op."
+**Idempotency:** `batch_id` is the primary dedup key server-side. Client retries send the same batch_id; the server returns 200 with the original `{accepted, rejected, duplicate: true, rejected_reasons}` result on re-submit. The client stores `wasDuplicateOnResubmit` so Diagnostics can distinguish between "server dropped 47 rows" and "we already uploaded this batch and the retry was a no-op."
+
+**Cross-batch replay protection:** field-test tooling can manually replay phone data, and a killed/reinstalled app can later retry the same physical readings under a different `batch_id`. The backend must suppress those rows too, keyed by `device_token_hash`, exact `recorded_at`, and near-identical coordinate. Suppressed rows return 200 as soft rejects with `duplicate_reading` in `rejected_reasons`; the client still marks its local batch uploaded because the server has accepted responsibility for the readings.
 
 **Crash recovery:** a batch left in `.inFlight` at app relaunch is not assumed lost or succeeded. If `lastAttemptAt` is newer than 5 minutes, leave it alone and wait for the next scheduled drain. If older than 5 minutes, downgrade it to `.pending` and retry using the same `batch_id`.
 
@@ -732,6 +746,7 @@ enum RejectedReason: String, Codable {
     case futureTimestamp  = "future_timestamp"
     case staleTimestamp   = "stale_timestamp"
     case unpaved          = "unpaved"
+    case duplicateReading = "duplicate_reading"
 
     var displayString: String {
         switch self {
@@ -741,6 +756,7 @@ enum RejectedReason: String, Codable {
         case .futureTimestamp:  "Timestamp was in the future"
         case .staleTimestamp:   "Recording was too old to accept"
         case .unpaved:          "Matched an unpaved road"
+        case .duplicateReading: "Already received by the server"
         }
     }
 }

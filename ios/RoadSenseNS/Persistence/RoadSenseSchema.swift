@@ -32,6 +32,59 @@ enum RoadSenseSchemaV2: VersionedSchema {
             PotholeActionRecord.self,
         ]
     }
+
+    @Model
+    final class PotholeActionRecord {
+        @Attribute(.unique) var id: UUID
+        var potholeReportID: UUID?
+        var actionTypeRawValue: String
+        var latitude: Double
+        var longitude: Double
+        var accuracyM: Double
+        var recordedAt: Date
+        var createdAt: Date
+        var undoExpiresAt: Date?
+        var uploadStateRawValue: String
+        var uploadAttemptCount: Int
+        var lastAttemptAt: Date?
+        var nextAttemptAt: Date?
+        var lastHTTPStatusCode: Int?
+        var lastRequestID: String?
+
+        init(
+            id: UUID = UUID(),
+            potholeReportID: UUID? = nil,
+            actionTypeRawValue: String,
+            latitude: Double,
+            longitude: Double,
+            accuracyM: Double,
+            recordedAt: Date,
+            createdAt: Date,
+            undoExpiresAt: Date? = nil,
+            uploadStateRawValue: String,
+            uploadAttemptCount: Int = 0,
+            lastAttemptAt: Date? = nil,
+            nextAttemptAt: Date? = nil,
+            lastHTTPStatusCode: Int? = nil,
+            lastRequestID: String? = nil
+        ) {
+            self.id = id
+            self.potholeReportID = potholeReportID
+            self.actionTypeRawValue = actionTypeRawValue
+            self.latitude = latitude
+            self.longitude = longitude
+            self.accuracyM = accuracyM
+            self.recordedAt = recordedAt
+            self.createdAt = createdAt
+            self.undoExpiresAt = undoExpiresAt
+            self.uploadStateRawValue = uploadStateRawValue
+            self.uploadAttemptCount = uploadAttemptCount
+            self.lastAttemptAt = lastAttemptAt
+            self.nextAttemptAt = nextAttemptAt
+            self.lastHTTPStatusCode = lastHTTPStatusCode
+            self.lastRequestID = lastRequestID
+        }
+    }
 }
 
 enum RoadSenseSchemaV3: VersionedSchema {
@@ -49,6 +102,59 @@ enum RoadSenseSchemaV3: VersionedSchema {
             PotholeActionRecord.self,
             PotholeReportRecord.self,
         ]
+    }
+
+    @Model
+    final class PotholeActionRecord {
+        @Attribute(.unique) var id: UUID
+        var potholeReportID: UUID?
+        var actionTypeRawValue: String
+        var latitude: Double
+        var longitude: Double
+        var accuracyM: Double
+        var recordedAt: Date
+        var createdAt: Date
+        var undoExpiresAt: Date?
+        var uploadStateRawValue: String
+        var uploadAttemptCount: Int
+        var lastAttemptAt: Date?
+        var nextAttemptAt: Date?
+        var lastHTTPStatusCode: Int?
+        var lastRequestID: String?
+
+        init(
+            id: UUID = UUID(),
+            potholeReportID: UUID? = nil,
+            actionTypeRawValue: String,
+            latitude: Double,
+            longitude: Double,
+            accuracyM: Double,
+            recordedAt: Date,
+            createdAt: Date,
+            undoExpiresAt: Date? = nil,
+            uploadStateRawValue: String,
+            uploadAttemptCount: Int = 0,
+            lastAttemptAt: Date? = nil,
+            nextAttemptAt: Date? = nil,
+            lastHTTPStatusCode: Int? = nil,
+            lastRequestID: String? = nil
+        ) {
+            self.id = id
+            self.potholeReportID = potholeReportID
+            self.actionTypeRawValue = actionTypeRawValue
+            self.latitude = latitude
+            self.longitude = longitude
+            self.accuracyM = accuracyM
+            self.recordedAt = recordedAt
+            self.createdAt = createdAt
+            self.undoExpiresAt = undoExpiresAt
+            self.uploadStateRawValue = uploadStateRawValue
+            self.uploadAttemptCount = uploadAttemptCount
+            self.lastAttemptAt = lastAttemptAt
+            self.nextAttemptAt = nextAttemptAt
+            self.lastHTTPStatusCode = lastHTTPStatusCode
+            self.lastRequestID = lastRequestID
+        }
     }
 }
 
@@ -68,6 +174,59 @@ enum RoadSenseSchemaV4: VersionedSchema {
             PotholeReportRecord.self,
             DriveSessionRecord.self,
         ]
+    }
+
+    @Model
+    final class PotholeActionRecord {
+        @Attribute(.unique) var id: UUID
+        var potholeReportID: UUID?
+        var actionTypeRawValue: String
+        var latitude: Double
+        var longitude: Double
+        var accuracyM: Double
+        var recordedAt: Date
+        var createdAt: Date
+        var undoExpiresAt: Date?
+        var uploadStateRawValue: String
+        var uploadAttemptCount: Int
+        var lastAttemptAt: Date?
+        var nextAttemptAt: Date?
+        var lastHTTPStatusCode: Int?
+        var lastRequestID: String?
+
+        init(
+            id: UUID = UUID(),
+            potholeReportID: UUID? = nil,
+            actionTypeRawValue: String,
+            latitude: Double,
+            longitude: Double,
+            accuracyM: Double,
+            recordedAt: Date,
+            createdAt: Date,
+            undoExpiresAt: Date? = nil,
+            uploadStateRawValue: String,
+            uploadAttemptCount: Int = 0,
+            lastAttemptAt: Date? = nil,
+            nextAttemptAt: Date? = nil,
+            lastHTTPStatusCode: Int? = nil,
+            lastRequestID: String? = nil
+        ) {
+            self.id = id
+            self.potholeReportID = potholeReportID
+            self.actionTypeRawValue = actionTypeRawValue
+            self.latitude = latitude
+            self.longitude = longitude
+            self.accuracyM = accuracyM
+            self.recordedAt = recordedAt
+            self.createdAt = createdAt
+            self.undoExpiresAt = undoExpiresAt
+            self.uploadStateRawValue = uploadStateRawValue
+            self.uploadAttemptCount = uploadAttemptCount
+            self.lastAttemptAt = lastAttemptAt
+            self.nextAttemptAt = nextAttemptAt
+            self.lastHTTPStatusCode = lastHTTPStatusCode
+            self.lastRequestID = lastRequestID
+        }
     }
 }
 

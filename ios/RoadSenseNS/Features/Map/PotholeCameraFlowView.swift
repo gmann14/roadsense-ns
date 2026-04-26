@@ -31,15 +31,21 @@ struct PotholeCameraFlowView: View {
 
             switch camera.authorizationState {
             case .notDetermined, .authorized:
-                cameraBody
+                if let setupErrorMessage = camera.setupErrorMessage {
+                    unavailableBody(message: setupErrorMessage)
+                } else {
+                    cameraBody
+                }
             case .denied, .restricted:
                 deniedBody
+            @unknown default:
+                unavailableBody(message: "RoadSense received an unknown camera permission state. Close this screen and try again.")
             }
         }
         .task {
             await camera.startIfNeeded()
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             Task {
                 await camera.refreshAuthorizationState()
@@ -282,6 +288,29 @@ struct PotholeCameraFlowView: View {
         }
         .padding(DesignTokens.Space.xl)
     }
+
+    private func unavailableBody(message: String) -> some View {
+        VStack(spacing: DesignTokens.Space.lg) {
+            Image(systemName: "camera.badge.ellipsis")
+                .font(.system(size: 42, weight: .semibold))
+                .foregroundStyle(.white)
+
+            Text("Camera unavailable")
+                .font(.system(.title2, design: .rounded, weight: .bold))
+                .foregroundStyle(.white)
+
+            Text(message)
+                .font(.body)
+                .foregroundStyle(.white.opacity(0.82))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 300)
+
+            Button("Close", action: onCancel)
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.signal)
+        }
+        .padding(DesignTokens.Space.xl)
+    }
 }
 
 struct PotholeCameraUnavailableView: View {
@@ -325,6 +354,7 @@ private enum CameraStartupState: Equatable {
 private final class CameraCaptureModel: NSObject, ObservableObject {
     @Published var authorizationState: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     @Published private(set) var startupState: CameraStartupState = .idle
+    @Published var setupErrorMessage: String?
 
     let session = AVCaptureSession()
 
@@ -355,6 +385,7 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
             return
         }
 
+        setupErrorMessage = nil
         startSessionIfNeeded()
     }
 
@@ -370,7 +401,10 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
 
     @MainActor
     func capturePhoto(onCapture: @escaping (Data) -> Void) {
-        guard startupState == .running else {
+        guard startupState == .running, session.isRunning else {
+            let message = "RoadSense could not start the camera. Close this screen and try again after checking iOS camera permissions."
+            setupErrorMessage = message
+            startupState = .failed(message)
             return
         }
 
@@ -402,6 +436,7 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
             if let failureMessage = self.configureSessionIfNeeded() {
                 DispatchQueue.main.async { [weak self] in
                     guard let self, self.sessionGeneration == generation else { return }
+                    self.setupErrorMessage = failureMessage
                     self.startupState = .failed(failureMessage)
                 }
                 return
@@ -414,6 +449,9 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
             let didStart = self.session.isRunning
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.sessionGeneration == generation else { return }
+                self.setupErrorMessage = didStart
+                    ? nil
+                    : "iOS did not return an active camera preview. Close and try again."
                 self.startupState = didStart
                     ? .running
                     : .failed("iOS did not return an active camera preview. Close and try again.")
@@ -458,7 +496,6 @@ private final class CameraCaptureModel: NSObject, ObservableObject {
                 output.maxPhotoDimensions = maxDimensions
             }
         }
-
         isConfigured = true
         return nil
     }

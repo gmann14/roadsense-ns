@@ -27,7 +27,7 @@ struct MapScreen: View {
         ZStack(alignment: .top) {
             RoadQualityMapView(
                 config: model.config,
-                pendingDriveCoordinates: model.pendingDriveCoordinates,
+                localDriveOverlayPoints: model.localDriveOverlayPoints,
                 pendingPotholeCoordinates: model.pendingPotholeCoordinates,
                 onMapLoaded: {
                     isMapLoaded = true
@@ -703,7 +703,7 @@ struct MapScreen: View {
         isMapLoaded
             && mapLoadError == nil
             && model.userStatsSummary.acceptedReadingCount == 0
-            && model.pendingDriveCoordinates.isEmpty
+            && model.localDriveOverlayPoints.isEmpty
     }
 
     private var recordingTitle: String {

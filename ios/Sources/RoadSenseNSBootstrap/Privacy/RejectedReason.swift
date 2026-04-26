@@ -5,6 +5,7 @@ public enum RejectedReason: String, Codable, CaseIterable, Sendable {
     case futureTimestamp = "future_timestamp"
     case staleTimestamp = "stale_timestamp"
     case unpaved = "unpaved"
+    case duplicateReading = "duplicate_reading"
 
     public var displayString: String {
         switch self {
@@ -20,6 +21,8 @@ public enum RejectedReason: String, Codable, CaseIterable, Sendable {
             return "Recording was too old to accept"
         case .unpaved:
             return "Matched an unpaved road"
+        case .duplicateReading:
+            return "Already received by the server"
         }
     }
 }

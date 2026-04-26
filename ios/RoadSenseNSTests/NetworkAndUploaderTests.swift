@@ -1440,12 +1440,16 @@ final class NetworkAndUploaderTests: XCTestCase {
         try? await Task.sleep(for: .milliseconds(10))
         motionService.sendVerticalAcceleration(-0.8, timestamp: 1_713_000_000.1)
         motionService.sendVerticalAcceleration(2.6, timestamp: 1_713_000_000.2)
-        try? await Task.sleep(for: .milliseconds(10))
 
-        let matched = coordinator.strongestRecentPotholeCandidate(
-            near: location,
-            now: Date(timeIntervalSince1970: 1_713_000_005)
-        )
+        var matched: PotholeCandidate?
+        for _ in 0..<20 {
+            matched = coordinator.strongestRecentPotholeCandidate(
+                near: location,
+                now: Date(timeIntervalSince1970: 1_713_000_005)
+            )
+            if matched != nil { break }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
 
         XCTAssertEqual(matched?.magnitudeG, 2.6)
         XCTAssertEqual(coordinator.diagnostics.lastPotholeCandidateAt, Date(timeIntervalSince1970: location.timestamp))
