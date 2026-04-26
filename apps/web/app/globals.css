@@ -130,7 +130,7 @@ button {
 
 .headline {
   font-family: var(--rs-font-display);
-  font-size: clamp(1.9rem, 2.7vw, 2.9rem);
+  font-size: clamp(1.75rem, 2.35vw, 2.55rem);
   line-height: 1;
   letter-spacing: -0.025em;
   font-weight: 600;
@@ -338,9 +338,9 @@ nav a[aria-current="page"] {
 
 .page-header {
   display: grid;
-  gap: 8px;
-  padding: 4px 0 10px;
-  margin-bottom: 6px;
+  gap: 6px;
+  padding: 2px 0 4px;
+  margin-bottom: 0;
 }
 
 .page-header__eyebrow {
@@ -352,17 +352,17 @@ nav a[aria-current="page"] {
 .page-header__lede {
   color: var(--rs-ink-muted);
   max-width: 70ch;
-  font-size: 1rem;
-  line-height: 1.45;
+  font-size: 0.96rem;
+  line-height: 1.4;
   margin: 0;
 }
 
 .trust-line {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding-top: 4px;
+  padding-top: 2px;
   color: var(--rs-ink-muted);
   font-size: 0.88rem;
 }
@@ -386,11 +386,11 @@ nav a[aria-current="page"] {
 
 .explorer-controls {
   display: flex;
-  gap: 14px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .mode-switcher {
@@ -407,7 +407,7 @@ nav a[aria-current="page"] {
   background: transparent;
   color: var(--rs-ink-muted);
   border-radius: var(--rs-radius-pill);
-  padding: 10px 16px;
+  padding: 9px 14px;
   display: inline-flex;
   gap: 8px;
   align-items: center;
@@ -431,7 +431,7 @@ nav a[aria-current="page"] {
 
 .search-input {
   min-width: min(320px, 100%);
-  padding: 12px 14px;
+  padding: 10px 13px;
   border-radius: var(--rs-radius-sm);
   border: 1px solid var(--rs-border-strong);
   background: var(--rs-surface);
@@ -471,7 +471,7 @@ nav a[aria-current="page"] {
 
 .map-explorer {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .map-stage-hero {

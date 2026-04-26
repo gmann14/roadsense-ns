@@ -9,6 +9,10 @@ export type PublicStats = {
   generated_at: string;
 };
 
+type PublicStatsRestRow = PublicStats & {
+  stats_key?: number;
+};
+
 export type SegmentDetail = {
   id: string;
   road_name: string | null;
@@ -158,6 +162,30 @@ async function fetchJson<T>(path: string, nextOptions?: RequestInit & { next?: {
   }
 }
 
+async function fetchRest<T>(path: string, nextOptions?: RequestInit & { next?: { revalidate: number } }): Promise<T | null> {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${getSupabaseRootUrl()}/rest/v1${path}`, {
+      ...nextOptions,
+      headers: {
+        ...getPublicReadHeaders(),
+        ...(nextOptions?.headers ?? {}),
+      },
+    });
+
+    if (!response.ok || response.status === 204) {
+      return null;
+    }
+
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchRpc<T>(
   rpcName: string,
   body: Record<string, unknown>,
@@ -190,6 +218,17 @@ async function fetchRpc<T>(
 }
 
 export async function getPublicStats(): Promise<PublicStats | null> {
+  const rows = await fetchRest<PublicStatsRestRow[]>(
+    "/public_stats_mv?select=total_km_mapped,total_readings,segments_scored,active_potholes,municipalities_covered,map_bounds,pothole_bounds,generated_at&limit=1",
+    {
+      next: { revalidate: 300 },
+    },
+  );
+
+  if (rows?.[0]) {
+    return rows[0];
+  }
+
   return await fetchJson<PublicStats>("/stats", {
     next: { revalidate: 300 },
   });

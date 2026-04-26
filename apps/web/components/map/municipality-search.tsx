@@ -144,15 +144,14 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
         navigateToSelection();
       }}
     >
-      <label style={{ display: "grid", gap: 6 }}>
+      <label style={{ display: "grid", gap: 4 }}>
         <span className="eyebrow">Search municipalities or places</span>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <input
             className="search-input"
             list="municipality-options"
             placeholder="Halifax, Truro, Lunenburg…"
             aria-label="Search municipalities or places"
-            aria-describedby="municipality-search-help"
             value={value}
             onChange={(event) => setValue(event.target.value)}
           />
@@ -174,9 +173,6 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
           </button>
         </div>
       </label>
-      <span id="municipality-search-help" className="lede" style={{ margin: 0, fontSize: "0.92rem" }}>
-        Search a municipality, town, or road area in Nova Scotia.
-      </span>
       {suggestions.length > 0 ? (
         <div className="search-results" role="listbox" aria-label="Search suggestions">
           {suggestions.map((suggestion) => (
