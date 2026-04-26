@@ -343,16 +343,16 @@ export function SegmentDrawerPanel({
     if (!detail) {
       return (
         <div className="drawer-state">
-          <span className="eyebrow">Segment drawer</span>
+          <span className="eyebrow">Road detail</span>
           <strong>
             {mode === "quality"
               ? "Select a road to inspect"
-                : "Coverage mode lands in the next slice"}
+              : "Coverage view"}
           </strong>
           <span className="lede">
             {mode === "quality"
-              ? "Click a published road line on the map to inspect category, confidence, trend, and pothole context."
-              : "Route-state switching is live already, but the alternate map source for this mode is still queued next in the implementation plan."}
+              ? "Click a highlighted road to inspect category, confidence, trend, and pothole context."
+              : "Coverage highlights where the public map has enough data to publish road conditions."}
           </span>
         </div>
       );
@@ -386,7 +386,7 @@ export function SegmentDrawerPanel({
             Last community reading {detail.aggregate.last_reading_at ? formatRelativeDate(detail.aggregate.last_reading_at) : "not available"}
           </strong>
           <span className="lede">
-            Aggregates are refreshed nightly and may continue to evolve as more contributors drive this segment.
+            Road-section scores may evolve as more contributors drive the same area.
           </span>
         </div>
       </>
@@ -396,7 +396,7 @@ export function SegmentDrawerPanel({
   const headingLabel =
     mode === "potholes"
       ? "Pothole map"
-      : detail?.road_name ?? (selectedSegmentId ? "Loading segment" : "Segment detail");
+      : detail?.road_name ?? (selectedSegmentId ? "Loading road" : "Road detail");
   const drawerVariant = mode === "potholes" ? "pothole-panel" : "detail";
 
   return (
@@ -429,7 +429,7 @@ export function SegmentDrawerPanel({
             type="button"
             className="drawer-close"
             onClick={handleClose}
-            aria-label="Close segment detail drawer"
+            aria-label={mode === "potholes" ? "Close pothole panel" : "Close road detail panel"}
           >
             ×
           </button>

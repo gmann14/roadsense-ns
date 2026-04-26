@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 
 import type { Bbox, PotholeRow, PublicStats } from "@/lib/api/client";
+import { formatSnapshotDate } from "@/lib/format";
 import type { MunicipalityConfig } from "@/lib/municipality-manifest";
 import {
   parseViewportState,
@@ -28,11 +29,11 @@ type MapExplorerProps = {
 
 const modeSummaryCopy: Record<MapMode, string> = {
   quality:
-    "Published community road-quality segments render live here. Click a road to open the detail drawer.",
+    "Road quality from local test drives. Pan, zoom, or click a highlighted road for detail.",
   potholes:
-    "Potholes mode isolates active markers so the public can inspect hazard clusters without the quality ramp.",
+    "Active potholes from manual reports and confirmed impacts.",
   coverage:
-    "Coverage mode shows where RoadSense has enough contributor density to publish reliable road-quality signal.",
+    "Where RoadSense has enough data to show a public signal.",
 };
 
 const modeLabel: Record<MapMode, string> = {
@@ -45,7 +46,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
   const pathname = usePathname();
   const router = useRouter();
   const liveSearchParams = useSearchParams();
-  const [mapReady, setMapReady] = useState(false);
+  const [, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [visibleBbox, setVisibleBbox] = useState<Bbox | null>(null);
   const [isDrawerDismissed, setIsDrawerDismissed] = useState(false);
@@ -56,17 +57,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
       : searchParamRecordToUrlSearchParams(searchParams);
   const routeState = parseViewportState(baseSearchParams);
 
-  const navigate = (nextParams: URLSearchParams, action: "push" | "replace") => {
-    // Mapbox can emit a late viewport commit after a route transition starts.
-    // Do not let the previous page replace the new pathname.
-    if (
-      action === "replace" &&
-      typeof window !== "undefined" &&
-      window.location.pathname !== pathname
-    ) {
-      return;
-    }
-
+  const navigate = (nextParams: URLSearchParams) => {
     const nextQuery = nextParams.toString();
     const nextUrl = nextQuery.length > 0 ? `${pathname}?${nextQuery}` : pathname;
     const currentQuery = liveSearchParams.toString();
@@ -75,27 +66,22 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
       return;
     }
 
-    if (action === "push") {
+    startTransition(() => {
       router.push(nextUrl, { scroll: false });
-      return;
-    }
-    router.replace(nextUrl, { scroll: false });
+    });
   };
 
   const handleModeSelect = (mode: MapMode) => {
     setIsDrawerDismissed(false);
-    navigate(withUpdatedRouteState(baseSearchParams, { mode, segment: null }), "push");
+    navigate(withUpdatedRouteState(baseSearchParams, { mode, segment: null, lat: null, lng: null, z: null }));
   };
 
   const handleSegmentSelect = (segmentId: string) => {
     setIsDrawerDismissed(false);
-    navigate(withUpdatedRouteState(baseSearchParams, { segment: segmentId }), "push");
+    navigate(withUpdatedRouteState(baseSearchParams, { segment: segmentId }));
   };
 
   const handleViewportCommit = ({
-    lat,
-    lng,
-    z,
     bbox,
   }: {
     lat: number;
@@ -111,12 +97,11 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
 
       return normalizedBbox;
     });
-    navigate(withUpdatedRouteState(baseSearchParams, { lat, lng, z }), "replace");
   };
 
   const handleClearSelection = () => {
     setIsDrawerDismissed(false);
-    navigate(withUpdatedRouteState(baseSearchParams, { segment: null }), "push");
+    navigate(withUpdatedRouteState(baseSearchParams, { segment: null }));
   };
 
   const handleDrawerClose = () => {
@@ -138,14 +123,12 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
         lng: pothole.lng,
         z: 14.4,
       }),
-      "push",
     );
   };
 
   const drawerOpen = !isDrawerDismissed && (routeState.mode === "potholes" || Boolean(routeState.segment));
-  const statusMessage = mapError ?? (mapReady ? "Map loaded." : "Loading map surface…");
   const statsSummary = stats
-    ? `${stats.total_km_mapped.toFixed(1)} unique road km · ${stats.segments_scored} scored segments`
+    ? `${stats.total_km_mapped.toFixed(1)} road km · ${stats.segments_scored} road sections`
     : "Stats loading";
 
   return (
@@ -155,7 +138,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
           {municipality ? municipality.name : "Nova Scotia overview"}
         </span>
         <h1 id="map-explorer-title" className="headline">
-          {municipality ? `Road quality in ${municipality.name}` : "Community road quality"}
+          {municipality ? `Road quality in ${municipality.name}` : "Road quality map"}
         </h1>
         <p className="page-header__lede">{modeSummaryCopy[routeState.mode]}</p>
         {municipality ? (
@@ -186,7 +169,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
           </span>
           <span className="trust-line-divider" aria-hidden="true" />
           <span>
-            <strong>{stats ? stats.segments_scored : "—"}</strong> scored segments
+            <strong>{stats ? stats.segments_scored : "—"}</strong> road sections
           </span>
           <span className="trust-line-divider" aria-hidden="true" />
           <span>
@@ -194,7 +177,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
           </span>
           <span className="trust-line-divider" aria-hidden="true" />
           <span>
-            Refreshed <strong>{stats?.generated_at ?? "pending"}</strong>
+            Updated <strong>{formatSnapshotDate(stats?.generated_at)}</strong>
           </span>
         </div>
       </header>
@@ -226,9 +209,11 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
           <div className="pill pill-soft" aria-hidden="true">
             {statsSummary}
           </div>
-          <div className="pill pill-soft" aria-hidden="true">
-            {statusMessage}
-          </div>
+          {mapError ? (
+            <div className="pill pill-soft" aria-hidden="true">
+              {mapError}
+            </div>
+          ) : null}
         </div>
 
         <MapLegend />

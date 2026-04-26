@@ -1,3 +1,5 @@
+import { formatSnapshotDate } from "@/lib/format";
+
 type TrustStripProps = {
   totalKmMapped: string;
   municipalitiesCovered: string;
@@ -13,7 +15,7 @@ export function TrustStrip({
     <section className="card trust-strip" aria-label="Trust summary">
       <TrustMetric label="Unique road coverage" value={totalKmMapped} />
       <TrustMetric label="Municipalities covered" value={municipalitiesCovered} />
-      <TrustMetric label="Last refresh" value={freshness} />
+      <TrustMetric label="Last refresh" value={formatSnapshotDate(freshness)} />
     </section>
   );
 }

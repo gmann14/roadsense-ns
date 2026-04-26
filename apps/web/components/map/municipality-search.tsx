@@ -175,7 +175,7 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
         </div>
       </label>
       <span id="municipality-search-help" className="lede" style={{ margin: 0, fontSize: "0.92rem" }}>
-        Municipality matches route to dedicated pages first. If no municipality matches, place search can pan the current map.
+        Search a municipality, town, or road area in Nova Scotia.
       </span>
       {suggestions.length > 0 ? (
         <div className="search-results" role="listbox" aria-label="Search suggestions">

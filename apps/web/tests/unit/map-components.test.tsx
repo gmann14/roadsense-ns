@@ -268,7 +268,7 @@ describe("segment drawer panel", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /close segment detail drawer/i }));
+    fireEvent.click(screen.getByRole("button", { name: /close pothole panel/i }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });

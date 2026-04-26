@@ -50,8 +50,8 @@ const TOP_POTHOLES_SOURCE_ID = "roadsense-top-potholes";
 const TOP_POTHOLES_LAYER_ID = "roadsense-top-potholes-points";
 const COVERAGE_LAYER_ID = "roadsense-coverage-segments";
 const DATA_BOUNDS_MAX_ZOOM = 13.1;
-const POTHOLE_MARKER_MIN_ZOOM = 13.35;
-const POTHOLE_MARKER_FOCUS_ZOOM = 13.75;
+const POTHOLE_MARKER_MIN_ZOOM = 8.8;
+const POTHOLE_MARKER_FOCUS_ZOOM = 10.8;
 
 export function RoadQualityMapView({
   mode,
@@ -220,14 +220,14 @@ export function RoadQualityMapView({
                 "#7a6754",
                 "#97a6ad",
               ],
-              "line-width": ["interpolate", ["linear"], ["zoom"], 6, 2.2, 11, 4.2, 14, 7.2],
+              "line-width": ["interpolate", ["linear"], ["zoom"], 6, 3.2, 10, 5, 14, 8.2],
               "line-opacity": [
                 "match",
                 ["get", "confidence"],
                 "low",
-                0.4,
-                "medium",
                 0.72,
+                "medium",
+                0.9,
                 0.96,
               ],
             },
@@ -283,11 +283,11 @@ export function RoadQualityMapView({
               visibility: "none",
             },
             paint: {
-              "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 5.5, 10, 7, 14, 10],
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 6.5, 10, 9, 14, 12],
               "circle-color": "#c53d45",
               "circle-stroke-color": "#fffaf1",
-              "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 1.5, 12, 2.5],
-              "circle-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.78, 10, 0.92],
+              "circle-stroke-width": ["interpolate", ["linear"], ["zoom"], 6, 2, 12, 3],
+              "circle-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.84, 10, 0.96],
             },
           });
         }
@@ -442,7 +442,7 @@ export function RoadQualityMapView({
     map.easeTo({
       center: [routeState.lng, routeState.lat],
       zoom: routeState.z,
-      duration: 450,
+      duration: 300,
       essential: true,
     });
   }, [routeState.lat, routeState.lng, routeState.z]);
@@ -457,12 +457,11 @@ export function RoadQualityMapView({
 
     if (mode === "potholes" && map.getZoom() < POTHOLE_MARKER_MIN_ZOOM) {
       const potholeBounds = potholeBoundsRef.current;
-      const currentBounds = map.getBounds();
-      if (potholeBounds && currentBounds && !mapBoundsOverlap(currentBounds, potholeBounds)) {
+      if (potholeBounds) {
         map.fitBounds(bboxToLngLatBoundsLike(potholeBounds), {
           padding: 120,
           maxZoom: POTHOLE_MARKER_FOCUS_ZOOM,
-          duration: 500,
+          duration: 450,
           essential: true,
         });
         return;
@@ -470,7 +469,7 @@ export function RoadQualityMapView({
 
       map.easeTo({
         zoom: POTHOLE_MARKER_FOCUS_ZOOM,
-        duration: 450,
+        duration: 300,
         essential: true,
       });
     }
@@ -485,19 +484,6 @@ export function RoadQualityMapView({
           Add <code>NEXT_PUBLIC_MAPBOX_TOKEN</code> to render the live public map.
         </div>
       ) : null}
-      {mode === "potholes" ? (
-        <div className="map-overlay-banner" style={{ bottom: 24, top: "auto" }}>
-          <strong>Potholes mode is live.</strong>
-          This view isolates active pothole markers and keeps the side panel focused on recent community-confirmed
-          impacts.
-        </div>
-      ) : null}
-      {mode === "coverage" ? (
-        <div className="map-overlay-banner" style={{ bottom: 24, top: "auto" }}>
-          <strong>Coverage mode is live.</strong>
-          This source answers where RoadSense has enough community data to publish reliable conditions.
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -508,6 +494,7 @@ function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
     visibleLayerIds.add(SEGMENT_LAYER_ID);
     visibleLayerIds.add(SELECTED_SEGMENT_LAYER_ID);
     visibleLayerIds.add(POTHOLE_LAYER_ID);
+    visibleLayerIds.add(TOP_POTHOLES_LAYER_ID);
   } else if (mode === "potholes") {
     visibleLayerIds.add(POTHOLE_LAYER_ID);
     visibleLayerIds.add(TOP_POTHOLES_LAYER_ID);
@@ -593,15 +580,6 @@ function bboxToLngLatBoundsLike(bbox: Bbox): mapboxgl.LngLatBoundsLike {
     [bbox.minLng, bbox.minLat],
     [bbox.maxLng, bbox.maxLat],
   ];
-}
-
-function mapBoundsOverlap(bounds: mapboxgl.LngLatBounds, bbox: Bbox): boolean {
-  return (
-    bounds.getWest() <= bbox.maxLng &&
-    bounds.getEast() >= bbox.minLng &&
-    bounds.getSouth() <= bbox.maxLat &&
-    bounds.getNorth() >= bbox.minLat
-  );
 }
 
 function topPotholesToFeatureCollection(potholes: PotholeRow[]): Parameters<mapboxgl.GeoJSONSource["setData"]>[0] {

@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(8);
+SELECT plan(9);
 
 DELETE FROM pothole_reports
 WHERE id = '00000000-0000-0000-0000-000000001801'::UUID;
@@ -8,11 +8,12 @@ WHERE id = '00000000-0000-0000-0000-000000001801'::UUID;
 DELETE FROM segment_aggregates
 WHERE segment_id IN (
     '00000000-0000-0000-0000-000000001701'::UUID,
-    '00000000-0000-0000-0000-000000001702'::UUID
+    '00000000-0000-0000-0000-000000001702'::UUID,
+    '00000000-0000-0000-0000-000000001703'::UUID
 );
 
 DELETE FROM road_segments
-WHERE osm_way_id IN (980001, 980002);
+WHERE osm_way_id IN (980001, 980002, 980003);
 
 INSERT INTO road_segments (
     id,
@@ -58,6 +59,21 @@ INSERT INTO road_segments (
         FALSE,
         FALSE,
         90.00
+    ),
+    (
+        '00000000-0000-0000-0000-000000001703',
+        980003,
+        0,
+        ST_GeomFromText('LINESTRING(-64.3500 44.3800,-64.3488 44.3800)', 4326),
+        90.0,
+        'Tile Local Road',
+        'residential',
+        'asphalt',
+        'District of Lunenburg',
+        FALSE,
+        FALSE,
+        FALSE,
+        90.00
     );
 
 INSERT INTO segment_aggregates (
@@ -98,6 +114,19 @@ INSERT INTO segment_aggregates (
         'stable',
         0.910,
         0.900
+    ),
+    (
+        '00000000-0000-0000-0000-000000001703',
+        0.710,
+        'rough',
+        3,
+        1,
+        'low',
+        now() - INTERVAL '30 minutes',
+        0,
+        'stable',
+        0.700,
+        0.690
     );
 
 INSERT INTO pothole_reports (
@@ -149,9 +178,16 @@ SELECT cmp_ok(
 );
 
 SELECT is(
-    octet_length(get_tile(9, 331, 369)),
+    octet_length(get_tile(7, 41, 46)),
     0,
-    'zoom levels below 10 return an empty tile'
+    'zoom levels below 8 return an empty tile'
+);
+
+SELECT cmp_ok(
+    octet_length(get_tile(10, 328, 370)),
+    '>',
+    0,
+    'default-zoom tiles include scored local roads'
 );
 
 SELECT ok(

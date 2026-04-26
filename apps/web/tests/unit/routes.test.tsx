@@ -27,7 +27,7 @@ vi.mock("next/navigation", () => ({
 describe("web route shells", () => {
   it("renders the home map shell", async () => {
     const markup = renderToStaticMarkup(await HomePage());
-    expect(markup).toContain("Community road quality");
+    expect(markup).toContain("Road quality map");
     expect(markup).toContain("RoadSense NS");
     expect(markup).toContain('aria-current="page"');
   });
@@ -37,7 +37,7 @@ describe("web route shells", () => {
       await MunicipalityPage({ params: Promise.resolve({ slug: "halifax" }) }),
     );
     expect(markup).toContain("Halifax");
-    expect(markup).toContain("Published community road-quality segments render live here");
+    expect(markup).toContain("Road quality from local test drives");
     expect(markup).toContain("Halifax");
   });
 

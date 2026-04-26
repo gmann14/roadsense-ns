@@ -4,7 +4,7 @@ test("home route loads with trust framing and map controls", async ({ page }) =>
   await page.goto("/");
 
   await expect(page.getByRole("link", { name: "RoadSense NS" })).toBeVisible();
-  await expect(page.getByText("Community road quality")).toBeVisible();
+  await expect(page.getByText("Road quality map")).toBeVisible();
   await expect(page.getByRole("tablist", { name: "Map mode" })).toBeVisible();
   await expect(page.getByLabel("Road quality legend")).toBeVisible();
 });
@@ -14,11 +14,11 @@ test("mode switching updates route state", async ({ page }) => {
 
   await page.getByRole("button", { name: "Coverage" }).click();
   await expect(page).toHaveURL(/mode=coverage/);
-  await expect(page.getByText(/Coverage mode is live/i)).toBeVisible();
+  await expect(page.getByText(/Where RoadSense has enough data/i)).toBeVisible();
 
   await page.getByRole("button", { name: "Potholes" }).click();
   await expect(page).toHaveURL(/mode=potholes/);
-  await expect(page.getByText(/Potholes mode is live/i)).toBeVisible();
+  await expect(page.getByText(/Active potholes from manual reports/i)).toBeVisible();
   await expect(page.getByRole("complementary").getByText(/Pothole map/i)).toBeVisible();
 });
 
@@ -82,7 +82,7 @@ test.describe("mobile", () => {
   test("home route remains usable on a phone-sized viewport", async ({ page }) => {
     await page.goto("/");
 
-    await expect(page.getByText("Community road quality")).toBeVisible();
+    await expect(page.getByText("Road quality map")).toBeVisible();
     await expect(page.getByRole("button", { name: "Coverage" })).toBeVisible();
     await expect(page.getByLabel("Road quality legend")).toBeVisible();
   });
