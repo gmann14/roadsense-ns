@@ -6,6 +6,7 @@ import HomePage from "@/app/page";
 import MethodologyPage from "@/app/methodology/page";
 import MunicipalityPage, { generateMetadata } from "@/app/municipality/[slug]/page";
 import PrivacyPage from "@/app/privacy/page";
+import PrivacyAndCountsPage from "@/app/privacy-and-counts/page";
 import MostReportedPotholesPage from "@/app/reports/potholes/page";
 import WorstRoadsPage from "@/app/reports/worst-roads/page";
 import {
@@ -56,6 +57,17 @@ describe("web route shells", () => {
   it("renders methodology and privacy pages", () => {
     expect(renderToStaticMarkup(<MethodologyPage />)).toContain("How RoadSense turns passive driving");
     expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Public map, private contributors");
+  });
+
+  it("renders the privacy & counts route shell with telemetry sources named", async () => {
+    const markup = renderToStaticMarkup(await PrivacyAndCountsPage());
+    expect(markup).toContain("Every telemetry source, named in plain language");
+    expect(markup).toContain("Sentry");
+    expect(markup).toContain("Mapbox");
+    expect(markup).toContain("feedback_submissions");
+    expect(markup).toContain("Live aggregate counts");
+    // Firebase appears as part of the explicit disclaimer ("no Firebase, no Mixpanel…"), not as a used dependency.
+    expect(markup).toContain("no Firebase");
   });
 });
 

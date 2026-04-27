@@ -10,12 +10,16 @@
 		0005F6455CB1194DA77528C2 /* ThermalMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38814048A460DD56E42A5706 /* ThermalMonitor.swift */; };
 		01AB046260471C52C02D8C59 /* NetworkAndUploaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */; };
 		08943009043515777FFF00D0 /* DrivingHeuristic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E77758971EB7F44643652E /* DrivingHeuristic.swift */; };
+		0A28963363ED02C838A65FE7 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7392BA7EF3A23ADDDA9B7DF /* BrandMark.swift */; };
 		0BCFD3D8D47603D464DDD78B /* BackgroundCollectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */; };
 		0BF4081F3A43C171EAEA3262 /* DriveSessionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04E0FAC175D9CB0D942CCED4 /* DriveSessionRecord.swift */; };
 		0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */; };
+		0D45B7B5BDA7036E3BB937B8 /* APIClientFeedbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76F0ABD56492966DBA220089 /* APIClientFeedbackTests.swift */; };
+		0D6F06996A31A6407B16C3E6 /* DrivingScreenComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658D6BB8E24D52CBB5BA5E25 /* DrivingScreenComponents.swift */; };
 		135F89FB9099D9FAE72742CC /* UploadDrainCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10DDA50E806EEF8535BD914 /* UploadDrainCoordinator.swift */; };
 		13F02CBE3FA2D19A992E0016 /* UploadBatchJSONCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */; };
 		1780B2A4E897E484A5BB3C0D /* DrivingHeuristic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46E77758971EB7F44643652E /* DrivingHeuristic.swift */; };
+		179D6A3B7419DAB962119406 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63E6ADD9D8D32AD9CCD127B2 /* FeatureFlags.swift */; };
 		1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE870B004546FC93939AF065 /* Endpoints.swift */; };
 		1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E39073C99FB20D024E79D0 /* MotionMath.swift */; };
 		1CBE5AA8C087BA9471E07E16 /* PotholePhotoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 006FA6E12647281144C3D972 /* PotholePhotoStore.swift */; };
@@ -30,7 +34,6 @@
 		3957B51C67FCB5FF1CEC7628 /* DriveEndpointTrimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1B35DE8F53433B4BCCB9A0 /* DriveEndpointTrimmer.swift */; };
 		3E1EAD8552D8141AAAF82DC8 /* PotholeActionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89EE7E2252FD9D4C1984BC93 /* PotholeActionStore.swift */; };
 		3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CE5D67A573F4B606118C23 /* SettingsView.swift */; };
-		BEEF0022CAFE0022DEAD0022 /* LicensesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0022DEAD0023FEED0022 /* LicensesView.swift */; };
 		4030CA59DBFD2BD1002A939A /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
 		415EED346262E91866151E11 /* UploadResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */; };
 		4233C35F3626F4B3635D657A /* RoadSenseSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B4E2F0BBA75CCC42516100B /* RoadSenseSchema.swift */; };
@@ -44,10 +47,12 @@
 		58D2BBBAABD2C950BE180973 /* PrivacyZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */; };
 		5A661F0F9DCBC5633EDDF277 /* SimHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56EBF67158E7FCDE38E6E04F /* SimHarnessView.swift */; };
 		5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F9E1A697AF1C0543503C5D /* PermissionManager.swift */; };
+		5F11DD9A919EA3E0F7513588 /* MapScreenRedesignPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB1B9B6F652C210BD17BBE2 /* MapScreenRedesignPreview.swift */; };
 		60AA16F79F94361B54431179 /* Uploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41B92DA7CA8EB765BCFC11A /* Uploader.swift */; };
 		61C6790E5D041EB25808BAF3 /* RoadSenseLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 659C7BBB94CC6DB51D4B2730 /* RoadSenseLogger.swift */; };
+		61D7051AC34A306377C36B5F /* MapScreenRedesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DEBA0D0F87D4B3143F8655 /* MapScreenRedesign.swift */; };
+		61E361E43A082F9379EE3DFC /* FeedbackComposerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD15F159396DBFACBA6A7C5 /* FeedbackComposerModel.swift */; };
 		620E94DA1BD6F97C61B3C807 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3729474480B72BA41C2B5D8C /* AppModelTests.swift */; };
-		DEAD0002BEEF0002CAFE0002 /* MockupRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEED0002FACE0002DEAD0003 /* MockupRenderTests.swift */; };
 		63328FB0E97ABDBED76424CF /* UploadResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */; };
 		63608FF99D0642C8081C5D41 /* DeviceTokenRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */; };
 		649D0F5915C8738794307D34 /* UserStatsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FDA026E9790EC226336CE31 /* UserStatsStore.swift */; };
@@ -56,8 +61,10 @@
 		6C8619598AF246D149D9037F /* RoughnessScorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E723F9695CA3320B3F86E695 /* RoughnessScorer.swift */; };
 		6CB12F83F061BDDB1FAD352A /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24017FAA2743BBD1FD361A56 /* StatsView.swift */; };
 		6E2764000B77D35C50060E07 /* PotholeActionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6371625CAD43199A1021AA9 /* PotholeActionStoreTests.swift */; };
+		6E86378F31E363550C6057A6 /* DriveSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35B069043D716E17F9B67B71 /* DriveSummaryTests.swift */; };
 		6F4BF681196BA8C52ABFDDD8 /* ReadingWindowProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */; };
 		71B953E564C5532CCA058F32 /* UploadAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AFFFE8ED069250BF48A1547 /* UploadAPIModels.swift */; };
+		75344D133A08D1802F9654A8 /* ModelMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C8207704C2707891CCF6FA2 /* ModelMigrationTests.swift */; };
 		7A292EF7FD5C3BC651718E56 /* RejectedReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */; };
 		7FA2D5C653995C0F73E6666A /* RoadSenseNSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */; };
 		8147DC66BED1C5411E9FD89D /* RetentionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */; };
@@ -72,9 +79,11 @@
 		912813A8964A74F475023D98 /* PotholePhotoProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29327C76BAE8991E25115A8E /* PotholePhotoProcessorTests.swift */; };
 		9270568D1211CD2E3AFDCB10 /* RoughnessScorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E723F9695CA3320B3F86E695 /* RoughnessScorer.swift */; };
 		92BB25E254C7AD6202139526 /* ManualPotholeLocatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */; };
-		B050B11DB050B11DB050B11D /* ModelMigrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B050A11DB050A11DB050A11D /* ModelMigrationTests.swift */; };
 		93499EAF4872315D0197908C /* ReadingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F92672E8E369B06AFF5F25AF /* ReadingStore.swift */; };
+		9374B54AC33D34DBF8FB4C89 /* NeedsAttentionPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = E803DBF8AE4B6EF6FFC807CD /* NeedsAttentionPill.swift */; };
+		93C65E0EF15B26424AEA3E21 /* HapticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 298B669058AE5A355DA96D51 /* HapticsService.swift */; };
 		94F489CC8741A0B2D00ED1DC /* UploadBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */; };
+		95EEBD20BF6FDBC3D4AED0FD /* FeedbackComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0F8292B0B6F90460B7680B1 /* FeedbackComposerView.swift */; };
 		982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70A04456020333C21483C47 /* HighPassBiquad.swift */; };
 		9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC86C13C16A0385D36E47FD /* AppContainer.swift */; };
 		9C76D445B3A6A352A2B066D3 /* PotholeCameraFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4FAA04CA9D8B3BCE9A9CC19 /* PotholeCameraFlowView.swift */; };
@@ -91,32 +100,32 @@
 		AE674105AE11F88B332E65BB /* UploadRuntimeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38491FCE6C30B52713465B8D /* UploadRuntimeTests.swift */; };
 		AFEE1434CB9A30B9D66A33DC /* IngestHealthEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */; };
 		B18C711CD756572A47A6DE8F /* UploadRequestFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9553FFA21CB22675B92971 /* UploadRequestFactory.swift */; };
+		B1C16980285AD2B533EE1F40 /* DrivesListGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35AFBB1F33654ED2360FE684 /* DrivesListGrouping.swift */; };
 		B21405C05811503808C54478 /* DrivingDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777A503AFECA80F0A49C3096 /* DrivingDetector.swift */; };
 		B2D9E6BCD21611B708C78F26 /* MotionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68A275BABCEFCE3E1964F10 /* MotionService.swift */; };
 		B2E6DF647ED4515D3A700282 /* ReadingRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = A96B8343D20095BCEF65D89C /* ReadingRecord.swift */; };
 		B8393B14BAC87209E1414CD7 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */; };
 		B84C0C037E20BD97BD457AB5 /* UploadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DCAA398E4BA72123985282C /* UploadPolicy.swift */; };
+		B85814FFA883079A35312722 /* AttentionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17199643EA466C153AC2B150 /* AttentionState.swift */; };
 		BCED38C029DC23CD8CF965DB /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95DBAC276591544789D06C3E /* DesignTokens.swift */; };
-		BEEF0011CAFE0011DEAD0011 /* BrandMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0011DEAD0012FEED0011 /* BrandMark.swift */; };
 		BE7DBD83E05D54A627C6B4E6 /* SegmentDetailResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06C075253EF1F1E69FC89030 /* SegmentDetailResponseParser.swift */; };
 		C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */; };
 		C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1269DDDE04E2FB4239384BC9 /* ContentView.swift */; };
 		C684FB9328095BE8B1048EF2 /* pothole-hit.expected.json in Resources */ = {isa = PBXBuildFile; fileRef = B045A4EE8832A8E643A3740C /* pothole-hit.expected.json */; };
+		C69070A17B2A965E930BFFD9 /* FeedbackComposerModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 727040322BD073BF51BC6C5B /* FeedbackComposerModelTests.swift */; };
 		C7B974A63846BB64DD556431 /* ReadingWindowProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */; };
 		C859EED8CA59645B04B5D668 /* PrivacyZoneStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB54690AD1B0B14F43315BE6 /* PrivacyZoneStore.swift */; };
 		C894D8A4DAAC9BABBBD275FD /* RetentionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */; };
 		CAFAF51DC3E1A3AF7854919C /* ModelContainerProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F035620621F3107CCB6E6D /* ModelContainerProvider.swift */; };
+		CB1F04B640D1B2607FA070C0 /* BrandVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABEB001E686B49514B484D3F /* BrandVoice.swift */; };
 		CB7414748B2E9DE849EBFE9C /* SensorFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026DC5F95328D7091BC8482E /* SensorFixture.swift */; };
 		CD76AE221C9058361D9476EA /* ReadingBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */; };
 		CE11AD6DFDAB5C71982687C4 /* UploadStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A148A1535E38E0F509C75CB /* UploadStatus.swift */; };
 		CE1CBC213EECC6627118A072 /* Endpoints.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE870B004546FC93939AF065 /* Endpoints.swift */; };
+		D0C3611AF14948EFC40D3F11 /* LicensesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01098BACC15F81E04B4BAAB8 /* LicensesView.swift */; };
 		D341480EFFBE39FDAF32552F /* ReadingBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */; };
 		D3654C639B341A125F6F764E /* MapScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */; };
-		DEAD0001BEEF0001CAFE0001 /* MapScreenRedesignPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEED0001FACE0001DEAD0002 /* MapScreenRedesignPreview.swift */; };
-		BEEF0020CAFE0020DEAD0020 /* AttentionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0020DEAD0021FEED0020 /* AttentionState.swift */; };
-		BEEF0021CAFE0021DEAD0021 /* NeedsAttentionPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0021DEAD0022FEED0021 /* NeedsAttentionPill.swift */; };
-		BEEF0023CAFE0023DEAD0023 /* DrivingScreenComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0023DEAD0024FEED0023 /* DrivingScreenComponents.swift */; };
-		BEEF0025CAFE0025DEAD0025 /* MapScreenRedesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0025DEAD0026FEED0025 /* MapScreenRedesign.swift */; };
+		D4B334D924DDE55C8A6F84C2 /* DriveListGrouperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6C0A9805F38C0665D98181 /* DriveListGrouperTests.swift */; };
 		D4C185705B6C67577E3128F9 /* PrivacyZonesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 583510BB6B1BABFA95ACB79D /* PrivacyZonesView.swift */; };
 		D6B093D0428291818D29B050 /* SensorCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A83AAFA6806FFC7DA4C2528 /* SensorCoordinator.swift */; };
 		D6CAFA8A14152FE2A077BFF3 /* RejectedReason.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FCA5A9B47E2F21547B5B53D /* RejectedReason.swift */; };
@@ -126,15 +135,13 @@
 		DB60EBD564C4FFEC0E4F4EE9 /* PotholeActionRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDB42FED037769EE898F2934 /* PotholeActionRecord.swift */; };
 		DBE9EAA01AE9BA7D8306F7BF /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */; };
 		DC0045BD98623446B06CC83F /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = DFBDE19C2B3A05C0840949A5 /* MapboxMaps */; };
+		DC915210331F65473B16AFEA /* MockupRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92FDAEA75CB9CC16485601DF /* MockupRenderTests.swift */; };
 		DDCC83C031162D3E518D596B /* QualityFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */; };
 		DFB8ADBE97DE5439C2D6429A /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BE8F93CE35FA6438817474 /* AppConfig.swift */; };
 		E0A858EAF54B726D7480CB88 /* DeviceTokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EC0C104BF5658C06ACCBB1 /* DeviceTokenManager.swift */; };
 		E1DCB9FC2A5B640B1B58F385 /* PotholePhotoStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4242FA58E0DE0AE3062BF2B /* PotholePhotoStoreTests.swift */; };
 		EB26C71EB8CF4A2C2C9247A0 /* HighPassBiquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70A04456020333C21483C47 /* HighPassBiquad.swift */; };
 		EB46566139FD4C04A594EA96 /* AppBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06554CA351911A995764AA76 /* AppBootstrap.swift */; };
-		BEEF0010CAFE0010DEAD0010 /* BrandVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0010DEAD0011FEED0010 /* BrandVoice.swift */; };
-		BEEF0012CAFE0012DEAD0012 /* HapticsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0012DEAD0013FEED0012 /* HapticsService.swift */; };
-		BEEF0024CAFE0024DEAD0024 /* FeatureFlags.swift in Sources */ = {isa = PBXBuildFile; fileRef = FACE0024DEAD0025FEED0024 /* FeatureFlags.swift */; };
 		ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */; };
 		F005FBB0C3E992990AEBC2D6 /* IngestHealthEvaluator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE246C89A3251586B6ECE509 /* IngestHealthEvaluator.swift */; };
 		F196DEC71004CA063E17D458 /* SegmentAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5510C3BC3010F7CA1DBD337A /* SegmentAPIModels.swift */; };
@@ -142,6 +149,7 @@
 		F3BBDEDC49BACD9ADAFD2A5D /* MotionMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E39073C99FB20D024E79D0 /* MotionMath.swift */; };
 		F3CF0CDC2F7A60CCD3B7CC90 /* PotholeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */; };
 		F66BC190C390272525DB016E /* DriveEndpointTrimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1B35DE8F53433B4BCCB9A0 /* DriveEndpointTrimmer.swift */; };
+		F83E793BDD81F0E7F0DF9608 /* DrivesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AE07013D298AD2BBAD0F657 /* DrivesListView.swift */; };
 		F95AA84B2BCBC6B15BA91532 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BE8F93CE35FA6438817474 /* AppConfig.swift */; };
 		FA4334D50A1F3340EDF35A2A /* SensorFixtureRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD48E01F41552DAB66909C1 /* SensorFixtureRunner.swift */; };
 		FCBD4AA25AEF988133150B59 /* PrivacyZoneRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10D40F3275A4DDC565E3DD2E /* PrivacyZoneRecord.swift */; };
@@ -167,27 +175,22 @@
 
 /* Begin PBXFileReference section */
 		006FA6E12647281144C3D972 /* PotholePhotoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoStore.swift; sourceTree = "<group>"; };
-		023DE992C5BA96EAB05EF99A /* pothole-hit.csv */ = {isa = PBXFileReference; lastKnownFileType = text; path = "pothole-hit.csv"; sourceTree = "<group>"; };
+		01098BACC15F81E04B4BAAB8 /* LicensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensesView.swift; sourceTree = "<group>"; };
+		023DE992C5BA96EAB05EF99A /* pothole-hit.csv */ = {isa = PBXFileReference; path = "pothole-hit.csv"; sourceTree = "<group>"; };
 		026DC5F95328D7091BC8482E /* SensorFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorFixture.swift; sourceTree = "<group>"; };
 		029336ECC82481F844689FD4 /* PotholeReportRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeReportRecord.swift; sourceTree = "<group>"; };
 		04E0FAC175D9CB0D942CCED4 /* DriveSessionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionRecord.swift; sourceTree = "<group>"; };
 		06554CA351911A995764AA76 /* AppBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBootstrap.swift; sourceTree = "<group>"; };
-		FACE0010DEAD0011FEED0010 /* BrandVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandVoice.swift; sourceTree = "<group>"; };
-		FACE0012DEAD0013FEED0012 /* HapticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticsService.swift; sourceTree = "<group>"; };
-		FACE0024DEAD0025FEED0024 /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
 		06C075253EF1F1E69FC89030 /* SegmentDetailResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentDetailResponseParser.swift; sourceTree = "<group>"; };
 		0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderTests.swift; sourceTree = "<group>"; };
 		0AFFFE8ED069250BF48A1547 /* UploadAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadAPIModels.swift; sourceTree = "<group>"; };
 		10D40F3275A4DDC565E3DD2E /* PrivacyZoneRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyZoneRecord.swift; sourceTree = "<group>"; };
 		1269DDDE04E2FB4239384BC9 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		155FF90E2D9FB3FFB3927DB4 /* QueueModelMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueModelMapper.swift; sourceTree = "<group>"; };
+		17199643EA466C153AC2B150 /* AttentionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionState.swift; sourceTree = "<group>"; };
 		1A63DB84BA5E66CE3F794D25 /* SentryBootstrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentryBootstrapper.swift; sourceTree = "<group>"; };
+		1C8207704C2707891CCF6FA2 /* ModelMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelMigrationTests.swift; sourceTree = "<group>"; };
 		1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreen.swift; sourceTree = "<group>"; };
-		FEED0001FACE0001DEAD0002 /* MapScreenRedesignPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreenRedesignPreview.swift; sourceTree = "<group>"; };
-		FACE0020DEAD0021FEED0020 /* AttentionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttentionState.swift; sourceTree = "<group>"; };
-		FACE0021DEAD0022FEED0021 /* NeedsAttentionPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeedsAttentionPill.swift; sourceTree = "<group>"; };
-		FACE0023DEAD0024FEED0023 /* DrivingScreenComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingScreenComponents.swift; sourceTree = "<group>"; };
-		FACE0025DEAD0026FEED0025 /* MapScreenRedesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreenRedesign.swift; sourceTree = "<group>"; };
 		1EFAC01C66B9C992BC2313A7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		1F57C6D76B7E595FE412BC87 /* ManualPotholeLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualPotholeLocator.swift; sourceTree = "<group>"; };
 		1FB9B9294F92A70C11D0FB1B /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -195,12 +198,15 @@
 		27F9E1A697AF1C0543503C5D /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		28F035620621F3107CCB6E6D /* ModelContainerProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerProvider.swift; sourceTree = "<group>"; };
 		29327C76BAE8991E25115A8E /* PotholePhotoProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoProcessorTests.swift; sourceTree = "<group>"; };
+		298B669058AE5A355DA96D51 /* HapticsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticsService.swift; sourceTree = "<group>"; };
+		2AE07013D298AD2BBAD0F657 /* DrivesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivesListView.swift; sourceTree = "<group>"; };
 		31BB9FA2F39D47DBE85F983C /* RoadSenseNSSimHarnessApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSSimHarnessApp.swift; sourceTree = "<group>"; };
 		31E39073C99FB20D024E79D0 /* MotionMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionMath.swift; sourceTree = "<group>"; };
 		324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualPotholeLocatorTests.swift; sourceTree = "<group>"; };
 		33BE8F93CE35FA6438817474 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfig.swift; sourceTree = "<group>"; };
+		35AFBB1F33654ED2360FE684 /* DrivesListGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivesListGrouping.swift; sourceTree = "<group>"; };
+		35B069043D716E17F9B67B71 /* DriveSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSummaryTests.swift; sourceTree = "<group>"; };
 		3729474480B72BA41C2B5D8C /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
-		FEED0002FACE0002DEAD0003 /* MockupRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockupRenderTests.swift; sourceTree = "<group>"; };
 		38491FCE6C30B52713465B8D /* UploadRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadRuntimeTests.swift; sourceTree = "<group>"; };
 		38814048A460DD56E42A5706 /* ThermalMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThermalMonitor.swift; sourceTree = "<group>"; };
 		3D5005EEB20B02D1100FB8D7 /* UploadBatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadBatch.swift; sourceTree = "<group>"; };
@@ -221,8 +227,12 @@
 		5A325CD10157DA933DF82404 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5F9B3A1E4D8232E728FC985D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		637B4BB438A6B26C00C8A6E3 /* RoadSenseNS.Local.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Local.xcconfig; sourceTree = "<group>"; };
+		63E6ADD9D8D32AD9CCD127B2 /* FeatureFlags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureFlags.swift; sourceTree = "<group>"; };
+		658D6BB8E24D52CBB5BA5E25 /* DrivingScreenComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingScreenComponents.swift; sourceTree = "<group>"; };
 		659C7BBB94CC6DB51D4B2730 /* RoadSenseLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseLogger.swift; sourceTree = "<group>"; };
 		68183A6CEB94DFF10348CBBE /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
+		727040322BD073BF51BC6C5B /* FeedbackComposerModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackComposerModelTests.swift; sourceTree = "<group>"; };
+		76F0ABD56492966DBA220089 /* APIClientFeedbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClientFeedbackTests.swift; sourceTree = "<group>"; };
 		770EBDB5BF565D5AD7546CA5 /* SensorCheckpointStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorCheckpointStore.swift; sourceTree = "<group>"; };
 		777A503AFECA80F0A49C3096 /* DrivingDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrivingDetector.swift; sourceTree = "<group>"; };
 		7A83AAFA6806FFC7DA4C2528 /* SensorCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorCoordinator.swift; sourceTree = "<group>"; };
@@ -235,20 +245,24 @@
 		8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeDetector.swift; sourceTree = "<group>"; };
 		8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadQualityMapView.swift; sourceTree = "<group>"; };
 		9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingBuilder.swift; sourceTree = "<group>"; };
+		92FDAEA75CB9CC16485601DF /* MockupRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockupRenderTests.swift; sourceTree = "<group>"; };
 		95DBAC276591544789D06C3E /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
-		FACE0011DEAD0012FEED0011 /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
 		998E3B40A89C837692A7B138 /* DeviceTokenRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenRecord.swift; sourceTree = "<group>"; };
 		99BE4E2399EF31135224A3E8 /* PotholePhotoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoProcessor.swift; sourceTree = "<group>"; };
-		9A192B2CFE9054A42D255FF3 /* RoadSense NS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RoadSense NS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9E6C0A9805F38C0665D98181 /* DriveListGrouperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveListGrouperTests.swift; sourceTree = "<group>"; };
+		A0F8292B0B6F90460B7680B1 /* FeedbackComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackComposerView.swift; sourceTree = "<group>"; };
 		A2D445C6696ED6F082B33288 /* TestingRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestingRuntime.swift; sourceTree = "<group>"; };
 		A4CE5D67A573F4B606118C23 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		FACE0022DEAD0023FEED0022 /* LicensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensesView.swift; sourceTree = "<group>"; };
 		A68D28C0E187AB48C62D0AC3 /* RoadSenseNS.Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Staging.xcconfig; sourceTree = "<group>"; };
+		A6DEBA0D0F87D4B3143F8655 /* MapScreenRedesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreenRedesign.swift; sourceTree = "<group>"; };
+		A7392BA7EF3A23ADDDA9B7DF /* BrandMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandMark.swift; sourceTree = "<group>"; };
 		A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadEligibilityPolicy.swift; sourceTree = "<group>"; };
 		A96B8343D20095BCEF65D89C /* ReadingRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingRecord.swift; sourceTree = "<group>"; };
+		ABEB001E686B49514B484D3F /* BrandVoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandVoice.swift; sourceTree = "<group>"; };
 		AC9553FFA21CB22675B92971 /* UploadRequestFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadRequestFactory.swift; sourceTree = "<group>"; };
+		ADD15F159396DBFACBA6A7C5 /* FeedbackComposerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackComposerModel.swift; sourceTree = "<group>"; };
 		B045A4EE8832A8E643A3740C /* pothole-hit.expected.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "pothole-hit.expected.json"; sourceTree = "<group>"; };
-		B050A11DB050A11DB050A11D /* ModelMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelMigrationTests.swift; sourceTree = "<group>"; };
 		B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundCollectionPolicy.swift; sourceTree = "<group>"; };
 		B41B92DA7CA8EB765BCFC11A /* Uploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Uploader.swift; sourceTree = "<group>"; };
 		B4242FA58E0DE0AE3062BF2B /* PotholePhotoStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoStoreTests.swift; sourceTree = "<group>"; };
@@ -257,24 +271,26 @@
 		C687070E04DFCBE0FE4EA200 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorCheckpoint.swift; sourceTree = "<group>"; };
 		C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSApp.swift; sourceTree = "<group>"; };
-		C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RoadSenseNSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C9E2C334C77577FC08622EF8 /* HarnessFixtureCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessFixtureCatalog.swift; sourceTree = "<group>"; };
 		CA6257F1C7E68CE62C4CCF25 /* SegmentDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentDetailSheet.swift; sourceTree = "<group>"; };
 		CDB42FED037769EE898F2934 /* PotholeActionRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeActionRecord.swift; sourceTree = "<group>"; };
+		CEB1B9B6F652C210BD17BBE2 /* MapScreenRedesignPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreenRedesignPreview.swift; sourceTree = "<group>"; };
 		CEC86C13C16A0385D36E47FD /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
 		D10DDA50E806EEF8535BD914 /* UploadDrainCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadDrainCoordinator.swift; sourceTree = "<group>"; };
 		D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingWindowProcessor.swift; sourceTree = "<group>"; };
 		D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadResponseParser.swift; sourceTree = "<group>"; };
 		D4FAA04CA9D8B3BCE9A9CC19 /* PotholeCameraFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeCameraFlowView.swift; sourceTree = "<group>"; };
 		D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionReadiness.swift; sourceTree = "<group>"; };
-		D6D673F19DB713B76E0CDCF0 /* RoadSenseNSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RoadSenseNSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6D673F19DB713B76E0CDCF0 /* RoadSenseNSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB54690AD1B0B14F43315BE6 /* PrivacyZoneStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyZoneStore.swift; sourceTree = "<group>"; };
 		DCD48E01F41552DAB66909C1 /* SensorFixtureRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorFixtureRunner.swift; sourceTree = "<group>"; };
-		DE4B6189F55160E7C0CA0856 /* RoadSense NS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "RoadSense NS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DE4B6189F55160E7C0CA0856 /* RoadSenseNSSimHarness.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = RoadSenseNSSimHarness.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		E32C15B4FE59F8CA5CA37118 /* UploadBatchJSONCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadBatchJSONCodec.swift; sourceTree = "<group>"; };
 		E68A275BABCEFCE3E1964F10 /* MotionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionService.swift; sourceTree = "<group>"; };
 		E723F9695CA3320B3F86E695 /* RoughnessScorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoughnessScorer.swift; sourceTree = "<group>"; };
+		E803DBF8AE4B6EF6FFC807CD /* NeedsAttentionPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeedsAttentionPill.swift; sourceTree = "<group>"; };
 		E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingFlowView.swift; sourceTree = "<group>"; };
 		EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkAndUploaderTests.swift; sourceTree = "<group>"; };
 		EDAC070ACEE2F122C555B0ED /* UserStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserStats.swift; sourceTree = "<group>"; };
@@ -330,12 +346,12 @@
 		1345EEAF9D9B0ED9D1BCB755 /* Map */ = {
 			isa = PBXGroup;
 			children = (
-				FACE0020DEAD0021FEED0020 /* AttentionState.swift */,
-				FACE0023DEAD0024FEED0023 /* DrivingScreenComponents.swift */,
+				17199643EA466C153AC2B150 /* AttentionState.swift */,
+				658D6BB8E24D52CBB5BA5E25 /* DrivingScreenComponents.swift */,
 				1C99EB8057C4EC12D49B76D6 /* MapScreen.swift */,
-				FACE0025DEAD0026FEED0025 /* MapScreenRedesign.swift */,
-				FEED0001FACE0001DEAD0002 /* MapScreenRedesignPreview.swift */,
-				FACE0021DEAD0022FEED0021 /* NeedsAttentionPill.swift */,
+				A6DEBA0D0F87D4B3143F8655 /* MapScreenRedesign.swift */,
+				CEB1B9B6F652C210BD17BBE2 /* MapScreenRedesignPreview.swift */,
+				E803DBF8AE4B6EF6FFC807CD /* NeedsAttentionPill.swift */,
 				D4FAA04CA9D8B3BCE9A9CC19 /* PotholeCameraFlowView.swift */,
 				99BE4E2399EF31135224A3E8 /* PotholePhotoProcessor.swift */,
 				8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */,
@@ -351,6 +367,15 @@
 				7A83AAFA6806FFC7DA4C2528 /* SensorCoordinator.swift */,
 			);
 			path = Pipeline;
+			sourceTree = "<group>";
+		};
+		20FC931F73C2BFE64C3EFFDA /* Drives */ = {
+			isa = PBXGroup;
+			children = (
+				35AFBB1F33654ED2360FE684 /* DrivesListGrouping.swift */,
+				2AE07013D298AD2BBAD0F657 /* DrivesListView.swift */,
+			);
+			path = Drives;
 			sourceTree = "<group>";
 		};
 		2616872B480318DDB35923E0 /* RoadSenseNSSimHarness */ = {
@@ -464,10 +489,10 @@
 				CEC86C13C16A0385D36E47FD /* AppContainer.swift */,
 				E0646FAEDFDBCFB6D8B4F9B2 /* AppModel.swift */,
 				4B2199FED8B8DBD6F6FD265B /* BackgroundTaskRegistrar.swift */,
-				FACE0010DEAD0011FEED0010 /* BrandVoice.swift */,
+				ABEB001E686B49514B484D3F /* BrandVoice.swift */,
 				1269DDDE04E2FB4239384BC9 /* ContentView.swift */,
-				FACE0012DEAD0013FEED0012 /* HapticsService.swift */,
-				FACE0024DEAD0025FEED0024 /* FeatureFlags.swift */,
+				63E6ADD9D8D32AD9CCD127B2 /* FeatureFlags.swift */,
+				298B669058AE5A355DA96D51 /* HapticsService.swift */,
 				659C7BBB94CC6DB51D4B2730 /* RoadSenseLogger.swift */,
 				C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */,
 				1A63DB84BA5E66CE3F794D25 /* SentryBootstrapper.swift */,
@@ -527,11 +552,15 @@
 		738AEE105180D9D2D869A4F8 /* RoadSenseNSTests */ = {
 			isa = PBXGroup;
 			children = (
+				76F0ABD56492966DBA220089 /* APIClientFeedbackTests.swift */,
 				3729474480B72BA41C2B5D8C /* AppModelTests.swift */,
+				9E6C0A9805F38C0665D98181 /* DriveListGrouperTests.swift */,
+				35B069043D716E17F9B67B71 /* DriveSummaryTests.swift */,
+				727040322BD073BF51BC6C5B /* FeedbackComposerModelTests.swift */,
 				5F9B3A1E4D8232E728FC985D /* Info.plist */,
 				324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */,
-				B050A11DB050A11DB050A11D /* ModelMigrationTests.swift */,
-				FEED0002FACE0002DEAD0003 /* MockupRenderTests.swift */,
+				92FDAEA75CB9CC16485601DF /* MockupRenderTests.swift */,
+				1C8207704C2707891CCF6FA2 /* ModelMigrationTests.swift */,
 				EBB170797E26D15B58420BFF /* NetworkAndUploaderTests.swift */,
 				0A95566A8B4700000AFA2805 /* PlaceholderTests.swift */,
 				B6371625CAD43199A1021AA9 /* PotholeActionStoreTests.swift */,
@@ -563,7 +592,7 @@
 		7E8E84022CD1A16A9D70D26B /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
-				FACE0011DEAD0012FEED0011 /* BrandMark.swift */,
+				A7392BA7EF3A23ADDDA9B7DF /* BrandMark.swift */,
 				95DBAC276591544789D06C3E /* DesignTokens.swift */,
 			);
 			path = DesignSystem;
@@ -572,8 +601,8 @@
 		8729970931269C5BA5CF5208 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				01098BACC15F81E04B4BAAB8 /* LicensesView.swift */,
 				A4CE5D67A573F4B606118C23 /* SettingsView.swift */,
-				FACE0022DEAD0023FEED0022 /* LicensesView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -581,8 +610,8 @@
 		9E5365CA19BCADC399895BD7 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				9A192B2CFE9054A42D255FF3 /* RoadSense NS.app */,
-				DE4B6189F55160E7C0CA0856 /* RoadSense NS.app */,
+				9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */,
+				DE4B6189F55160E7C0CA0856 /* RoadSenseNSSimHarness.app */,
 				C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */,
 				D6D673F19DB713B76E0CDCF0 /* RoadSenseNSUITests.xctest */,
 			);
@@ -595,6 +624,15 @@
 				E83AC0B6AFCA145180534B1D /* OnboardingFlowView.swift */,
 			);
 			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		A104128A691798F24159DE03 /* Feedback */ = {
+			isa = PBXGroup;
+			children = (
+				ADD15F159396DBFACBA6A7C5 /* FeedbackComposerModel.swift */,
+				A0F8292B0B6F90460B7680B1 /* FeedbackComposerView.swift */,
+			);
+			path = Feedback;
 			sourceTree = "<group>";
 		};
 		B61C0DD8F4BF7D0D5233BF1D /* App */ = {
@@ -645,6 +683,8 @@
 			isa = PBXGroup;
 			children = (
 				7E8E84022CD1A16A9D70D26B /* DesignSystem */,
+				20FC931F73C2BFE64C3EFFDA /* Drives */,
+				A104128A691798F24159DE03 /* Feedback */,
 				1345EEAF9D9B0ED9D1BCB755 /* Map */,
 				A055F6FAB38CBD5786C00779 /* Onboarding */,
 				7A9157B62ED71B02C9AFF8BC /* PrivacyZones */,
@@ -672,7 +712,7 @@
 			packageProductDependencies = (
 			);
 			productName = RoadSenseNSSimHarness;
-			productReference = DE4B6189F55160E7C0CA0856 /* RoadSense NS.app */;
+			productReference = DE4B6189F55160E7C0CA0856 /* RoadSenseNSSimHarness.app */;
 			productType = "com.apple.product-type.application";
 		};
 		6C4282FA31560B7A152AC1C4 /* RoadSenseNSUITests */ = {
@@ -711,7 +751,7 @@
 				94AD22E714178BC9763D1344 /* Sentry */,
 			);
 			productName = RoadSenseNS;
-			productReference = 9A192B2CFE9054A42D255FF3 /* RoadSense NS.app */;
+			productReference = 9A192B2CFE9054A42D255FF3 /* RoadSenseNS.app */;
 			productType = "com.apple.product-type.application";
 		};
 		F3B73F912150FE5952CCF260 /* RoadSenseNSTests */ = {
@@ -807,10 +847,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0D45B7B5BDA7036E3BB937B8 /* APIClientFeedbackTests.swift in Sources */,
 				620E94DA1BD6F97C61B3C807 /* AppModelTests.swift in Sources */,
+				D4B334D924DDE55C8A6F84C2 /* DriveListGrouperTests.swift in Sources */,
+				6E86378F31E363550C6057A6 /* DriveSummaryTests.swift in Sources */,
+				C69070A17B2A965E930BFFD9 /* FeedbackComposerModelTests.swift in Sources */,
 				92BB25E254C7AD6202139526 /* ManualPotholeLocatorTests.swift in Sources */,
-				B050B11DB050B11DB050B11D /* ModelMigrationTests.swift in Sources */,
-				DEAD0002BEEF0002CAFE0002 /* MockupRenderTests.swift in Sources */,
+				DC915210331F65473B16AFEA /* MockupRenderTests.swift in Sources */,
+				75344D133A08D1802F9654A8 /* ModelMigrationTests.swift in Sources */,
 				01AB046260471C52C02D8C59 /* NetworkAndUploaderTests.swift in Sources */,
 				0D2DE814C8DFF7337AD6EFA6 /* PlaceholderTests.swift in Sources */,
 				6E2764000B77D35C50060E07 /* PotholeActionStoreTests.swift in Sources */,
@@ -874,40 +918,45 @@
 			files = (
 				2E1B6D32ED2B5BB95BBBDC7E /* APIClient.swift in Sources */,
 				EB46566139FD4C04A594EA96 /* AppBootstrap.swift in Sources */,
-				BEEF0010CAFE0010DEAD0010 /* BrandVoice.swift in Sources */,
-				BEEF0012CAFE0012DEAD0012 /* HapticsService.swift in Sources */,
-				BEEF0024CAFE0024DEAD0024 /* FeatureFlags.swift in Sources */,
 				F95AA84B2BCBC6B15BA91532 /* AppConfig.swift in Sources */,
 				9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */,
 				6B42654DBC077FAC55F09FD3 /* AppEnvironment.swift in Sources */,
 				DBE9EAA01AE9BA7D8306F7BF /* AppModel.swift in Sources */,
+				B85814FFA883079A35312722 /* AttentionState.swift in Sources */,
 				0BCFD3D8D47603D464DDD78B /* BackgroundCollectionPolicy.swift in Sources */,
 				D9D68063F1304D636E7E2814 /* BackgroundTaskRegistrar.swift in Sources */,
+				0A28963363ED02C838A65FE7 /* BrandMark.swift in Sources */,
+				CB1F04B640D1B2607FA070C0 /* BrandVoice.swift in Sources */,
 				C02E931B0EFEC031C895EA80 /* CollectionReadiness.swift in Sources */,
 				C315D9DBEAAC9A03B4F80F70 /* ContentView.swift in Sources */,
-				BEEF0011CAFE0011DEAD0011 /* BrandMark.swift in Sources */,
 				BCED38C029DC23CD8CF965DB /* DesignTokens.swift in Sources */,
 				E0A858EAF54B726D7480CB88 /* DeviceTokenManager.swift in Sources */,
 				63608FF99D0642C8081C5D41 /* DeviceTokenRecord.swift in Sources */,
 				A1474D058AA8DD8A7886BF8B /* DeviceTokenStore.swift in Sources */,
 				F66BC190C390272525DB016E /* DriveEndpointTrimmer.swift in Sources */,
 				0BF4081F3A43C171EAEA3262 /* DriveSessionRecord.swift in Sources */,
+				B1C16980285AD2B533EE1F40 /* DrivesListGrouping.swift in Sources */,
+				F83E793BDD81F0E7F0DF9608 /* DrivesListView.swift in Sources */,
 				B21405C05811503808C54478 /* DrivingDetector.swift in Sources */,
 				1780B2A4E897E484A5BB3C0D /* DrivingHeuristic.swift in Sources */,
+				0D6F06996A31A6407B16C3E6 /* DrivingScreenComponents.swift in Sources */,
 				1B16282C261E9CED53A3E371 /* Endpoints.swift in Sources */,
+				179D6A3B7419DAB962119406 /* FeatureFlags.swift in Sources */,
+				61E361E43A082F9379EE3DFC /* FeedbackComposerModel.swift in Sources */,
+				95EEBD20BF6FDBC3D4AED0FD /* FeedbackComposerView.swift in Sources */,
+				93C65E0EF15B26424AEA3E21 /* HapticsService.swift in Sources */,
 				982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */,
 				AFEE1434CB9A30B9D66A33DC /* IngestHealthEvaluator.swift in Sources */,
+				D0C3611AF14948EFC40D3F11 /* LicensesView.swift in Sources */,
 				D936E8CAA7F8D74C012BB1D8 /* LocationService.swift in Sources */,
 				9EABEA30417F41AE694F52D1 /* ManualPotholeLocator.swift in Sources */,
 				D3654C639B341A125F6F764E /* MapScreen.swift in Sources */,
-				DEAD0001BEEF0001CAFE0001 /* MapScreenRedesignPreview.swift in Sources */,
-				BEEF0020CAFE0020DEAD0020 /* AttentionState.swift in Sources */,
-				BEEF0021CAFE0021DEAD0021 /* NeedsAttentionPill.swift in Sources */,
-				BEEF0023CAFE0023DEAD0023 /* DrivingScreenComponents.swift in Sources */,
-				BEEF0025CAFE0025DEAD0025 /* MapScreenRedesign.swift in Sources */,
+				61D7051AC34A306377C36B5F /* MapScreenRedesign.swift in Sources */,
+				5F11DD9A919EA3E0F7513588 /* MapScreenRedesignPreview.swift in Sources */,
 				CAFAF51DC3E1A3AF7854919C /* ModelContainerProvider.swift in Sources */,
 				1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */,
 				B2D9E6BCD21611B708C78F26 /* MotionService.swift in Sources */,
+				9374B54AC33D34DBF8FB4C89 /* NeedsAttentionPill.swift in Sources */,
 				ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */,
 				5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */,
 				DB60EBD564C4FFEC0E4F4EE9 /* PotholeActionRecord.swift in Sources */,
@@ -944,7 +993,6 @@
 				FA4334D50A1F3340EDF35A2A /* SensorFixtureRunner.swift in Sources */,
 				825EF8A058DF7DA06B8A89CE /* SentryBootstrapper.swift in Sources */,
 				3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */,
-				BEEF0022CAFE0022DEAD0022 /* LicensesView.swift in Sources */,
 				6CB12F83F061BDDB1FAD352A /* StatsView.swift in Sources */,
 				269DDA3BBA30325BA96F619C /* TestingRuntime.swift in Sources */,
 				0005F6455CB1194DA77528C2 /* ThermalMonitor.swift in Sources */,
@@ -987,13 +1035,20 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
-				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "ca.roadsense.ios.nightly-cleanup ca.roadsense.ios.upload-drain";
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = (
+					"ca.roadsense.ios.nightly-cleanup",
+					"ca.roadsense.ios.upload-drain",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = "RoadSense NS";
 				INFOPLIST_KEY_NSCameraUsageDescription = "RoadSense NS uses the camera so you can submit pothole photos while stopped.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "RoadSense NS uses motion data to score road roughness and detect potholes.";
-				INFOPLIST_KEY_UIBackgroundModes = "location processing fetch";
+				INFOPLIST_KEY_UIBackgroundModes = (
+					location,
+					processing,
+					fetch,
+				);
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1139,15 +1194,21 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = D7WP753WUK;
 				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
-				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "ca.roadsense.ios.nightly-cleanup ca.roadsense.ios.upload-drain";
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = (
+					"ca.roadsense.ios.nightly-cleanup",
+					"ca.roadsense.ios.upload-drain",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = "RoadSense NS Local";
 				INFOPLIST_KEY_NSCameraUsageDescription = "RoadSense NS uses the camera so you can submit pothole photos while stopped.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "RoadSense NS uses motion data to score road roughness and detect potholes.";
-				INFOPLIST_KEY_UIBackgroundModes = "location processing fetch";
+				INFOPLIST_KEY_UIBackgroundModes = (
+					location,
+					processing,
+					fetch,
+				);
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1319,13 +1380,20 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				INFOPLIST_FILE = RoadSenseNS/Resources/Info.plist;
-				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "ca.roadsense.ios.nightly-cleanup ca.roadsense.ios.upload-drain";
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = (
+					"ca.roadsense.ios.nightly-cleanup",
+					"ca.roadsense.ios.upload-drain",
+				);
 				INFOPLIST_KEY_CFBundleDisplayName = "RoadSense NS";
 				INFOPLIST_KEY_NSCameraUsageDescription = "RoadSense NS uses the camera so you can submit pothole photos while stopped.";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "RoadSense NS uses background location to keep collecting road quality readings during a drive.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "RoadSense NS uses your location to measure road quality while you drive.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "RoadSense NS uses motion data to score road roughness and detect potholes.";
-				INFOPLIST_KEY_UIBackgroundModes = "location processing fetch";
+				INFOPLIST_KEY_UIBackgroundModes = (
+					location,
+					processing,
+					fetch,
+				);
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

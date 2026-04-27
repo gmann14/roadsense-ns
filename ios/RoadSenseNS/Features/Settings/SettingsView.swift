@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var model: AppModel
     let onManagePrivacyZones: () -> Void
+    let onSendFeedback: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var isDeleting = false
@@ -20,6 +21,7 @@ struct SettingsView: View {
                 uploadsCard
                 privacyCard
                 dataCard
+                feedbackCard
                 aboutCard
 
                 if let errorMessage {
@@ -375,6 +377,25 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(DesignTokens.Space.md)
         .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
+    }
+
+    private var feedbackCard: some View {
+        groupedCard(
+            iconSystemName: "bubble.left.and.bubble.right.fill",
+            iconTint: DesignTokens.Palette.deep,
+            title: "Send feedback",
+            subtitle: "Tell us what worked, what broke, or what's missing. We don't include your location, drive data, or device ID."
+        ) {
+            Button("Send feedback") {
+                dismiss()
+                onSendFeedback()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(DesignTokens.Palette.deep)
+            .controlSize(.large)
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("settings.send-feedback")
+        }
     }
 
     private var aboutCard: some View {

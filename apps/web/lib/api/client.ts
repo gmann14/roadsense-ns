@@ -294,3 +294,101 @@ export async function getTopPotholes(limit = 20): Promise<PotholeResponse | null
     potholes: rows ?? [],
   };
 }
+
+export type FeedbackCategoryValue =
+  | "bug"
+  | "feature"
+  | "map_issue"
+  | "pothole_issue"
+  | "privacy_safety"
+  | "other";
+
+export type FeedbackSubmissionInput = {
+  category: FeedbackCategoryValue;
+  message: string;
+  replyEmail?: string | null;
+  contactConsent?: boolean;
+  route?: string | null;
+  locale?: string | null;
+};
+
+export type FeedbackSubmissionOutcome =
+  | { kind: "accepted"; id: string; requestId: string | null }
+  | { kind: "validation_failed"; fieldErrors: Record<string, string>; requestId: string | null }
+  | { kind: "rate_limited"; retryAfterSeconds: number | null; requestId: string | null }
+  | { kind: "network_error"; message: string }
+  | { kind: "server_error"; statusCode: number; requestId: string | null };
+
+export async function submitFeedback(
+  input: FeedbackSubmissionInput,
+  fetchImpl: typeof fetch = fetch,
+): Promise<FeedbackSubmissionOutcome> {
+  const trimmedMessage = input.message.trim();
+  const trimmedEmail = input.replyEmail?.trim() ?? "";
+  const payload = {
+    source: "web" as const,
+    category: input.category,
+    message: trimmedMessage,
+    reply_email: trimmedEmail.length > 0 ? trimmedEmail : null,
+    contact_consent: input.contactConsent === true,
+    app_version: process.env.NEXT_PUBLIC_APP_VERSION ?? "web",
+    platform: "web",
+    locale: input.locale ?? null,
+    route: input.route ?? null,
+  };
+
+  let response: Response;
+  try {
+    response = await fetchImpl(buildEndpointUrl("/feedback"), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...getPublicReadHeaders(),
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    return {
+      kind: "network_error",
+      message: error instanceof Error ? error.message : "Network request failed",
+    };
+  }
+
+  const requestId = response.headers.get("x-request-id");
+
+  if (response.status === 201) {
+    const body = (await response.json().catch(() => null)) as { id?: string; request_id?: string } | null;
+    return {
+      kind: "accepted",
+      id: body?.id ?? "",
+      requestId: body?.request_id ?? requestId,
+    };
+  }
+
+  if (response.status === 400) {
+    const body = (await response.json().catch(() => null)) as
+      | { field_errors?: Record<string, string>; request_id?: string }
+      | null;
+    return {
+      kind: "validation_failed",
+      fieldErrors: body?.field_errors ?? {},
+      requestId: body?.request_id ?? requestId,
+    };
+  }
+
+  if (response.status === 429) {
+    const retryAfterHeader = response.headers.get("Retry-After");
+    const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
+    return {
+      kind: "rate_limited",
+      retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null,
+      requestId,
+    };
+  }
+
+  return {
+    kind: "server_error",
+    statusCode: response.status,
+    requestId,
+  };
+}

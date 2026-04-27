@@ -57,10 +57,10 @@ final class AppModel {
     private let defaults: UserDefaults
     private let privacyZoneDecisionKey = "ca.roadsense.ios.privacy-zone-decision"
     private let collectionPausedKey = "ca.roadsense.ios.collection-paused"
-    private let apiClient: APIClient
+    let apiClient: APIClient
     private let potholeActionStore: PotholeActionStore
     private let potholePhotoStore: PotholePhotoStore
-    private let readingStore: ReadingStore
+    let readingStore: ReadingStore
     private let uploadQueueStore: UploadQueueStore
     private let uploadDrainCoordinator: UploadDrainCoordinator
     private let sensorCoordinator: SensorCoordinator

@@ -592,6 +592,7 @@ Post-MVP phases:
   - a public tester can submit useful feedback from iOS or the web map without leaving the product or emailing manually
   - feedback is visible to maintainers with enough context to reproduce or prioritize
   - the user-facing copy clearly says what metadata is included and whether they can be contacted
+- **Current repo note:** the `feedback_submissions` table (with categories, message length constraints, optional reply email + consent gate, and request-id capture), the `/feedback` Edge Function (size-capped JSON, validation, IP rate-limit at 10/hour, service-role inserts), the iOS `FeedbackComposerModel` + `FeedbackComposerView` reachable from Settings, and the web `FeedbackDialog` reachable from the top nav are all in place. Triage sink for MVP is the private `feedback_submissions` table itself, queried by service-role only — a private GitHub-issue-creation hook is the suggested follow-up. Offline queueing for iOS was deliberately skipped on this pass: the form keeps its content on transient failure so the user can retry, but unsent feedback does not survive an app kill. A real-device pass plus a `/privacy-and-counts` transparency page that lists the feedback table alongside Sentry are still outstanding.
 
 ## Phase 9 — Web Backend Additions
 
@@ -904,6 +905,7 @@ These tasks track the background-upload loop and its remaining device-validation
   - add foreground-cleanup pass for stale drives
 - **Acceptance**
   - a simulated drive produces exactly one `DriveSessionRecord` with accurate distance and counters
+- **Current repo note:** `DriveSessionRecord` exists, `SensorCoordinator` stamps readings via `ensureCurrentDriveSession`, and `ReadingStore` already finalizes sealed/open sessions and repairs fragmented groups. The new `recentDriveSummaries(limit:)` and `deleteDriveSession(id:)` APIs plus `DriveStore` haversine distance and bbox helpers cover the read path. XCTests assert grouping, accepted/privacy-filtered/pothole counts, distance bounds, bbox corners, delete-cascades-readings behavior, and limit enforcement.
 
 ### B077 — Drives list and detail UI
 
@@ -919,6 +921,7 @@ These tasks track the background-upload loop and its remaining device-validation
   - `Open on main map` action that centers the map to the drive's bounding box
 - **Acceptance**
   - VoiceOver labels match the documented script; Dynamic Type Accessibility 1+ reflows rows vertically
+- **Current repo note:** `DrivesListView` is in place, accessible from the new "Recent drives" card on `StatsView`. Rows render distance + accepted/privacy/pothole chips, the privacy-only state surfaces the "Inside a privacy zone" treatment, and the delete action carries a confirmation that explicitly mentions "Already uploaded data stays public — RoadSense doesn't track who sent it." Grouping uses the new `DriveListGrouper` with explicit unit tests for Today / Yesterday / Earlier this week / Earlier buckets in Halifax tz. Mini-map polyline detail screen and `Open on main map` action remain follow-ups (the bbox is stored on `DriveSummary` for the main-map jump). UI-test automation (XCUITest) and a real-device VoiceOver pass are still outstanding; the SwiftUI shell is exercised by view-model tests, not yet by full UI tests.
 
 ## Phase 11 — Post-MVP Operational Procedures
 

@@ -3,6 +3,7 @@ import SwiftUI
 struct StatsView: View {
     let statsStore: UserStatsStore
     var onAppear: (() -> Void)?
+    var onShowDrives: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var summary = UserStatsSummary.zero
@@ -13,6 +14,9 @@ struct StatsView: View {
             VStack(alignment: .leading, spacing: DesignTokens.Space.xl) {
                 hero
                 contributionCard
+                if onShowDrives != nil {
+                    drivesShortcutCard
+                }
                 reachCard
                 explainerCard
 
@@ -133,6 +137,30 @@ struct StatsView: View {
                 identifier: "stats.privacy-filtered",
                 valueTint: DesignTokens.Palette.smooth
             )
+        }
+    }
+
+    private var drivesShortcutCard: some View {
+        sectionCard(title: "Recent drives") {
+            VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+                Text("See your last trips with distance, road samples, and privacy-zone counts.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    dismiss()
+                    onShowDrives?()
+                } label: {
+                    Text("Open recent drives")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Palette.deep)
+                .controlSize(.large)
+                .accessibilityIdentifier("stats.open-recent-drives")
+            }
         }
     }
 

@@ -8,6 +8,8 @@ struct ContentView: View {
     @State private var isShowingPrivacyZones = false
     @State private var isShowingStats = false
     @State private var isShowingSettings = false
+    @State private var isShowingDrives = false
+    @State private var feedbackComposer: FeedbackComposerModel?
     @State private var lastForegroundDrainAt: Date?
 
     init(container: AppContainer) {
@@ -53,8 +55,14 @@ struct ContentView: View {
                 NavigationStack {
                     StatsView(
                         statsStore: model.userStatsStore,
-                        onAppear: { model.refreshCollectionStats() }
+                        onAppear: { model.refreshCollectionStats() },
+                        onShowDrives: { isShowingDrives = true }
                     )
+                }
+            }
+            .sheet(isPresented: $isShowingDrives) {
+                NavigationStack {
+                    DrivesListView(readingStore: model.readingStore)
                 }
             }
             .sheet(isPresented: $isShowingSettings, onDismiss: {
@@ -65,9 +73,20 @@ struct ContentView: View {
                         model: model,
                         onManagePrivacyZones: {
                             isShowingPrivacyZones = true
+                        },
+                        onSendFeedback: {
+                            feedbackComposer = FeedbackComposerModel(
+                                submitter: FeedbackSubmissionAPIClient(apiClient: model.apiClient),
+                                route: "Settings"
+                            )
                         }
                     )
                 }
+            }
+            .sheet(item: $feedbackComposer) { composer in
+                FeedbackComposerView(model: composer)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
         .onAppear {

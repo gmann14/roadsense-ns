@@ -16,6 +16,7 @@ struct EndpointsTests {
 
         #expect(endpoints.uploadReadingsURL.absoluteString == "http://127.0.0.1:54321/functions/v1/upload-readings")
         #expect(endpoints.potholeActionsURL.absoluteString == "http://127.0.0.1:54321/functions/v1/pothole-actions")
+        #expect(endpoints.feedbackURL.absoluteString == "http://127.0.0.1:54321/functions/v1/feedback")
         #expect(endpoints.segmentDetailURL(id: segmentID).absoluteString == "http://127.0.0.1:54321/functions/v1/segments/12345678-90ab-cdef-1234-567890abcdef")
         #expect(endpoints.tileTemplateURLString == "http://127.0.0.1:54321/functions/v1/tiles/{z}/{x}/{y}.mvt?apikey=anon.test-key")
         #expect(endpoints.tileURL(z: 14, x: 5299, y: 5915).absoluteString == "http://127.0.0.1:54321/functions/v1/tiles/14/5299/5915.mvt")

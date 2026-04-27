@@ -51,6 +51,23 @@ struct SignedUploadAttemptSummary: Sendable {
     let statusCode: Int
 }
 
+struct FeedbackSubmissionRequest: Sendable {
+    let source: String
+    let category: String
+    let message: String
+    let replyEmail: String?
+    let contactConsent: Bool
+    let route: String?
+    let locale: String?
+}
+
+enum FeedbackSubmissionResult: Sendable {
+    case accepted(id: String, requestID: String?)
+    case validationFailed(fieldErrors: [String: String], requestID: String?)
+    case rateLimited(retryAfterSeconds: TimeInterval?, requestID: String?)
+    case serverError(statusCode: Int, requestID: String?)
+}
+
 final class APIClient {
     private let endpoints: Endpoints
     private let session: URLSession
@@ -262,6 +279,56 @@ final class APIClient {
         }
 
         return SignedUploadAttemptSummary(statusCode: httpResponse.statusCode)
+    }
+
+    func submitFeedback(_ request: FeedbackSubmissionRequest) async throws -> FeedbackSubmissionResult {
+        let clientOSVersion = await MainActor.run {
+            "iOS \(UIDevice.current.systemVersion)"
+        }
+        var urlRequest = URLRequest(url: endpoints.feedbackURL)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.setValue(endpoints.config.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        urlRequest.setValue("Bearer \(endpoints.config.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        urlRequest.httpBody = try UploadCodec.makeEncoder().encode(
+            FeedbackSubmissionPayload(
+                source: request.source,
+                category: request.category,
+                message: request.message,
+                replyEmail: request.replyEmail,
+                contactConsent: request.contactConsent,
+                appVersion: appVersionString(),
+                platform: clientOSVersion,
+                locale: request.locale,
+                route: request.route
+            )
+        )
+
+        let (data, response) = try await session.data(for: urlRequest)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIClientError.invalidResponse
+        }
+
+        let requestID = httpResponse.value(forHTTPHeaderField: "x-request-id")
+        let decoder = UploadCodec.makeDecoder()
+
+        switch httpResponse.statusCode {
+        case 201:
+            let body = try decoder.decode(FeedbackSubmissionAcceptedResponse.self, from: data)
+            return .accepted(id: body.id, requestID: body.requestID ?? requestID)
+        case 400:
+            let envelope = try? decoder.decode(FeedbackValidationErrorResponse.self, from: data)
+            return .validationFailed(
+                fieldErrors: envelope?.fieldErrors ?? [:],
+                requestID: envelope?.requestID ?? requestID
+            )
+        case 429:
+            let retryAfterSeconds = retryAfter(from: httpResponse.allHeaderFields)
+            return .rateLimited(retryAfterSeconds: retryAfterSeconds, requestID: requestID)
+        default:
+            return .serverError(statusCode: httpResponse.statusCode, requestID: requestID)
+        }
     }
 
     private func appVersionString() -> String {

@@ -121,6 +121,11 @@ export function PrivacyContent() {
           We will answer in plain language. If the implementation changes in a way that affects what data is collected
           or published, this page will be updated before broader public testing.
         </p>
+        <p className="lede" style={{ margin: 0 }}>
+          Want a per-source view with live counts? See{" "}
+          <a href="/privacy-and-counts">Privacy &amp; counts</a> — every telemetry source named, with current aggregates
+          from the public stats view.
+        </p>
       </article>
     </section>
   );

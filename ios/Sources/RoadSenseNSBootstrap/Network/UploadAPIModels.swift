@@ -287,3 +287,90 @@ public struct PotholePhotoUploadResponse: Codable, Equatable, Sendable {
         case expectedObjectPath = "expected_object_path"
     }
 }
+
+public struct FeedbackSubmissionPayload: Codable, Equatable, Sendable {
+    public let source: String
+    public let category: String
+    public let message: String
+    public let replyEmail: String?
+    public let contactConsent: Bool
+    public let appVersion: String
+    public let platform: String
+    public let locale: String?
+    public let route: String?
+
+    public init(
+        source: String,
+        category: String,
+        message: String,
+        replyEmail: String?,
+        contactConsent: Bool,
+        appVersion: String,
+        platform: String,
+        locale: String?,
+        route: String?
+    ) {
+        self.source = source
+        self.category = category
+        self.message = message
+        self.replyEmail = replyEmail
+        self.contactConsent = contactConsent
+        self.appVersion = appVersion
+        self.platform = platform
+        self.locale = locale
+        self.route = route
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case source
+        case category
+        case message
+        case replyEmail = "reply_email"
+        case contactConsent = "contact_consent"
+        case appVersion = "app_version"
+        case platform
+        case locale
+        case route
+    }
+}
+
+public struct FeedbackSubmissionAcceptedResponse: Codable, Equatable, Sendable {
+    public let id: String
+    public let requestID: String?
+
+    public init(id: String, requestID: String?) {
+        self.id = id
+        self.requestID = requestID
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case requestID = "request_id"
+    }
+}
+
+public struct FeedbackValidationErrorResponse: Codable, Equatable, Sendable {
+    public let error: String
+    public let message: String?
+    public let requestID: String?
+    public let fieldErrors: [String: String]
+
+    public init(
+        error: String,
+        message: String?,
+        requestID: String?,
+        fieldErrors: [String: String]
+    ) {
+        self.error = error
+        self.message = message
+        self.requestID = requestID
+        self.fieldErrors = fieldErrors
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case error
+        case message
+        case requestID = "request_id"
+        case fieldErrors = "field_errors"
+    }
+}

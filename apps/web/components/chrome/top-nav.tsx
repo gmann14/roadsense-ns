@@ -3,12 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
+
 const links: Array<{ href: string; label: string }> = [
   { href: "/", label: "Map" },
   { href: "/reports/worst-roads", label: "Worst Roads" },
   { href: "/reports/potholes", label: "Potholes" },
   { href: "/methodology", label: "Methodology" },
   { href: "/privacy", label: "Privacy" },
+  { href: "/privacy-and-counts", label: "Counts" },
 ];
 
 export function TopNav() {
@@ -53,6 +56,7 @@ export function TopNav() {
               {link.label}
             </Link>
           ))}
+          <FeedbackDialog triggerLabel="Send feedback" triggerClassName="top-nav-link" />
         </nav>
       </header>
     </>

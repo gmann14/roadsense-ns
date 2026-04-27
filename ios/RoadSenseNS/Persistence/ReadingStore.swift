@@ -23,6 +23,119 @@ struct DriveSessionFragmentRepairSummary: Equatable {
     )
 }
 
+struct DriveSummary: Identifiable, Equatable {
+    let id: UUID
+    let startedAt: Date
+    let endedAt: Date?
+    let isSealed: Bool
+    let acceptedReadingCount: Int
+    let privacyFilteredReadingCount: Int
+    let potholeCount: Int
+    let distanceKm: Double
+    let bbox: DriveBoundingBox?
+
+    var durationSeconds: TimeInterval? {
+        guard let endedAt else { return nil }
+        return endedAt.timeIntervalSince(startedAt)
+    }
+
+    var hasOnlyPrivacyFilteredData: Bool {
+        acceptedReadingCount == 0 && privacyFilteredReadingCount > 0
+    }
+}
+
+struct DriveBoundingBox: Equatable {
+    let minLatitude: Double
+    let minLongitude: Double
+    let maxLatitude: Double
+    let maxLongitude: Double
+}
+
+enum DriveStore {
+    static let earthRadiusMeters: Double = 6_371_000
+
+    @MainActor
+    static func makeSummary(session: DriveSessionRecord, readings: [ReadingRecord]) -> DriveSummary {
+        let accepted = readings.filter { $0.droppedByPrivacyZone == false }
+        let privacyFiltered = readings.count - accepted.count
+        let potholes = accepted.filter { $0.isPothole }.count
+
+        let distanceKm = haversineDistanceKm(coordinates: accepted.map { ($0.latitude, $0.longitude) })
+        let bbox = boundingBox(coordinates: accepted.map { ($0.latitude, $0.longitude) })
+            ?? boundingBox(from: session)
+
+        return DriveSummary(
+            id: session.id,
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            isSealed: session.isSealed,
+            acceptedReadingCount: accepted.count,
+            privacyFilteredReadingCount: privacyFiltered,
+            potholeCount: potholes,
+            distanceKm: distanceKm,
+            bbox: bbox
+        )
+    }
+
+    static func haversineDistanceKm(coordinates: [(Double, Double)]) -> Double {
+        guard coordinates.count > 1 else { return 0 }
+        var total: Double = 0
+        for index in 1..<coordinates.count {
+            total += haversineMeters(
+                latA: coordinates[index - 1].0,
+                lngA: coordinates[index - 1].1,
+                latB: coordinates[index].0,
+                lngB: coordinates[index].1
+            )
+        }
+        return total / 1_000.0
+    }
+
+    static func haversineMeters(latA: Double, lngA: Double, latB: Double, lngB: Double) -> Double {
+        let dLat = (latB - latA) * .pi / 180
+        let dLng = (lngB - lngA) * .pi / 180
+        let lat1 = latA * .pi / 180
+        let lat2 = latB * .pi / 180
+
+        let a = sin(dLat / 2) * sin(dLat / 2)
+            + sin(dLng / 2) * sin(dLng / 2) * cos(lat1) * cos(lat2)
+        let c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return earthRadiusMeters * c
+    }
+
+    static func boundingBox(coordinates: [(Double, Double)]) -> DriveBoundingBox? {
+        guard !coordinates.isEmpty else { return nil }
+        var minLat = coordinates[0].0
+        var maxLat = coordinates[0].0
+        var minLng = coordinates[0].1
+        var maxLng = coordinates[0].1
+        for (lat, lng) in coordinates.dropFirst() {
+            if lat < minLat { minLat = lat }
+            if lat > maxLat { maxLat = lat }
+            if lng < minLng { minLng = lng }
+            if lng > maxLng { maxLng = lng }
+        }
+        return DriveBoundingBox(
+            minLatitude: minLat,
+            minLongitude: minLng,
+            maxLatitude: maxLat,
+            maxLongitude: maxLng
+        )
+    }
+
+    @MainActor
+    static func boundingBox(from session: DriveSessionRecord) -> DriveBoundingBox? {
+        let endLatitude = session.endLatitude ?? session.startLatitude
+        let endLongitude = session.endLongitude ?? session.startLongitude
+        return DriveBoundingBox(
+            minLatitude: min(session.startLatitude, endLatitude),
+            minLongitude: min(session.startLongitude, endLongitude),
+            maxLatitude: max(session.startLatitude, endLatitude),
+            maxLongitude: max(session.startLongitude, endLongitude)
+        )
+    }
+}
+
 struct LocalDriveOverlayPoint: Equatable {
     let latitude: Double
     let longitude: Double
@@ -417,6 +530,52 @@ final class ReadingStore {
             context.delete(session)
         }
 
+        try context.save()
+    }
+
+    func recentDriveSummaries(limit: Int = 50) throws -> [DriveSummary] {
+        let context = ModelContext(container)
+        var descriptor = FetchDescriptor<DriveSessionRecord>(
+            sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = max(limit, 0)
+        let sessions = try context.fetch(descriptor)
+        guard !sessions.isEmpty else { return [] }
+
+        let sessionIDs = Set(sessions.map(\.id))
+        let readings = try context.fetch(
+            FetchDescriptor<ReadingRecord>(
+                sortBy: [SortDescriptor(\.recordedAt, order: .forward)]
+            )
+        ).filter { reading in
+            guard let id = reading.driveSessionID else { return false }
+            return sessionIDs.contains(id)
+        }
+
+        var grouped: [UUID: [ReadingRecord]] = [:]
+        for reading in readings {
+            guard let id = reading.driveSessionID else { continue }
+            grouped[id, default: []].append(reading)
+        }
+
+        return sessions.map { session in
+            DriveStore.makeSummary(session: session, readings: grouped[session.id] ?? [])
+        }
+    }
+
+    func deleteDriveSession(id: UUID) throws {
+        let context = ModelContext(container)
+        let readings = try context.fetch(
+            FetchDescriptor<ReadingRecord>(
+                predicate: #Predicate { $0.driveSessionID == id }
+            )
+        )
+        for reading in readings {
+            context.delete(reading)
+        }
+        if let session = try fetchDriveSession(id: id, in: context) {
+            context.delete(session)
+        }
         try context.save()
     }
 
