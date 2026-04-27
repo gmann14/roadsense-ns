@@ -11,6 +11,7 @@ enum PotholeActionSubmissionResult: Equatable {
 
 struct PotholePhotoCaptureContext: Equatable {
     let coordinateLabel: String
+    let locationSample: LocationSample
 }
 
 enum PotholePhotoSubmissionResult: Equatable {
@@ -311,13 +312,13 @@ final class AppModel {
             logger.error("failed to promote pending pothole actions: \(error.localizedDescription)")
         }
 
-        let chosenSample = potholeLocator.locate(
+        let reactionSample = potholeLocator.locate(
             tapTimestamp: now,
             recentSamples: locationService.recentSamples,
             latestSample: locationService.latestSample
         )
 
-        guard let chosenSample, hasUsableLocation(chosenSample, now: now) else {
+        guard let chosenSample = usableManualLocationSample(preferred: reactionSample, now: now) else {
             haptics.notification(.warning)
             return .unavailableLocation
         }
@@ -357,8 +358,7 @@ final class AppModel {
             return .unavailableLocation
         }
 
-        guard let sample = locationService.latestSample,
-              hasUsableLocation(sample, now: now) else {
+        guard let sample = freshestUsableLocationSample(now: now) else {
             return .unavailableLocation
         }
 
@@ -389,8 +389,7 @@ final class AppModel {
         for potholes: [SegmentPothole],
         now: Date = Date()
     ) -> SegmentPothole? {
-        guard let sample = locationService.latestSample,
-              hasFreshStoppedLocation(sample, now: now),
+        guard let sample = freshestStoppedLocationSample(now: now),
               !isInsidePrivacyZone(sample) else {
             return nil
         }
@@ -405,26 +404,26 @@ final class AppModel {
     }
 
     func potholePhotoCaptureContext(now: Date = Date()) -> PotholePhotoCaptureContext? {
-        guard let sample = locationService.latestSample,
-              hasUsableLocation(sample, now: now) else {
+        guard let sample = freshestUsableLocationSample(now: now) else {
             return nil
         }
 
         return PotholePhotoCaptureContext(
-            coordinateLabel: "Near \(formattedCoordinate(sample.latitude)), \(formattedCoordinate(sample.longitude))"
+            coordinateLabel: "Near \(formattedCoordinate(sample.latitude)), \(formattedCoordinate(sample.longitude))",
+            locationSample: sample
         )
     }
 
     func submitPotholePhoto(
         rawImageData: Data,
         segmentID: UUID? = nil,
-        now: Date = Date()
+        now: Date = Date(),
+        locationSample captureLocationSample: LocationSample? = nil
     ) async -> PotholePhotoSubmissionResult {
-        guard let sample = locationService.latestSample else {
-            return .unavailableLocation
-        }
-
-        guard hasUsableLocation(sample, now: now) else {
+        guard let sample = photoSubmissionLocationSample(
+            captureLocationSample: captureLocationSample,
+            now: now
+        ) else {
             return .unavailableLocation
         }
 
@@ -514,9 +513,53 @@ final class AppModel {
         return ageSeconds <= 10 && sample.horizontalAccuracyMeters <= 25
     }
 
+    private func hasRecoverablePhotoCaptureLocation(_ sample: LocationSample, now: Date) -> Bool {
+        let ageSeconds = now.timeIntervalSince1970 - sample.timestamp
+        return ageSeconds >= 0 && ageSeconds <= 120 && sample.horizontalAccuracyMeters <= 25
+    }
+
     private func hasFreshStoppedLocation(_ sample: LocationSample, now: Date) -> Bool {
         let ageSeconds = now.timeIntervalSince1970 - sample.timestamp
         return ageSeconds <= 10 && sample.speedKmh < 5
+    }
+
+    private func usableLocationSamples(now: Date) -> [LocationSample] {
+        ([locationService.latestSample].compactMap { $0 } + locationService.recentSamples)
+            .filter { hasUsableLocation($0, now: now) }
+    }
+
+    private func freshestUsableLocationSample(now: Date) -> LocationSample? {
+        usableLocationSamples(now: now).max { $0.timestamp < $1.timestamp }
+    }
+
+    private func freshestStoppedLocationSample(now: Date) -> LocationSample? {
+        usableLocationSamples(now: now)
+            .filter { hasFreshStoppedLocation($0, now: now) }
+            .max { $0.timestamp < $1.timestamp }
+    }
+
+    private func usableManualLocationSample(preferred: LocationSample?, now: Date) -> LocationSample? {
+        if let preferred, hasUsableLocation(preferred, now: now) {
+            return preferred
+        }
+
+        return freshestUsableLocationSample(now: now)
+    }
+
+    private func photoSubmissionLocationSample(
+        captureLocationSample: LocationSample?,
+        now: Date
+    ) -> LocationSample? {
+        if let sample = freshestUsableLocationSample(now: now) {
+            return sample
+        }
+
+        guard let captureLocationSample,
+              hasRecoverablePhotoCaptureLocation(captureLocationSample, now: now) else {
+            return nil
+        }
+
+        return captureLocationSample
     }
 
     private func isInsidePrivacyZone(_ sample: LocationSample) -> Bool {

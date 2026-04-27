@@ -120,7 +120,7 @@ struct SettingsView: View {
             iconSystemName: "lock.shield.fill",
             iconTint: DesignTokens.Palette.smooth,
             title: "Privacy",
-            subtitle: "Optional zones filter readings on-device before upload. Useful for home, work, or anywhere you stop often."
+            subtitle: "Optional zones filter drive samples on-device before upload. Useful for home, work, or anywhere you stop often."
         ) {
             Button("Manage privacy zones") {
                 dismiss()

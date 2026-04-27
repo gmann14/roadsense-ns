@@ -246,7 +246,7 @@ struct SegmentDetailSheet: View {
         sectionCard(title: "Trust") {
             VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
                 trustRow(
-                    label: "Readings",
+                    label: "Drive samples",
                     value: "\(segment.aggregate.totalReadings)"
                 )
                 Divider().overlay(DesignTokens.Palette.border)
@@ -284,10 +284,10 @@ struct SegmentDetailSheet: View {
                 .buttonStyle(.bordered)
                 .tint(DesignTokens.Palette.deep)
                 .accessibilityIdentifier("segmentDetail.add-photo")
-                .accessibilityHint("Opens the camera to attach a pothole photo for this road segment.")
+                .accessibilityHint("Opens the camera to attach a pothole photo for this road.")
 
                 if segment.potholes.isEmpty {
-                    Text("No nearby pothole markers are available for follow-up on this segment yet.")
+                    Text("No nearby pothole markers are available for follow-up on this road yet.")
                         .font(.system(size: 14))
                         .foregroundStyle(DesignTokens.Palette.inkMuted)
                         .fixedSize(horizontal: false, vertical: true)

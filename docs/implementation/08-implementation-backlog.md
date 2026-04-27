@@ -440,6 +440,7 @@ Post-MVP phases:
 - **Acceptance**
   - a first-time tester can tell whether RoadSense is recording, waiting, blocked, or uploading without opening Settings
   - stats describe drives/trips and km, not implementation-only segment counts
+- **Current repo note:** The remaining public iOS copy pass now avoids "accepted readings", "pending uploads", and "road segment" language in the primary stats/map/settings/detail surfaces. Stats and settings talk about trips, drive data, road data, and drive samples; low-level reading counts remain in diagnostics/code where they describe stored samples. Remaining work is grouped-trip stat validation beyond the current `UserStatsStore` tests and a real-device Dynamic Type/VoiceOver pass for the active-drive banner and mark/photo CTAs.
 
 ### B066 — Camera and manual-report fault isolation
 
@@ -457,6 +458,7 @@ Post-MVP phases:
 - **Acceptance**
   - no black camera screen without explanatory copy
   - no camera path can poison GPS state or disable manual pothole marking for the rest of a drive
+- **Current repo note:** Mark pothole, pothole follow-up, and photo capture now select the freshest usable buffered GPS sample instead of trusting a single latest sample. Photo submission also carries the capture-time GPS sample forward and accepts it for a short recovery window if live GPS falls stale while the camera is open. App-model tests cover buffered fallback for marking, buffered fallback for photo context, and capture-time fallback on submit. Remaining work is real-device camera open/cancel/submit validation, especially denied/restricted camera states and repeated camera dismissal during an active drive.
 
 ### B067 — Internal diagnostics and data offload tooling
 
@@ -471,6 +473,7 @@ Post-MVP phases:
   - expose the same key counts in Settings diagnostics for tester self-reporting
 - **Acceptance**
   - after a test drive, we can answer "what exists on phone?", "what landed in backend?", and "what is stale/pending?" from one repeatable workflow
+- **Current repo note:** `scripts/local-ios-quality-report.sh` now summarizes a copied `default.store` across road samples, roughness distribution, grouped trips, upload batch states, pothole marks, and photo reports. `scripts/test-local-ios-quality-report.sh` builds a deterministic SQLite fixture for the report shape. Settings already exposes collection state, last GPS sample, last driving signal, collection start/stop, bump candidate, trip upload waits, pothole mark waits, photo waits, failed retries, and last successful upload. Remaining work is writing each field-test offload/replay into `.context/` as part of the manual test workflow.
 
 ### B060 — Background execution and relaunch handling
 

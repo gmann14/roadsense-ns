@@ -98,9 +98,10 @@ struct MapScreen: View {
                     },
                     onSubmit: { data in
                         let segmentID = scopedPhotoSegmentID
+                        let locationSample = photoCaptureContext.locationSample
                         isShowingCamera = false
                         Task {
-                            await handlePhotoSubmit(data, segmentID: segmentID)
+                            await handlePhotoSubmit(data, segmentID: segmentID, locationSample: locationSample)
                         }
                     }
                 )
@@ -727,7 +728,7 @@ struct MapScreen: View {
         if model.userStatsSummary.pendingTripUploadCount > 0 {
             return "\(model.userStatsSummary.pendingTripUploadCount) \(model.userStatsSummary.pendingTripUploadCount == 1 ? "trip" : "trips") waiting to upload"
         }
-        if model.pendingUploadCount > 0 { return "\(model.pendingUploadCount) uploads waiting" }
+        if model.pendingUploadCount > 0 { return "\(model.pendingUploadCount) updates waiting to upload" }
         if model.userStatsSummary.acceptedReadingCount == 0 { return "Start driving to track road quality." }
         return "Watching for your next drive."
     }
@@ -856,9 +857,13 @@ struct MapScreen: View {
         selectedSegment = nil
     }
 
-    private func handlePhotoSubmit(_ data: Data, segmentID: UUID?) async {
+    private func handlePhotoSubmit(_ data: Data, segmentID: UUID?, locationSample: LocationSample?) async {
         let feedback: PotholeFeedback
-        switch await model.submitPotholePhoto(rawImageData: data, segmentID: segmentID) {
+        switch await model.submitPotholePhoto(
+            rawImageData: data,
+            segmentID: segmentID,
+            locationSample: locationSample
+        ) {
         case .queued:
             feedback = PotholeFeedback(
                 title: "Photo queued",

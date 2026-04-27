@@ -172,6 +172,45 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(records.first?.uploadState, .pendingUndo)
     }
 
+    func testMarkPotholeFallsBackToFreshUsableBufferedLocation() throws {
+        let defaults = try makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let unusableClosestSample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.75,
+            latitude: 44.1,
+            longitude: -63.1,
+            horizontalAccuracyMeters: 80,
+            speedKmh: 48,
+            headingDegrees: 180
+        )
+        let usableBufferedSample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 2,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 48,
+            headingDegrees: 180
+        )
+        let container = try makeContainer(
+            locationService: TestLocationService(
+                latestSample: unusableClosestSample,
+                recentSamples: [usableBufferedSample, unusableClosestSample]
+            )
+        )
+
+        let model = AppModel(container: container, defaults: defaults)
+        let result = model.markPothole(now: now)
+
+        guard case .queued = result else {
+            return XCTFail("Expected queued pothole action from usable buffered GPS sample")
+        }
+
+        let context = ModelContext(container.modelContainer)
+        let record = try XCTUnwrap(context.fetch(FetchDescriptor<PotholeActionRecord>()).first)
+        XCTAssertEqual(record.latitude, usableBufferedSample.latitude, accuracy: 0.000001)
+        XCTAssertEqual(record.longitude, usableBufferedSample.longitude, accuracy: 0.000001)
+    }
+
     func testMarkPotholeRejectsStaleLocation() throws {
         let defaults = try makeDefaults()
         let now = Date(timeIntervalSince1970: 1_713_000_000)
@@ -461,6 +500,75 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(reports.first).latitude, sample.latitude, accuracy: 0.000001)
         XCTAssertEqual(try XCTUnwrap(reports.first).longitude, sample.longitude, accuracy: 0.000001)
         XCTAssertEqual(reports.first?.uploadState, .pendingMetadata)
+    }
+
+    func testPhotoCaptureContextUsesFreshUsableBufferedLocationWhenLatestIsUnusable() throws {
+        let defaults = try makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let unusableLatestSample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.2,
+            latitude: 44.1,
+            longitude: -63.1,
+            horizontalAccuracyMeters: 90,
+            speedKmh: 0,
+            headingDegrees: 180
+        )
+        let usableBufferedSample = LocationSample(
+            timestamp: now.timeIntervalSince1970 - 1.5,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 0,
+            headingDegrees: 180
+        )
+        let container = try makeContainer(
+            locationService: TestLocationService(
+                latestSample: unusableLatestSample,
+                recentSamples: [usableBufferedSample, unusableLatestSample]
+            )
+        )
+        let model = AppModel(container: container, defaults: defaults)
+
+        let context = try XCTUnwrap(model.potholePhotoCaptureContext(now: now))
+
+        XCTAssertEqual(context.locationSample, usableBufferedSample)
+        XCTAssertTrue(context.coordinateLabel.contains("44.6488"))
+    }
+
+    func testSubmitPotholePhotoUsesCaptureLocationWhenLiveLocationFallsStale() async throws {
+        let defaults = try makeDefaults()
+        let captureTime = Date(timeIntervalSince1970: 1_713_000_000)
+        let submitTime = captureTime.addingTimeInterval(45)
+        let captureSample = LocationSample(
+            timestamp: captureTime.timeIntervalSince1970,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: 0,
+            headingDegrees: 180
+        )
+        let container = try makeContainer(
+            locationService: TestLocationService(
+                latestSample: nil,
+                recentSamples: []
+            )
+        )
+        let model = AppModel(container: container, defaults: defaults)
+
+        let result = await model.submitPotholePhoto(
+            rawImageData: try makeJPEGData(),
+            now: submitTime,
+            locationSample: captureSample
+        )
+
+        guard case .queued = result else {
+            return XCTFail("Expected queued pothole photo from capture-time GPS sample")
+        }
+
+        let context = ModelContext(container.modelContainer)
+        let report = try XCTUnwrap(context.fetch(FetchDescriptor<PotholeReportRecord>()).first)
+        XCTAssertEqual(report.latitude, captureSample.latitude, accuracy: 0.000001)
+        XCTAssertEqual(report.longitude, captureSample.longitude, accuracy: 0.000001)
     }
 
     func testSubmitPotholePhotoRejectsPrivacyZoneOverlap() async throws {

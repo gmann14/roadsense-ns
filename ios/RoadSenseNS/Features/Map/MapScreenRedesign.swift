@@ -160,9 +160,10 @@ struct MapScreenRedesign: View {
                     },
                     onSubmit: { data in
                         let segmentID = scopedPhotoSegmentID
+                        let locationSample = photoCaptureContext.locationSample
                         isShowingCamera = false
                         Task {
-                            await handlePhotoSubmit(data, segmentID: segmentID)
+                            await handlePhotoSubmit(data, segmentID: segmentID, locationSample: locationSample)
                         }
                     }
                 )
@@ -597,9 +598,13 @@ struct MapScreenRedesign: View {
         selectedSegment = nil
     }
 
-    private func handlePhotoSubmit(_ data: Data, segmentID: UUID?) async {
+    private func handlePhotoSubmit(_ data: Data, segmentID: UUID?, locationSample: LocationSample?) async {
         let feedback: RedesignRejectionFeedback?
-        switch await model.submitPotholePhoto(rawImageData: data, segmentID: segmentID) {
+        switch await model.submitPotholePhoto(
+            rawImageData: data,
+            segmentID: segmentID,
+            locationSample: locationSample
+        ) {
         case .queued:
             feedback = RedesignRejectionFeedback(
                 title: BrandVoice.Failures.photoQueuedTitle,

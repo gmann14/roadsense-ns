@@ -116,7 +116,7 @@ struct StatsView: View {
             )
             Divider()
             statRow(
-                label: "Road readings saved",
+                label: "Road data saved",
                 value: "\(summary.acceptedReadingCount)",
                 identifier: "stats.accepted-readings"
             )
@@ -150,9 +150,9 @@ struct StatsView: View {
     private var explainerCard: some View {
         sectionCard(title: "How to read this") {
             VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
-                Text("A trip can contain many internal road readings. RoadSense groups short detector pauses so your stats line up with how you think about a drive.")
-                Text("Only the mid-drive readings that survive endpoint trimming become uploadable.")
-                Text("Privacy-filtered readings never leave the device. That count exists so you can confirm your zones are working on top of the default endpoint trimming.")
+                Text("A trip can contain many road-quality samples. RoadSense groups short detector pauses so your stats line up with how you think about a drive.")
+                Text("Only the mid-drive samples that survive endpoint trimming become uploadable.")
+                Text("Privacy-filtered samples never leave the device. That count exists so you can confirm your zones are working on top of the default endpoint trimming.")
             }
             .font(.system(size: 14))
             .foregroundStyle(DesignTokens.Palette.inkMuted)

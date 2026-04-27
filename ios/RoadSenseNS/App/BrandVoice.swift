@@ -267,25 +267,25 @@ enum BrandVoice {
         static let technicalDetailsDisclosure = NSLocalizedString(
             "stats.technicalDetails.disclosure",
             value: "Technical details",
-            comment: "Disclosure label hiding the readings/quality breakdown."
+            comment: "Disclosure label hiding the drive-sample quality breakdown."
         )
 
         static let acceptedReadingsLabel = NSLocalizedString(
             "stats.acceptedReadings.label",
-            value: "Accepted readings",
-            comment: "Label for the count of readings that survived quality filters."
+            value: "Road data saved",
+            comment: "Label for the count of road-quality samples that survived quality filters."
         )
 
         static let pendingUploadsLabel = NSLocalizedString(
             "stats.pendingUploads.label",
-            value: "Pending uploads",
-            comment: "Label for the count of readings queued for upload."
+            value: "Trips waiting to upload",
+            comment: "Label for the count of trips queued for upload."
         )
 
         static let privacyFilteredLabel = NSLocalizedString(
             "stats.privacyFiltered.label",
             value: "Privacy-filtered",
-            comment: "Label for the count of readings filtered out by privacy rules."
+            comment: "Label for the count of drive samples filtered out by privacy rules."
         )
 
         static let potholesFlaggedLabel = NSLocalizedString(
@@ -348,7 +348,7 @@ enum BrandVoice {
 
         static let privacySubtitle = NSLocalizedString(
             "settings.privacy.subtitle",
-            value: "Optional zones filter readings on-device before upload. Useful for home, work, or anywhere you stop often.",
+            value: "Optional zones filter drive samples on-device before upload. Useful for home, work, or anywhere you stop often.",
             comment: "Subtitle of the privacy settings card."
         )
 
@@ -378,7 +378,7 @@ enum BrandVoice {
 
         static let aboutBody = NSLocalizedString(
             "settings.about.body",
-            value: "RoadSense NS quietly measures road roughness while you drive and uploads only readings that pass quality and privacy filters. Background collection improves continuity and can be turned off any time.",
+            value: "RoadSense NS quietly measures road roughness while you drive and uploads only road data that passes quality and privacy filters. Background collection improves continuity and can be turned off any time.",
             comment: "Body of the About settings card."
         )
 
@@ -390,7 +390,7 @@ enum BrandVoice {
 
         static let dataManagementSubtitle = NSLocalizedString(
             "settings.dataManagement.subtitle",
-            value: "Clears locally stored readings, pothole reports, upload queue, and stats. Your privacy zones stay in place.",
+            value: "Clears locally stored drive data, pothole reports, upload queue, and stats. Your privacy zones stay in place.",
             comment: "Subtitle of the data deletion settings card."
         )
 

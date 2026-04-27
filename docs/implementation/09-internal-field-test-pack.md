@@ -1,6 +1,6 @@
 # 09 — Internal Field-Test Pack
 
-*Last updated: 2026-04-23*
+*Last updated: 2026-04-26*
 
 Covers: the concrete checklist for internal dogfooding once Apple signing/TestFlight are available. This is intentionally operational rather than architectural: the goal is that a tester can run through it without inventing their own procedure.
 
@@ -173,6 +173,14 @@ For app crashes or suspicious upload states, also pull:
 - system crash logs for `RoadSense NS`
 - local Supabase counts for the same time window
 - the processed batch IDs used for any manual replay
+
+After pulling a store, run:
+
+```bash
+./scripts/local-ios-quality-report.sh path/to/default.store
+```
+
+The report should be attached or pasted into the `.context/` offload note for that run. It summarizes road samples, last sample time, upload-ready/pending/uploaded counts, endpoint/privacy drops, grouped trips, upload batches, pothole marks, and photo reports.
 
 If a bug cannot be reduced to a simulator harness fixture, it is not fully closed.
 

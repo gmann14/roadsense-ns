@@ -63,7 +63,7 @@ struct PrivacyZonesView: View {
                 Button("Delete \(zone.label)", role: .destructive) { deleteZone(zone) }
                 Button("Cancel", role: .cancel) { zoneToDelete = nil }
             } message: { zone in
-                Text("Readings inside \(zone.label) will again be uploaded after deletion.")
+                Text("Drive samples inside \(zone.label) will again be uploaded after deletion.")
             }
         }
     }
@@ -89,7 +89,7 @@ struct PrivacyZonesView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(DesignTokens.Palette.ink)
 
-            Text("RoadSense filters readings inside this radius before upload. Keep it large enough to cover driveways, side streets, and common arrival paths.")
+            Text("RoadSense filters drive samples inside this radius before upload. Keep it large enough to cover driveways, side streets, and common arrival paths.")
                 .font(.system(size: 13))
                 .foregroundStyle(DesignTokens.Palette.inkMuted)
                 .fixedSize(horizontal: false, vertical: true)
