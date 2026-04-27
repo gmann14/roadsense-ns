@@ -6,8 +6,8 @@ Current B011 pipeline:
 
 - `local-backend-up.sh` — starts local Supabase, revives the edge runtime if it died, and smoke-checks `/functions/v1/health` plus tiles
 - `local-quality-report.sh` — prints the latest processed batches, roughness-score distribution, aggregate coverage, and confidence buckets from the local backend
-- `local-ios-quality-report.sh` — prints road-sample counts, roughness distribution, grouped trips, upload batch states, pothole marks, and photo reports from a copied iPhone SwiftData store
-- `test-local-ios-quality-report.sh` — smoke-tests the local iOS store report against a deterministic SQLite fixture
+- `local-ios-quality-report.sh` — prints road-sample counts, roughness distribution, grouped trips, upload batch states, pothole marks, and photo reports from a copied iPhone SwiftData store, plus a "Since last report" delta against a saved snapshot so you can see what each new drive actually added
+- `test-local-ios-quality-report.sh` — smoke-tests the local iOS store report against a deterministic SQLite fixture, including baseline / no-change / new-drive delta paths and the `--no-snapshot-update` and `--reset-snapshot` flags
 - `local-web-up.sh` — starts the public Next.js map locally against the local Supabase stack using the existing iOS Mapbox/anon secrets
 - `api-smoke.sh` — contract smoke for `/health`, `/stats`, and duplicate-safe `/upload-readings` against local or staging Edge Functions
 - `seeded-e2e-smoke.sh` — seeded local/staging smoke that inserts a synthetic paved segment, uploads three matching batches, refreshes stats, and verifies segment detail plus tile emission
@@ -58,6 +58,31 @@ export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
 export DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 REGION_KEY=nova-scotia ./scripts/osm-import.sh
 ```
+
+## Post-drive iPhone offload
+
+After a calibration drive, copy the device store into `.context/device-live-latest/` and run:
+
+```bash
+./scripts/local-ios-quality-report.sh
+```
+
+The first run prints the cumulative store report and writes a snapshot at
+`<store>.report-snapshot`. Each later run prints a "Since last report" delta at
+the top — new road samples, new privacy-filtered samples, new sensor pothole
+candidates, new manual marks, new uploaded batches — and then refreshes the
+snapshot. So the typical workflow is:
+
+1. Drive.
+2. Copy the device store into `.context/device-live-latest/`.
+3. Run the script. The "Since last report" section is what happened on this drive.
+4. Repeat after the next drive.
+
+Useful flags:
+
+- `--no-snapshot-update` — print deltas without overwriting the snapshot, e.g. when sharing two reports against the same baseline.
+- `--reset-snapshot` — discard the existing snapshot and treat this run as a new baseline.
+- `--snapshot-file <path>` — keep separate snapshots for distinct device pulls.
 
 ## Local backend bootstrap
 
