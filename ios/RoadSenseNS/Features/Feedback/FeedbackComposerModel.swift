@@ -158,7 +158,9 @@ final class FeedbackComposerModel: Identifiable {
 
     static func isValidEmail(_ candidate: String) -> Bool {
         guard !candidate.isEmpty else { return false }
-        guard let regex = try? NSRegularExpression(pattern: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$") else {
+        // \A and \z are absolute anchors; ^ and $ in NSRegularExpression match end-of-line by
+        // default, which would silently accept a trailing newline that the server would reject.
+        guard let regex = try? NSRegularExpression(pattern: "\\A[^\\s@]+@[^\\s@]+\\.[^\\s@]+\\z") else {
             return false
         }
         let range = NSRange(candidate.startIndex..<candidate.endIndex, in: candidate)

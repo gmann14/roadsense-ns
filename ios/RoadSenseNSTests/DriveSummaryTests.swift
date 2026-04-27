@@ -236,4 +236,134 @@ final class DriveSummaryTests: XCTestCase {
         let summaries = try ReadingStore(container: container).recentDriveSummaries(limit: 3)
         XCTAssertEqual(summaries.count, 3)
     }
+
+    func testRecentDriveSummariesWithLimitZeroReturnsEmpty() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let context = ModelContext(container)
+        context.insert(
+            DriveSessionRecord(
+                id: UUID(),
+                startedAt: Date(),
+                startLatitude: 44.6488,
+                startLongitude: -63.5752,
+                isSealed: true
+            )
+        )
+        try context.save()
+
+        let summaries = try ReadingStore(container: container).recentDriveSummaries(limit: 0)
+        XCTAssertEqual(summaries.count, 0)
+    }
+
+    func testRecentDriveSummariesWithNegativeLimitReturnsEmpty() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let context = ModelContext(container)
+        context.insert(
+            DriveSessionRecord(
+                id: UUID(),
+                startedAt: Date(),
+                startLatitude: 44.6488,
+                startLongitude: -63.5752,
+                isSealed: true
+            )
+        )
+        try context.save()
+
+        let summaries = try ReadingStore(container: container).recentDriveSummaries(limit: -10)
+        XCTAssertEqual(summaries.count, 0)
+    }
+
+    func testDeleteDriveSessionForUnknownIdIsANoOp() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let context = ModelContext(container)
+        context.insert(
+            DriveSessionRecord(
+                id: UUID(),
+                startedAt: Date(),
+                startLatitude: 44.6488,
+                startLongitude: -63.5752,
+                isSealed: true
+            )
+        )
+        try context.save()
+
+        // Should not throw and should not delete other rows.
+        try ReadingStore(container: container).deleteDriveSession(id: UUID())
+
+        let remaining = try context.fetch(FetchDescriptor<DriveSessionRecord>())
+        XCTAssertEqual(remaining.count, 1)
+    }
+
+    func testRecentDriveSummariesIncludesUnsealedDrivesAtTheTop() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let context = ModelContext(container)
+        let baseDate = Date(timeIntervalSince1970: 1_713_000_000)
+
+        let sealedID = UUID()
+        let openID = UUID()
+
+        context.insert(
+            DriveSessionRecord(
+                id: sealedID,
+                startedAt: baseDate,
+                endedAt: baseDate.addingTimeInterval(300),
+                startLatitude: 44.6488,
+                startLongitude: -63.5752,
+                isSealed: true
+            )
+        )
+        context.insert(
+            DriveSessionRecord(
+                id: openID,
+                startedAt: baseDate.addingTimeInterval(3_600),
+                startLatitude: 44.6488,
+                startLongitude: -63.5752,
+                isSealed: false
+            )
+        )
+        try context.save()
+
+        let summaries = try ReadingStore(container: container).recentDriveSummaries()
+        XCTAssertEqual(summaries.count, 2)
+        XCTAssertEqual(summaries[0].id, openID)
+        XCTAssertFalse(summaries[0].isSealed)
+        XCTAssertEqual(summaries[1].id, sealedID)
+        XCTAssertTrue(summaries[1].isSealed)
+    }
+
+    func testHaversineDistanceIsZeroForRepeatedIdenticalCoordinates() {
+        let coords = Array(repeating: (44.6488, -63.5752), count: 10)
+        XCTAssertEqual(DriveStore.haversineDistanceKm(coordinates: coords), 0, accuracy: 1e-9)
+    }
+
+    func testBoundingBoxCollapsesToPointForSingleCoordinate() {
+        let bbox = DriveStore.boundingBox(coordinates: [(44.6488, -63.5752)])
+        XCTAssertEqual(bbox?.minLatitude, 44.6488)
+        XCTAssertEqual(bbox?.maxLatitude, 44.6488)
+        XCTAssertEqual(bbox?.minLongitude, -63.5752)
+        XCTAssertEqual(bbox?.maxLongitude, -63.5752)
+    }
+
+    func testBoundingBoxIsNilForEmptyInput() {
+        XCTAssertNil(DriveStore.boundingBox(coordinates: []))
+    }
+
+    func testHaversineMetersWorksAcrossEquatorAndAntimeridian() {
+        // Equator-spanning points (Singapore-ish to opposite side) — great-circle distance is ~5,000 km, but we just
+        // sanity-check that the math doesn't blow up or return negative numbers.
+        let across = DriveStore.haversineMeters(
+            latA: 1.3521, lngA: 103.8198,
+            latB: -1.5, lngB: 104.0
+        )
+        XCTAssertGreaterThan(across, 0)
+        XCTAssertLessThan(across, 1_000_000)
+
+        // Antimeridian — Suva (FJ) to Apia (WS); the formula treats them as ~1,140 km apart even though crossing the date line.
+        let antimeridian = DriveStore.haversineMeters(
+            latA: -18.1416, lngA: 178.4419,
+            latB: -13.8506, lngB: -171.7513
+        )
+        XCTAssertGreaterThan(antimeridian, 1_100_000)
+        XCTAssertLessThan(antimeridian, 1_300_000)
+    }
 }

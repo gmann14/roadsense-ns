@@ -22,8 +22,15 @@ function formatCount(value: number | null | undefined): string {
 }
 
 function formatKilometres(value: number | null | undefined): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     return "—";
+  }
+  if (value < 1) {
+    const metres = Math.max(0, Math.round(value * 1_000));
+    return `${numberFormatter.format(metres)} m`;
+  }
+  if (value < 10) {
+    return `${value.toFixed(1)} km`;
   }
   return `${numberFormatter.format(Math.round(value))} km`;
 }

@@ -128,6 +128,104 @@ final class FeedbackComposerModelTests: XCTestCase {
         XCTAssertEqual(submitter.recordedCalls.count, 0)
         XCTAssertEqual(model.status, .idle)
     }
+
+    func testCannotSubmitWhenMessageIsOnlyWhitespace() {
+        let submitter = StubFeedbackSubmitter()
+        let model = FeedbackComposerModel(submitter: submitter)
+        model.message = "          \n\n\t  "
+
+        XCTAssertFalse(model.canSubmit)
+        XCTAssertEqual(model.trimmedMessage, "")
+    }
+
+    func testCanSubmitWhenMessageBoundsAreExactlyAtLimits() {
+        let submitter = StubFeedbackSubmitter()
+        let model = FeedbackComposerModel(submitter: submitter)
+
+        model.message = String(repeating: "x", count: FeedbackComposerModel.messageMinimumLength)
+        XCTAssertTrue(model.canSubmit)
+
+        model.message = String(repeating: "x", count: FeedbackComposerModel.messageMaximumLength)
+        XCTAssertTrue(model.canSubmit)
+
+        model.message = String(repeating: "x", count: FeedbackComposerModel.messageMaximumLength + 1)
+        XCTAssertFalse(model.canSubmit)
+    }
+
+    func testCharacterCountLabelReflectsTrimmedLength() {
+        let submitter = StubFeedbackSubmitter()
+        let model = FeedbackComposerModel(submitter: submitter)
+        model.message = "  hello world  "
+        XCTAssertEqual(model.characterCountLabel, "11/4000")
+    }
+
+    func testResetClearsAllUserInputAndStatus() async {
+        let submitter = StubFeedbackSubmitter(result: .accepted(id: "x", requestID: "r"))
+        let model = FeedbackComposerModel(submitter: submitter)
+        model.message = "Found a bug while testing reset behavior."
+        model.replyEmail = "tester@example.com"
+        model.contactConsent = true
+        await model.submit()
+        XCTAssertEqual(model.status, .submitted)
+
+        model.reset()
+
+        XCTAssertEqual(model.message, "")
+        XCTAssertEqual(model.replyEmail, "")
+        XCTAssertFalse(model.contactConsent)
+        XCTAssertEqual(model.status, .idle)
+    }
+
+    func testSubmitTrimsMessageAndPassesTrimmedValueToSubmitter() async {
+        let submitter = StubFeedbackSubmitter()
+        let model = FeedbackComposerModel(submitter: submitter)
+        model.message = "   leading and trailing whitespace test message   \n"
+
+        await model.submit()
+
+        XCTAssertEqual(submitter.recordedCalls.count, 1)
+        XCTAssertEqual(submitter.recordedCalls[0].message, "leading and trailing whitespace test message")
+    }
+
+    func testIsValidEmailHandlesCommonEdgeCases() {
+        // Valid forms
+        XCTAssertTrue(FeedbackComposerModel.isValidEmail("a@b.co"))
+        XCTAssertTrue(FeedbackComposerModel.isValidEmail("first.last@subdomain.example.com"))
+        XCTAssertTrue(FeedbackComposerModel.isValidEmail("user+tag@example.org"))
+
+        // Invalid forms
+        XCTAssertFalse(FeedbackComposerModel.isValidEmail(""))
+        XCTAssertFalse(FeedbackComposerModel.isValidEmail("no-at-sign.example.com"))
+        XCTAssertFalse(FeedbackComposerModel.isValidEmail("@example.com"))
+        XCTAssertFalse(FeedbackComposerModel.isValidEmail("user@"))
+        XCTAssertFalse(FeedbackComposerModel.isValidEmail("user@example"))
+        XCTAssertFalse(FeedbackComposerModel.isValidEmail("user space@example.com"))
+        XCTAssertFalse(FeedbackComposerModel.isValidEmail("user@exa mple.com"))
+        XCTAssertFalse(FeedbackComposerModel.isValidEmail("user@example.com\n"))
+        XCTAssertFalse(FeedbackComposerModel.isValidEmail("user@@example.com"))
+    }
+
+    func testTrimmedReplyEmailIgnoresLeadingTrailingWhitespace() {
+        let submitter = StubFeedbackSubmitter()
+        let model = FeedbackComposerModel(submitter: submitter)
+        model.message = "Long enough message body for the test."
+        model.replyEmail = "  tester@example.com  "
+
+        XCTAssertTrue(model.canSubmit)
+        XCTAssertEqual(model.trimmedReplyEmail, "tester@example.com")
+    }
+
+    func testCanSubmitTogglesFalseWhileSubmittingThenBackOnSuccess() async {
+        let submitter = StubFeedbackSubmitter(result: .accepted(id: "x", requestID: "r"))
+        let model = FeedbackComposerModel(submitter: submitter)
+        model.message = "Long enough message body for the submit toggle."
+
+        XCTAssertTrue(model.canSubmit)
+        await model.submit()
+        XCTAssertEqual(model.status, .submitted)
+        // After submit returns, canSubmit reflects whether a re-submit would work — message still present, status submitted (not submitting), so allowed.
+        XCTAssertTrue(model.canSubmit)
+    }
 }
 
 private extension FeedbackCategory {

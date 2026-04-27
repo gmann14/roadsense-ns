@@ -534,11 +534,16 @@ final class ReadingStore {
     }
 
     func recentDriveSummaries(limit: Int = 50) throws -> [DriveSummary] {
+        // SwiftData treats fetchLimit == 0 as "unlimited" (Core Data semantics), so a caller
+        // asking for "give me zero drives" would silently get every drive in the store. Short
+        // circuit before constructing the descriptor.
+        guard limit > 0 else { return [] }
+
         let context = ModelContext(container)
         var descriptor = FetchDescriptor<DriveSessionRecord>(
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)]
         )
-        descriptor.fetchLimit = max(limit, 0)
+        descriptor.fetchLimit = limit
         let sessions = try context.fetch(descriptor)
         guard !sessions.isEmpty else { return [] }
 
