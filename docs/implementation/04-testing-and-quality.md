@@ -292,6 +292,7 @@ Current early-device snapshot (2026-04-25, single tester, `.context/device-live-
 - 602 accepted readings, 27.9 km, 7 grouped trips after merging short detector fragments
 - roughness RMS: p50 `0.057`, p75 `0.081`, p90 `0.104`, p95 `0.119`, max `0.194`
 - current backend category thresholds produce: 43.7% smooth, 37.2% fair, 15.6% rough, 3.5% very rough
+- Field-test note: the 2026-04-26 upload came from a Mazda 3 hatchback, while the earlier baseline drives came from a Tesla Model Y. Treat cross-day score differences as vehicle-confounded until we have repeated passes on the same road from both vehicles.
 
 Use `./scripts/local-ios-quality-report.sh [path/to/default.store]` after each copied device dump to compare future drives against this baseline. Do not retune thresholds from this one dataset alone; wait for the known-road loop above plus repeated passes over at least one intentionally rough road.
 
