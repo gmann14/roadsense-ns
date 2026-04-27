@@ -348,6 +348,46 @@ final class DriveSummaryTests: XCTestCase {
         XCTAssertNil(DriveStore.boundingBox(coordinates: []))
     }
 
+    func testStaticMapURLEncodesCenterZoomAndStrippedChrome() throws {
+        let bbox = DriveBoundingBox(
+            minLatitude: 44.6488,
+            minLongitude: -63.5752,
+            maxLatitude: 44.6520,
+            maxLongitude: -63.5710
+        )
+        let url = try XCTUnwrap(
+            DrivesListView.staticMapURL(
+                for: bbox,
+                token: "pk.test-token",
+                widthPoints: 320,
+                heightPoints: 100
+            )
+        )
+
+        XCTAssertEqual(url.scheme, "https")
+        XCTAssertEqual(url.host, "api.mapbox.com")
+        XCTAssertTrue(url.path.contains("/styles/v1/mapbox/light-v11/static/"))
+        // Center coords (averaged) and zoom embedded in the path
+        XCTAssertTrue(url.path.contains("-63.57310,44.65040"))
+        XCTAssertTrue(url.path.contains("/320x100@2x"))
+
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let dict = Dictionary(uniqueKeysWithValues: query.map { ($0.name, $0.value ?? "") })
+        XCTAssertEqual(dict["access_token"], "pk.test-token")
+        XCTAssertEqual(dict["logo"], "false")
+        XCTAssertEqual(dict["attribution"], "false")
+    }
+
+    func testStaticMapURLReturnsNilForEmptyToken() {
+        let bbox = DriveBoundingBox(
+            minLatitude: 44.6488,
+            minLongitude: -63.5752,
+            maxLatitude: 44.6520,
+            maxLongitude: -63.5710
+        )
+        XCTAssertNil(DrivesListView.staticMapURL(for: bbox, token: "", widthPoints: 320, heightPoints: 100))
+    }
+
     func testHaversineMetersWorksAcrossEquatorAndAntimeridian() {
         // Equator-spanning points (Singapore-ish to opposite side) — great-circle distance is ~5,000 km, but we just
         // sanity-check that the math doesn't blow up or return negative numbers.

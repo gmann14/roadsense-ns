@@ -593,4 +593,84 @@ final class PotholeActionStoreTests: XCTestCase {
         XCTAssertEqual(coordinates.last?.latitude, pendingUpload.latitude)
         XCTAssertEqual(coordinates.last?.longitude, pendingUpload.longitude)
     }
+
+    func testPrepareNextActionDoesNotLetANewMarkCutInFrontOfAnOlderRetry() throws {
+        // Regression for the drainer ordering bug: if an older mark has been
+        // attempted and is sitting on a short backoff (nextAttemptAt = past),
+        // a freshly-queued mark with nextAttemptAt = nil must NOT jump to the
+        // front of the drain queue. The prior implementation sorted by
+        // nextAttemptAt with nil treated as .distantPast, which caused exactly
+        // this starvation under sustained network failure.
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let context = ModelContext(container)
+
+        let now = Date(timeIntervalSince1970: 1_713_000_100.0)
+        let earlierCreatedAt = Date(timeIntervalSince1970: 1_713_000_000.0)
+        let laterCreatedAt = Date(timeIntervalSince1970: 1_713_000_050.0)
+
+        let olderRetrying = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            accuracyM: 6,
+            recordedAt: earlierCreatedAt,
+            createdAt: earlierCreatedAt,
+            uploadState: .pendingUpload,
+            uploadAttemptCount: 1,
+            lastAttemptAt: earlierCreatedAt.addingTimeInterval(60),
+            nextAttemptAt: earlierCreatedAt.addingTimeInterval(61)
+        )
+        let newerFresh = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6490,
+            longitude: -63.5750,
+            accuracyM: 5,
+            recordedAt: laterCreatedAt,
+            createdAt: laterCreatedAt,
+            uploadState: .pendingUpload,
+            uploadAttemptCount: 0
+        )
+        context.insert(olderRetrying)
+        context.insert(newerFresh)
+        try context.save()
+
+        guard case let .ready(action) = try store.prepareNextAction(now: now) else {
+            XCTFail("Expected the older retrying mark to be returned first")
+            return
+        }
+        XCTAssertEqual(
+            action.id,
+            olderRetrying.id,
+            "Older mark with explicit backoff must drain before the freshly created one"
+        )
+    }
+
+    func testPrepareNextActionStillRespectsActiveBackoffWindow() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let context = ModelContext(container)
+
+        let now = Date(timeIntervalSince1970: 1_713_000_100.0)
+        let blocked = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            accuracyM: 6,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            uploadState: .pendingUpload,
+            uploadAttemptCount: 2,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_080.0),
+            nextAttemptAt: now.addingTimeInterval(120) // 2 min in the future
+        )
+        context.insert(blocked)
+        try context.save()
+
+        guard case let .blocked(nextAttemptAt) = try store.prepareNextAction(now: now) else {
+            XCTFail("Expected blocked decision when the only eligible record is in backoff")
+            return
+        }
+        XCTAssertEqual(nextAttemptAt, now.addingTimeInterval(120))
+    }
 }

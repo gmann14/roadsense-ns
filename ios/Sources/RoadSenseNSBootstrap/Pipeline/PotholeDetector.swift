@@ -42,8 +42,12 @@ public struct PotholeDetector: Sendable {
         }
     }
 
-    public var spikeThresholdG: Double = 2.0
-    public var dipThresholdG: Double = -0.5
+    // Defaults tuned for typical NS driving in a passenger car: a moderate
+    // pothole strike at 50–80 km/h registers ~0.8–1.6G, deep ones 2G+. The
+    // dip-then-spike pattern keeps false positives down (smooth speed bumps
+    // rise without dipping first).
+    public var spikeThresholdG: Double = 1.0
+    public var dipThresholdG: Double = -0.3
     public var historyWindowSize: Int = 50
     public var dipLookbackSampleCount: Int = 5
 

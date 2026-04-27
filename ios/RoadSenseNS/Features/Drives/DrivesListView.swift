@@ -2,6 +2,8 @@ import SwiftUI
 
 struct DrivesListView: View {
     let readingStore: ReadingStore
+    var mapboxAccessToken: String? = nil
+    var onOpenOnMap: ((DriveBoundingBox) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var sections: [DriveListSection] = []
@@ -116,6 +118,10 @@ struct DrivesListView: View {
 
     private func driveRow(_ drive: DriveSummary) -> some View {
         VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+            if let bbox = drive.bbox, let url = staticMapURL(for: bbox) {
+                miniMapPreview(url: url)
+            }
+
             HStack(alignment: .firstTextBaseline) {
                 Text(timeRangeLabel(drive))
                     .font(.system(size: 17, weight: .semibold, design: .rounded))
@@ -154,7 +160,23 @@ struct DrivesListView: View {
             }
 
             HStack {
+                if let onOpenOnMap, let bbox = drive.bbox {
+                    Button {
+                        dismiss()
+                        onOpenOnMap(bbox)
+                    } label: {
+                        Label("Open on map", systemImage: "map")
+                            .font(.system(size: 13, weight: .semibold))
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(DesignTokens.Palette.deep)
+                    .accessibilityIdentifier("drives.row.open-on-map")
+                }
+
                 Spacer()
+
                 Button(role: .destructive) {
                     deleteCandidate = drive
                 } label: {
@@ -230,6 +252,102 @@ struct DrivesListView: View {
         } catch {
             deleteError = error.localizedDescription
             deleteCandidate = nil
+        }
+    }
+
+    private func miniMapPreview(url: URL) -> some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .empty:
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                    .fill(DesignTokens.Palette.canvasSunken)
+                    .overlay(ProgressView().tint(DesignTokens.Palette.inkMuted))
+            case let .success(image):
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            case .failure:
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous)
+                    .fill(DesignTokens.Palette.canvasSunken)
+                    .overlay(
+                        Image(systemName: "map")
+                            .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    )
+            @unknown default:
+                EmptyView()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 100)
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
+        .accessibilityIdentifier("drives.row.mini-map")
+    }
+
+    func staticMapURL(for bbox: DriveBoundingBox) -> URL? {
+        guard let token = mapboxAccessToken, !token.isEmpty else { return nil }
+        return DrivesListView.staticMapURL(
+            for: bbox,
+            token: token,
+            widthPoints: 320,
+            heightPoints: 100
+        )
+    }
+
+    static func staticMapURL(
+        for bbox: DriveBoundingBox,
+        token: String,
+        widthPoints: Int,
+        heightPoints: Int
+    ) -> URL? {
+        guard !token.isEmpty else { return nil }
+
+        // Mapbox Static Images caps width and height at 1280; 2x devices already
+        // get sharp rendering via the @2x flag.
+        let width = max(60, min(widthPoints, 1280))
+        let height = max(60, min(heightPoints, 1280))
+
+        let center = (
+            lat: (bbox.minLatitude + bbox.maxLatitude) / 2,
+            lng: (bbox.minLongitude + bbox.maxLongitude) / 2
+        )
+        let zoom = staticMapZoom(for: bbox)
+
+        // 5 decimal places ≈ 1 m precision; keeps URLs short and AsyncImage's
+        // URL-based cache more effective.
+        func fmt(_ value: Double) -> String {
+            String(format: "%.5f", value)
+        }
+
+        let style = "mapbox/light-v11"
+        let lon = fmt(center.lng)
+        let lat = fmt(center.lat)
+        let zoomString = String(format: "%.1f", zoom)
+        let path = "/styles/v1/\(style)/static/\(lon),\(lat),\(zoomString),0,0/\(width)x\(height)@2x"
+
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "api.mapbox.com"
+        components.path = path
+        components.queryItems = [
+            URLQueryItem(name: "access_token", value: token),
+            URLQueryItem(name: "logo", value: "false"),
+            URLQueryItem(name: "attribution", value: "false")
+        ]
+        return components.url
+    }
+
+    private static func staticMapZoom(for bbox: DriveBoundingBox) -> Double {
+        let latSpan = max(bbox.maxLatitude - bbox.minLatitude, 0.0005)
+        let lngSpan = max(bbox.maxLongitude - bbox.minLongitude, 0.0005)
+        let span = max(latSpan, lngSpan)
+        switch span {
+        case ..<0.005: return 14
+        case ..<0.02:  return 13
+        case ..<0.05:  return 12
+        case ..<0.15:  return 11
+        case ..<0.4:   return 10
+        case ..<1.0:   return 9
+        default:       return 8
         }
     }
 }

@@ -501,12 +501,18 @@ final class PotholeActionStore {
     }
 
     private func compareDrainOrder(_ lhs: PotholeActionRecord, _ rhs: PotholeActionRecord) -> Bool {
-        let lhsNextAttempt = lhs.nextAttemptAt ?? .distantPast
-        let rhsNextAttempt = rhs.nextAttemptAt ?? .distantPast
-        if lhsNextAttempt != rhsNextAttempt {
-            return lhsNextAttempt < rhsNextAttempt
+        // FIFO by createdAt as the primary order. nextAttemptAt is only used as a
+        // tiebreaker when both records were created at the same instant — it must
+        // never reorder records that arrived in different drives, otherwise a fresh
+        // mark with nextAttemptAt == nil would cut in front of an older mark whose
+        // first attempt failed (the prior implementation treated nil as
+        // .distantPast, doing exactly that and starving the older mark of retries).
+        if lhs.createdAt != rhs.createdAt {
+            return lhs.createdAt < rhs.createdAt
         }
 
-        return lhs.createdAt < rhs.createdAt
+        let lhsNextAttempt = lhs.nextAttemptAt ?? .distantPast
+        let rhsNextAttempt = rhs.nextAttemptAt ?? .distantPast
+        return lhsNextAttempt < rhsNextAttempt
     }
 }

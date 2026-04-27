@@ -15,6 +15,7 @@ import SwiftUI
 /// - `docs/adr/0001-driving-redesign-rollback.md`
 struct MapScreenRedesign: View {
     @Bindable var model: AppModel
+    @Binding var pendingMapTarget: DriveBoundingBox?
 
     let onShowStats: () -> Void
     let onShowSettings: () -> Void
@@ -51,6 +52,7 @@ struct MapScreenRedesign: View {
                 config: model.config,
                 localDriveOverlayPoints: model.localDriveOverlayPoints,
                 pendingPotholeCoordinates: model.pendingPotholeCoordinates,
+                pendingMapTarget: $pendingMapTarget,
                 onMapLoaded: {
                     isMapLoaded = true
                     mapLoadError = nil

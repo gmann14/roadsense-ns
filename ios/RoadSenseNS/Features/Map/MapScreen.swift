@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MapScreen: View {
     @Bindable var model: AppModel
+    @Binding var pendingMapTarget: DriveBoundingBox?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let onShowStats: () -> Void
@@ -29,6 +30,7 @@ struct MapScreen: View {
                 config: model.config,
                 localDriveOverlayPoints: model.localDriveOverlayPoints,
                 pendingPotholeCoordinates: model.pendingPotholeCoordinates,
+                pendingMapTarget: $pendingMapTarget,
                 onMapLoaded: {
                     isMapLoaded = true
                     mapLoadError = nil
@@ -1046,6 +1048,7 @@ private struct BottomCardHeightPreferenceKey: PreferenceKey {
     NavigationStack {
         MapScreen(
             model: AppModel(container: makePreviewContainer()),
+            pendingMapTarget: .constant(nil),
             onShowStats: {},
             onShowSettings: {},
             onShowPrivacyZones: {}

@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var isShowingStats = false
     @State private var isShowingSettings = false
     @State private var isShowingDrives = false
+    @State private var pendingMapTarget: DriveBoundingBox?
     @State private var feedbackComposer: FeedbackComposerModel?
     @State private var lastForegroundDrainAt: Date?
 
@@ -62,7 +63,13 @@ struct ContentView: View {
             }
             .sheet(isPresented: $isShowingDrives) {
                 NavigationStack {
-                    DrivesListView(readingStore: model.readingStore)
+                    DrivesListView(
+                        readingStore: model.readingStore,
+                        mapboxAccessToken: model.config.mapboxAccessToken,
+                        onOpenOnMap: { bbox in
+                            pendingMapTarget = bbox
+                        }
+                    )
                 }
             }
             .sheet(isPresented: $isShowingSettings, onDismiss: {
@@ -129,6 +136,7 @@ struct ContentView: View {
         if FeatureFlags.drivingRedesignEnabled {
             MapScreenRedesign(
                 model: model,
+                pendingMapTarget: $pendingMapTarget,
                 onShowStats: { isShowingStats = true },
                 onShowSettings: { isShowingSettings = true },
                 onShowPrivacyZones: { isShowingPrivacyZones = true }
@@ -136,6 +144,7 @@ struct ContentView: View {
         } else {
             MapScreen(
                 model: model,
+                pendingMapTarget: $pendingMapTarget,
                 onShowStats: { isShowingStats = true },
                 onShowSettings: { isShowingSettings = true },
                 onShowPrivacyZones: { isShowingPrivacyZones = true }

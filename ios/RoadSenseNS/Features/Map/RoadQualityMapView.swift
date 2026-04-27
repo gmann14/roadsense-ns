@@ -6,6 +6,7 @@ struct RoadQualityMapView: View {
     let config: AppConfig
     let localDriveOverlayPoints: [LocalDriveOverlayPoint]
     let pendingPotholeCoordinates: [CLLocationCoordinate2D]
+    @Binding var pendingMapTarget: DriveBoundingBox?
     let onMapLoaded: () -> Void
     let onMapLoadingError: (String) -> Void
     let onSelectSegment: (UUID) -> Void
@@ -77,6 +78,48 @@ struct RoadQualityMapView: View {
                 onMapLoadingError(event.message)
             }
             .ignoresSafeArea()
+            .onChange(of: pendingMapTarget) { _, newTarget in
+                applyPendingTarget(newTarget)
+            }
+        }
+    }
+
+    private func applyPendingTarget(_ target: DriveBoundingBox?) {
+        guard let target else { return }
+        viewport = .camera(
+            center: cameraCenter(of: target),
+            zoom: cameraZoom(for: target),
+            bearing: 0,
+            pitch: 0
+        )
+        // Clear the request so the binding can fire again next time.
+        pendingMapTarget = nil
+    }
+
+    private func cameraCenter(of bbox: DriveBoundingBox) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(
+            latitude: (bbox.minLatitude + bbox.maxLatitude) / 2,
+            longitude: (bbox.minLongitude + bbox.maxLongitude) / 2
+        )
+    }
+
+    private func cameraZoom(for bbox: DriveBoundingBox) -> Double {
+        // Pick a Mapbox zoom that comfortably fits the bbox. The bbox spans are
+        // small (single-drive scale), so the heuristic doesn't have to be exact —
+        // it just needs to land somewhere between street-level (16) and city-level
+        // (10) so the whole drive is visible.
+        let latSpan = max(bbox.maxLatitude - bbox.minLatitude, 0.0005)
+        let lngSpan = max(bbox.maxLongitude - bbox.minLongitude, 0.0005)
+        let span = max(latSpan, lngSpan)
+
+        switch span {
+        case ..<0.005: return 15
+        case ..<0.02:  return 14
+        case ..<0.05:  return 13
+        case ..<0.15:  return 12
+        case ..<0.4:   return 11
+        case ..<1.0:   return 10
+        default:       return 9
         }
     }
 }
