@@ -132,10 +132,8 @@ Deno.test("handleRequest applies CORS to all responses, including 404", async ()
     assertEquals(res.headers.get("access-control-allow-origin"), "*");
 });
 
-Deno.test("handleRequest returns 501 for routes that aren't implemented yet (baseline)", async () => {
-    // health is still notImplemented as of P2; pick any other un-ported route
-    // if/when this one gets refactored.
-    const req = new Request("http://localhost/functions/v1/health");
+Deno.test("handleRequest returns 404 for routes outside the registered set", async () => {
+    const req = new Request("http://localhost/functions/v1/some-future-thing");
     const res = await handleRequest(req);
-    assertEquals(res.status, 501);
+    assertEquals(res.status, 404);
 });
