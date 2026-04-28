@@ -1,6 +1,6 @@
 # 05 — Deployment & Observability
 
-*Last updated: 2026-04-23*
+*Last updated: 2026-04-28*
 
 Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what to do when something breaks at 11pm" playbook.
 
@@ -35,8 +35,7 @@ openssl rand -base64 32 | tr -d '/+='   # TOKEN_PEPPER
 
 # 3) Apply migrations (needs psql; uses proxy URL for connectivity)
 export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
-export DATABASE_URL=<railway-proxy-url>
-./scripts/migrate-railway.sh
+DATABASE_URL=<railway-proxy-url> PGCONNECT_TIMEOUT=10 ./scripts/migrate-railway.sh
 
 # 4) Seed road network (NS-wide)
 ./scripts/load-municipalities.sh   # StatCan boundaries
@@ -68,8 +67,41 @@ Health: `curl <api-url>/functions/v1/health` (no apikey required).
 
 ```bash
 export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
-DATABASE_URL=<proxy-url> ./scripts/migrate-railway.sh   # idempotent; safe to re-run
+DATABASE_URL=<proxy-url> PGCONNECT_TIMEOUT=10 ./scripts/migrate-railway.sh   # idempotent; safe to re-run
 ```
+
+`migrate-railway.sh` parses `DATABASE_URL` into libpq `PG*` environment variables before invoking `psql`, so credentials do not appear in child process arguments. Keep using that script for replay instead of `psql "$DATABASE_URL"`.
+
+After replay, run the API smoke against the deployed Deno service:
+
+```bash
+FUNCTIONS_BASE_URL=<api-url>/functions/v1 \
+PUBLIC_API_KEY=<public-api-key> \
+./scripts/api-smoke.sh
+```
+
+Expected checks:
+- `/health` and `/health/deep` return healthy responses.
+- `/stats` returns the public materialized-view shape.
+- `/top-potholes?limit=5` returns `{ "potholes": [...] }`; this catches accidental fallback to removed PostgREST RPC paths.
+- `/upload-readings` accepts a fresh batch and duplicate replay.
+
+For local smoke against the Railway public TCP proxy, Deno may reject the proxy certificate with `UnknownIssuer` even though `psql` connects. Prefer smoking the deployed Railway service. If you must run `supabase/functions/server.ts` locally against the proxy, scope Deno's temporary certificate bypass to that proxy host:
+
+```bash
+deno run --unsafely-ignore-certificate-errors=<railway-proxy-host> \
+  --allow-all supabase/functions/server.ts
+```
+
+Do not use that flag in Railway; the deployed service should use the internal `*.railway.internal` database URL and does not need TLS.
+
+If maps look empty after a migration replay, verify the tile function was updated rather than assuming the API service needs a redeploy:
+
+```sql
+SELECT length(get_tile(14, 5460, 5961)) AS tile_bytes;
+```
+
+The Halifax staging fixture should return a non-zero byte count once `20260426203000_quality_corridor_tiles.sql` is applied.
 
 ### Scheduled jobs on Railway (no pg_cron)
 
@@ -88,6 +120,8 @@ Railway's stock PostGIS template doesn't include pg_cron. The `migrate-railway.s
 The scheduler activates when `RAILWAY_ENVIRONMENT` env var is set (i.e. running on Railway), or when `ENABLE_SCHEDULER=true` is set explicitly. It stays off during local dev and tests so the logs are quiet.
 
 Each job is idempotent (REFRESH CONCURRENTLY, CREATE TABLE IF NOT EXISTS) so multiple replicas all running the scheduler is safe — wasteful, but safe.
+
+The cron stub is replay-safe: `cron.schedule(job_name, ...)` upserts by `jobname`, and `cron.unschedule(jobid)` removes every row for that job name. If an older replay left duplicates behind, re-run `migrate-railway.sh`; its preflight dedupes `cron.job` before applying migrations.
 
 To force a refresh manually:
 
@@ -391,7 +425,7 @@ Week 8: submit for Beta App Review to unlock external testing. Prepare:
 
 ### Backend
 
-- Edge Functions use `console.log` / `console.error` — Supabase collects them into a queryable log stream
+- Railway Deno service uses `console.log` / `console.error`; inspect with `railway logs --service api`. Local Supabase functions still use Supabase's function logs.
 - Structured JSON logs for anything ingestion-related (one object per batch):
 
 ```json
@@ -470,8 +504,8 @@ Pager-style alerts (SMS/phone) are overkill for MVP. Email + checking in once a 
 
 ## Health Check Strategy
 
-- `GET /health` endpoint verifies DB connectivity + returns deploy metadata
-- `GET /health` is the only unauthenticated endpoint; everything else still sends the anon key
+- `GET /health` is a lightweight unauthenticated liveness endpoint and does not touch the DB.
+- `GET /health/deep` verifies DB connectivity and requires the public API key.
 - External uptime monitor pings `/health` every 5 minutes (UptimeRobot free tier or similar)
 - Alert on 3+ consecutive failures (15 min down)
 
@@ -508,8 +542,8 @@ Roll back if:
 
 ## Backup & Disaster Recovery
 
-- Supabase Pro: automated daily backups, point-in-time recovery for 7 days
-- Monthly manual export of `road_segments` (static-ish) + `segment_aggregates` (derived) to S3 or similar cold storage — defense against Supabase outage
+- Railway Postgres backups/PITR must be enabled per environment before external TestFlight. Confirm the current Railway plan's retention window during environment provisioning and document it next to the project link.
+- Monthly manual export of `road_segments` (static-ish) + `segment_aggregates` (derived) to S3 or similar cold storage — defense against provider outage
 - `readings` raw data is NOT backed up externally — it's ingestable but also regeneratable from app uploads if the window is short. 6-month retention cap means we only carry ~1TB worst case.
 
 ## Offline / Degraded Backend Behavior (iOS)
