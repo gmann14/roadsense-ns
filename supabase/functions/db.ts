@@ -4,11 +4,13 @@
 // The Railway internal hostname (postgis.railway.internal) does not present a
 // TLS cert; the public TCP proxy does. We toggle SSL accordingly.
 
-import postgres, { type Sql } from "https://deno.land/x/postgresjs@v3.4.4/mod.js";
+import postgres from "https://deno.land/x/postgresjs@v3.4.4/mod.js";
 
-let _pool: Sql | null = null;
+export type DB = ReturnType<typeof postgres>;
 
-export function db(): Sql {
+let _pool: DB | null = null;
+
+export function db(): DB {
     if (_pool) return _pool;
 
     const url = Deno.env.get("DATABASE_URL");
@@ -31,6 +33,6 @@ export function db(): Sql {
 }
 
 /// For tests: replace the pool with a mock; pass null to re-enable env-driven init.
-export function setPoolForTests(pool: Sql | null): void {
+export function setPoolForTests(pool: DB | null): void {
     _pool = pool;
 }
