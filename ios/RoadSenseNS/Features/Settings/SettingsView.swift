@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var model: AppModel
+    var feedbackQueue: FeedbackQueue? = nil
     let onManagePrivacyZones: () -> Void
     let onSendFeedback: () -> Void
 
@@ -10,6 +11,8 @@ struct SettingsView: View {
     @State private var isRetryingFailedUploads = false
     @State private var isRetryingFailedPotholeActions = false
     @State private var isRetryingFailedPhotos = false
+    @State private var isRetryingFeedbackQueue = false
+    @State private var queuedFeedbackCount: Int = 0
     @State private var isConfirmingDelete = false
     @State private var errorMessage: String?
 
@@ -398,6 +401,62 @@ struct SettingsView: View {
             .controlSize(.large)
             .frame(maxWidth: .infinity)
             .accessibilityIdentifier("settings.send-feedback")
+
+            if queuedFeedbackCount > 0 {
+                feedbackQueueRow
+            }
+        }
+        .task(id: feedbackQueue == nil) { refreshFeedbackQueueCount() }
+    }
+
+    private var feedbackQueueRow: some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+            HStack {
+                Text(queuedFeedbackCount == 1
+                    ? "1 feedback message waiting to upload"
+                    : "\(queuedFeedbackCount) feedback messages waiting to upload")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                Spacer()
+            }
+
+            Button {
+                retryFeedbackQueue()
+            } label: {
+                HStack {
+                    if isRetryingFeedbackQueue {
+                        ProgressView().tint(DesignTokens.Palette.deep)
+                    }
+                    Text(isRetryingFeedbackQueue ? "Retrying…" : "Retry now")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .tint(DesignTokens.Palette.deep)
+            .controlSize(.regular)
+            .disabled(isRetryingFeedbackQueue)
+            .accessibilityIdentifier("settings.retry-feedback-queue")
+        }
+        .padding(DesignTokens.Space.md)
+        .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
+    }
+
+    private func refreshFeedbackQueueCount() {
+        queuedFeedbackCount = feedbackQueue?.pendingCount ?? 0
+    }
+
+    private func retryFeedbackQueue() {
+        guard let feedbackQueue, !isRetryingFeedbackQueue else { return }
+        isRetryingFeedbackQueue = true
+        let submitter = FeedbackSubmissionAPIClient(apiClient: model.apiClient)
+
+        Task {
+            _ = await FeedbackQueueDrainer.drain(queue: feedbackQueue, submitter: submitter)
+            await MainActor.run {
+                isRetryingFeedbackQueue = false
+                refreshFeedbackQueueCount()
+            }
         }
     }
 

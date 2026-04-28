@@ -81,6 +81,7 @@ struct ContentView: View {
                 NavigationStack {
                     SettingsView(
                         model: model,
+                        feedbackQueue: feedbackQueue,
                         onManagePrivacyZones: {
                             isShowingPrivacyZones = true
                         },
