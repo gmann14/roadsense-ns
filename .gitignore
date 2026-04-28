@@ -26,3 +26,5 @@ tsconfig.tsbuildinfo
 supabase/.temp/
 supabase/.branches/
 supabase/functions/.env
+
+.railway-secrets.local

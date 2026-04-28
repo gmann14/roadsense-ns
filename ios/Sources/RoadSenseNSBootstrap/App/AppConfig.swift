@@ -7,6 +7,7 @@ public struct AppConfig: Equatable, Sendable {
     public let supabaseAnonKey: String
     public let sentryDSN: String?
     public let appGroupIdentifier: String?
+    public let enablePotholePhotos: Bool
 
     public init(
         environment: AppEnvironment,
@@ -14,7 +15,8 @@ public struct AppConfig: Equatable, Sendable {
         mapboxAccessToken: String,
         supabaseAnonKey: String,
         sentryDSN: String? = nil,
-        appGroupIdentifier: String? = nil
+        appGroupIdentifier: String? = nil,
+        enablePotholePhotos: Bool = true
     ) {
         self.environment = environment
         self.apiBaseURL = apiBaseURL
@@ -22,6 +24,7 @@ public struct AppConfig: Equatable, Sendable {
         self.supabaseAnonKey = supabaseAnonKey
         self.sentryDSN = sentryDSN?.nilIfEmpty
         self.appGroupIdentifier = appGroupIdentifier?.nilIfEmpty
+        self.enablePotholePhotos = enablePotholePhotos
     }
 
     public var functionsBaseURL: URL {
@@ -56,8 +59,21 @@ public struct AppConfig: Equatable, Sendable {
             mapboxAccessToken: mapboxAccessToken,
             supabaseAnonKey: supabaseAnonKey,
             sentryDSN: values["SENTRY_DSN"],
-            appGroupIdentifier: values["APP_GROUP_IDENTIFIER"]
+            appGroupIdentifier: values["APP_GROUP_IDENTIFIER"],
+            enablePotholePhotos: parseBool(values["ENABLE_POTHOLE_PHOTOS"], default: true)
         )
+    }
+}
+
+private func parseBool(_ value: String?, default defaultValue: Bool) -> Bool {
+    guard let raw = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !raw.isEmpty else {
+        return defaultValue
+    }
+    switch raw.lowercased() {
+    case "yes", "true", "1": return true
+    case "no", "false", "0": return false
+    default: return defaultValue
     }
 }
 

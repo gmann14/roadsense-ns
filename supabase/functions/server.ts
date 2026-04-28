@@ -44,7 +44,9 @@ import {
     createPgFetchWorstSegments,
 } from "./segments-worst/pgRuntime.ts";
 
-const PUBLIC_API_KEY = Deno.env.get("PUBLIC_API_KEY") ?? "";
+function configuredApiKey(): string {
+    return Deno.env.get("PUBLIC_API_KEY") ?? "";
+}
 
 // Each ported handler is built lazily on first call so tests can import this
 // module without a live DATABASE_URL. Subsequent calls reuse the same instance.
@@ -126,18 +128,22 @@ export async function handleRequest(req: Request): Promise<Response> {
         });
     }
 
-    const auth = verifyApiKey(req, PUBLIC_API_KEY);
-    if (!auth.ok) {
-        return new Response(
-            JSON.stringify({ error: auth.error }),
-            {
-                status: auth.status,
-                headers: {
-                    "content-type": "application/json; charset=utf-8",
-                    ...corsHeaders(),
+    // Health is unauthenticated so Railway/uptime probes can hit it.
+    const url = new URL(req.url);
+    if (url.pathname !== "/functions/v1/health") {
+        const auth = verifyApiKey(req, configuredApiKey());
+        if (!auth.ok) {
+            return new Response(
+                JSON.stringify({ error: auth.error }),
+                {
+                    status: auth.status,
+                    headers: {
+                        "content-type": "application/json; charset=utf-8",
+                        ...corsHeaders(),
+                    },
                 },
-            },
-        );
+            );
+        }
     }
 
     const response = await dispatch(ROUTES, req);

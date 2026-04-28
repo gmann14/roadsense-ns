@@ -6,19 +6,79 @@ Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what 
 
 ## Environments
 
-| Env | Purpose | Supabase project | iOS scheme | Maps key |
+| Env | Purpose | Backend host | iOS scheme | Maps key |
 |---|---|---|---|---|
-| `local` | Local dev (`supabase start`) | auto | `RoadSenseNS-Local` | personal dev key |
-| `staging` | Optional shared integration env | `roadsense-staging` | `RoadSenseNS-Staging` | staging key |
-| `production` | Real users | `roadsense-prod` | `RoadSenseNS` | production key |
+| `local` | Local dev (`supabase start`) | local Supabase | `RoadSenseNS-Local` | personal dev key |
+| `staging` | TestFlight + Vercel preview | Railway PostGIS + Deno | `RoadSenseNS-Staging` | staging key |
+| `production` | Real users (App Store) | Railway PostGIS + Deno (separate project) | `RoadSenseNS` | production key |
 
-`staging` and `production` are **physically separate Supabase projects**. No shared database, no RLS multi-tenancy trickery. Keeps blast radius small.
+Staging and production are physically separate Railway projects so the blast radius of a bad migration is contained. Local development still uses local Supabase via the CLI.
 
-Current repo note:
+### Staging endpoints (current)
 
-- GitHub Environments named `staging` and `production` now exist in the repo.
-- Remote deploy automation is ready to use them, but a dedicated hosted `roadsense-staging` project is intentionally deferred until signed installs or shared-backend smoke tests make it worth the cost/ops overhead.
-- While Apple Developer approval is still pending and there are no outside testers, local Supabase plus backend CI is the default environment strategy.
+- API: `https://api-production-075e9.up.railway.app/functions/v1`
+- Web: `https://roadsense-web.vercel.app`
+- DB (admin): Railway proxy URL — see `.railway-secrets.local` (gitignored) for current values.
+
+## Railway runbook
+
+### Provision a new environment
+
+```bash
+# 1) Create the project + DB (PostGIS template)
+railway link  # or: railway init <project-name>
+railway add --database postgres  # then add the PostGIS image manually if not the template
+
+# 2) Generate secrets
+openssl rand -base64 48 | tr -d '/+='   # PUBLIC_API_KEY
+openssl rand -base64 32 | tr -d '/+='   # TOKEN_PEPPER
+
+# 3) Apply migrations (needs psql; uses proxy URL for connectivity)
+export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+export DATABASE_URL=<railway-proxy-url>
+./scripts/migrate-railway.sh
+
+# 4) Seed road network (NS-wide)
+./scripts/load-municipalities.sh   # StatCan boundaries
+./scripts/osm-import.sh            # OSM ways → road_segments
+
+# 5) Create the api service + set env vars + deploy
+railway add --service api
+railway link --service api
+railway variables --set DATABASE_URL=<internal-railway.internal-url> \
+                  --set PUBLIC_API_KEY=<from-step-2> \
+                  --set TOKEN_PEPPER=<from-step-2> \
+                  --set PG_POOL_MAX=10 --set PORT=8000
+railway up --service api --ci
+
+# 6) Generate public domain
+railway domain
+```
+
+### Deploy a code change to existing Railway env
+
+```bash
+railway link  # if not already linked
+railway up --service api --ci
+```
+
+Health: `curl <api-url>/functions/v1/health` (no apikey required).
+
+### Verify schema on Railway DB
+
+```bash
+export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
+DATABASE_URL=<proxy-url> ./scripts/migrate-railway.sh   # idempotent; safe to re-run
+```
+
+### Refresh stats / worst-segments materialised views
+
+Railway's stock PostGIS template doesn't include pg_cron; the `migrate-railway.sh` preflight installs no-op stubs so migrations apply, but scheduled jobs do **not** fire automatically. Refresh manually until pg_cron (or a Railway scheduled service) is wired up:
+
+```sql
+REFRESH MATERIALIZED VIEW public_stats_mv;
+REFRESH MATERIALIZED VIEW public_worst_segments_mv;
+```
 
 ## Secrets Management
 

@@ -19,6 +19,7 @@ enum PotholePhotoSubmissionResult: Equatable {
     case unavailableLocation
     case insidePrivacyZone
     case outsideCoverage
+    case featureDisabled
 }
 
 struct CollectionDiagnosticsSummary: Equatable {
@@ -420,6 +421,10 @@ final class AppModel {
         now: Date = Date(),
         locationSample captureLocationSample: LocationSample? = nil
     ) async -> PotholePhotoSubmissionResult {
+        guard config.enablePotholePhotos else {
+            return .featureDisabled
+        }
+
         guard let sample = photoSubmissionLocationSample(
             captureLocationSample: captureLocationSample,
             now: now

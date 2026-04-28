@@ -137,3 +137,52 @@ Deno.test("handleRequest returns 404 for routes outside the registered set", asy
     const res = await handleRequest(req);
     assertEquals(res.status, 404);
 });
+
+Deno.test("handleRequest blocks unauthorized requests when PUBLIC_API_KEY is set", async () => {
+    const previous = Deno.env.get("PUBLIC_API_KEY");
+    Deno.env.set("PUBLIC_API_KEY", "test-secret-token-1234");
+    try {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/stats"),
+        );
+        assertEquals(res.status, 401);
+    } finally {
+        if (previous === undefined) Deno.env.delete("PUBLIC_API_KEY");
+        else Deno.env.set("PUBLIC_API_KEY", previous);
+    }
+});
+
+Deno.test("handleRequest exempts /health from apikey auth so probes work", async () => {
+    const previous = Deno.env.get("PUBLIC_API_KEY");
+    Deno.env.set("PUBLIC_API_KEY", "test-secret-token-1234");
+    try {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/health"),
+        );
+        // Without DATABASE_URL the handler will throw, so we just assert it
+        // got past the auth gate (i.e. status is NOT 401).
+        if (res.status === 401) {
+            throw new Error("expected /health to bypass auth, got 401");
+        }
+    } finally {
+        if (previous === undefined) Deno.env.delete("PUBLIC_API_KEY");
+        else Deno.env.set("PUBLIC_API_KEY", previous);
+    }
+});
+
+Deno.test("handleRequest accepts requests with a matching apikey when PUBLIC_API_KEY is set", async () => {
+    const previous = Deno.env.get("PUBLIC_API_KEY");
+    Deno.env.set("PUBLIC_API_KEY", "test-secret-token-1234");
+    try {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/some-future-thing", {
+                headers: { apikey: "test-secret-token-1234" },
+            }),
+        );
+        // Auth passes → router fires → 404 (route not in table)
+        assertEquals(res.status, 404);
+    } finally {
+        if (previous === undefined) Deno.env.delete("PUBLIC_API_KEY");
+        else Deno.env.set("PUBLIC_API_KEY", previous);
+    }
+});

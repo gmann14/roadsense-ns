@@ -639,6 +639,14 @@ struct MapScreenRedesign: View {
                 tint: DesignTokens.Palette.warning,
                 dismissDelay: .seconds(3)
             )
+        case .featureDisabled:
+            feedback = RedesignRejectionFeedback(
+                title: "Photo reports unavailable",
+                message: "Photo reports are temporarily disabled for this build.",
+                iconName: "camera.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
         }
 
         scopedPhotoSegmentID = nil

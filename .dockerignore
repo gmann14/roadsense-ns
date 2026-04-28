@@ -1,0 +1,11 @@
+.git
+.github
+ios
+android
+web
+docs
+scripts
+node_modules
+*.md
+.env*
+!supabase/functions/**

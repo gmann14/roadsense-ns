@@ -1,8 +1,16 @@
 # 13 — Railway / Deno Migration (Path C)
 
-*Last updated: 2026-04-28*
+*Last updated: 2026-04-28 — **Status: shipped to staging***
 
 Covers: migrating the Edge Functions stack off Supabase onto a single Deno service running against a Railway-hosted PostGIS database. Keeps the existing `functions/` handler logic; replaces `supabase-js` with a raw Postgres client; consolidates `/functions/v1/*` routing into one entrypoint.
+
+**Live staging endpoints** (as of 2026-04-28):
+
+- API: `https://api-production-075e9.up.railway.app/functions/v1`
+- Web: `https://roadsense-web.vercel.app`
+- DB: Railway PostGIS, 1.74M road segments + 91 NS municipalities loaded
+
+For day-to-day Railway operations, see `05-deployment-and-observability.md` → Railway runbook.
 
 ## Why this migration
 
