@@ -1,4 +1,5 @@
 import type { PublicStats } from "@/lib/api/client";
+import { GetTheAppLinks } from "@/components/chrome/get-the-app-links";
 
 const sections = [
   { id: "live-counts", label: "Live counts" },
@@ -116,6 +117,8 @@ export function PrivacyAndCountsContent({ stats }: Props) {
           Generated at: <strong data-testid="counts.generated-at">{formatGeneratedAt(stats?.generated_at ?? null)}</strong>
         </p>
       </article>
+
+      <GetTheAppLinks variant="card" />
 
       <article id="phone-data" className="card" style={{ padding: 24, display: "grid", gap: 12 }}>
         <span className="eyebrow">02 · What leaves your phone</span>

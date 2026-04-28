@@ -1252,3 +1252,84 @@ nav a[aria-current="page"] {
   color: var(--rs-deep);
   border-color: var(--rs-border-strong);
 }
+
+/* === Get the app === */
+
+.get-the-app__pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.get-the-app__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--rs-radius-pill);
+  background: #0f1e26;
+  color: white;
+  font-size: 0.8rem;
+  line-height: 1.1;
+  font-weight: 500;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: filter var(--rs-motion-standard);
+}
+
+.get-the-app__pill:hover {
+  filter: brightness(1.15);
+}
+
+.get-the-app__pill:focus-visible {
+  outline: 3px solid rgba(14, 59, 74, 0.32);
+  outline-offset: 2px;
+}
+
+.get-the-app__pill svg {
+  flex-shrink: 0;
+}
+
+.get-the-app__pill span {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.1;
+}
+
+.get-the-app__line1 {
+  font-size: 0.62rem;
+  opacity: 0.78;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.get-the-app__line2 {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.get-the-app.card {
+  padding: 20px 24px;
+  display: grid;
+  gap: 12px;
+}
+
+.get-the-app__heading {
+  margin: 0;
+  font-family: var(--rs-font-display);
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--rs-ink);
+}
+
+.top-nav-app-links {
+  display: inline-flex;
+  margin-left: 4px;
+}
+
+@media (max-width: 640px) {
+  .top-nav-app-links {
+    display: none;
+  }
+}

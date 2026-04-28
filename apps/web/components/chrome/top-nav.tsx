@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
+import { GetTheAppLinks } from "@/components/chrome/get-the-app-links";
 
 const links: Array<{ href: string; label: string }> = [
   { href: "/", label: "Map" },
@@ -57,6 +58,7 @@ export function TopNav() {
             </Link>
           ))}
           <FeedbackDialog triggerLabel="Send feedback" triggerClassName="top-nav-link" />
+          <GetTheAppLinks className="top-nav-app-links" />
         </nav>
       </header>
     </>
