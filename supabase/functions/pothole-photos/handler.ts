@@ -1,5 +1,5 @@
 import { errorResponse, jsonResponse } from "../_shared/http.ts";
-import { extractClientIp } from "../upload-readings/handler.ts";
+import { extractClientIp } from "../_shared/clientIp.ts";
 
 const UUID_V4_REGEX =
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

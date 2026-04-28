@@ -1,15 +1,15 @@
 # 03 — API Contracts
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-04-28*
 
 Authoritative request/response shapes for all endpoints. **Lock this doc by end of week 2** so iOS and backend can work in parallel without churn.
 
 ## Conventions
 
-- Base URL: `https://<project-ref>.supabase.co/functions/v1`
+- Base URL: local Supabase uses `http://127.0.0.1:54321/functions/v1`; hosted staging/production use the Railway Deno API URL.
 - Content-Type: `application/json` for JSON endpoints, `application/vnd.mapbox-vector-tile` for tiles
-- Auth: Supabase anon key in `Authorization: Bearer <anon>` header for all requests except `GET /health`, which is intentionally unauthenticated for uptime monitoring. Supabase Edge Functions require the Authorization header; the `apikey` header is also accepted for compatibility. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
-- The `ingest_reading_batch` RPC is `SECURITY DEFINER` with `EXECUTE` granted only to `service_role`; the anon key cannot invoke it directly. Uploads MUST go through the `/functions/v1/upload-readings` Edge Function, which holds the service role key and enforces rate limits before dispatching.
+- Auth: send the environment public API key in `Authorization: Bearer <key>` and/or `apikey: <key>` for all requests except `GET /health`, which is intentionally unauthenticated for uptime monitoring. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
+- The `ingest_reading_batch` RPC is `SECURITY DEFINER` with `EXECUTE` granted only to privileged backend roles; the public key cannot invoke it directly. Uploads MUST go through `/functions/v1/upload-readings`, which enforces validation and rate limits before dispatching.
 - All timestamps are RFC 3339 / ISO 8601 with timezone (`2026-04-17T14:30:00Z`)
 - All coordinates are WGS84 (EPSG:4326), `lng` then `lat` where ordered, but JSON fields are named explicitly (`lat`, `lng`) to avoid ambiguity
 - UUIDs are lowercase v4 strings with hyphens
@@ -267,6 +267,34 @@ Bbox limited to ~10km × 10km; larger requests return 400.
 
 ---
 
+### `GET /top-potholes?limit=<1-100>`
+
+List the highest-priority active potholes for public reports and municipality pages. Railway web clients call this Deno route directly; do not use the old Supabase PostgREST RPC path.
+
+**Response — 200 OK**
+
+```json
+{
+    "potholes": [
+        {
+            "id": "p1-...",
+            "lat": 44.6498,
+            "lng": -63.5762,
+            "magnitude": 2.4,
+            "confirmation_count": 7,
+            "first_reported_at": "2026-04-01T12:00:00Z",
+            "last_confirmed_at": "2026-04-16T08:00:00Z",
+            "status": "active",
+            "segment_id": "c8a1b2d3-..."
+        }
+    ]
+}
+```
+
+Default limit is 20. Missing data is a valid empty list; malformed or out-of-range limits return 400.
+
+---
+
 ### `GET /stats`
 
 Public global stats for the stats card on the home screen.
@@ -284,7 +312,7 @@ Public global stats for the stats card on the home screen.
 }
 ```
 
-Cache-Control: `public, max-age=300`. Computed from a materialized view refreshed every 5 minutes by `pg_cron`.
+Cache-Control: `public, max-age=300`. Computed from a materialized view refreshed every 5 minutes by pg_cron locally/Supabase or by the Railway Deno scheduler in hosted staging/production.
 
 ---
 

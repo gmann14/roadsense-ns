@@ -33,7 +33,7 @@ export function createPgRpc(sqlOverride?: DB): PgRpc {
             const sql = sqlOverride ?? db();
             const keys = Object.keys(params);
             const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
-            const values = keys.map((k) => params[k] === undefined ? null : params[k]);
+            const values = keys.map((k) => params[k] === undefined ? null : params[k]) as never[];
             const query = `SELECT ${fn}(${placeholders}) AS result`;
             const rows = (await sql.unsafe(query, values)) as Array<{ result: T | null }>;
             return { data: rows[0]?.result ?? null, error: null };

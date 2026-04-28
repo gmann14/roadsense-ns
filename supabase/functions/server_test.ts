@@ -142,6 +142,25 @@ Deno.test("handleRequest returns 404 for routes outside the registered set", asy
     assertEquals(res.status, 404);
 });
 
+Deno.test("handleRequest routes top-potholes through the Deno API surface", async () => {
+    const previousKey = Deno.env.get("PUBLIC_API_KEY");
+    const previousDatabaseUrl = Deno.env.get("DATABASE_URL");
+    Deno.env.delete("PUBLIC_API_KEY");
+    Deno.env.delete("DATABASE_URL");
+    try {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/top-potholes?limit=1"),
+        );
+        assertEquals(res.status, 503);
+        assertEquals((await res.json()).error, "service_unavailable");
+    } finally {
+        if (previousKey === undefined) Deno.env.delete("PUBLIC_API_KEY");
+        else Deno.env.set("PUBLIC_API_KEY", previousKey);
+        if (previousDatabaseUrl === undefined) Deno.env.delete("DATABASE_URL");
+        else Deno.env.set("DATABASE_URL", previousDatabaseUrl);
+    }
+});
+
 Deno.test("handleRequest blocks unauthorized requests when PUBLIC_API_KEY is set", async () => {
     const previous = Deno.env.get("PUBLIC_API_KEY");
     Deno.env.set("PUBLIC_API_KEY", "test-secret-token-1234");

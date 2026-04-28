@@ -10,6 +10,7 @@ Planned initial functions:
 - `potholes`
 - `stats`
 - `health`
+- `top-potholes`
 
 Phase-2 web additions:
 
@@ -28,6 +29,8 @@ Implemented so far:
   - joins `road_segments` and `segment_aggregates` into the single-segment contract with explicit `history: []` and `neighbors: null` MVP stubs
 - `potholes`
   - validates bbox shape/size and reads via the locked `get_potholes_in_bbox` RPC
+- `top-potholes`
+  - validates `limit` and exposes the ranked active-pothole report without relying on Supabase PostgREST/RPC routing
 - `stats`
   - reads `public_stats_mv` and serves the public stats card contract with a 5-minute cache header
 - `health`

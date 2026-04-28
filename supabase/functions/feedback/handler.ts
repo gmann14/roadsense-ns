@@ -1,4 +1,7 @@
 import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { extractClientIp } from "../_shared/clientIp.ts";
+
+export { extractClientIp };
 
 const FEEDBACK_SOURCES = new Set(["ios", "web"]);
 const FEEDBACK_CATEGORIES = new Set([
@@ -74,16 +77,6 @@ function trimToLimit(value: unknown, limit: number): string | null {
     }
 
     return trimmed.slice(0, limit);
-}
-
-export function extractClientIp(headers: Headers): string {
-    const forwarded = headers.get("x-forwarded-for") ?? "";
-    const firstForwarded = forwarded.split(",")[0]?.trim();
-
-    return firstForwarded
-        || headers.get("x-real-ip")
-        || headers.get("cf-connecting-ip")
-        || "unknown";
 }
 
 export function validateFeedbackPayload(payload: unknown): ValidationResult {

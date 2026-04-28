@@ -70,7 +70,12 @@ export function createDeepHealthHandler(
                 { "cache-control": "no-store" },
                 requestId,
             );
-        } catch {
+        } catch (error) {
+            console.error("deep-health database check failed", {
+                request_id: requestId,
+                error,
+            });
+
             return errorResponse(
                 "service_unavailable",
                 "Database is unreachable.",

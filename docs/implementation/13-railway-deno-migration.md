@@ -22,7 +22,7 @@ For day-to-day Railway operations, see `05-deployment-and-observability.md` → 
 ## Goals + non-goals
 
 **Goals**
-- All existing iOS endpoints (`upload-readings`, `pothole-actions`, `feedback`, `stats`, `tiles`, `tiles-coverage`, `segments`, `segments-worst`, `potholes`, `health`) reachable on Railway.
+- All existing iOS/web endpoints (`upload-readings`, `pothole-actions`, `feedback`, `stats`, `tiles`, `tiles-coverage`, `segments`, `segments-worst`, `potholes`, `top-potholes`, `health`) reachable on Railway.
 - All existing pgTAP and Deno tests still pass.
 - Same JSON shapes the iOS client and web client already expect — zero client refactor required for the non-photo endpoints.
 - One Dockerfile that Railway can build.
@@ -52,7 +52,7 @@ For day-to-day Railway operations, see `05-deployment-and-observability.md` → 
                         ┌──────────────────────┐
                         │ Railway Postgres     │
                         │ + PostGIS 3.7        │
-                        │ + pg_cron            │
+                        │ + cron stubs         │
                         │ + osm.* schema       │
                         └──────────────────────┘
 ```
@@ -80,7 +80,8 @@ supabase/
 │   ├── stats/                         # similar pattern
 │   ├── tiles/, tiles-coverage/        # similar
 │   ├── segments/, segments-worst/     # similar
-│   ├── potholes/, health/             # similar
+│   ├── potholes/, top-potholes/       # similar
+│   ├── health/                        # similar
 │   ├── feedback/                      # similar
 │   ├── pothole-photos/                # UNTOUCHED (deferred; not deployed)
 │   ├── pothole-photo-moderation/      # UNTOUCHED (deferred)
@@ -287,9 +288,12 @@ The iOS app's "Take photo" button currently routes through `pothole-photos` Edge
 PostgREST + Supabase send CORS headers automatically. Our new Deno service must set them too, or the web client gets blocked.
 **Mitigation:** wrap every response in a `withCors(...)` helper that adds `Access-Control-Allow-Origin: *` (we have no auth cookies; * is fine) plus `Access-Control-Allow-Headers: Content-Type, apikey, Authorization`. Add a test asserting OPTIONS preflight returns 204 with correct headers.
 
-### 13. Web client's REST fallback
-`getPublicStats()` first tries `/rest/v1/public_stats_mv?select=...`, falls back to `/functions/v1/stats`. Without PostgREST, the REST URL returns 404 silently and the fallback fires.
-**Mitigation:** verified by existing fallback path; no code change needed. Add a test that asserts `getPublicStats` survives a 404 on the REST URL.
+### 13. Web client's REST/RPC fallback
+The web client used to call Supabase PostgREST for `public_stats_mv` and `get_top_potholes`, then silently fall back only for stats. Railway does not run PostgREST, so report pages could render empty top-pothole data while looking otherwise healthy.
+**Mitigation:** web reads now call `/stats` and `/top-potholes` directly through the Deno API. `scripts/api-smoke.sh` checks both contracts.
+
+### 14. Client IP forwarding
+Railway receives proxy forwarding headers, but handlers must not trust the first `x-forwarded-for` value because clients can supply one. Rate-limit helpers now use the last public forwarded hop before fallback headers, skipping private proxy hops.
 
 ## Phase breakdown (RED/GREEN)
 

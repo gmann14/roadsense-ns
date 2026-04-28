@@ -36,6 +36,9 @@ import { createPgCoverageTileRpc } from "./tiles-coverage/pgRuntime.ts";
 import { createPotholesHandler } from "./potholes/handler.ts";
 import { createPgFetchPotholes } from "./potholes/pgRuntime.ts";
 
+import { createTopPotholesHandler } from "./top-potholes/handler.ts";
+import { createPgFetchTopPotholes } from "./top-potholes/pgRuntime.ts";
+
 import { createSegmentsHandler } from "./segments/handler.ts";
 import { createPgFetchSegmentDetail } from "./segments/pgRuntime.ts";
 
@@ -119,6 +122,7 @@ export const ROUTES = [
     ),
     route("/functions/v1/segments/:id", lazy(() => createSegmentsHandler({ fetchSegmentDetail: createPgFetchSegmentDetail() }))),
     route("/functions/v1/potholes", lazy(() => createPotholesHandler({ fetchPotholes: createPgFetchPotholes() }))),
+    route("/functions/v1/top-potholes", lazy(() => createTopPotholesHandler({ fetchTopPotholes: createPgFetchTopPotholes() }))),
     route("/functions/v1/tiles/coverage/:z/:x/:y.mvt", lazy(() => createCoverageTileHandler({ rpcGetCoverageTile: createPgCoverageTileRpc() }))),
     route("/functions/v1/tiles/:z/:x/:y.mvt", lazy(() => createTileHandler({ rpcGetTile: createPgTileRpc() }))),
 ] as const;
