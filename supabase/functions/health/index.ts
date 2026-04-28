@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { createHealthHandler } from "./handler.ts";
+import { createDeepHealthHandler } from "./handler.ts";
 
 function createDbCheck() {
     const supabase = createClient(
@@ -18,7 +18,7 @@ function createDbCheck() {
 }
 
 Deno.serve(
-    createHealthHandler({
+    createDeepHealthHandler({
         checkDb: createDbCheck(),
     }),
 );

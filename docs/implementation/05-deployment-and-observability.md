@@ -71,13 +71,30 @@ export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
 DATABASE_URL=<proxy-url> ./scripts/migrate-railway.sh   # idempotent; safe to re-run
 ```
 
-### Refresh stats / worst-segments materialised views
+### Scheduled jobs on Railway (no pg_cron)
 
-Railway's stock PostGIS template doesn't include pg_cron; the `migrate-railway.sh` preflight installs no-op stubs so migrations apply, but scheduled jobs do **not** fire automatically. Refresh manually until pg_cron (or a Railway scheduled service) is wired up:
+Railway's stock PostGIS template doesn't include pg_cron. The `migrate-railway.sh` preflight installs no-op stubs so migrations apply cleanly. The Deno service then runs an in-process scheduler (`supabase/functions/_shared/scheduler.ts`) that fires the same jobs pg_cron would have:
+
+| Job | Cadence | What it does |
+|---|---|---|
+| `refresh-public-stats-mv` | every 5 min | Refreshes `public_stats_mv` so `/stats` isn't stale |
+| `refresh-public-worst-segments-mv` | every 15 min | Refreshes the worst-segments materialised view |
+| `create-next-readings-partition` | every 24h | Pre-creates next month's `readings_YYYY_MM` partition before the calendar rolls over (otherwise inserts would fail with "no partition of relation found for row") |
+| `nightly-aggregate-recompute` | every 24h | Full aggregate recompute |
+| `pothole-expiry` | every 24h | Marks unconfirmed potholes as expired |
+| `rate-limit-gc` | every 24h | Trims old rate-limit rows |
+| `drop-old-readings-partitions` | every 24h | Drops partitions older than 6 months |
+
+The scheduler activates when `RAILWAY_ENVIRONMENT` env var is set (i.e. running on Railway), or when `ENABLE_SCHEDULER=true` is set explicitly. It stays off during local dev and tests so the logs are quiet.
+
+Each job is idempotent (REFRESH CONCURRENTLY, CREATE TABLE IF NOT EXISTS) so multiple replicas all running the scheduler is safe — wasteful, but safe.
+
+To force a refresh manually:
 
 ```sql
 REFRESH MATERIALIZED VIEW public_stats_mv;
 REFRESH MATERIALIZED VIEW public_worst_segments_mv;
+SELECT create_next_readings_partition();
 ```
 
 ## Secrets Management

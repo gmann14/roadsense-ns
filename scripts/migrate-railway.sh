@@ -123,8 +123,11 @@ RETURNS BOOLEAN
 LANGUAGE plpgsql
 AS $fn$
 BEGIN
-    RAISE NOTICE 'cron.unschedule stub: job=% (no-op on Railway)', job_name;
-    RETURN TRUE;
+    -- Real DELETE so re-running migrate-railway.sh doesn't pile up duplicate
+    -- rows in cron.job (the schedule/unschedule pattern is the standard "find
+    -- by jobname, then re-schedule" idiom in our migrations).
+    DELETE FROM cron.job WHERE jobname = job_name;
+    RETURN FOUND;
 END
 $fn$;
 
@@ -133,8 +136,8 @@ RETURNS BOOLEAN
 LANGUAGE plpgsql
 AS $fn$
 BEGIN
-    RAISE NOTICE 'cron.unschedule stub: job_id=% (no-op on Railway)', job_id;
-    RETURN TRUE;
+    DELETE FROM cron.job WHERE jobid = job_id;
+    RETURN FOUND;
 END
 $fn$;
 SQL

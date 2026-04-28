@@ -101,8 +101,27 @@ import sys
 with open(sys.argv[1], "r", encoding="utf-8") as fh:
     payload = json.load(fh)
 
+# /health is the lite liveness probe — process is up, no DB roundtrip.
+# Use /health/deep for the DB check below.
 assert payload["status"] == "ok", payload
-assert "db" in payload, payload
+PY
+
+deep_health_status="$(request GET "${FUNCTIONS_BASE_URL}/health/deep" "" "${tmpdir}/health-deep.json")"
+if [[ "${deep_health_status}" != "200" ]]; then
+  echo "health/deep check failed with HTTP ${deep_health_status}" >&2
+  cat "${tmpdir}/health-deep.json" >&2
+  exit 1
+fi
+
+python3 - "${tmpdir}/health-deep.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    payload = json.load(fh)
+
+assert payload["status"] == "ok", payload
+assert payload["db"] == "reachable", payload
 PY
 
 stats_status="$(request GET "${FUNCTIONS_BASE_URL}/stats" "" "${tmpdir}/stats.json")"
@@ -190,7 +209,8 @@ PY
 )"
 
 echo "API smoke passed against ${FUNCTIONS_BASE_URL}"
-echo "  /health: ok"
+echo "  /health: ok (liveness)"
+echo "  /health/deep: ok (db reachable)"
 echo "  /stats: contract ok"
 echo "  /upload-readings: ${summary}"
 echo "  /upload-readings duplicate replay: ok"

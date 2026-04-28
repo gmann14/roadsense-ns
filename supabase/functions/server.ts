@@ -7,8 +7,9 @@
 import { dispatch, route, type RouteHandler } from "./_shared/routes.ts";
 import { verifyApiKey } from "./_shared/apikey.ts";
 import { createPgRpc } from "./_shared/pgRpc.ts";
+import { startScheduler } from "./_shared/scheduler.ts";
 
-import { createHealthHandler } from "./health/handler.ts";
+import { createDeepHealthHandler, createHealthHandler } from "./health/handler.ts";
 import { createPgDbCheck } from "./health/pgRuntime.ts";
 
 import { createStatsHandler } from "./stats/handler.ts";
@@ -44,93 +45,95 @@ import {
     createPgFetchWorstSegments,
 } from "./segments-worst/pgRuntime.ts";
 
+const CORS_HEADERS: Record<string, string> = {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
+    "access-control-allow-headers": "content-type, apikey, authorization, x-request-id",
+    "access-control-max-age": "86400",
+};
+
+// Read PUBLIC_API_KEY on every call so tests that mutate the env mid-suite
+// (server_test.ts) see the change. Cheap on Deno; production payoff isn't
+// worth a more complex caching scheme.
 function configuredApiKey(): string {
     return Deno.env.get("PUBLIC_API_KEY") ?? "";
 }
 
-// Each ported handler is built lazily on first call so tests can import this
-// module without a live DATABASE_URL. Subsequent calls reuse the same instance.
-function lazy<T>(factory: () => T): () => T {
-    let cached: T | null = null;
-    return () => {
-        if (cached === null) cached = factory();
-        return cached;
+// Builds each handler lazily on first request so test imports work without a
+// live DATABASE_URL. Wraps the resulting handler as a RouteHandler so we can
+// register it in ROUTES directly — no second-tier wrapper required.
+type AnyHandler = (req: Request) => Promise<Response>;
+function lazy(factory: () => AnyHandler): RouteHandler {
+    let cached: AnyHandler | null = null;
+    return (req) => {
+        cached ??= factory();
+        return cached(req);
     };
 }
 
-const getHealth = lazy(() =>
-    createHealthHandler({ checkDb: createPgDbCheck() })
-);
-const getStats = lazy(() =>
-    createStatsHandler({ fetchStats: createPgFetchStats() })
-);
-const getUploadReadings = lazy(() => {
-    const rpc = createPgRpc();
-    return createUploadReadingsHandler({
-        hashDeviceToken,
-        checkRateLimit: createRateLimitChecker(rpc) as (tokenHashHex: string, ip: string) => Promise<UploadRateLimitResult>,
-        ingestBatch: createPgIngestBatch(),
-    });
-});
-const getPotholeActions = lazy(() => {
-    const rpc = createPgRpc();
-    return createPotholeActionsHandler({
-        hashDeviceToken,
-        checkRateLimit: createPotholeActionRateLimitChecker(rpc) as (tokenHashHex: string, ip: string) => Promise<PotholeActionsRateLimitResult>,
-        applyAction: createPgApplyAction(),
-    });
-});
-const getFeedback = lazy(() => {
-    const rpc = createPgRpc();
-    return createFeedbackHandler({
-        checkRateLimit: createFeedbackRateLimitChecker(rpc) as (ip: string) => Promise<FeedbackRateLimitResult>,
-        insertFeedback: createPgInsertFeedback(),
-    });
-});
-const getTiles = lazy(() => createTileHandler({ rpcGetTile: createPgTileRpc() }));
-const getCoverageTiles = lazy(() => createCoverageTileHandler({ rpcGetCoverageTile: createPgCoverageTileRpc() }));
-const getPotholes = lazy(() => createPotholesHandler({ fetchPotholes: createPgFetchPotholes() }));
-const getSegments = lazy(() => createSegmentsHandler({ fetchSegmentDetail: createPgFetchSegmentDetail() }));
-const getSegmentsWorst = lazy(() => createSegmentsWorstHandler({
-    fetchKnownMunicipalities: createPgFetchKnownMunicipalities(),
-    fetchWorstSegments: createPgFetchWorstSegments(),
-}));
-
-const handleHealth: RouteHandler = (req) => getHealth()(req);
-const handleStats: RouteHandler = (req) => getStats()(req);
-const handleUploadReadings: RouteHandler = (req) => getUploadReadings()(req);
-const handlePotholeActions: RouteHandler = (req) => getPotholeActions()(req);
-const handleFeedback: RouteHandler = (req) => getFeedback()(req);
-const handleTiles: RouteHandler = (req) => getTiles()(req);
-const handleCoverageTiles: RouteHandler = (req) => getCoverageTiles()(req);
-const handlePotholes: RouteHandler = (req) => getPotholes()(req);
-const handleSegmentDetail: RouteHandler = (req) => getSegments()(req);
-const handleSegmentsWorst: RouteHandler = (req) => getSegmentsWorst()(req);
-
 export const ROUTES = [
-    route("/functions/v1/health", handleHealth),
-    route("/functions/v1/upload-readings", handleUploadReadings),
-    route("/functions/v1/pothole-actions", handlePotholeActions),
-    route("/functions/v1/feedback", handleFeedback),
-    route("/functions/v1/stats", handleStats),
-    route("/functions/v1/segments-worst", handleSegmentsWorst),
-    route("/functions/v1/segments/:id", handleSegmentDetail),
-    route("/functions/v1/potholes", handlePotholes),
-    route("/functions/v1/tiles/coverage/:z/:x/:y.mvt", handleCoverageTiles),
-    route("/functions/v1/tiles/:z/:x/:y.mvt", handleTiles),
+    route("/functions/v1/health", lazy(() => createHealthHandler())),
+    route(
+        "/functions/v1/health/deep",
+        lazy(() => createDeepHealthHandler({ checkDb: createPgDbCheck() })),
+    ),
+    route(
+        "/functions/v1/upload-readings",
+        lazy(() => {
+            const rpc = createPgRpc();
+            return createUploadReadingsHandler({
+                hashDeviceToken,
+                checkRateLimit: createRateLimitChecker(rpc) as (tokenHashHex: string, ip: string) => Promise<UploadRateLimitResult>,
+                ingestBatch: createPgIngestBatch(),
+            });
+        }),
+    ),
+    route(
+        "/functions/v1/pothole-actions",
+        lazy(() => {
+            const rpc = createPgRpc();
+            return createPotholeActionsHandler({
+                hashDeviceToken,
+                checkRateLimit: createPotholeActionRateLimitChecker(rpc) as (tokenHashHex: string, ip: string) => Promise<PotholeActionsRateLimitResult>,
+                applyAction: createPgApplyAction(),
+            });
+        }),
+    ),
+    route(
+        "/functions/v1/feedback",
+        lazy(() => {
+            const rpc = createPgRpc();
+            return createFeedbackHandler({
+                checkRateLimit: createFeedbackRateLimitChecker(rpc) as (ip: string) => Promise<FeedbackRateLimitResult>,
+                insertFeedback: createPgInsertFeedback(),
+            });
+        }),
+    ),
+    route("/functions/v1/stats", lazy(() => createStatsHandler({ fetchStats: createPgFetchStats() }))),
+    route(
+        "/functions/v1/segments-worst",
+        lazy(() => createSegmentsWorstHandler({
+            fetchKnownMunicipalities: createPgFetchKnownMunicipalities(),
+            fetchWorstSegments: createPgFetchWorstSegments(),
+        })),
+    ),
+    route("/functions/v1/segments/:id", lazy(() => createSegmentsHandler({ fetchSegmentDetail: createPgFetchSegmentDetail() }))),
+    route("/functions/v1/potholes", lazy(() => createPotholesHandler({ fetchPotholes: createPgFetchPotholes() }))),
+    route("/functions/v1/tiles/coverage/:z/:x/:y.mvt", lazy(() => createCoverageTileHandler({ rpcGetCoverageTile: createPgCoverageTileRpc() }))),
+    route("/functions/v1/tiles/:z/:x/:y.mvt", lazy(() => createTileHandler({ rpcGetTile: createPgTileRpc() }))),
 ] as const;
+
+// /health stays unauthenticated so uptime probes work without a key. Every
+// other route requires apikey when PUBLIC_API_KEY is set.
+const PUBLIC_PATHS = new Set<string>(["/functions/v1/health"]);
 
 export async function handleRequest(req: Request): Promise<Response> {
     if (req.method === "OPTIONS") {
-        return new Response(null, {
-            status: 204,
-            headers: corsHeaders(),
-        });
+        return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    // Health is unauthenticated so Railway/uptime probes can hit it.
     const url = new URL(req.url);
-    if (url.pathname !== "/functions/v1/health") {
+    if (!PUBLIC_PATHS.has(url.pathname)) {
         const auth = verifyApiKey(req, configuredApiKey());
         if (!auth.ok) {
             return new Response(
@@ -139,7 +142,7 @@ export async function handleRequest(req: Request): Promise<Response> {
                     status: auth.status,
                     headers: {
                         "content-type": "application/json; charset=utf-8",
-                        ...corsHeaders(),
+                        ...CORS_HEADERS,
                     },
                 },
             );
@@ -148,7 +151,7 @@ export async function handleRequest(req: Request): Promise<Response> {
 
     const response = await dispatch(ROUTES, req);
     const headers = new Headers(response.headers);
-    for (const [key, value] of Object.entries(corsHeaders())) {
+    for (const [key, value] of Object.entries(CORS_HEADERS)) {
         if (!headers.has(key)) headers.set(key, value);
     }
     return new Response(response.body, {
@@ -158,18 +161,17 @@ export async function handleRequest(req: Request): Promise<Response> {
     });
 }
 
-function corsHeaders(): Record<string, string> {
-    return {
-        "access-control-allow-origin": "*",
-        "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
-        "access-control-allow-headers": "content-type, apikey, authorization, x-request-id",
-        "access-control-max-age": "86400",
-    };
-}
-
 // Boot only when run as the main module (not when imported by tests).
 if (import.meta.main) {
     const port = Number(Deno.env.get("PORT") ?? "8000");
     console.log(`server starting on :${port}`);
+
+    // Start the in-process scheduler when running on Railway (no pg_cron).
+    // Local dev with `supabase start` uses the real pg_cron and doesn't need
+    // this; opt out explicitly to keep tests/dev runs quiet.
+    if (Deno.env.get("RAILWAY_ENVIRONMENT") || Deno.env.get("ENABLE_SCHEDULER") === "true") {
+        startScheduler();
+    }
+
     Deno.serve({ port }, handleRequest);
 }

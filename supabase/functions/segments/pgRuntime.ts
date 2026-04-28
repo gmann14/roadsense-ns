@@ -1,4 +1,5 @@
 import { db, type DB } from "../db.ts";
+import { toIso } from "../_shared/pg.ts";
 import type {
     SegmentAggregate,
     SegmentDetail,
@@ -115,7 +116,3 @@ export function createPgFetchSegmentDetail(sqlOverride?: DB) {
     };
 }
 
-function toIso(value: Date | string | null | undefined): string | null {
-    if (!value) return null;
-    return value instanceof Date ? value.toISOString() : String(value);
-}

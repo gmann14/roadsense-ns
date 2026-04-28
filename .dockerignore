@@ -8,4 +8,4 @@ scripts
 node_modules
 *.md
 .env*
-!supabase/functions/**
+.railway-secrets.local

@@ -18,7 +18,7 @@ export function db(): DB {
         throw new Error("DATABASE_URL is not set");
     }
 
-    const isRailwayInternal = url.includes("railway.internal");
+    const isRailwayInternal = isRailwayInternalUrl(url);
 
     _pool = postgres(url, {
         max: Number(Deno.env.get("PG_POOL_MAX") ?? "10"),
@@ -35,4 +35,16 @@ export function db(): DB {
 /// For tests: replace the pool with a mock; pass null to re-enable env-driven init.
 export function setPoolForTests(pool: DB | null): void {
     _pool = pool;
+}
+
+// Anchored hostname check so a malicious URL like
+// `evil.railway.internal.attacker.com` cannot trick us into disabling TLS.
+export function isRailwayInternalUrl(rawUrl: string): boolean {
+    let host: string;
+    try {
+        host = new URL(rawUrl).hostname.toLowerCase();
+    } catch {
+        return false;
+    }
+    return host === "railway.internal" || host.endsWith(".railway.internal");
 }
