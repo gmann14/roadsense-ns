@@ -16,6 +16,9 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Space.xl) {
+                if let alert = uploadHealthAlert {
+                    alertBanner(alert)
+                }
                 collectionCard
                 diagnosticsCard
                 uploadsCard
@@ -665,4 +668,128 @@ struct SettingsView: View {
 
         return " · HTTP \(statusCode)"
     }
+
+    // MARK: - Upload-health alert
+
+    fileprivate var uploadHealthAlert: UploadHealthAlert? {
+        SettingsView.uploadHealthAlert(
+            now: Date(),
+            lastSuccessfulUploadAt: lastSuccessfulUploadAt,
+            uploadStatusSummary: model.uploadStatusSummary,
+            potholeActionStatusSummary: model.potholeActionStatusSummary,
+            potholePhotoStatusSummary: model.potholePhotoStatusSummary,
+            pendingTripUploadCount: model.userStatsSummary.pendingTripUploadCount,
+            pendingPotholeMarkCount: model.potholeActionStatusSummary.pendingCount,
+            pendingPhotoCount: model.potholePhotoStatusSummary.pendingCount
+        )
+    }
+
+    static func uploadHealthAlert(
+        now: Date,
+        lastSuccessfulUploadAt: Date?,
+        uploadStatusSummary: UploadQueueStatusSummary,
+        potholeActionStatusSummary: PotholeActionStatusSummary,
+        potholePhotoStatusSummary: PotholePhotoStatusSummary,
+        pendingTripUploadCount: Int,
+        pendingPotholeMarkCount: Int,
+        pendingPhotoCount: Int
+    ) -> UploadHealthAlert? {
+        let failedPermanentTotal = uploadStatusSummary.failedPermanentBatchCount
+            + potholeActionStatusSummary.failedPermanentCount
+            + potholePhotoStatusSummary.failedPermanentCount
+
+        if failedPermanentTotal > 0 {
+            return UploadHealthAlert(
+                severity: .danger,
+                title: "Some uploads failed",
+                detail: "\(failedPermanentTotal) item\(failedPermanentTotal == 1 ? "" : "s") need attention. Use the retry buttons below."
+            )
+        }
+
+        let totalPending = pendingTripUploadCount + pendingPotholeMarkCount + pendingPhotoCount
+        guard totalPending > 0 else {
+            return nil
+        }
+
+        guard let lastSuccess = lastSuccessfulUploadAt else {
+            // We have data queued but have never seen a successful upload.
+            return UploadHealthAlert(
+                severity: .warning,
+                title: "Nothing has uploaded yet",
+                detail: "\(totalPending) item\(totalPending == 1 ? "" : "s") queued. Check that you're on a network that can reach the backend."
+            )
+        }
+
+        let staleHours = Int(now.timeIntervalSince(lastSuccess) / 3_600)
+        if staleHours >= 24 {
+            return UploadHealthAlert(
+                severity: .danger,
+                title: "Uploads have been failing for \(staleHours)h",
+                detail: "Last successful upload was \(lastSuccess.formatted(date: .abbreviated, time: .shortened)). \(totalPending) item\(totalPending == 1 ? "" : "s") still queued."
+            )
+        }
+
+        if staleHours >= 4 {
+            return UploadHealthAlert(
+                severity: .warning,
+                title: "No upload in \(staleHours)h",
+                detail: "\(totalPending) item\(totalPending == 1 ? "" : "s") queued. Make sure you're on a network the backend can reach."
+            )
+        }
+
+        return nil
+    }
+
+    private func alertBanner(_ alert: UploadHealthAlert) -> some View {
+        HStack(alignment: .top, spacing: DesignTokens.Space.md) {
+            Image(systemName: alert.severity.iconName)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(alert.severity.tint)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: DesignTokens.Space.xs) {
+                Text(alert.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(DesignTokens.Palette.ink)
+                Text(alert.detail)
+                    .font(.system(size: 13))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(DesignTokens.Space.lg)
+        .background(alert.severity.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.md, style: .continuous)
+                .strokeBorder(alert.severity.tint.opacity(0.45), lineWidth: 1)
+        )
+        .accessibilityIdentifier("settings.upload-health-banner")
+    }
+}
+
+struct UploadHealthAlert: Equatable {
+    enum Severity: Equatable {
+        case warning
+        case danger
+
+        var iconName: String {
+            switch self {
+            case .warning: return "exclamationmark.triangle.fill"
+            case .danger:  return "xmark.octagon.fill"
+            }
+        }
+
+        var tint: Color {
+            switch self {
+            case .warning: return DesignTokens.Palette.warning
+            case .danger:  return DesignTokens.Palette.danger
+            }
+        }
+    }
+
+    let severity: Severity
+    let title: String
+    let detail: String
 }

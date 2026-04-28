@@ -9,6 +9,7 @@ Current B011 pipeline:
 - `local-ios-quality-report.sh` — prints road-sample counts, roughness distribution, grouped trips, upload batch states, pothole marks, and photo reports from a copied iPhone SwiftData store, plus a "Since last report" delta against a saved snapshot so you can see what each new drive actually added
 - `test-local-ios-quality-report.sh` — smoke-tests the local iOS store report against a deterministic SQLite fixture, including baseline / no-change / new-drive delta paths and the `--no-snapshot-update` and `--reset-snapshot` flags
 - `replay-snapshot-readings.sh` — replays every accepted, non-trimmed reading from a copied iPhone snapshot back through `/functions/v1/upload-readings`. Use after re-running `osm-import.sh` with wider segment coverage to recover drives the server originally rejected as `no_segment_match`. Server-side dedup makes it safe to re-run.
+- `pull-device-store.sh` — pulls the iOS app's data container off a paired iPhone via `xcrun devicectl`, refreshes `.context/device-live-latest`, preserves the snapshot file for the delta, and runs `local-ios-quality-report.sh`. One-shot replacement for the manual offload sequence.
 - `local-web-up.sh` — starts the public Next.js map locally against the local Supabase stack using the existing iOS Mapbox/anon secrets
 - `api-smoke.sh` — contract smoke for `/health`, `/stats`, and duplicate-safe `/upload-readings` against local or staging Edge Functions
 - `seeded-e2e-smoke.sh` — seeded local/staging smoke that inserts a synthetic paved segment, uploads three matching batches, refreshes stats, and verifies segment detail plus tile emission
@@ -62,7 +63,17 @@ REGION_KEY=nova-scotia ./scripts/osm-import.sh
 
 ## Post-drive iPhone offload
 
-After a calibration drive, copy the device store into `.context/device-live-latest/` and run:
+After a calibration drive, plug in the phone and run:
+
+```bash
+./scripts/pull-device-store.sh
+```
+
+That pulls the iOS app's data container off the paired iPhone via
+`xcrun devicectl`, refreshes `.context/device-live-latest/`, preserves the
+prior snapshot for the delta, and runs `local-ios-quality-report.sh`.
+
+If you need to point the report at a snapshot that's already on disk:
 
 ```bash
 ./scripts/local-ios-quality-report.sh
