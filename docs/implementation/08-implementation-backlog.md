@@ -945,6 +945,20 @@ These tasks ship **after** MVP TestFlight launch. They exist on a quarterly cade
   - quarterly refresh completes inside its documented operational budget on production-scale data
   - `/stats` and the quality map reflect the post-refresh world within one nightly cycle
 
+## Phase 11d — Railway / Deno migration (Path C)
+
+### B130 — Move Edge Functions off Supabase onto Railway
+
+- **Spec refs:** [13](13-railway-deno-migration.md), [03](03-api-contracts.md), [05](05-deployment-and-observability.md)
+- **Depends on:** B070-B072 upload execution, B072a feedback path, all Phase 9 web backend work
+- **Status:** plan written, code starting. See [13-railway-deno-migration.md](13-railway-deno-migration.md) for full architecture, sticking-point analysis, and 14-phase RED/GREEN test breakdown. Core idea: replace supabase-js with raw postgres-deno across ~10 functions, ship as a single Deno service on Railway against a Railway-hosted PostGIS. Defers photo-upload functions until R2 bucket is set up.
+- **Why now:** Apple Developer access landed; we need a hosted backend reachable from cellular for TestFlight. Self-hosted Supabase ($25-40/mo) is overkill for our scale; Path C reduces it to $5-10/mo with a leaner architecture and one service to operate.
+- **Acceptance**
+  - api-smoke.sh against the Railway URL returns the expected shapes for /health, /stats, /upload-readings (duplicate-safe replay)
+  - replay-snapshot-readings.sh successfully replays the local device snapshot against Railway after osm-import.sh runs there
+  - signed iOS Staging IPA can drive, mark potholes, send feedback against Railway
+  - /privacy-and-counts on Vercel shows live counts from Railway
+
 ## Phase 12 — Android Follow-On
 
 Android is explicitly post-iOS MVP. Do not start this until the iOS app has proven background collection, upload reliability, and roughness calibration on real drives; otherwise we duplicate unsettled platform decisions.
