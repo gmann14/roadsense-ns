@@ -11,15 +11,18 @@ struct ContentView: View {
     @State private var isShowingDrives = false
     @State private var pendingMapTarget: DriveBoundingBox?
     @State private var feedbackComposer: FeedbackComposerModel?
+    @State private var feedbackQueue: FeedbackQueue
     @State private var lastForegroundDrainAt: Date?
 
     init(container: AppContainer) {
+        let defaults = AppBootstrap.defaultsForCurrentProcess()
         _model = State(
             initialValue: AppModel(
                 container: container,
-                defaults: AppBootstrap.defaultsForCurrentProcess()
+                defaults: defaults
             )
         )
+        _feedbackQueue = State(initialValue: FeedbackQueue(defaults: defaults))
     }
 
     var body: some View {
@@ -84,6 +87,7 @@ struct ContentView: View {
                         onSendFeedback: {
                             feedbackComposer = FeedbackComposerModel(
                                 submitter: FeedbackSubmissionAPIClient(apiClient: model.apiClient),
+                                queue: feedbackQueue,
                                 route: "Settings"
                             )
                         }
@@ -94,6 +98,11 @@ struct ContentView: View {
                 FeedbackComposerView(model: composer)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+                    .task {
+                        // Drain anything queued from a prior session/network outage
+                        // as soon as the composer mounts. Silent on success.
+                        await composer.retryPending()
+                    }
             }
         }
         .onAppear {
@@ -116,6 +125,12 @@ struct ContentView: View {
             lastForegroundDrainAt = now
             Task {
                 await model.handleAppDidBecomeActive()
+            }
+            if feedbackQueue.pendingCount > 0 {
+                let submitter = FeedbackSubmissionAPIClient(apiClient: model.apiClient)
+                Task {
+                    _ = await FeedbackQueueDrainer.drain(queue: feedbackQueue, submitter: submitter)
+                }
             }
         case .background:
             model.handleAppDidEnterBackground()

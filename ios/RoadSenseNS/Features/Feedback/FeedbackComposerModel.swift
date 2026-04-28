@@ -62,6 +62,7 @@ final class FeedbackComposerModel: Identifiable {
     let id = UUID()
 
     private let submitter: FeedbackSubmitting
+    private let queue: FeedbackQueue?
     private let source: String
     private let route: String?
     private let locale: String?
@@ -71,15 +72,18 @@ final class FeedbackComposerModel: Identifiable {
     var replyEmail: String
     var contactConsent: Bool
     private(set) var status: FeedbackSubmissionStatus
+    private(set) var queuedForRetryCount: Int = 0
 
     init(
         submitter: FeedbackSubmitting,
+        queue: FeedbackQueue? = nil,
         source: String = "ios",
         route: String? = nil,
         locale: String? = Locale.current.identifier,
         initialCategory: FeedbackCategory = .bug
     ) {
         self.submitter = submitter
+        self.queue = queue
         self.source = source
         self.route = route
         self.locale = locale
@@ -88,6 +92,7 @@ final class FeedbackComposerModel: Identifiable {
         self.replyEmail = ""
         self.contactConsent = false
         self.status = .idle
+        self.queuedForRetryCount = queue?.pendingCount ?? 0
     }
 
     var trimmedMessage: String {
@@ -137,22 +142,65 @@ final class FeedbackComposerModel: Identifiable {
             locale: locale
         )
 
+        // Persist the submission BEFORE the network call. If the user kills
+        // the app mid-submit (or the network drops + the request never
+        // returns), the next composer open or app foreground will retry it.
+        let pendingID = UUID()
+        let persisted = PersistedFeedbackSubmission(
+            id: pendingID,
+            request: PersistedFeedbackRequest(request)
+        )
+        queue?.enqueue(persisted)
+        queuedForRetryCount = queue?.pendingCount ?? 0
+
         do {
             let result = try await submitter.submit(request)
             switch result {
             case .accepted:
+                queue?.markSubmitted(id: pendingID)
                 status = .submitted
             case let .validationFailed(fieldErrors, _):
+                // Server says this payload will never succeed; drop it from
+                // the queue so we don't retry forever.
+                queue?.markSubmitted(id: pendingID)
                 status = .validationFailed(fieldErrors)
             case let .rateLimited(retryAfterSeconds, _):
+                queue?.recordFailure(
+                    id: pendingID,
+                    message: "Rate-limited"
+                )
                 status = .rateLimited(retryAfterSeconds: retryAfterSeconds)
             case let .serverError(statusCode, _):
+                queue?.recordFailure(
+                    id: pendingID,
+                    message: "Server error \(statusCode)"
+                )
                 status = .serverError(statusCode: statusCode)
             }
         } catch {
             let message = (error as? LocalizedError)?.errorDescription
                 ?? error.localizedDescription
+            queue?.recordFailure(id: pendingID, message: message)
             status = .networkError(message)
+        }
+
+        queuedForRetryCount = queue?.pendingCount ?? 0
+    }
+
+    /// Drains pending submissions through the API. Safe to call on composer
+    /// init or app foreground — silent on success, surfaces a banner on partial
+    /// failure.
+    func retryPending() async {
+        guard let queue, queue.pendingCount > 0 else { return }
+
+        let result = await FeedbackQueueDrainer.drain(
+            queue: queue,
+            submitter: submitter
+        )
+        queuedForRetryCount = queue.pendingCount
+
+        if result.submitted > 0, status == .idle {
+            status = .submitted
         }
     }
 

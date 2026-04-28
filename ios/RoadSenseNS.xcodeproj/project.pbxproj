@@ -43,6 +43,7 @@
 		43D452E0BB2A2A57DC7753F9 /* UploadHealthAlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F8311FB419462427EC0FC5D /* UploadHealthAlertTests.swift */; };
 		476D1DCAD75559D8E2CBE87C /* PrivacyZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */; };
 		4E08F2DAC6BCB52420AA8BB2 /* PotholeDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */; };
+		4F81F8114222CE5028114954 /* FeedbackQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = C88D78FB313EAD799A2EC9B2 /* FeedbackQueue.swift */; };
 		55AA7CEAC78F98938B1505DB /* UploadEligibilityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8170529197B80D0CFDDC48C /* UploadEligibilityPolicy.swift */; };
 		57E1241F899736857CCD5C5C /* PotholePhotoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99BE4E2399EF31135224A3E8 /* PotholePhotoProcessor.swift */; };
 		58D2BBBAABD2C950BE180973 /* PrivacyZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E86F01DD97C19967FD7491 /* PrivacyZone.swift */; };
@@ -117,6 +118,7 @@
 		C7B974A63846BB64DD556431 /* ReadingWindowProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D28C3210AB3E7D5DEAB905D0 /* ReadingWindowProcessor.swift */; };
 		C859EED8CA59645B04B5D668 /* PrivacyZoneStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB54690AD1B0B14F43315BE6 /* PrivacyZoneStore.swift */; };
 		C894D8A4DAAC9BABBBD275FD /* RetentionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */; };
+		C914D149796C75F1759B6444 /* FeedbackQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42B93E947EDC459D29373BE /* FeedbackQueueTests.swift */; };
 		CAFAF51DC3E1A3AF7854919C /* ModelContainerProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F035620621F3107CCB6E6D /* ModelContainerProvider.swift */; };
 		CB1F04B640D1B2607FA070C0 /* BrandVoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABEB001E686B49514B484D3F /* BrandVoice.swift */; };
 		CB7414748B2E9DE849EBFE9C /* SensorFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 026DC5F95328D7091BC8482E /* SensorFixture.swift */; };
@@ -255,6 +257,7 @@
 		9E6C0A9805F38C0665D98181 /* DriveListGrouperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveListGrouperTests.swift; sourceTree = "<group>"; };
 		A0F8292B0B6F90460B7680B1 /* FeedbackComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackComposerView.swift; sourceTree = "<group>"; };
 		A2D445C6696ED6F082B33288 /* TestingRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestingRuntime.swift; sourceTree = "<group>"; };
+		A42B93E947EDC459D29373BE /* FeedbackQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackQueueTests.swift; sourceTree = "<group>"; };
 		A4CE5D67A573F4B606118C23 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A68D28C0E187AB48C62D0AC3 /* RoadSenseNS.Staging.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Staging.xcconfig; sourceTree = "<group>"; };
 		A6DEBA0D0F87D4B3143F8655 /* MapScreenRedesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapScreenRedesign.swift; sourceTree = "<group>"; };
@@ -273,6 +276,7 @@
 		C687070E04DFCBE0FE4EA200 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C6E666B2F4C969A8EDD18763 /* SensorCheckpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorCheckpoint.swift; sourceTree = "<group>"; };
 		C7D1B33C9EA9A18473F8587E /* RoadSenseNSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseNSApp.swift; sourceTree = "<group>"; };
+		C88D78FB313EAD799A2EC9B2 /* FeedbackQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackQueue.swift; sourceTree = "<group>"; };
 		C92C66AE5DC3BC5CF5E85327 /* RoadSenseNSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = RoadSenseNSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C9E2C334C77577FC08622EF8 /* HarnessFixtureCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessFixtureCatalog.swift; sourceTree = "<group>"; };
 		CA6257F1C7E68CE62C4CCF25 /* SegmentDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentDetailSheet.swift; sourceTree = "<group>"; };
@@ -559,6 +563,7 @@
 				9E6C0A9805F38C0665D98181 /* DriveListGrouperTests.swift */,
 				35B069043D716E17F9B67B71 /* DriveSummaryTests.swift */,
 				727040322BD073BF51BC6C5B /* FeedbackComposerModelTests.swift */,
+				A42B93E947EDC459D29373BE /* FeedbackQueueTests.swift */,
 				5F9B3A1E4D8232E728FC985D /* Info.plist */,
 				324CEFAD7CFADA6E750FD38A /* ManualPotholeLocatorTests.swift */,
 				92FDAEA75CB9CC16485601DF /* MockupRenderTests.swift */,
@@ -634,6 +639,7 @@
 			children = (
 				ADD15F159396DBFACBA6A7C5 /* FeedbackComposerModel.swift */,
 				A0F8292B0B6F90460B7680B1 /* FeedbackComposerView.swift */,
+				C88D78FB313EAD799A2EC9B2 /* FeedbackQueue.swift */,
 			);
 			path = Feedback;
 			sourceTree = "<group>";
@@ -855,6 +861,7 @@
 				D4B334D924DDE55C8A6F84C2 /* DriveListGrouperTests.swift in Sources */,
 				6E86378F31E363550C6057A6 /* DriveSummaryTests.swift in Sources */,
 				C69070A17B2A965E930BFFD9 /* FeedbackComposerModelTests.swift in Sources */,
+				C914D149796C75F1759B6444 /* FeedbackQueueTests.swift in Sources */,
 				92BB25E254C7AD6202139526 /* ManualPotholeLocatorTests.swift in Sources */,
 				DC915210331F65473B16AFEA /* MockupRenderTests.swift in Sources */,
 				75344D133A08D1802F9654A8 /* ModelMigrationTests.swift in Sources */,
@@ -948,6 +955,7 @@
 				179D6A3B7419DAB962119406 /* FeatureFlags.swift in Sources */,
 				61E361E43A082F9379EE3DFC /* FeedbackComposerModel.swift in Sources */,
 				95EEBD20BF6FDBC3D4AED0FD /* FeedbackComposerView.swift in Sources */,
+				4F81F8114222CE5028114954 /* FeedbackQueue.swift in Sources */,
 				93C65E0EF15B26424AEA3E21 /* HapticsService.swift in Sources */,
 				982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */,
 				AFEE1434CB9A30B9D66A33DC /* IngestHealthEvaluator.swift in Sources */,
