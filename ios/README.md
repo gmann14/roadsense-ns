@@ -82,3 +82,10 @@ Current notes:
 Additional verification commands:
 
 - `xcodebuild -project ios/RoadSenseNS.xcodeproj -scheme RoadSenseNS -configuration "Local Debug" -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build-for-testing`
+
+TestFlight automation:
+
+- `ios/fastlane/Fastfile` builds a signed release IPA and uploads it to internal TestFlight.
+- The default release lane uses `Staging Release`, which is release-optimized but points at the Railway staging API.
+- GitHub Actions workflow: `.github/workflows/ios-testflight.yml`
+- Required GitHub secrets: `APPLE_ASC_API_KEY_ID`, `APPLE_ASC_API_ISSUER_ID`, `APPLE_ASC_API_PRIVATE_KEY`, `APPLE_TEAM_ID`, and `MAPBOX_ACCESS_TOKEN`.

@@ -1,0 +1,107 @@
+name: iOS TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      configuration:
+        description: Release configuration to archive
+        required: true
+        type: choice
+        default: Staging Release
+        options:
+          - Staging Release
+          - Production Release
+      build_number:
+        description: Optional CFBundleVersion override
+        required: false
+        type: string
+      upload_to_testflight:
+        description: Upload the signed IPA to internal TestFlight
+        required: true
+        type: boolean
+        default: true
+
+concurrency:
+  group: ios-testflight-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 75
+    env:
+      APPLE_ASC_API_KEY_ID: ${{ secrets.APPLE_ASC_API_KEY_ID }}
+      APPLE_ASC_API_ISSUER_ID: ${{ secrets.APPLE_ASC_API_ISSUER_ID }}
+      APPLE_ASC_API_PRIVATE_KEY: ${{ secrets.APPLE_ASC_API_PRIVATE_KEY }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
+      ROAD_SENSE_PUBLIC_API_KEY: ${{ secrets.ROAD_SENSE_PUBLIC_API_KEY }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      ROAD_SENSE_APP_IDENTIFIER: ca.roadsense.ios
+      IOS_RELEASE_CONFIGURATION: ${{ inputs.configuration }}
+      IOS_BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
+      SKIP_TESTFLIGHT_UPLOAD: ${{ inputs.upload_to_testflight == false && '1' || '0' }}
+      TESTFLIGHT_CHANGELOG: Internal RoadSense NS field-test build from ${{ github.sha }}.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check required release secrets
+        shell: bash
+        run: |
+          missing=()
+          for name in APPLE_ASC_API_KEY_ID APPLE_ASC_API_ISSUER_ID APPLE_ASC_API_PRIVATE_KEY APPLE_TEAM_ID MAPBOX_ACCESS_TOKEN; do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required secret(s): %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Install XcodeGen
+        shell: bash
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      - name: Write App Store Connect private key
+        shell: bash
+        run: |
+          key_path="${RUNNER_TEMP}/AuthKey_${APPLE_ASC_API_KEY_ID}.p8"
+          printf '%s' "${APPLE_ASC_API_PRIVATE_KEY}" > "${key_path}"
+          chmod 600 "${key_path}"
+          echo "APPLE_ASC_API_PRIVATE_KEY_PATH=${key_path}" >> "${GITHUB_ENV}"
+
+      - name: Build and upload internal TestFlight build
+        shell: bash
+        run: |
+          cd ios
+          bundle exec fastlane ios testflight
+
+      - name: Upload IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roadsense-ios-ipa
+          path: ios/build/ipas/*.ipa
+          if-no-files-found: ignore
+
+      - name: Upload archive logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roadsense-ios-build-logs
+          path: |
+            ios/build
+            ~/Library/Logs/gym
+          if-no-files-found: ignore

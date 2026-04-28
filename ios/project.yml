@@ -13,10 +13,12 @@ packages:
 configs:
   Local Debug: debug
   Staging Debug: debug
+  Staging Release: release
   Production Release: release
 configFiles:
   Local Debug: Config/RoadSenseNS.Local.xcconfig
   Staging Debug: Config/RoadSenseNS.Staging.xcconfig
+  Staging Release: Config/RoadSenseNS.Staging.xcconfig
   Production Release: Config/RoadSenseNS.Production.xcconfig
 settings:
   base:
@@ -74,13 +76,16 @@ targets:
       configs:
         Local Debug:
           INFOPLIST_KEY_CFBundleDisplayName: RoadSense NS Local
-          PRODUCT_BUNDLE_IDENTIFIER: ca.roadsense.ios.localdebug
+          PRODUCT_BUNDLE_IDENTIFIER: $(ROAD_SENSE_APP_BUNDLE_IDENTIFIER)
         Staging Debug:
           INFOPLIST_KEY_CFBundleDisplayName: RoadSense NS
-          PRODUCT_BUNDLE_IDENTIFIER: ca.roadsense.ios
+          PRODUCT_BUNDLE_IDENTIFIER: $(ROAD_SENSE_APP_BUNDLE_IDENTIFIER)
+        Staging Release:
+          INFOPLIST_KEY_CFBundleDisplayName: RoadSense NS
+          PRODUCT_BUNDLE_IDENTIFIER: $(ROAD_SENSE_APP_BUNDLE_IDENTIFIER)
         Production Release:
           INFOPLIST_KEY_CFBundleDisplayName: RoadSense NS
-          PRODUCT_BUNDLE_IDENTIFIER: ca.roadsense.ios
+          PRODUCT_BUNDLE_IDENTIFIER: $(ROAD_SENSE_APP_BUNDLE_IDENTIFIER)
   RoadSenseNSTests:
     type: bundle.unit-test
     platform: iOS
