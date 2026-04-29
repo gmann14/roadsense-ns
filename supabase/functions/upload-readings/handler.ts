@@ -1,4 +1,7 @@
 import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { extractClientIp } from "../_shared/clientIp.ts";
+
+export { extractClientIp };
 
 const UUID_V4_REGEX =
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -52,16 +55,6 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isIsoTimestamp(value: unknown): value is string {
     return typeof value === "string" && !Number.isNaN(Date.parse(value));
-}
-
-export function extractClientIp(headers: Headers): string {
-    const forwarded = headers.get("x-forwarded-for") ?? "";
-    const firstForwarded = forwarded.split(",")[0]?.trim();
-
-    return firstForwarded
-        || headers.get("x-real-ip")
-        || headers.get("cf-connecting-ip")
-        || "unknown";
 }
 
 export function validateUploadPayload(payload: unknown): ValidationResult {

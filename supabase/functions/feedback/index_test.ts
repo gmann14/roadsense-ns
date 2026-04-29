@@ -48,13 +48,18 @@ function defaultDeps(overrides: Partial<{
     };
 }
 
-Deno.test("extractClientIp prefers x-forwarded-for then x-real-ip then cf-connecting-ip", () => {
+Deno.test("extractClientIp uses the last public forwarded hop before fallback headers", () => {
     assertEquals(
         extractClientIp(new Headers({
             "x-forwarded-for": "203.0.113.7, 10.0.0.1",
             "x-real-ip": "198.51.100.10",
         })),
         "203.0.113.7",
+    );
+
+    assertEquals(
+        extractClientIp(new Headers({ "x-forwarded-for": "8.8.8.8, 203.0.113.8" })),
+        "203.0.113.8",
     );
 
     assertEquals(

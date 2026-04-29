@@ -1,7 +1,16 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+-- pg_cron is available on Supabase but not on Railway's stock PostGIS image.
+-- Catch the "extension not available" error so the migration runs on both.
+-- migrate-railway.sh installs cron.* stub functions so subsequent migrations
+-- that call cron.schedule(...) continue to work as no-ops.
+DO $$ BEGIN
+    CREATE EXTENSION IF NOT EXISTS pg_cron;
+EXCEPTION WHEN feature_not_supported OR undefined_file OR insufficient_privilege THEN
+    RAISE NOTICE 'pg_cron not available; scheduled jobs will be no-ops';
+END $$;
 
 DO $$
 BEGIN

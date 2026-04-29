@@ -21,6 +21,37 @@ struct AppConfigTests {
         #expect(config.supabaseAnonKey == "anon.test-key")
         #expect(config.sentryDSN == "https://public@sentry.example/1")
         #expect(config.appGroupIdentifier == "group.ca.roadsense.ios")
+        #expect(config.enablePotholePhotos == true)
+    }
+
+    @Test
+    func parsesPotholePhotoFlag() throws {
+        let disabled = try AppConfig.fromDictionary([
+            "APP_ENV": "STAGING",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_POTHOLE_PHOTOS": "NO"
+        ])
+        #expect(disabled.enablePotholePhotos == false)
+
+        let explicitlyEnabled = try AppConfig.fromDictionary([
+            "APP_ENV": "STAGING",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_POTHOLE_PHOTOS": "YES"
+        ])
+        #expect(explicitlyEnabled.enablePotholePhotos == true)
+
+        let bogus = try AppConfig.fromDictionary([
+            "APP_ENV": "STAGING",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_POTHOLE_PHOTOS": "maybe"
+        ])
+        #expect(bogus.enablePotholePhotos == true)
     }
 
     @Test

@@ -8,17 +8,31 @@ export type TileRpcResult = {
 
 export type TileRpc = (params: { z: number; x: number; y: number }) => Promise<TileRpcResult>;
 
+// Mapbox vector tiles are valid for z 0–22; anything beyond that overflows
+// ST_TileEnvelope server-side and crashes get_tile() with a Postgres error.
+// Reject out-of-range coords here so /tiles returns 400 instead of 500.
+export const MAX_TILE_ZOOM = 22;
+
 export function parseTilePath(pathname: string): { z: number; x: number; y: number } | null {
     const match = pathname.match(/\/(\d+)\/(\d+)\/(\d+)\.mvt$/);
     if (!match) {
         return null;
     }
 
-    return {
-        z: Number.parseInt(match[1], 10),
-        x: Number.parseInt(match[2], 10),
-        y: Number.parseInt(match[3], 10),
-    };
+    const z = Number.parseInt(match[1], 10);
+    const x = Number.parseInt(match[2], 10);
+    const y = Number.parseInt(match[3], 10);
+    if (!isValidTileCoord(z, x, y)) {
+        return null;
+    }
+    return { z, x, y };
+}
+
+export function isValidTileCoord(z: number, x: number, y: number): boolean {
+    if (!Number.isInteger(z) || !Number.isInteger(x) || !Number.isInteger(y)) return false;
+    if (z < 0 || z > MAX_TILE_ZOOM) return false;
+    const max = 2 ** z;
+    return x >= 0 && x < max && y >= 0 && y < max;
 }
 
 function hexToBytes(hex: string): Uint8Array | null {

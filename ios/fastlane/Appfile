@@ -1,0 +1,2 @@
+app_identifier(ENV.fetch("ROAD_SENSE_APP_IDENTIFIER", "ca.roadsense.ios"))
+team_id(ENV["APPLE_TEAM_ID"]) if ENV["APPLE_TEAM_ID"]

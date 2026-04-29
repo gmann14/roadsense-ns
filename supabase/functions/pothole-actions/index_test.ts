@@ -17,12 +17,17 @@ const validPayload = {
     recorded_at: "2026-04-21T18:22:00Z",
 } as const;
 
-Deno.test("extractClientIp prefers x-forwarded-for then x-real-ip", () => {
+Deno.test("extractClientIp uses the last public forwarded hop before fallback headers", () => {
     const forwardedHeaders = new Headers({
         "x-forwarded-for": "203.0.113.7, 10.0.0.1",
         "x-real-ip": "198.51.100.10",
     });
     assertEquals(extractClientIp(forwardedHeaders), "203.0.113.7");
+
+    const spoofedForwardedHeaders = new Headers({
+        "x-forwarded-for": "8.8.8.8, 203.0.113.8",
+    });
+    assertEquals(extractClientIp(spoofedForwardedHeaders), "203.0.113.8");
 
     const realIpHeaders = new Headers({
         "x-real-ip": "198.51.100.10",

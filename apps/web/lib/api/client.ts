@@ -9,10 +9,6 @@ export type PublicStats = {
   generated_at: string;
 };
 
-type PublicStatsRestRow = PublicStats & {
-  stats_key?: number;
-};
-
 export type SegmentDetail = {
   id: string;
   road_name: string | null;
@@ -132,14 +128,13 @@ function buildEndpointUrl(path: string): string {
   return `${getApiBaseUrl().replace(/\/$/, "")}${path}`;
 }
 
-function getSupabaseRootUrl(): string {
-  return getApiBaseUrl()
-    .replace(/\/functions\/v1\/?$/, "")
-    .replace(/\/$/, "");
+function apiFetchesDisabledInTests(): boolean {
+  return (process.env.NODE_ENV === "test" || process.env.VITEST === "true") &&
+    process.env.ROADSENSE_ALLOW_API_FETCHES_IN_TEST !== "true";
 }
 
 async function fetchJson<T>(path: string, nextOptions?: RequestInit & { next?: { revalidate: number } }): Promise<T | null> {
-  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") {
+  if (apiFetchesDisabledInTests()) {
     return null;
   }
 
@@ -162,73 +157,7 @@ async function fetchJson<T>(path: string, nextOptions?: RequestInit & { next?: {
   }
 }
 
-async function fetchRest<T>(path: string, nextOptions?: RequestInit & { next?: { revalidate: number } }): Promise<T | null> {
-  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") {
-    return null;
-  }
-
-  try {
-    const response = await fetch(`${getSupabaseRootUrl()}/rest/v1${path}`, {
-      ...nextOptions,
-      headers: {
-        ...getPublicReadHeaders(),
-        ...(nextOptions?.headers ?? {}),
-      },
-    });
-
-    if (!response.ok || response.status === 204) {
-      return null;
-    }
-
-    return (await response.json()) as T;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchRpc<T>(
-  rpcName: string,
-  body: Record<string, unknown>,
-  nextOptions?: RequestInit & { next?: { revalidate: number } },
-): Promise<T | null> {
-  if (process.env.NODE_ENV === "test" || process.env.VITEST === "true") {
-    return null;
-  }
-
-  try {
-    const response = await fetch(`${getSupabaseRootUrl()}/rest/v1/rpc/${rpcName}`, {
-      method: "POST",
-      ...nextOptions,
-      headers: {
-        "content-type": "application/json",
-        ...getPublicReadHeaders(),
-        ...(nextOptions?.headers ?? {}),
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok || response.status === 204) {
-      return null;
-    }
-
-    return (await response.json()) as T;
-  } catch {
-    return null;
-  }
-}
-
 export async function getPublicStats(): Promise<PublicStats | null> {
-  const rows = await fetchRest<PublicStatsRestRow[]>(
-    "/public_stats_mv?select=total_km_mapped,total_readings,segments_scored,active_potholes,municipalities_covered,map_bounds,pothole_bounds,generated_at&limit=1",
-    {
-      next: { revalidate: 300 },
-    },
-  );
-
-  if (rows?.[0]) {
-    return rows[0];
-  }
-
   return await fetchJson<PublicStats>("/stats", {
     next: { revalidate: 300 },
   });
@@ -284,15 +213,10 @@ export function isPotholeBboxWithinLookupCap(bbox: Bbox): boolean {
 }
 
 export async function getTopPotholes(limit = 20): Promise<PotholeResponse | null> {
-  const rows = await fetchRpc<PotholeRow[]>(
-    "get_top_potholes",
-    { p_limit: limit },
-    { next: { revalidate: 300 } },
-  );
-
-  return {
-    potholes: rows ?? [],
-  };
+  const query = new URLSearchParams({ limit: String(limit) });
+  return await fetchJson<PotholeResponse>(`/top-potholes?${query.toString()}`, {
+    next: { revalidate: 300 },
+  });
 }
 
 export type FeedbackCategoryValue =

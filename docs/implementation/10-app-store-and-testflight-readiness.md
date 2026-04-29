@@ -1,6 +1,6 @@
 # 10 — App Store & TestFlight Readiness
 
-*Last updated: 2026-04-24*
+*Last updated: 2026-04-28*
 
 Covers: the release-ops source of truth for Apple Developer approval, App Store Connect fields, privacy labels, reviewer notes, screenshots, and the first internal/external TestFlight cycles.
 
@@ -8,10 +8,10 @@ This doc is intentionally operational. [06-security-and-privacy.md](06-security-
 
 ## Current Status
 
-- Apple Developer approval is still pending.
+- Apple Developer approval/API access is now far enough along for upload automation.
 - There are no outside testers yet.
-- A persistent hosted `staging` backend is intentionally deferred until signed multi-device testing makes a shared backend worthwhile.
-- The immediate bottleneck is Apple/TestFlight readiness, not backend infrastructure.
+- Railway staging is provisioned and smoke-tested for hosted backend testing.
+- The immediate bottleneck is signed iOS distribution, App Store Connect metadata, and real-device validation.
 - The web app now has a fuller `/privacy` page that can back the future public policy URL once deployed.
 
 ## What To Finish Before Apple Approval Lands
@@ -102,11 +102,12 @@ Rules:
 
 Before the first internal TestFlight upload:
 
-1. `cd ios && xcodegen generate`
-2. build a production archive
-3. run `xcrun PrivacyReport` on the archive
-4. confirm the aggregated privacy manifest is present and coherent
-5. verify the archive does not introduce a new privacy-collected-data category beyond what [06-security-and-privacy.md](06-security-and-privacy.md) already declares
+1. confirm GitHub secrets exist for `APPLE_ASC_API_KEY_ID`, `APPLE_ASC_API_ISSUER_ID`, `APPLE_ASC_API_PRIVATE_KEY`, `APPLE_TEAM_ID`, and `MAPBOX_ACCESS_TOKEN`
+2. run `.github/workflows/ios-testflight.yml` with `Staging Release` and upload disabled for the first signing dry run
+3. run `.github/workflows/ios-testflight.yml` with upload enabled once the signed archive succeeds
+4. run `xcrun PrivacyReport` on the archive
+5. confirm the aggregated privacy manifest is present and coherent
+6. verify the archive does not introduce a new privacy-collected-data category beyond what [06-security-and-privacy.md](06-security-and-privacy.md) already declares
 
 The iOS implementation spec already requires this check:
 
@@ -139,8 +140,6 @@ Before submitting for external Beta App Review:
 
 These are not worth front-loading before Apple approval:
 
-- provisioning a persistent hosted `staging` backend
-- automating `testflight.yml`
 - polishing external-tester support workflows before the first internal signed build exists
 
 ## Go / No-Go

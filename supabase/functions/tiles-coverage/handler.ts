@@ -1,4 +1,5 @@
 import {
+    isValidTileCoord,
     normalizeTilePayload,
     TILE_CONTENT_TYPE,
 } from "../tiles/handler.ts";
@@ -20,11 +21,13 @@ export function parseCoverageTilePath(pathname: string): { z: number; x: number;
         return null;
     }
 
-    return {
-        z: Number.parseInt(match[1], 10),
-        x: Number.parseInt(match[2], 10),
-        y: Number.parseInt(match[3], 10),
-    };
+    const z = Number.parseInt(match[1], 10);
+    const x = Number.parseInt(match[2], 10);
+    const y = Number.parseInt(match[3], 10);
+    if (!isValidTileCoord(z, x, y)) {
+        return null;
+    }
+    return { z, x, y };
 }
 
 export function createCoverageTileHandler(deps: { rpcGetCoverageTile: CoverageTileRpc }) {

@@ -3,11 +3,13 @@ set -euo pipefail
 
 FUNCTIONS_BASE_URL="${FUNCTIONS_BASE_URL:-http://127.0.0.1:54321/functions/v1}"
 SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
+PUBLIC_API_KEY="${PUBLIC_API_KEY:-}"
+API_KEY="${PUBLIC_API_KEY:-$SUPABASE_ANON_KEY}"
 
-if [[ -z "${SUPABASE_ANON_KEY}" ]]; then
-  echo "SUPABASE_ANON_KEY is required." >&2
+if [[ -z "${API_KEY}" ]]; then
+  echo "PUBLIC_API_KEY or SUPABASE_ANON_KEY is required." >&2
   echo "Example:" >&2
-  echo "  export SUPABASE_ANON_KEY=..." >&2
+  echo "  export PUBLIC_API_KEY=..." >&2
   echo "  export FUNCTIONS_BASE_URL=http://127.0.0.1:54321/functions/v1" >&2
   exit 1
 fi
@@ -43,8 +45,8 @@ request() {
 
   if [[ "${url}" != */health ]]; then
     curl_args+=(
-      -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"
-      -H "apikey: ${SUPABASE_ANON_KEY}"
+      -H "Authorization: Bearer ${API_KEY}"
+      -H "apikey: ${API_KEY}"
     )
   fi
 
@@ -101,8 +103,27 @@ import sys
 with open(sys.argv[1], "r", encoding="utf-8") as fh:
     payload = json.load(fh)
 
+# /health is the lite liveness probe — process is up, no DB roundtrip.
+# Use /health/deep for the DB check below.
 assert payload["status"] == "ok", payload
-assert "db" in payload, payload
+PY
+
+deep_health_status="$(request GET "${FUNCTIONS_BASE_URL}/health/deep" "" "${tmpdir}/health-deep.json")"
+if [[ "${deep_health_status}" != "200" ]]; then
+  echo "health/deep check failed with HTTP ${deep_health_status}" >&2
+  cat "${tmpdir}/health-deep.json" >&2
+  exit 1
+fi
+
+python3 - "${tmpdir}/health-deep.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    payload = json.load(fh)
+
+assert payload["status"] == "ok", payload
+assert payload["db"] == "reachable", payload
 PY
 
 stats_status="$(request GET "${FUNCTIONS_BASE_URL}/stats" "" "${tmpdir}/stats.json")"
@@ -130,6 +151,36 @@ required = {
 
 missing = required - payload.keys()
 assert not missing, missing
+PY
+
+top_potholes_status="$(request GET "${FUNCTIONS_BASE_URL}/top-potholes?limit=5" "" "${tmpdir}/top-potholes.json")"
+if [[ "${top_potholes_status}" != "200" ]]; then
+  echo "top-potholes check failed with HTTP ${top_potholes_status}" >&2
+  cat "${tmpdir}/top-potholes.json" >&2
+  exit 1
+fi
+
+python3 - "${tmpdir}/top-potholes.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    payload = json.load(fh)
+
+assert isinstance(payload.get("potholes"), list), payload
+for row in payload["potholes"]:
+    for key in [
+        "id",
+        "lat",
+        "lng",
+        "magnitude",
+        "confirmation_count",
+        "first_reported_at",
+        "last_confirmed_at",
+        "status",
+        "segment_id",
+    ]:
+        assert key in row, row
 PY
 
 upload_status="$(request POST "${FUNCTIONS_BASE_URL}/upload-readings" "${tmpdir}/upload.json" "${tmpdir}/upload-response.json")"
@@ -190,7 +241,9 @@ PY
 )"
 
 echo "API smoke passed against ${FUNCTIONS_BASE_URL}"
-echo "  /health: ok"
+echo "  /health: ok (liveness)"
+echo "  /health/deep: ok (db reachable)"
 echo "  /stats: contract ok"
+echo "  /top-potholes: contract ok"
 echo "  /upload-readings: ${summary}"
 echo "  /upload-readings duplicate replay: ok"

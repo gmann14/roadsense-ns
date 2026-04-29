@@ -1,5 +1,6 @@
 import { db, type DB } from "../db.ts";
 import type { Bbox, PotholeRow } from "./handler.ts";
+import { normalizePotholeRow, type DbPotholeRow } from "./row.ts";
 
 export function createPgFetchPotholes(sqlOverride?: DB): (bbox: Bbox) => Promise<PotholeRow[]> {
     return async (bbox) => {
@@ -11,7 +12,7 @@ export function createPgFetchPotholes(sqlOverride?: DB): (bbox: Bbox) => Promise
                 ${bbox.maxLng}::DOUBLE PRECISION,
                 ${bbox.maxLat}::DOUBLE PRECISION
             )
-        `) as PotholeRow[];
-        return rows;
+        `) as DbPotholeRow[];
+        return rows.map(normalizePotholeRow);
     };
 }

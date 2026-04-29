@@ -8,6 +8,11 @@ DerivedData/
 **/*.xcodeproj/xcuserdata/
 ios/Config/*.secrets.xcconfig
 ios/.swiftpm/
+ios/build/
+ios/fastlane/report.xml
+ios/fastlane/Preview.html
+ios/fastlane/screenshots/
+ios/fastlane/test_output/
 
 # Swift Package Manager
 .build/
@@ -26,3 +31,5 @@ tsconfig.tsbuildinfo
 supabase/.temp/
 supabase/.branches/
 supabase/functions/.env
+
+.railway-secrets.local

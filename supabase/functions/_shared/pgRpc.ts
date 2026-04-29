@@ -12,13 +12,28 @@ export type RpcResponse<T> = { data: T | null; error: { message?: string } | nul
 
 export type PgRpc = <T>(fn: string, params: Record<string, unknown>) => Promise<RpcResponse<T>>;
 
+// Only unqualified or schema.qualified Postgres function names. Rejects
+// quoted identifiers, semicolons, parens — anything that could break out of
+// the `SELECT fn(...)` template. Today every caller passes a hardcoded
+// literal, but this guard means a future caller can't accidentally turn this
+// into a SQL-injection sink.
+const SAFE_FN_NAME = /^[a-z_][a-z0-9_]*(\.[a-z_][a-z0-9_]*)?$/i;
+
 export function createPgRpc(sqlOverride?: DB): PgRpc {
     return async <T>(fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
-        const sql = sqlOverride ?? db();
+        if (!SAFE_FN_NAME.test(fn)) {
+            return {
+                data: null,
+                error: { message: `unsafe RPC function name: ${fn}` },
+            };
+        }
         try {
+            // db() can throw when DATABASE_URL is missing; catch it inside the
+            // try so callers get the same {data, error} shape they expect.
+            const sql = sqlOverride ?? db();
             const keys = Object.keys(params);
             const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
-            const values = keys.map((k) => params[k] === undefined ? null : params[k]);
+            const values = keys.map((k) => params[k] === undefined ? null : params[k]) as never[];
             const query = `SELECT ${fn}(${placeholders}) AS result`;
             const rows = (await sql.unsafe(query, values)) as Array<{ result: T | null }>;
             return { data: rows[0]?.result ?? null, error: null };

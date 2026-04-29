@@ -1,9 +1,41 @@
 import { errorResponse, jsonResponse } from "../_shared/http.ts";
 
-export function createHealthHandler(
+// /health is intentionally a process-liveness probe with NO database call so a
+// flood of unauthenticated probes can't exhaust PG_POOL_MAX. Use /health/deep
+// (apikey-gated) for the database round-trip.
+export function createHealthHandler() {
+    return function handleHealthRequest(req: Request): Promise<Response> {
+        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+
+        if (req.method !== "GET" && req.method !== "HEAD") {
+            return Promise.resolve(
+                new Response(null, {
+                    status: 405,
+                    headers: { "x-request-id": requestId },
+                }),
+            );
+        }
+
+        return Promise.resolve(
+            jsonResponse(
+                {
+                    status: "ok",
+                    version: Deno.env.get("APP_VERSION") ?? "dev",
+                    commit: Deno.env.get("GIT_SHA") ?? "local",
+                    deployed_at: Deno.env.get("DEPLOYED_AT") ?? null,
+                },
+                200,
+                { "cache-control": "no-store" },
+                requestId,
+            ),
+        );
+    };
+}
+
+export function createDeepHealthHandler(
     deps: { checkDb: () => Promise<string | null> },
 ) {
-    return async function handleHealthRequest(req: Request): Promise<Response> {
+    return async function handleDeepHealthRequest(req: Request): Promise<Response> {
         const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
 
         if (req.method !== "GET" && req.method !== "HEAD") {
@@ -38,7 +70,12 @@ export function createHealthHandler(
                 { "cache-control": "no-store" },
                 requestId,
             );
-        } catch {
+        } catch (error) {
+            console.error("deep-health database check failed", {
+                request_id: requestId,
+                error,
+            });
+
             return errorResponse(
                 "service_unavailable",
                 "Database is unreachable.",
