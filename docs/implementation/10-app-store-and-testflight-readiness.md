@@ -11,7 +11,7 @@ This doc is intentionally operational. [06-security-and-privacy.md](06-security-
 - Apple Developer approval/API access is now far enough along for upload automation.
 - There are no outside testers yet.
 - Railway staging is provisioned and smoke-tested for hosted backend testing.
-- The immediate bottleneck is signed iOS distribution, App Store Connect metadata, and real-device validation.
+- The immediate bottleneck is signed iOS distribution, App Store Connect metadata, and real-device validation. The GitHub TestFlight workflow exists, but CI must still be able to use Apple distribution signing assets for `ca.roadsense.ios`.
 - The web app now has a fuller `/privacy` page that can back the future public policy URL once deployed.
 
 ## What To Finish Before Apple Approval Lands
@@ -104,10 +104,11 @@ Before the first internal TestFlight upload:
 
 1. confirm GitHub secrets exist for `APPLE_ASC_API_KEY_ID`, `APPLE_ASC_API_ISSUER_ID`, `APPLE_ASC_API_PRIVATE_KEY`, `APPLE_TEAM_ID`, and `MAPBOX_ACCESS_TOKEN`
 2. run `.github/workflows/ios-testflight.yml` with `Staging Release` and upload disabled for the first signing dry run
-3. run `.github/workflows/ios-testflight.yml` with upload enabled once the signed archive succeeds
-4. run `xcrun PrivacyReport` on the archive
-5. confirm the aggregated privacy manifest is present and coherent
-6. verify the archive does not introduce a new privacy-collected-data category beyond what [06-security-and-privacy.md](06-security-and-privacy.md) already declares
+3. if the dry run cannot sign automatically on the GitHub runner, add an explicit signing path with `fastlane match` or an imported Apple Distribution certificate plus App Store provisioning profile
+4. run `.github/workflows/ios-testflight.yml` with upload enabled once the signed archive succeeds
+5. run `xcrun PrivacyReport` on the archive
+6. confirm the aggregated privacy manifest is present and coherent
+7. verify the archive does not introduce a new privacy-collected-data category beyond what [06-security-and-privacy.md](06-security-and-privacy.md) already declares
 
 The iOS implementation spec already requires this check:
 

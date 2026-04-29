@@ -304,7 +304,17 @@ Uses the `production` GitHub Environment with the same secret names as staging. 
 
 ### TestFlight release automation
 
-Still manual. The repo does not currently ship a `testflight.yml`; archive/upload remains a human release-day task until signing, App Store Connect API credentials, and the release shape are stable enough to automate without guessing.
+GitHub Actions now owns the repeatable TestFlight path in `.github/workflows/ios-testflight.yml`. It builds `Staging Release` by default, can switch to `Production Release`, and can run with upload disabled for signing dry runs.
+
+Required repository secrets:
+
+- `APPLE_ASC_API_KEY_ID`
+- `APPLE_ASC_API_ISSUER_ID`
+- `APPLE_ASC_API_PRIVATE_KEY`
+- `APPLE_TEAM_ID`
+- `MAPBOX_ACCESS_TOKEN`
+
+The workflow still needs valid Apple distribution signing material for CI. If App Store Connect API authentication cannot provision/sign automatically on a clean runner, use `fastlane match` or manually import an Apple Distribution certificate plus App Store provisioning profile before `build_app`.
 
 ## Observability Verification Checklist
 
