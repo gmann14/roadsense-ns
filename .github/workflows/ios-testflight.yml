@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 75
     env:
       APPLE_ASC_API_KEY_ID: ${{ secrets.APPLE_ASC_API_KEY_ID }}
@@ -73,6 +73,10 @@ jobs:
       - name: Install XcodeGen
         shell: bash
         run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      - name: Show Xcode version
+        shell: bash
+        run: xcodebuild -version
 
       - name: Write App Store Connect private key
         shell: bash

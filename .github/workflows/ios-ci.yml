@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   scaffold-check:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -41,6 +41,10 @@ jobs:
       - name: Install XcodeGen
         shell: bash
         run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      - name: Show Xcode version
+        shell: bash
+        run: xcodebuild -version
 
       - name: Generate Xcode project
         shell: bash
