@@ -3,7 +3,8 @@ require "shellwords"
 
 default_platform(:ios)
 
-PROJECT_PATH = "RoadSenseNS.xcodeproj"
+IOS_DIR = File.expand_path("..", __dir__)
+PROJECT_PATH = File.join(IOS_DIR, "RoadSenseNS.xcodeproj")
 SCHEME = "RoadSenseNS"
 DEFAULT_APP_IDENTIFIER = "ca.roadsense.ios"
 
@@ -31,7 +32,7 @@ def release_channel
 end
 
 def release_xcconfig_path
-  File.expand_path("../Config/RoadSenseNS.#{release_channel}.secrets.xcconfig", __dir__)
+  File.join(IOS_DIR, "Config/RoadSenseNS.#{release_channel}.secrets.xcconfig")
 end
 
 def app_identifier
@@ -46,7 +47,7 @@ def asc_private_key_path
   UI.user_error!("Set APPLE_ASC_API_PRIVATE_KEY_PATH or APPLE_ASC_API_PRIVATE_KEY") unless key_content
 
   key_id = required_env("APPLE_ASC_API_KEY_ID")
-  output_dir = File.expand_path("../build/secrets", __dir__)
+  output_dir = File.join(IOS_DIR, "build/secrets")
   FileUtils.mkdir_p(output_dir)
   path = File.join(output_dir, "AuthKey_#{key_id}.p8")
   File.write(path, key_content)
@@ -111,15 +112,15 @@ platform :ios do
   lane :build_release do
     asc_api_key
     write_release_xcconfig
-    sh("xcodegen generate")
+    sh("cd #{Shellwords.escape(IOS_DIR)} && xcodegen generate")
 
     build_app(
       project: PROJECT_PATH,
       scheme: SCHEME,
       configuration: release_configuration,
       clean: true,
-      archive_path: "build/archives/RoadSenseNS-#{build_number}.xcarchive",
-      output_directory: "build/ipas",
+      archive_path: File.join(IOS_DIR, "build/archives/RoadSenseNS-#{build_number}.xcarchive"),
+      output_directory: File.join(IOS_DIR, "build/ipas"),
       output_name: "RoadSenseNS-#{build_number}.ipa",
       export_method: "app-store",
       export_team_id: required_env("APPLE_TEAM_ID"),
@@ -153,7 +154,7 @@ platform :ios do
   end
 
   desc "Build a signed release IPA and upload it to internal TestFlight."
-  lane :testflight do
+  lane :internal_testflight do
     build_release
 
     if truthy_env?("SKIP_TESTFLIGHT_UPLOAD")
@@ -161,7 +162,7 @@ platform :ios do
       next
     end
 
-    ipa = File.expand_path("build/ipas/RoadSenseNS-#{build_number}.ipa")
+    ipa = File.join(IOS_DIR, "build/ipas/RoadSenseNS-#{build_number}.ipa")
     upload_to_testflight(
       api_key: asc_api_key,
       app_identifier: app_identifier,

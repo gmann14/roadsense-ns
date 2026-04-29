@@ -86,7 +86,7 @@ jobs:
         shell: bash
         run: |
           cd ios
-          bundle exec fastlane ios testflight
+          bundle exec fastlane ios internal_testflight
 
       - name: Upload IPA artifact
         if: always()

@@ -31,5 +31,5 @@ APPLE_ASC_API_KEY_ID=... \
 APPLE_ASC_API_ISSUER_ID=... \
 APPLE_TEAM_ID=... \
 MAPBOX_ACCESS_TOKEN=... \
-bundle exec fastlane ios testflight
+bundle exec fastlane ios internal_testflight
 ```
