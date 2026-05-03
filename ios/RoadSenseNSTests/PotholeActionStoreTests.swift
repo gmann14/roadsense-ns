@@ -216,10 +216,15 @@ final class PotholeActionStoreTests: XCTestCase {
         )
         try context.save()
 
-        XCTAssertEqual(try store.reconcileManualReportStats(), 3)
-        XCTAssertEqual(try statsStore.summary().potholesReported, 3)
+        // FeatureFlags.countSensorPotholesInUserStats is false in v1, so the
+        // sensor-detected ReadingRecord above does NOT contribute to the
+        // reconcile floor. Only the two manual reports (one pendingUpload,
+        // one failedPermanent) count. The confirmPresent follow-up action is
+        // a different actionType and never enters the floor.
+        XCTAssertEqual(try store.reconcileManualReportStats(), 2)
+        XCTAssertEqual(try statsStore.summary().potholesReported, 2)
         XCTAssertEqual(try store.reconcileManualReportStats(), 0)
-        XCTAssertEqual(try statsStore.summary().potholesReported, 3)
+        XCTAssertEqual(try statsStore.summary().potholesReported, 2)
     }
 
     func testQueueFollowUpActionCreatesPendingUploadRecord() throws {
