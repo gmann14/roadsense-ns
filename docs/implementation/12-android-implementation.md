@@ -221,11 +221,13 @@ Split into two sub-phases so the wire-format parity work doesn't block on AGP se
 
 Tests prove byte-for-byte JSON parity with the iOS-committed shape (`UploadReadingsRequestJsonTest` asserts the exact wire form iOS produces) and re-implement the iOS unit tests for upload eligibility, backoff, and retention. Acceptance: `./gradlew :core-api:test` is green.
 
-**A12-2b — Android `:app` module + Room + Retrofit + WorkManager *(pending)*.**
+**A12-2b — Android `:app` module + Room + Retrofit *(landed)*; WorkManager `UploadDrainWorker` deferred to A12-3.**
 
-- **RED**: instrumentation tests for Room migrations, upload-batch state machine, retry/backoff, queue persistence across process death
-- **GREEN**: Room schema + DAOs, Retrofit `BackendClient` wrapper around `core-api` DTOs, WorkManager `UploadDrainWorker`
-- **Acceptance**: a Kotlin script that hand-feeds 100 synthetic readings can drain them through Retrofit against local Supabase
+- **RED**: Robolectric DAO tests for the four `pendingForUpload` exclusion gates (privacy-zone-dropped, endpoint-trimmed, already-uploaded, drive-attached-but-unsealed), batch assign/markUploaded/release, retention pruning, privacy-zone upsert, drive-session seal
+- **GREEN**: Room schema (8 entities mirroring iOS SwiftData line-for-line) + DAOs + type converters + schema export to `app/schemas/` for migration tests; Retrofit `BackendClient` wrapping `core-api` DTOs with `AuthHeaderInterceptor`; OkHttp client factory; backup rules excluding the Room DB from Auto Backup and device-to-device transfer
+- **Acceptance**: `./gradlew :app:assembleDebug` builds clean, `./gradlew :app:testDebugUnitTest` runs the Robolectric Room tests, schema JSON is committed at `android/app/schemas/ca.roadsense.ns.data.room.RoadSenseDatabase/1.json`
+
+WorkManager `UploadDrainWorker` is deferred to A12-3 because the upload-drain trigger is the same lifecycle as the foreground collection service end-of-drive hook; building them together keeps the wake-on-drive-end semantics in one PR rather than split across two.
 
 ### A12-3 — Foreground collection service + permissions
 

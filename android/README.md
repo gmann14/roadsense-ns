@@ -4,21 +4,33 @@ Android client for the RoadSense NS road-quality measurement project. Plan and a
 
 ## Status
 
-**Phase A12-1 — Sensor pipeline parity.** Landed.
-**Phase A12-2 — Wire-format DTOs + upload policies.** Partial; see below.
+| Phase | Status | Notes |
+|---|---|---|
+| A12-1 — Sensor pipeline parity | Landed | `core-sensor` JVM module + iOS-fixture replay |
+| A12-2a — Wire-format DTOs + policies | Landed | `core-api` JVM module + iOS JSON parity |
+| A12-2b — Room + Retrofit shells | Landed | `:app` module compiles, schema exported, 10 DB tests pass |
+| A12-3 — Foreground service + permissions | Not started | Needs an emulator for instrumentation tests |
+| A12-4 — Mapbox + Compose UI + manual pothole | Not started | |
+| A12-5 — Feedback queue | Not started | |
+| A12-6 — Sideload distribution + Play prep | Not started | See `docs/implementation/14-google-play-readiness.md` |
+
+Total tests passing across all modules: **48** (`core-sensor` 16 + `core-api` 22 + `app` 10).
 
 What exists:
 
-- `core-sensor` (pure Kotlin/JVM) — line-for-line ports of the iOS pipeline (`RoughnessScorer`, `PotholeDetector`, `QualityFilter`, `ReadingBuilder`, `ReadingWindowProcessor`, `SensorCheckpoint`, `MotionMath`, `HighPassBiquad`, `PrivacyZone`, `SensorFixture`, `SensorFixtureRunner`)
-- `core-api` (pure Kotlin/JVM) — wire-format DTOs (`UploadReadingsRequest/Response`, `UploadErrorEnvelope`), `UploadCodec` (sorted-keys JSON, ISO-8601 dates, lowercase UUIDs to match iOS), `Endpoints`, `AppConfig`, `UploadEligibilityPolicy`, `UploadPolicy`, `RetentionPolicy`
-- `core-fixtures/` — byte-for-byte mirror of iOS test fixtures, parity-checked by `scripts/check-android-fixture-parity.sh`
-- JVM unit tests covering both modules; run with `./gradlew test`
+- `core-sensor` (pure Kotlin/JVM) — line-for-line ports of the iOS pipeline
+- `core-api` (pure Kotlin/JVM) — wire-format DTOs + upload eligibility/backoff/retention policies
+- `core-fixtures/` — byte-for-byte mirror of iOS test fixtures, parity-checked
+- `:app` Android module — AGP 8.7, AndroidX, Room schema (8 entities + DAOs), Retrofit `BackendClient` over `core-api` DTOs, OkHttp auth interceptor, backup rules excluding the Room DB
+- Robolectric tests covering Room schema + the upload-pipeline DAO queries
 
-What does **not** exist yet (A12-2 remainder + later phases):
+What does **not** exist yet:
 
-- the `:app` Android module with AGP (Room schema, DAOs, Retrofit BackendClient wrapper, WorkManager `UploadDrainWorker`)
-- Hilt DI, Compose UI, Mapbox, foreground service
-- signing keystores or Play Console wiring
+- WorkManager `UploadDrainWorker` (deferred from A12-2b → A12-3 since it ties into the service lifecycle)
+- Foreground `CollectionService`, `PermissionsCoordinator`, `SensorBridge` (Android Sensor/Location → `core-sensor`)
+- Compose UI, Mapbox, photo capture
+- Hilt DI (using manual constructor injection so far — Hilt can land alongside Compose)
+- Signing keystores, Play Console wiring
 
 ## Prerequisites
 
@@ -60,15 +72,17 @@ This must pass in CI. Drift is a planning bug.
 
 ```
 android/
-├── settings.gradle.kts        # :core-sensor + :core-api
+├── settings.gradle.kts        # :core-sensor, :core-api, :app
 ├── build.gradle.kts
-├── gradle.properties
-├── gradle/wrapper/            # wrapper jar materialized via `gradle wrapper`
+├── gradle.properties          # android.useAndroidX=true
+├── gradle/wrapper/
 ├── core-sensor/               # pure JVM — sensor pipeline (A12-1)
-│   ├── build.gradle.kts
 │   └── src/{main,test}/kotlin/ca/roadsense/ns/sensor/...
-├── core-api/                  # pure JVM — wire-format DTOs + policies (A12-2)
-│   ├── build.gradle.kts
+├── core-api/                  # pure JVM — wire-format DTOs + policies (A12-2a)
 │   └── src/{main,test}/kotlin/ca/roadsense/ns/api/...
+├── app/                       # Android — Room + Retrofit (A12-2b)
+│   ├── build.gradle.kts
+│   ├── schemas/               # Room schema export, committed for migrations
+│   └── src/main/kotlin/ca/roadsense/ns/{data/room,data/network,…}
 └── core-fixtures/             # byte-for-byte copy of iOS test fixtures
 ```
