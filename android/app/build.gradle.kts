@@ -47,6 +47,7 @@ android {
 
     sourceSets {
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
+        getByName("test").resources.srcDir("$rootDir/core-fixtures")
     }
 
     packaging {

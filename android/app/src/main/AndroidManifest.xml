@@ -29,7 +29,13 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.RoadSense">
-        <!-- A12-3 wires CollectionService here. A12-4 wires MainActivity. -->
+
+        <service
+            android:name=".collection.CollectionService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- A12-4 wires MainActivity. -->
     </application>
 
 </manifest>
