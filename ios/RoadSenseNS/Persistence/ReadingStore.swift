@@ -394,7 +394,7 @@ final class ReadingStore {
         stats.totalKmRecorded += max(candidate.speedKmh, 0) * candidate.durationSeconds / 3600
         stats.totalSegmentsContributed += 1
         stats.lastDriveAt = candidate.recordedAt
-        if candidate.isPothole {
+        if candidate.isPothole, FeatureFlags.countSensorPotholesInUserStats {
             stats.potholesReported += 1
         }
 

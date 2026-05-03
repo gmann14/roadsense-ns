@@ -261,14 +261,24 @@ final class PotholeActionStore {
                     $0.uploadStateRawValue != "pending_undo"
             }
         )
-        let acceptedSensorPotholesDescriptor = FetchDescriptor<ReadingRecord>(
-            predicate: #Predicate {
-                $0.droppedByPrivacyZone == false &&
-                    $0.isPothole == true
-            }
-        )
         let committedManualReportCount = try context.fetchCount(committedManualReportsDescriptor)
-        let acceptedSensorPotholeCount = try context.fetchCount(acceptedSensorPotholesDescriptor)
+
+        // Sensor potholes only contribute to the floor when the count flag is
+        // on. With the flag off (v1 default — see FeatureFlags), they're a
+        // separate signal that doesn't show up in the user-facing count.
+        let acceptedSensorPotholeCount: Int
+        if FeatureFlags.countSensorPotholesInUserStats {
+            let acceptedSensorPotholesDescriptor = FetchDescriptor<ReadingRecord>(
+                predicate: #Predicate {
+                    $0.droppedByPrivacyZone == false &&
+                        $0.isPothole == true
+                }
+            )
+            acceptedSensorPotholeCount = try context.fetchCount(acceptedSensorPotholesDescriptor)
+        } else {
+            acceptedSensorPotholeCount = 0
+        }
+
         let minimumPotholeCount = committedManualReportCount + acceptedSensorPotholeCount
         guard minimumPotholeCount > 0 else {
             return 0
