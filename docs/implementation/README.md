@@ -19,6 +19,8 @@ These docs translate [product-spec.md](../product-spec.md) into concrete, action
 | 08 | [Implementation Backlog](08-implementation-backlog.md) | Literal task order, dependencies, red/green plan, and acceptance criteria |
 | 09 | [Internal Field-Test Pack](09-internal-field-test-pack.md) | Operational checklist for signed-device dogfooding and evidence capture |
 | 10 | [App Store & TestFlight Readiness](10-app-store-and-testflight-readiness.md) | App Store Connect fields, privacy labels, reviewer notes, and release checklists |
+| 12 | [Android Implementation](12-android-implementation.md) | Kotlin/Compose project layout, sensor pipeline port, foreground-service collection, Room persistence, distribution path |
+| 14 | [Google Play Readiness](14-google-play-readiness.md) | Play Console fields, Data Safety form, background-location declaration, Closed-Testing 14-day gate, release checklists |
 
 ## Conventions Used Across Specs
 
@@ -33,7 +35,7 @@ If you are starting implementation rather than reviewing architecture, read [08-
 
 These are real product needs, but punted past MVP launch to keep the critical path short:
 
-- Android client (product-spec Phase 6)
+- Android client (product-spec Phase 6) — planned in [12-android-implementation.md](12-android-implementation.md), launch ops in [14-google-play-readiness.md](14-google-play-readiness.md); coding gated on iOS calibration being locked
 - Web dashboard implementation deferred from MVP launch, but now specified in [07-web-dashboard-implementation.md](07-web-dashboard-implementation.md)
 - iOS DeviceCheck attestation — wait until abuse is a real problem
 - Gamification (leaderboards, badges)

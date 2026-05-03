@@ -1,6 +1,6 @@
 # 12 — Android Implementation Plan
 
-*Last updated: 2026-04-27*
+*Last updated: 2026-05-03*
 
 Covers: Kotlin/Compose project layout, sensor pipeline port, foreground-service collection, Room persistence, upload pipeline, privacy zones, Mapbox Android, permissions/onboarding, shared-fixture testing, distribution.
 
@@ -69,16 +69,21 @@ The `core-sensor` module is a **pure-Kotlin JVM module**. It has zero Android de
 
 ## Sensor pipeline port
 
-The iOS pipeline lives in `ios/Sources/RoadSenseNSBootstrap/Pipeline/`:
+The iOS pipeline is split across three directories under `ios/Sources/RoadSenseNSBootstrap/`:
 
-- `RoughnessScorer.swift` — high-pass filter then RMS over a window
-- `PotholeDetector.swift` — dip-then-spike detection on vertical-G
-- `MotionMath.swift` — `verticalAcceleration = dot(userAcceleration, gravity)`
-- `ReadingWindowProcessor.swift` — combines GPS + motion windows into upload-ready candidates
-- `PrivacyZones.swift` — Haversine distance check before queueing
-- `DrivingDetector.swift` — speed/acceleration heuristic for "is this driving?"
+- `Pipeline/RoughnessScorer.swift` — high-pass biquad then RMS over a window
+- `Pipeline/PotholeDetector.swift` — dip-then-spike detection on vertical-G
+- `Pipeline/QualityFilter.swift` — GPS accuracy / speed / sample-count / duration / thermal gates
+- `Pipeline/ReadingBuilder.swift` — accumulates GPS + motion samples into a `ReadingWindow`
+- `Pipeline/ReadingWindowProcessor.swift` — combines a window with quality gates into an upload-ready candidate
+- `Pipeline/SensorCheckpoint.swift` — durable snapshot for cross-launch restoration
+- `Sensors/HighPassBiquad.swift` — Butterworth biquad used by the scorer
+- `Sensors/MotionMath.swift` — `verticalAcceleration = dot(userAcceleration, gravity)`
+- `Sensors/DrivingHeuristic.swift` — speed/acceleration heuristic for "is this driving?"
+- `Privacy/PrivacyZone.swift` — Haversine distance check before queueing
+- `Harness/SensorFixture.swift` + `Harness/SensorFixtureRunner.swift` — parser + replay engine that drives the shared CSV fixtures
 
-Each port maps line-for-line to a Kotlin class in `core-sensor`:
+Every file above except `DrivingHeuristic.swift` ships in A12-1's Kotlin port. Driving detection is wired in at A12-3 alongside the foreground service. Each port maps line-for-line to a Kotlin class in `core-sensor`:
 
 ```kotlin
 class RoughnessScorer(private val highpassCoefficient: Double = 0.97) {
@@ -197,16 +202,29 @@ The onboarding flow mirrors iOS: brand mark + privacy framing + permission reque
 
 Mapping to the existing TDD pattern (RED tests first, GREEN code second). Each phase is a separate PR.
 
-### A12-1 — Project scaffold + sensor pipeline parity
+### A12-1 — Project scaffold + sensor pipeline parity *(landed)*
 
-- **RED**: shared-fixture JVM test that compiles against the iOS pothole-hit and smooth-cruise CSVs and asserts the same expected envelopes the iOS test does
-- **GREEN**: empty Android Studio project + `core-sensor` module + Kotlin ports of `RoughnessScorer`, `PotholeDetector`, `MotionMath`
-- **Acceptance**: `./gradlew :core-sensor:test` passes against the same fixtures iOS does
+- **RED**: JVM test (`FixtureReplayTest`) that loads each iOS fixture CSV + expected envelope and asserts windows, pothole flag, RMS range, max-spike-G range, privacy-filtered count, and rejected count
+- **GREEN**: pure-Kotlin/JVM `core-sensor` module + Kotlin ports of `MotionMath`, `HighPassBiquad`, `RoughnessScorer`, `PotholeDetector`, `QualityFilter`, `ReadingBuilder`, `ReadingWindowProcessor`, `SensorCheckpoint`, `PrivacyZone`, `SensorFixture`, `SensorFixtureRunner`
+- **Acceptance**: `./gradlew :core-sensor:test` passes against the four committed fixtures (`pothole-hit`, `smooth-cruise`, `privacy-zone-recovery`, `thermal-reject`); `scripts/check-android-fixture-parity.sh` verifies byte-for-byte identity with iOS
+
+The Android module (`:app` with AGP) is **not** part of A12-1 and is deferred to A12-2 so that running parity tests doesn't require an Android SDK install.
 
 ### A12-2 — Local persistence + upload pipeline shell (no UI)
 
+Split into two sub-phases so the wire-format parity work doesn't block on AGP setup:
+
+**A12-2a — Wire-format DTOs + upload policies *(landed)*.** Pure-Kotlin/JVM `core-api` module ships:
+- `UploadReadingsRequest/Response`, `UploadErrorEnvelope`, `UploadReadingPayload` data classes
+- `UploadCodec` (sorted-keys JSON + `.iso8601` date encoding + lowercase UUIDs to match iOS byte-for-byte)
+- `Endpoints`, `AppConfig`, `UploadEligibilityPolicy`, `UploadPolicy`, `RetentionPolicy`, `QueueReadingRecord`
+
+Tests prove byte-for-byte JSON parity with the iOS-committed shape (`UploadReadingsRequestJsonTest` asserts the exact wire form iOS produces) and re-implement the iOS unit tests for upload eligibility, backoff, and retention. Acceptance: `./gradlew :core-api:test` is green.
+
+**A12-2b — Android `:app` module + Room + Retrofit + WorkManager *(pending)*.**
+
 - **RED**: instrumentation tests for Room migrations, upload-batch state machine, retry/backoff, queue persistence across process death
-- **GREEN**: Room schema + DAOs, Retrofit BackendClient, WorkManager UploadDrainWorker
+- **GREEN**: Room schema + DAOs, Retrofit `BackendClient` wrapper around `core-api` DTOs, WorkManager `UploadDrainWorker`
 - **Acceptance**: a Kotlin script that hand-feeds 100 synthetic readings can drain them through Retrofit against local Supabase
 
 ### A12-3 — Foreground collection service + permissions
