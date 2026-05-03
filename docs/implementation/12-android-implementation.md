@@ -229,10 +229,21 @@ Tests prove byte-for-byte JSON parity with the iOS-committed shape (`UploadReadi
 
 WorkManager `UploadDrainWorker` is deferred to A12-3 because the upload-drain trigger is the same lifecycle as the foreground collection service end-of-drive hook; building them together keeps the wake-on-drive-end semantics in one PR rather than split across two.
 
-### A12-3 — Foreground collection service + permissions
+### A12-3 — Foreground collection service + permissions *(partial)*
+
+Landed pieces:
+
+- `SensorBridge` + `LocationBridge` — adapters from Android Sensor/Location to `core-sensor` types. Pure-Kotlin, JVM-testable.
+- `PermissionsCoordinator` + `PermissionsState` — single-snapshot view of granted permissions with `canStartDrive` / `canRunBackgroundDrive` predicates.
+- `CollectionPipeline` — orchestrates `ReadingBuilder` + `PotholeDetector` + privacy filtering + thermal state, writes accepted windows to `ReadingDao`. Robolectric tests replay the iOS `pothole-hit` and `privacy-zone-recovery` CSVs end-to-end through the Android Room schema.
+- `CollectionService` — foreground-service skeleton with notification channel + `foregroundServiceType="location"` manifest entry + `start`/`stop` helpers.
+- `UploadDrainCoordinator` — full state machine wiring `UploadEligibilityPolicy` + `UploadPolicy` + `ReadingDao` + `UploadBatchDao` + a `UploadReadingsRpc` fun-interface. Robolectric tests cover `NothingToDo`, `Offline`, 200 success path, 5xx backoff/release, 400 permanent failure, and `IOException` retry.
+- `UploadDrainWorker` — WorkManager entry stub.
+
+Pending pieces (need a real device or emulator):
 
 - **RED**: instrumentation tests covering permission grant/deny matrices, the foreground notification appearing, the service surviving an app-task swipe, the service stopping when the user explicitly taps "Stop"
-- **GREEN**: `CollectionService`, `PermissionsCoordinator`, onboarding Compose screens
+- **GREEN**: actual `SensorManager.registerListener` / `FusedLocationProviderClient` subscription inside `CollectionService`; onboarding Compose screens (folded into A12-4 since they share Hilt DI scope with the rest of the UI)
 - **Acceptance**: a 10-minute drive on a Pixel 7-class device produces samples matching iOS within tolerance and uploads them automatically
 
 ### A12-4 — Map UI + manual pothole + photo capture

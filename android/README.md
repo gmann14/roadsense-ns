@@ -9,12 +9,12 @@ Android client for the RoadSense NS road-quality measurement project. Plan and a
 | A12-1 — Sensor pipeline parity | Landed | `core-sensor` JVM module + iOS-fixture replay |
 | A12-2a — Wire-format DTOs + policies | Landed | `core-api` JVM module + iOS JSON parity |
 | A12-2b — Room + Retrofit shells | Landed | `:app` module compiles, schema exported, 10 DB tests pass |
-| A12-3 — Foreground service + permissions | Not started | Needs an emulator for instrumentation tests |
-| A12-4 — Mapbox + Compose UI + manual pothole | Not started | |
+| A12-3 — Foreground service + permissions | Partial | Sensor/location bridges, permissions snapshot, CollectionPipeline, CollectionService skeleton, UploadDrainCoordinator all landed and tested. Real sensor + GPS subscription inside the service still stubbed pending an emulator pass. |
+| A12-4 — Mapbox + Compose UI + manual pothole | Not started | Genuinely UI work — pair with a designer in Android Studio |
 | A12-5 — Feedback queue | Not started | |
 | A12-6 — Sideload distribution + Play prep | Not started | See `docs/implementation/14-google-play-readiness.md` |
 
-Total tests passing across all modules: **48** (`core-sensor` 16 + `core-api` 22 + `app` 10).
+Total tests passing across all modules: **61** (`core-sensor` 16 + `core-api` 22 + `app` 23).
 
 What exists:
 
@@ -26,11 +26,11 @@ What exists:
 
 What does **not** exist yet:
 
-- WorkManager `UploadDrainWorker` (deferred from A12-2b → A12-3 since it ties into the service lifecycle)
-- Foreground `CollectionService`, `PermissionsCoordinator`, `SensorBridge` (Android Sensor/Location → `core-sensor`)
-- Compose UI, Mapbox, photo capture
-- Hilt DI (using manual constructor injection so far — Hilt can land alongside Compose)
-- Signing keystores, Play Console wiring
+- Real sensor + GPS subscription inside `CollectionService` (the skeleton + notification + manifest are landed; the `SensorManager.registerListener` / `FusedLocationProviderClient` calls are stubbed pending an emulator validation pass)
+- Final `UploadDrainWorker` wiring (the worker class exists; the service-locator hookup that constructs `UploadDrainCoordinator` lands with Hilt in A12-4)
+- Compose UI, Mapbox, photo capture (A12-4)
+- Feedback queue (A12-5)
+- Signing keystores, Play Console wiring (A12-6)
 
 ## Prerequisites
 
