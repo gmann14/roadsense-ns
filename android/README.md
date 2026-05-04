@@ -34,31 +34,71 @@ What does **not** exist yet:
 
 ## Prerequisites
 
-- JDK 21 (`brew install --cask temurin@21` or any JDK 21 distribution)
-- Gradle 8.10.2+ (or run `gradle wrapper --gradle-version 8.10.2` once to materialize the wrapper)
+- **JDK 21** (`brew install openjdk@21`). Set `JAVA_HOME` to `/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
+- **Android SDK** — Platform 34, Build-Tools 34, Platform-Tools. Install via `brew install --cask android-commandlinetools`, then `sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"`. Set `ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`.
+- **Android Studio** (Ladybug 2024.1+ recommended) — `brew install --cask android-studio`. Required only for UI work and instrumentation tests; CLI builds and JVM/Robolectric tests work without it.
+- **Emulator + system image** (only for instrumentation tests) — `sdkmanager "emulator" "system-images;android-34;google_apis_playstore;arm64-v8a"` on Apple Silicon.
 
-The Android SDK is **not** required for A12-1. `core-sensor` is JVM-only.
+JDK 21 is required because Gradle 8.10 doesn't support JDK 25 (the brew default). If you already have a newer JDK, install JDK 21 alongside and point `JAVA_HOME` at it.
 
-## First-time setup
+For convenience, add this to `~/.zshrc` so `./gradlew` and `sdkmanager` work in any new shell:
+
+```sh
+export JAVA_HOME="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"
+export ANDROID_HOME="/opt/homebrew/share/android-commandlinetools"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH"
+```
+
+## Opening in Android Studio
+
+1. **File → Open**, pick `android/build.gradle.kts` (the project root, not the repo root).
+2. When prompted "Trust project?", trust it.
+3. Studio will sync Gradle and download AGP-managed dependencies on first open (~3–5 min).
+4. To run unit tests, right-click `core-sensor`, `core-api`, or `app/src/test` and pick **Run Tests**.
+5. To run instrumentation tests, you'll need an AVD running (see below) — right-click `app/src/androidTest` and **Run** (none defined yet — A12-3 follow-on adds them).
+
+If Studio asks about `local.properties`, it will write `sdk.dir=/opt/homebrew/share/android-commandlinetools` automatically. That file is gitignored.
+
+## Creating an AVD (for instrumentation tests)
+
+A `pixel7-api34` AVD already exists locally if you ran the setup above. List with `avdmanager list avd`. Boot it with:
+
+```sh
+$ANDROID_HOME/emulator/emulator -avd pixel7-api34
+```
+
+To recreate from scratch (CLI, no Studio needed):
+
+```sh
+echo "no" | avdmanager create avd \
+    --name pixel7-api34 \
+    --package "system-images;android-34;google_apis_playstore;arm64-v8a" \
+    --device pixel_7
+```
+
+Or do it through Studio's **Device Manager** with the same image.
+
+## Running tests from the CLI
 
 ```sh
 cd android
-gradle wrapper --gradle-version 8.10.2  # one-time; creates gradlew + gradle-wrapper.jar
-git add gradlew gradlew.bat gradle/wrapper/gradle-wrapper.jar
+./gradlew test                    # JVM unit tests across all modules (61 tests)
+./gradlew :core-sensor:test       # iOS-fixture parity only (16 tests)
+./gradlew :core-api:test          # wire-format parity + policies (22 tests)
+./gradlew :app:testDebugUnitTest  # Robolectric DAO + pipeline tests (23 tests)
+./gradlew :app:assembleDebug      # build the debug APK
 ```
-
-The wrapper jar is `.gitignore`d in this PR — commit it in the follow-up so contributors don't need a host gradle install.
-
-## Running the parity tests
-
-```sh
-cd android
-./gradlew :core-sensor:test
-```
-
-Expected output: 4 fixture-replay tests pass, plus the targeted unit tests for `HighPassBiquad`, `RoughnessScorer`, `PotholeDetector`, and `PrivacyZone`.
 
 If a fixture test fails, do **not** edit the expected envelope in `core-fixtures/` to make Android pass — that breaks iOS parity. The fix is to bring the Kotlin port back in line with the iOS Swift code, or to update *both* platforms together.
+
+## Secrets you'll need before A12-4 (UI work)
+
+These don't exist yet (UI hasn't landed) but should be added to `android/local.properties` (gitignored) when A12-4 starts:
+
+- `MAPBOX_ACCESS_TOKEN` — same one iOS uses; generated at Mapbox.com → tokens
+- `SUPABASE_ANON_KEY` — same one iOS uses; from the Supabase dashboard → API
+- `API_BASE_URL` — `http://10.0.2.2:54321` for local Supabase from the emulator, or the Railway/Supabase staging URL
+- `SENTRY_DSN` — optional; when wired in A12-3 follow-on
 
 ## Fixture parity
 
