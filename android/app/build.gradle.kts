@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,9 +7,26 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+/** Mirrors the iOS xcconfig pattern: per-environment defaults committed with
+ *  placeholder Mapbox/Sentry secrets, and an optional sibling
+ *  `<env>.secrets.properties` (gitignored) that overrides anything. */
+fun loadEnvProperties(envName: String): Properties {
+    val props = Properties()
+    val configDir = file("$rootDir/config")
+    val defaults = configDir.resolve("$envName.env.properties")
+    val secrets = configDir.resolve("$envName.env.secrets.properties")
+    if (defaults.exists()) defaults.inputStream().use(props::load)
+    if (secrets.exists()) secrets.inputStream().use(props::load)
+    return props
+}
+
 android {
     namespace = "ca.roadsense.ns"
     compileSdk = 34
+
+    buildFeatures {
+        buildConfig = true
+    }
 
     defaultConfig {
         applicationId = "ca.roadsense.android"
@@ -17,6 +36,41 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    flavorDimensions += "environment"
+
+    productFlavors {
+        fun com.android.build.api.dsl.ApplicationProductFlavor.applyEnv(envName: String) {
+            dimension = "environment"
+            val props = loadEnvProperties(envName)
+            fun str(key: String, default: String = "") =
+                "\"${(props.getProperty(key) ?: default).replace("\"", "\\\"")}\""
+            buildConfigField("String", "APP_ENV", str("APP_ENV", envName.uppercase()))
+            buildConfigField("String", "API_BASE_URL", str("API_BASE_URL"))
+            buildConfigField("String", "MAPBOX_ACCESS_TOKEN", str("MAPBOX_ACCESS_TOKEN"))
+            buildConfigField("String", "SUPABASE_ANON_KEY", str("SUPABASE_ANON_KEY"))
+            buildConfigField("String", "SENTRY_DSN", str("SENTRY_DSN"))
+            buildConfigField(
+                "boolean",
+                "ENABLE_POTHOLE_PHOTOS",
+                (props.getProperty("ENABLE_POTHOLE_PHOTOS") ?: "true"),
+            )
+            resValue("string", "app_name", props.getProperty("APP_DISPLAY_NAME") ?: "RoadSense NS")
+        }
+
+        create("local") {
+            applyEnv("local")
+            applicationIdSuffix = ".localdebug"
+        }
+        create("staging") {
+            applyEnv("staging")
+            applicationIdSuffix = ".staging"
+        }
+        create("production") {
+            applyEnv("production")
+            // No suffix on production — applicationId is `ca.roadsense.android`.
+        }
     }
 
     buildTypes {

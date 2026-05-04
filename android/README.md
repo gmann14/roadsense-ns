@@ -91,14 +91,46 @@ cd android
 
 If a fixture test fails, do **not** edit the expected envelope in `core-fixtures/` to make Android pass — that breaks iOS parity. The fix is to bring the Kotlin port back in line with the iOS Swift code, or to update *both* platforms together.
 
-## Secrets you'll need before A12-4 (UI work)
+## Environment configuration
 
-These don't exist yet (UI hasn't landed) but should be added to `android/local.properties` (gitignored) when A12-4 starts:
+Mirrors the iOS xcconfig pattern (see `ios/Config/RoadSenseNS.*.xcconfig`).
+Each environment has a properties file in `android/config/`:
 
-- `MAPBOX_ACCESS_TOKEN` — same one iOS uses; generated at Mapbox.com → tokens
-- `SUPABASE_ANON_KEY` — same one iOS uses; from the Supabase dashboard → API
-- `API_BASE_URL` — `http://10.0.2.2:54321` for local Supabase from the emulator, or the Railway/Supabase staging URL
-- `SENTRY_DSN` — optional; when wired in A12-3 follow-on
+| Environment | Committed defaults | Local override |
+|---|---|---|
+| local | `config/local.env.properties` | `config/local.env.secrets.properties` (gitignored) |
+| staging | `config/staging.env.properties` | `config/staging.env.secrets.properties` (gitignored) |
+| production | `config/production.env.properties` | `config/production.env.secrets.properties` (gitignored) |
+
+Committed values:
+
+- `API_BASE_URL` — local: `http://10.0.2.2:54321` (emulator → host loopback); staging: the Railway URL iOS uses; production: `https://roadsense.ca`
+- `SUPABASE_ANON_KEY` — staging is the same key committed in iOS (anon keys are public by design); local + production have placeholders for now
+- `MAPBOX_ACCESS_TOKEN` — placeholder in every committed file. Override per environment in the secrets file.
+- `SENTRY_DSN` — empty in committed files; goes in secrets if you want crash reports.
+- `ENABLE_POTHOLE_PHOTOS` — matches iOS (false in staging, true elsewhere).
+
+To run a real local build with your real Mapbox token:
+
+```sh
+echo "MAPBOX_ACCESS_TOKEN=pk.your-real-token" > android/config/local.env.secrets.properties
+./gradlew :app:assembleLocalDebug
+```
+
+The Gradle build merges defaults + secrets at sync time and emits the values as `BuildConfig` fields. `AppConfigProvider.current()` returns a typed `AppConfig` from those fields.
+
+## Build variants
+
+Three product flavors × two build types = six variants. Each flavor sets a distinct application id suffix so you can side-load all three at once:
+
+| Variant | Application id |
+|---|---|
+| `localDebug` | `ca.roadsense.android.localdebug` |
+| `stagingDebug` | `ca.roadsense.android.staging` |
+| `productionDebug` | `ca.roadsense.android` |
+| `…Release` | same id, signed for release |
+
+Run `./gradlew :app:assembleLocalDebug` (or `stagingDebug`, etc.) to build a specific variant. `./gradlew test` runs unit tests across all flavors.
 
 ## Fixture parity
 
