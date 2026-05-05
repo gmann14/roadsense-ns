@@ -19,6 +19,8 @@ These docs translate [product-spec.md](../product-spec.md) into concrete, action
 | 08 | [Implementation Backlog](08-implementation-backlog.md) | Literal task order, dependencies, red/green plan, and acceptance criteria |
 | 09 | [Internal Field-Test Pack](09-internal-field-test-pack.md) | Operational checklist for signed-device dogfooding and evidence capture |
 | 10 | [App Store & TestFlight Readiness](10-app-store-and-testflight-readiness.md) | App Store Connect fields, privacy labels, reviewer notes, and release checklists |
+| 13 | [Railway / Deno Migration](13-railway-deno-migration.md) | Path C plan + status: moving Edge Functions off Supabase to Railway PostGIS + Deno |
+| 14 | [Stress-test Runbook](14-stress-test-runbook.md) | Reusable agent prompt + process for stressing the production pipeline before TestFlight cycles |
 
 ## Conventions Used Across Specs
 
