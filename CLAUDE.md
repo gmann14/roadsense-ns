@@ -3,15 +3,15 @@
 iOS app that passively collects road quality data via accelerometer while driving, aggregating into a public heat map.
 
 ## Project Status
-- **Phase:** Pre-development (spec complete)
+- **Phase:** Beta hardening / live web
 - **Spec:** [docs/product-spec.md](docs/product-spec.md)
 - **Research:** [docs/research-supplement.md](docs/research-supplement.md)
 
 ## Tech Stack
 - **iOS:** Swift, SwiftUI, Core Motion, Core Location, Mapbox Maps SDK, SwiftData
-- **Backend:** Supabase (PostgreSQL + PostGIS), Edge Functions, stored procedures
+- **Backend:** Railway-hosted Postgres/PostGIS plus Supabase-compatible Deno function handlers and stored procedures
 - **Map Tiles:** Mapbox Vector Tiles via ST_AsMVT
-- **Web Dashboard (future):** Next.js + Mapbox GL JS + Vercel
+- **Web Dashboard:** Next.js + Mapbox GL JS deployed to Cloudflare via OpenNext
 
 ## Key Architecture Decisions
 - Client uploads POINT readings; server assigns to road segments (server owns road network)

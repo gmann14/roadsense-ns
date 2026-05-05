@@ -465,6 +465,79 @@ enum BrandVoice {
         )
     }
 
+    // MARK: - Always-Location upgrade explainer sheet (B068)
+
+    /// Copy for `AlwaysLocationUpgradeSheet`, shown when the user granted only
+    /// "When In Use" location and we need to walk them into the iOS Settings
+    /// flip. Reference: backlog item B068 in `docs/implementation/08-implementation-backlog.md`.
+    enum AlwaysUpgrade {
+        static let title = NSLocalizedString(
+            "alwaysUpgrade.title",
+            value: "One more permission to keep collecting.",
+            comment: "Title of the Always-Location upgrade explainer sheet."
+        )
+
+        static let mission = NSLocalizedString(
+            "alwaysUpgrade.mission",
+            value: "RoadSense quietly maps the road quality of Nova Scotia from the drives people are already taking. To keep doing that when your screen is off, iOS needs one more tap.",
+            comment: "Mission reminder + plain-language reason at the top of the sheet."
+        )
+
+        static let whyTitle = NSLocalizedString(
+            "alwaysUpgrade.why.title",
+            value: "Why we need Always",
+            comment: "Section title above the why-explanation."
+        )
+
+        static let whyBody = NSLocalizedString(
+            "alwaysUpgrade.why.body",
+            value: "Apple asks for \"While Using\" first by design. To keep recording during a drive — phone in your pocket, screen off, music playing — RoadSense needs Always. We only use it when you're actually moving in a car.",
+            comment: "Plain-language reason Always-Location is required."
+        )
+
+        static let stepsTitle = NSLocalizedString(
+            "alwaysUpgrade.steps.title",
+            value: "Two taps in Settings",
+            comment: "Section title above the numbered steps."
+        )
+
+        static let stepOne = NSLocalizedString(
+            "alwaysUpgrade.step1",
+            value: "Tap **Location**.",
+            comment: "First step inside iOS Settings → RoadSense NS."
+        )
+
+        static let stepTwo = NSLocalizedString(
+            "alwaysUpgrade.step2",
+            value: "Choose **Always**.",
+            comment: "Second step inside iOS Settings → RoadSense NS → Location."
+        )
+
+        static let returnHint = NSLocalizedString(
+            "alwaysUpgrade.returnHint",
+            value: "Then come back to RoadSense — you don't need to do anything else.",
+            comment: "Reassurance shown beneath the steps."
+        )
+
+        static let primaryButton = NSLocalizedString(
+            "alwaysUpgrade.primary",
+            value: "Open Settings",
+            comment: "Primary CTA that deep-links to iOS Settings."
+        )
+
+        static let secondaryButton = NSLocalizedString(
+            "alwaysUpgrade.secondary",
+            value: "Not now",
+            comment: "Dismiss button that closes the sheet without opening Settings."
+        )
+
+        static let accessibilityHint = NSLocalizedString(
+            "alwaysUpgrade.accessibilityHint",
+            value: "Opens iOS Settings so you can switch Location to Always.",
+            comment: "VoiceOver hint for the primary button."
+        )
+    }
+
     // MARK: - NeedsAttentionPill states (§13.5)
 
     enum Attention {

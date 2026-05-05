@@ -511,6 +511,53 @@ final class ReadingStore {
         return groups
     }
 
+    /// Field-test recovery action — clears upload bookkeeping on every retained
+    /// reading so the upload pipeline replays them under the new server-side
+    /// matcher. Server-side cross-batch dedupe (`processed_batches` +
+    /// device_token_hash + recorded_at + 0.5m proximity) guarantees previously
+    /// accepted readings are counted as `duplicate_reading` rather than
+    /// double-counted in segment_aggregates. Privacy-zone-dropped and
+    /// endpoint-trimmed readings are intentionally left out; they were filtered
+    /// for a reason.
+    ///
+    /// Also purges stale `UploadBatch` rows that are still in `pending` /
+    /// `inFlight` state — without this, `UploadQueueCore.prepareNextBatch` will
+    /// see the old batch first and either return its (now empty) reading set or
+    /// honor a stale `nextAttemptAt` back-off, blocking new batches from being
+    /// created from the re-armed readings.
+    ///
+    /// Returns the number of readings re-armed for upload.
+    @discardableResult
+    func markAllReadingsForRequeue(now: Date = Date()) throws -> Int {
+        let context = ModelContext(container)
+        let descriptor = FetchDescriptor<ReadingRecord>(
+            predicate: #Predicate {
+                $0.droppedByPrivacyZone == false
+                    && $0.endpointTrimmedAt == nil
+            }
+        )
+        let readings = try context.fetch(descriptor)
+        for reading in readings {
+            reading.uploadedAt = nil
+            reading.uploadBatchID = nil
+            reading.uploadReadyAt = now
+        }
+
+        let staleBatches = try context.fetch(
+            FetchDescriptor<UploadBatch>(
+                predicate: #Predicate {
+                    $0.statusRawValue == "pending" || $0.statusRawValue == "inFlight"
+                }
+            )
+        )
+        for batch in staleBatches {
+            context.delete(batch)
+        }
+
+        try context.save()
+        return readings.count
+    }
+
     func deleteAllContributionData() throws {
         let context = ModelContext(container)
 

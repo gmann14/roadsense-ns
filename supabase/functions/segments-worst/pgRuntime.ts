@@ -79,4 +79,3 @@ export function createPgFetchWorstSegments(sqlOverride?: DB) {
         };
     };
 }
-

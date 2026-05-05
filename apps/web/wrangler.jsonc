@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/wrangler@latest/config-schema.json",
+  "name": "nsroadsense-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-08-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    { "pattern": "nsroadsense.ca/*", "zone_name": "nsroadsense.ca" },
+    { "pattern": "www.nsroadsense.ca/*", "zone_name": "nsroadsense.ca" }
+  ],
+  "vars": {
+    "NEXT_PUBLIC_API_BASE_URL": "https://api.nsroadsense.ca/functions/v1"
+  }
+}

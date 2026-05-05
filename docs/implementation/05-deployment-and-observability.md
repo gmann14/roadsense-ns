@@ -1,6 +1,6 @@
 # 05 — Deployment & Observability
 
-*Last updated: 2026-04-28*
+*Last updated: 2026-05-05*
 
 Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what to do when something breaks at 11pm" playbook.
 
@@ -9,15 +9,16 @@ Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what 
 | Env | Purpose | Backend host | iOS scheme | Maps key |
 |---|---|---|---|---|
 | `local` | Local dev (`supabase start`) | local Supabase | `RoadSenseNS-Local` | personal dev key |
-| `staging` | TestFlight + Vercel preview | Railway PostGIS + Deno | `RoadSenseNS-Staging` | staging key |
-| `production` | Real users (App Store) | Railway PostGIS + Deno (separate project) | `RoadSenseNS` | production key |
+| `staging` | TestFlight/shared smoke | Railway PostGIS + Deno behind Cloudflare, if provisioned | `RoadSenseNS-Staging` | staging key |
+| `production` | Real users (App Store) | Railway PostGIS + Deno behind Cloudflare | `RoadSenseNS` | production key |
 
-Staging and production are physically separate Railway projects so the blast radius of a bad migration is contained. Local development still uses local Supabase via the CLI.
+Staging and production should be physically separate Railway projects so the blast radius of a bad migration is contained. Local development still uses local Supabase via the CLI.
 
-### Staging endpoints (current)
+### Current public endpoints
 
-- API: `https://api-production-075e9.up.railway.app/functions/v1`
-- Web: `https://roadsense-web.vercel.app`
+- API: `https://api.nsroadsense.ca/functions/v1` via Cloudflare proxy to Railway
+- API origin: `https://api-production-075e9.up.railway.app/functions/v1`
+- Web: `https://nsroadsense.ca` via Cloudflare/OpenNext
 - DB (admin): Railway proxy URL — see `.railway-secrets.local` (gitignored) for current values.
 
 ## Railway runbook
@@ -135,7 +136,9 @@ SELECT create_next_readings_partition();
 
 ### Backend
 
-- Supabase secrets via `supabase secrets set` — one command per env
+- Railway service variables hold runtime secrets per environment
+- `DATABASE_URL` — internal Railway Postgres URL for the API service
+- `PUBLIC_API_KEY` / `SUPABASE_ANON_KEY` — public API key accepted through `Authorization: Bearer` and `apikey`
 - `TOKEN_PEPPER` (64-char random string, per-env) — used to hash device tokens
 - `OSM_SNAPSHOT_URL` — pinned quarterly
 - `SENTRY_DSN` — backend error reporting
@@ -162,7 +165,10 @@ Stored in repo settings:
 
 - `APPLE_ASC_API_KEY_ID`, `APPLE_ASC_API_ISSUER_ID`, `APPLE_ASC_API_PRIVATE_KEY` — App Store Connect API for TestFlight uploads
 - `MATCH_PASSWORD` + `MATCH_GIT_URL` — fastlane match for signing certs (if we go that route)
-- `SUPABASE_ACCESS_TOKEN` — for deploying migrations + functions
+- `DATABASE_URL` or `RAILWAY_DATABASE_URL` — target Railway Postgres for migrations and seeded smoke checks
+- `RAILWAY_DEPLOY_HOOK_URL` — optional Railway deploy hook for the API service
+- `PUBLIC_API_KEY` or `SUPABASE_ANON_KEY` — public API key used by smoke checks and deployed clients
+- `FUNCTIONS_BASE_URL` — smoke target, normally `https://api.nsroadsense.ca/functions/v1` in production
 - `SENTRY_AUTH_TOKEN` — symbolication upload
 - `MAPBOX_DOWNLOAD_TOKEN` — SDK dependency fetch
 

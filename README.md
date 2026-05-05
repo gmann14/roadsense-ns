@@ -2,7 +2,7 @@
 
 An iOS app that passively collects road quality data using your phone's accelerometer while you drive. Aggregates data into a public heat map showing road roughness scores and pothole locations.
 
-**Status:** Active implementation. The iOS app, Supabase backend, and the first live web explorer slices are now in repo.
+**Status:** Active implementation. The iOS app, Railway-hosted backend, and live Cloudflare web explorer are now in repo.
 
 Start here:
 
@@ -13,7 +13,8 @@ Start here:
 Current repo structure:
 
 - `ios/` — Xcode project, Swift app target, simulator harness, and tests
-- `supabase/` — migrations, Edge Functions, and DB tests
-- `apps/web/` — Next.js public dashboard with live quality-map and segment-drawer groundwork
+- `supabase/` — Supabase-compatible migrations, Deno function handlers, and DB tests; production runs on Railway Postgres/API
+- `apps/web/` — Next.js public dashboard deployed to Cloudflare with OpenNext
+- `cloudflare/` — Workers used for API/tile proxying in front of the Railway API
 - `scripts/` — import, smoke, and operational scripts
 - `.github/workflows/` — manual CI workflows

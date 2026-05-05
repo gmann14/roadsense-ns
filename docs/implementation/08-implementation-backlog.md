@@ -529,6 +529,42 @@ Post-MVP phases:
   - core flows remain usable at large text sizes
 - **Current repo note:** this slice is now materially implemented in the simulator path: `OnboardingFlowView` is scroll-safe at large sizes, the app accepts a deterministic `ROAD_SENSE_DYNAMIC_TYPE_SIZE` override for UI automation, and UI smokes now verify the permissions-first onboarding plus stats/settings usability at `accessibility5`. Remaining work is VoiceOver and real-device validation, not the absence of a large-text test path.
 
+### B068 — Always-Location upgrade flow and onboarding clarity
+
+- **Spec refs:** [01](01-ios-implementation.md), [06](06-security-and-privacy.md)
+- **Depends on:** B032 (existing permissions onboarding), B065 (recording-state UX)
+- **Why field-test discovery:** during the first signed install (2026-05-04), iOS only granted "When In Use" location on initial prompt. The app then shows the "Set it and forget it →" pill which deep-links to iOS Settings without explaining why Always-Location is needed for passive driving collection or how to flip the toggle. Non-technical testers will not figure this out without help, and `OnboardingFlowView` doesn't handle the post-install upgrade case.
+- **RED**
+  - UI test that simulates "When In Use" being granted, asserts an in-app explainer sheet renders before any deep-link, and asserts the deep-link only fires after the user explicitly continues
+  - copy-deck snapshot test for the explainer text (mission, why background is required, exact two taps in iOS Settings)
+  - VoiceOver labels and Dynamic Type at `accessibility5` already covered by B063 — extend the same harness to the new sheet
+- **GREEN**
+  - new `AlwaysLocationUpgradeSheet` shown when permission state is `When In Use` and the user taps the attention pill (or after a first qualifying drive ends)
+  - sheet content: one-line mission reminder, plain-language reason ("RoadSense needs Always so it can keep recording when your phone screen is off, like during a drive"), an annotated screenshot or animation showing the two iOS Settings taps, and a primary "Open Settings" button that triggers the existing deep-link
+  - extend `OnboardingFlowView` permission stage copy to set the right expectation up front: the prompt asks for "While Using" first by Apple's design, and Always will be requested again later — make this not feel like a bait-and-switch
+  - keep the "Set it and forget it →" pill copy; only the destination changes (sheet first, then Settings)
+- **Acceptance**
+  - a tester who only granted "When In Use" can read the sheet, tap through to Settings, and return to a working background-collection state without external instructions
+  - the explainer is reachable from both the attention pill and Settings → Permissions
+  - no regression in the initial onboarding flow for users who grant Always immediately
+- **Out of scope:** tutorial-style walkthroughs of driving with the phone mounted, CarPlay setup, or auto-start prompts — those are separate UX work tracked elsewhere
+
+### B069 — Empty-state splash should not block community map
+
+- **Spec refs:** [01](01-ios-implementation.md), [07](07-web-dashboard-implementation.md)
+- **Depends on:** B068 (onboarding clarity)
+- **Why field-test discovery:** during the first build-4 install (2026-05-04) the "Drive normally — your first road ribbon shows up after the next sync" splash card centers over the map and obscures the public heatmap that's available regardless of local activity. This is wrong: the public map already has community data; gating that view behind the user's personal-drive history makes the app feel empty when it isn't.
+- **RED**
+  - UI test: install with no local drives, confirm public heatmap renders on the map view; the personal empty-state belongs in Stats, not on the map
+  - Snapshot test for the corrected card placement (e.g. dismissable hint pill, not a centered scrim)
+- **GREEN**
+  - move the personal empty-state copy to a small dismissable hint pill or to the Stats tab
+  - keep the map showing public segment colors regardless of local drive count
+  - first drive completes → hint pill auto-dismisses
+- **Acceptance**
+  - opening the app without any local drives shows the public heatmap immediately
+  - the "first ribbon shows up after next sync" copy still surfaces somewhere logical (likely Stats), but never blocks the map
+
 ## Phase 8 — TestFlight Readiness
 
 ### B070 — Internal field-test pack
@@ -984,6 +1020,74 @@ Android is explicitly post-iOS MVP. Do not start this until the iOS app has prov
   - a real Android test drive uploads readings that appear on the same public map without backend changes
   - battery drain and foreground-service UX are documented on at least one Pixel-class and one Samsung-class device
   - Google Play internal/closed testing path is documented, including any current new-developer testing requirements
+
+### B095 — Longer logical road stretches for matching and rendering
+
+- **Spec refs:** [02](02-backend-implementation.md), [07](07-web-dashboard-implementation.md)
+- **Depends on:** tiered segment-match radius migration `20260505130000_tiered_segment_match_radius.sql` shipped 2026-05-05 — observe its impact first
+- **Why field-test discovery:** OSM splits roads at every intersection. A 30km stretch of Hwy 103 is ~80 separate `road_segments` rows. A reading 28m off the centerline of one segment may be 4m off the geometry of the next merged stretch, but the per-segment matcher never sees that adjacency. Combined with the divided-highway problem (both directions share one centerline), this produces patchy coverage on long major roads even with the new tiered radius.
+- **RED**
+  - pgTAP: building a `road_stretches` table from `road_segments` for a synthetic two-segment fixture produces one stretch with the union geometry
+  - integration test: a reading 28m off segment A but 4m off the merged stretch matches successfully when the matcher targets stretches
+  - regression test: city block addresses still match the right block (no over-merging across name/road_type boundaries)
+- **GREEN**
+  - new `road_stretches` materialized view that groups adjacent `road_segments` by `(road_name, road_type, surface_type, municipality)` and unions geometry with `ST_LineMerge(ST_Union(...))`
+  - matcher operates against `road_stretches` for distance gating, then resolves the chosen stretch back to the underlying `road_segments` for storage so aggregates keep working at the existing granularity
+  - public web map and iOS map can render stretches as continuous polylines for cleaner display (optional, can ship after the matching change)
+  - nightly recompute rebuilds `road_stretches` after any OSM refresh
+- **Acceptance**
+  - on the same drive fixture, the stretches matcher accepts ≥10% more readings than the per-segment matcher with no increase in cross-block mismatch rate
+  - the public map looks visibly cleaner on Hwy 102/103 (one polyline, not 80)
+- **Out of scope:** changing how aggregates are stored (still per-segment), or merging across municipality boundaries
+
+### B096 — Real map-matching for full GPS tracks
+
+- **Spec refs:** [02](02-backend-implementation.md), [03](03-api-contracts.md)
+- **Depends on:** B095 (try cheaper fixes first)
+- **Why field-test discovery:** even with tiered radius and longer stretches, parallel-road ambiguity (you on Bedford Hwy vs. Hwy 102 right next to it), tunnels/overpasses, and short side-trips will still confuse a per-point matcher. Real map-matching uses temporal context — you can't teleport between segments — and reliably picks the right road graph path. This is what Strava, Mapbox, Google all use.
+- **Lighter options to evaluate before standing up OSRM:**
+  - **Mapbox Map Matching API:** zero infrastructure to host. Free up to 100k requests/month. We already have a Mapbox token wired through. One API call per drive (a batch of GPS points → matched OSM way IDs). Likely free forever at our usage scale. Best candidate for v1 of "real map-matching" if we can live with sending coordinates to Mapbox.
+  - **Self-hosted OSRM, on-demand only:** keep the per-point matcher as the default. Only queue a drive for OSRM re-match overnight if the naive matcher rejected >X% of its points. Costs us infra only on the drives that actually need it. ~Docker container, ~8GB RAM for NS+NB OSM, ~1GB disk.
+  - **Smarter PostGIS-only KNN:** drop fixed radius entirely. Use `<->` (KNN distance) without a cap, then filter by heading + speed continuity across consecutive readings within the same drive. No new service, but doesn't solve parallel-road ambiguity as well.
+- **RED**
+  - per-drive integration test using a known route fixture: both naive and map-matched paths produce expected segment IDs, with map-matching strictly weakly dominating naive on accuracy
+  - cost/latency budget test if Mapbox API path is chosen — assert one call per drive batch and assert P95 latency under target
+  - privacy review: if Mapbox path is chosen, document what coordinates leave our infra and update App Store privacy labels
+- **GREEN**
+  - pick one of the three lighter approaches above based on infra and privacy preferences
+  - integrate at the `ingest_reading_batch` stage (or as a post-ingest job for the on-demand variants)
+  - keep the naive matcher as a fallback so the system still ingests when the map-matcher is unavailable
+- **Acceptance**
+  - on the same drive fixture, map-matched results capture ≥X% more correct segment assignments than the post-B080 baseline
+  - parallel-road cases (Bedford Hwy vs. Hwy 102) resolve correctly
+  - infrastructure cost is documented and within budget for current and projected user count
+- **Out of scope:** client-side map-matching on the iPhone (requires shipping OSM data with the app — too heavy), or deprecating the per-point matcher
+
+### B097 — Cross-rotation device-token dedupe
+
+- **Spec refs:** [02](02-backend-implementation.md), [06](06-security-and-privacy.md)
+- **Why field-test discovery:** during the 2026-05-05 device-side requeue (debug action that re-armed 6,837 retained on-device readings to flow through the new tiered-radius matcher), the `processed_batches.rejected_reasons.duplicate_reading` counter stayed at zero — yet 2,135 of those readings had already been accepted in earlier sessions. The cross-batch dedupe in `ingest_reading_batch` matches on `existing.device_token_hash = p_device_token_hash`, but tokens rotate monthly per the privacy spec. The phone now has 39 distinct device tokens for the same physical device, so the previous session's hash never matches today's. Result: a small amount of double-counting on segments that were already mapped pre-requeue, with the original drive and the re-uploaded copy of that drive both contributing to the same segment's roughness aggregate.
+- **Severity:** low for MVP — the next nightly recompute trims outliers and the visible product is an aggregate, not per-reading. Worth tracking before any future bulk re-upload event multiplies the bias.
+- **Possible approaches (pick after a small spike):**
+  - widen the dedupe window to ignore device_token_hash and match on `(recorded_at, location)` alone; preserves the privacy property of rotating tokens but allows cross-rotation dedupe at ingest time
+  - introduce a stable per-install salt (separate from the rotating device_token) that the device sends as a "dedupe family" identifier; lets the server group submissions from the same physical install across rotations without identifying the user
+  - accept the inflation, fix it nightly via a `dedupe_readings` job that consolidates near-identical rows
+- **RED**
+  - integration test reproducing the failure: ingest a reading from device_token A, rotate to device_token B, re-ingest the same physical reading, assert it is rejected as `duplicate_reading`
+  - privacy/threat-model checklist: any chosen approach must not allow operators to link rotated tokens back to a single user identity
+- **GREEN**
+  - one of the approaches above, plus a backfill that consolidates the existing inflation introduced by the 2026-05-05 requeue
+- **Acceptance**
+  - a re-upload of a device's full local history produces zero new accepted readings for any (timestamp, ~5m proximity) tuple already in `readings`, regardless of rotation history
+- **Out of scope:** server-side time-series tracking of which device_token_hashes belong to the same install (would defeat the rotation property)
+
+### B098 — Local-build → production override pattern (dev hygiene)
+
+- **Spec refs:** [01](01-ios-implementation.md), [04](04-testing-and-quality.md)
+- **Why captured:** during the 2026-05-05 requeue, the only practical way to send historical on-device readings to production was to override `Local Debug`'s `API_BASE_URL` and `SUPABASE_ANON_KEY` to prod values via `ios/Config/RoadSenseNS.Local.secrets.xcconfig` (gitignored). The Staging Debug bundle ID differs from Local Debug (`ca.roadsense.ios` vs `ca.roadsense.ios.localdebug`), so a fresh Staging install does NOT see SwiftData written by the Local-build app — historical readings would be invisible. Worth documenting as a recipe and giving the iOS app a built-in safer alternative for future bulk re-uploads.
+- **Acceptance**
+  - either: short README in `ios/Config/Templates/` describing the override pattern + revert step; OR a structured "Connect to environment" picker in the Local-build app's debug settings that flips API_BASE_URL at runtime (without rebuild) so testers can route a single install at staging or production from the device
+- **Out of scope:** any change to TestFlight or App Store builds — this is dev-only ergonomics
 
 ## Suggested PR Slicing
 

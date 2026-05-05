@@ -1,6 +1,17 @@
 .DS_Store
 .claude/
 
+# Local secrets / credentials. Anything matching these patterns must
+# never be committed; durable copies should live in ~/.context/secrets/
+# (outside any worktree).
+*.local
+.env
+.env.*
+!.env.example
+.cloudflare-token*
+.cloudflare-config*
+.railway-secrets*
+
 # Xcode
 DerivedData/
 *.xcuserstate
@@ -20,6 +31,9 @@ ios/fastlane/test_output/
 # Node / web
 node_modules/
 .next/
+.open-next/
+.vercel/
+.wrangler/
 coverage/
 playwright-report/
 test-results/

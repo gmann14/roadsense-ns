@@ -1,9 +1,9 @@
-# Supabase Scaffold
+# Backend Scaffold
 
-This directory will hold the backend implementation:
+This directory holds the Supabase-compatible backend implementation. Local development still uses the Supabase CLI stack, but production is Railway Postgres/PostGIS plus Railway-hosted Deno function handlers behind Cloudflare.
 
-- `migrations/` — Postgres schema migrations
-- `functions/` — Supabase Edge Functions
+- `migrations/` — Postgres schema migrations applied with `supabase db push --db-url "$DATABASE_URL"`
+- `functions/` — Deno HTTP handlers using Supabase-compatible request paths and anon-key headers
 - `tests/` — pgTAP and Deno tests
 
 Implementation order starts with schema work in `B010` from [docs/implementation/08-implementation-backlog.md](../docs/implementation/08-implementation-backlog.md).

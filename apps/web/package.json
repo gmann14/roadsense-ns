@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:cloudflare": "opennextjs-cloudflare build",
+    "preview:cloudflare": "opennextjs-cloudflare preview",
+    "deploy:cloudflare": "opennextjs-cloudflare deploy",
     "start": "next start",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -19,6 +22,7 @@
   },
   "devDependencies": {
     "@lhci/cli": "^0.15.1",
+    "@opennextjs/cloudflare": "^1.19.6",
     "@playwright/test": "^1.55.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
@@ -27,6 +31,7 @@
     "@types/react-dom": "^19.2.2",
     "jsdom": "^27.0.1",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wrangler": "^4.87.0"
   }
 }

@@ -1,14 +1,16 @@
 # 03 — API Contracts
 
-*Last updated: 2026-04-28*
+*Last updated: 2026-05-05*
 
 Authoritative request/response shapes for all endpoints. **Lock this doc by end of week 2** so iOS and backend can work in parallel without churn.
 
 ## Conventions
 
-- Base URL: local Supabase uses `http://127.0.0.1:54321/functions/v1`; hosted staging/production use the Railway Deno API URL.
+- Production base URL: `https://api.nsroadsense.ca/functions/v1`
+- Railway origin URL: `https://api-production-075e9.up.railway.app/functions/v1`
+- Local base URL: `http://127.0.0.1:54321/functions/v1`
 - Content-Type: `application/json` for JSON endpoints, `application/vnd.mapbox-vector-tile` for tiles
-- Auth: send the environment public API key in `Authorization: Bearer <key>` and/or `apikey: <key>` for all requests except `GET /health`, which is intentionally unauthenticated for uptime monitoring. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
+- Auth: send the environment public API key in `Authorization: Bearer <key>` and/or `apikey: <key>` for all requests except `GET /health`, which is intentionally unauthenticated for uptime monitoring. The Cloudflare API proxy preserves this Supabase-compatible header shape. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
 - The `ingest_reading_batch` RPC is `SECURITY DEFINER` with `EXECUTE` granted only to privileged backend roles; the public key cannot invoke it directly. Uploads MUST go through `/functions/v1/upload-readings`, which enforces validation and rate limits before dispatching.
 - All timestamps are RFC 3339 / ISO 8601 with timezone (`2026-04-17T14:30:00Z`)
 - All coordinates are WGS84 (EPSG:4326), `lng` then `lat` where ordered, but JSON fields are named explicitly (`lat`, `lng`) to avoid ambiguity
@@ -109,7 +111,7 @@ Batch upload of processed point readings.
 - `duplicate`: `true` if this `batch_id` was already processed (no-op retry)
 - `rejected_reasons`: counts by reason code. Only codes the server actually emits are listed — clients must tolerate unknown keys for forward-compat. MVP-emitted enum:
   - `out_of_bounds` — lat/lng outside NS bbox
-  - `no_segment_match` — no road segment within 25m / heading window
+  - `no_segment_match` — no road segment within the road-class-tiered radius (45m for motorway/trunk/primary/_link, 25m for secondary/tertiary/_link, 20m for everything else) and heading window
   - `low_quality` — server-visible quality gates failed (`gps_accuracy_m > 20`, `speed_kmh < 15`, `speed_kmh > 160`, or `roughness_rms` outside `[0, 15]`). Client-only gates such as `duration_s > 15` and `sample_count < 30` should have been dropped before upload and never reach the backend.
   - `future_timestamp` — `recorded_at` in the future by > 60s
   - `stale_timestamp` — `recorded_at` older than 7 days

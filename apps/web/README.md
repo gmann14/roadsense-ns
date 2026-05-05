@@ -1,6 +1,6 @@
 # RoadSense NS Web
 
-Next.js App Router frontend for the future public RoadSense NS dashboard.
+Next.js App Router frontend for the public RoadSense NS dashboard. Production runs on Cloudflare Workers through OpenNext.
 
 Implemented so far:
 
@@ -25,18 +25,21 @@ Commands:
 - `npm install`
 - `npm test`
 - `npm run build`
+- `npm run build:cloudflare`
+- `npm run deploy:cloudflare`
 - `npm run test:lighthouse`
 
 Manual CI / deploy scaffolding:
 
-- `.github/workflows/web-ci.yml` runs unit tests, production build, and Playwright browser smoke on demand
-- `vercel.json` adds baseline response headers for deployed environments
+- `.github/workflows/web-ci.yml` runs unit tests, a Cloudflare/OpenNext production build, Lighthouse checks, and Playwright browser smoke on demand
+- `wrangler.jsonc` configures the Cloudflare Worker routes for `nsroadsense.ca` and `www.nsroadsense.ca`
+- `next.config.ts` adds baseline security headers before responses leave Next.js/OpenNext
 
 Environment:
 
 - `NEXT_PUBLIC_MAPBOX_TOKEN` — required for the live map canvas
 - `NEXT_PUBLIC_MAPBOX_STYLE_ID` or `NEXT_PUBLIC_MAPBOX_STYLE_URL` — optional Mapbox style override
-- `NEXT_PUBLIC_API_BASE_URL` — defaults to local Supabase Edge Functions
+- `NEXT_PUBLIC_API_BASE_URL` — defaults to the local Supabase-compatible function gateway; production uses `https://api.nsroadsense.ca/functions/v1`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — anon key for public read endpoints
 
 Current scope note:
@@ -49,4 +52,4 @@ Current scope note:
 - `Worst Roads` now uses the live ranked-report endpoint.
 - Browser smoke now covers keyboard-only navigation and phone-sized viewport behavior, and the CSS honors reduced-motion preferences.
 - Repo-side Lighthouse checks now enforce accessibility and CLS budgets for the methodology/privacy trust pages.
-- The main remaining web gap is real deployment linking plus hosted-environment performance validation for the live map surface rather than missing core product surfaces.
+- The main remaining web gap is hosted-environment performance validation for the live map surface rather than missing core product surfaces.

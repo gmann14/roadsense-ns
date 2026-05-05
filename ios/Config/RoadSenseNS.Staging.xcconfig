@@ -1,6 +1,6 @@
 APP_ENV = STAGING
 APP_DISPLAY_NAME = RoadSense NS
-API_BASE_URL = https:/$()/api-production-075e9.up.railway.app
+API_BASE_URL = https:/$()/api.nsroadsense.ca
 ROAD_SENSE_APP_BUNDLE_IDENTIFIER = ca.roadsense.ios
 MAPBOX_ACCESS_TOKEN = pk.placeholder.staging
 SUPABASE_ANON_KEY = hwJJrdunK0YQVGIBYzV6LUfosME9ZN9cg7AbE0PJgyYM69eb

@@ -1,0 +1,19 @@
+name = "nsroadsense-api-proxy"
+main = "src/worker.js"
+compatibility_date = "2025-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Routes onto api.nsroadsense.ca and tiles.nsroadsense.ca.
+# DNS records for both subdomains are managed separately and must
+# be proxied (orange-cloud) for these routes to fire.
+[[routes]]
+pattern = "api.nsroadsense.ca/*"
+zone_name = "nsroadsense.ca"
+
+[[routes]]
+pattern = "tiles.nsroadsense.ca/*"
+zone_name = "nsroadsense.ca"
+
+# Origin URL for the Railway-hosted Supabase-compatible functions gateway.
+[vars]
+ORIGIN_BASE = "https://api-production-075e9.up.railway.app"

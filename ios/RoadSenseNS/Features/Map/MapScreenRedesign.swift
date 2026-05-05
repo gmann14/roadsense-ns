@@ -20,6 +20,7 @@ struct MapScreenRedesign: View {
     let onShowStats: () -> Void
     let onShowSettings: () -> Void
     let onShowPrivacyZones: () -> Void
+    let onShowAlwaysUpgrade: () -> Void
 
     // Map + segment state — parallel to MapScreen.
     @State private var selectedSegment: SegmentDetailResponse?
@@ -509,7 +510,7 @@ struct MapScreenRedesign: View {
     private func handleAttentionTap(_ state: AttentionState) {
         switch state {
         case .alwaysLocationUpgrade:
-            model.requestAlwaysLocationUpgrade()
+            onShowAlwaysUpgrade()
         case .locationDenied, .motionDenied:
             if let url = URL(string: UIApplication.openSettingsURLString) {
                 UIApplication.shared.open(url)

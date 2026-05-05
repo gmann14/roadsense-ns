@@ -1,6 +1,6 @@
-# Edge Functions
+# Function Handlers
 
-Supabase Edge Functions will live here.
+Supabase-compatible Deno function handlers live here. They run locally through `supabase start`; production deploys the same handler surface to the Railway API service behind Cloudflare.
 
 Planned initial functions:
 

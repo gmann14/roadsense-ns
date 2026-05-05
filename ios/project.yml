@@ -24,7 +24,7 @@ settings:
   base:
     PRODUCT_NAME: RoadSense NS
     MARKETING_VERSION: 0.1.0
-    CURRENT_PROJECT_VERSION: 1
+    CURRENT_PROJECT_VERSION: 5
     SWIFT_VERSION: 5.9
     INFOPLIST_FILE: RoadSenseNS/Resources/Info.plist
     CODE_SIGN_STYLE: Automatic

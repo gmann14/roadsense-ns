@@ -1117,9 +1117,19 @@ BEGIN
     ) p;
 
     -- Match each reading to a SINGLE best segment using KNN + heading + distance filters.
-    -- The lateral takes 3 nearest candidates, filters by heading, and picks the closest
-    -- surviving one. Without the inner SELECT/ORDER BY/LIMIT 1 wrap, a reading that
-    -- passes the ON-filter against multiple candidates would be duplicated in tmp_matched.
+    -- The lateral takes 5 nearest candidates, filters by heading and a road-class-tiered
+    -- distance cutoff, and picks the closest surviving one. Without the inner
+    -- SELECT/ORDER BY/LIMIT 1 wrap, a reading that passes the ON-filter against multiple
+    -- candidates would be duplicated in tmp_matched.
+    --
+    -- Tiered radius — see "Segment-match radius tiers" below for rationale:
+    --   motorway / trunk / primary + _link    → 45 m cutoff
+    --   secondary / tertiary + _link          → 25 m cutoff
+    --   everything else (residential, etc.)   → 20 m cutoff (original behavior)
+    --
+    -- Initial bbox prefilter is the max tier (50 m) to avoid dropping candidates
+    -- before the per-row tier check applies. Implementation lives in migration
+    -- 20260505130000_tiered_segment_match_radius.sql.
     CREATE TEMP TABLE tmp_matched ON COMMIT DROP AS
     SELECT
         t.reading_idx,
@@ -1133,19 +1143,30 @@ BEGIN
             SELECT
                 rs.id AS segment_id,
                 rs.surface_type,
+                rs.road_type,
                 ST_Distance(rs.geom::geography, t.geom::geography) AS distance_m,
                 ABS(
                     ((COALESCE(t.heading, rs.bearing_degrees) - rs.bearing_degrees + 540)::INT % 360) - 180
                 ) AS heading_diff
             FROM road_segments rs
-            WHERE ST_DWithin(rs.geom::geography, t.geom::geography, 25)
+            WHERE ST_DWithin(rs.geom::geography, t.geom::geography, 50)
               AND rs.is_parking_aisle = FALSE
             -- KNN on geography so ordering reflects true meters (at 44°N,
             -- degree-space ordering would bias east-west over north-south by ~30%).
             ORDER BY rs.geom::geography <-> t.geom::geography
-            LIMIT 3
+            LIMIT 5
         ) candidates
-        WHERE candidates.distance_m <= 20
+        WHERE candidates.distance_m <= CASE
+                WHEN candidates.road_type IN (
+                    'motorway', 'trunk', 'primary',
+                    'motorway_link', 'trunk_link', 'primary_link'
+                ) THEN 45
+                WHEN candidates.road_type IN (
+                    'secondary', 'tertiary',
+                    'secondary_link', 'tertiary_link'
+                ) THEN 25
+                ELSE 20
+            END
           AND (candidates.heading_diff <= 45 OR candidates.heading_diff >= 135)  -- allow reverse direction
         ORDER BY candidates.distance_m
         LIMIT 1
@@ -1236,6 +1257,35 @@ $$;
 REVOKE EXECUTE ON FUNCTION ingest_reading_batch(UUID, BYTEA, JSONB, TIMESTAMPTZ, TEXT, TEXT) FROM PUBLIC;
 GRANT  EXECUTE ON FUNCTION ingest_reading_batch(UUID, BYTEA, JSONB, TIMESTAMPTZ, TEXT, TEXT) TO service_role;
 ```
+
+### Segment-match radius tiers
+
+The matcher uses different distance cutoffs per OSM `road_type`. This was introduced after field-test telemetry on 2026-05-05 showed ~1,863 readings rejected with `no_segment_match` versus 2,135 accepted — almost a 1:1 reject ratio caused by a flat 20 m cutoff that was too tight for highway driving.
+
+| Road class | Cutoff | Rationale |
+|---|---|---|
+| `motorway`, `trunk`, `primary`, `*_link` | **45 m** | Divided highways share one OSM centerline; on/off ramps and shoulder lanes drift; GPS spikes near overpasses and in cuts |
+| `secondary`, `tertiary`, `*_link` | **25 m** | Provincial routes and major rural roads — usually well-aligned but wider than residential |
+| Everything else (residential, service, unclassified) | **20 m** | City blocks are typically <50 m apart, so a tight cutoff prevents reading spillover to the wrong block |
+
+The bbox prefilter (`ST_DWithin(..., 50)`) uses the maximum tier so candidates aren't dropped before the per-row tier check applies. KNN is bounded to the 5 nearest segments, then heading-direction filtering (±45° same direction, 135–180° reverse) applies before picking the closest survivor.
+
+**Telemetry to monitor after deploys that touch this:** the `rejected_reasons.no_segment_match` count in `processed_batches` aggregated over a rolling 7-day window. Should fall sharply after the tiered cutoff lands and stay low; a sudden jump means OSM segment geometry has drifted relative to active drives, and the import pipeline needs investigation.
+
+**Out of scope for the per-segment matcher:** parallel-road ambiguity (e.g., Bedford Highway alongside Hwy 102), tunnel/overpass disambiguation, and recovery of cross-segment continuity along a single drive. These need real map-matching — see the next section.
+
+### Map-matching follow-up plan
+
+Two backlog items track the path beyond per-point KNN:
+
+- **B095 — Longer logical road stretches.** Merge adjacent `road_segments` rows with the same `(road_name, road_type, surface_type, municipality)` into a `road_stretches` materialized view. The matcher targets stretches for distance gating, then resolves the chosen stretch back to underlying `road_segments` for storage so `segment_aggregates` granularity is unchanged. Expected to recover another ~10% of `no_segment_match` rejections caused by the boundary-effect between adjacent OSM segments. Also enables cleaner web-map rendering (Highway 103 as one polyline, not 80).
+
+- **B096 — Real map-matching for full GPS tracks.** Three lighter alternatives evaluated before standing up self-hosted OSRM:
+  1. **Mapbox Map Matching API.** Zero infra. ~Free up to 100 k requests/month. One call per drive batch. Privacy review needed before adoption (coordinates leave our infra).
+  2. **Self-hosted OSRM, on-demand only.** Keep the per-point matcher in the hot path. Queue a drive for OSRM re-match only if the naive matcher rejected more than a threshold percentage of its points. Costs infra only on drives that need it.
+  3. **PostGIS-only KNN with temporal context.** Drop the fixed radius. Use `<->` plus per-drive heading/speed continuity to pick the right stretch from a wider candidate set. No new service, but doesn't fully solve parallel-road ambiguity.
+
+Both items live in [`docs/implementation/08-implementation-backlog.md`](08-implementation-backlog.md). B096 is gated behind B095 — measure whether stretches alone close the gap before paying for an external service or new infrastructure.
 
 ### Aggregate Folding: `update_segment_aggregates_from_batch`
 
@@ -1389,15 +1439,20 @@ DECLARE
     v_tile BYTEA;
     v_min_zoom INT;
 BEGIN
-    -- Zoom-level road-type filter (defense in depth; client also filters)
+    -- Zoom-level road-type filter (defense in depth; client also filters).
+    -- Floor was lowered from z<10 to z<6 in migration
+    -- 20260505120000_lower_tile_floor_to_z8.sql so the public web map renders
+    -- segments at the auto-fit-to-data initial zoom (~z 7.5-8 for an
+    -- NS-wide scored extent). At z=6/7/8/9 only major roads pass the
+    -- segment filter below, so each tile stays cheap.
     v_min_zoom := CASE
-        WHEN z < 10 THEN 0   -- show nothing (return empty tile)
+        WHEN z < 6 THEN 0    -- show nothing (return empty tile)
         WHEN z < 12 THEN 12  -- only major
         WHEN z < 14 THEN 14  -- + tertiary
         ELSE 0               -- show all
     END;
 
-    IF z < 10 THEN RETURN ''::bytea; END IF;
+    IF z < 6 THEN RETURN ''::bytea; END IF;
 
     WITH bounds AS (
         SELECT

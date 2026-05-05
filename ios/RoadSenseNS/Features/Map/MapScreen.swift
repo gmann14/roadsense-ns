@@ -8,6 +8,7 @@ struct MapScreen: View {
     let onShowStats: () -> Void
     let onShowSettings: () -> Void
     let onShowPrivacyZones: () -> Void
+    let onShowAlwaysUpgrade: () -> Void
 
     @State private var isCardExpanded = true
     @State private var selectedSegment: SegmentDetailResponse?
@@ -789,7 +790,7 @@ struct MapScreen: View {
 
     private func handlePrimaryAction() {
         if model.readiness.backgroundCollection == .upgradeRequired {
-            model.requestAlwaysLocationUpgrade()
+            onShowAlwaysUpgrade()
         } else if model.isCollectionPausedByUser {
             model.startPassiveMonitoring()
         }
@@ -1059,7 +1060,8 @@ private struct BottomCardHeightPreferenceKey: PreferenceKey {
             pendingMapTarget: .constant(nil),
             onShowStats: {},
             onShowSettings: {},
-            onShowPrivacyZones: {}
+            onShowPrivacyZones: {},
+            onShowAlwaysUpgrade: {}
         )
     }
 }
