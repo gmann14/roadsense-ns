@@ -30,19 +30,78 @@ Fields that should not drift:
 |---|---|
 | App name | `RoadSense NS` |
 | Bundle ID | `ca.roadsense.ios` |
-| Privacy policy URL | `https://roadsense.ca/privacy` |
+| Privacy policy URL | `https://nsroadsense.ca/privacy` |
 | Contact email | `graham.mann14@gmail.com` |
 | Account requirement | none |
 | Demo credentials | N/A |
+| Support URL | `https://nsroadsense.ca` (homepage; add a dedicated `/contact` later if you want a richer support surface) |
+| Primary category | Travel |
+| Secondary category | Utilities |
+| Age rating | 4+ |
 
-Fields that still need human product judgment:
+## Drafted copy for App Store submission
 
-- primary category
-- subtitle
-- promotional text
-- long description
-- keywords
-- support URL if you want something better than the privacy/contact page
+Drafted 2026-05-05 alongside the build 5 TestFlight submission. Lock these strings on App Store submission day; until then, treat as the leading candidate.
+
+### Subtitle (≤30 chars)
+
+`Community road-quality map` (26 chars)
+
+Alternates if you want a different angle: `Pothole map for Nova Scotia` (27), `Map Nova Scotia's roads` (23), `A community road map of NS` (26).
+
+### Promotional text (≤170 chars, editable post-approval without re-review)
+
+> Drive normally. Your phone quietly measures road roughness and shares it with a public map of every pothole and rough stretch in Nova Scotia. No account needed.
+
+(157 chars.)
+
+### Description (≤4,000 chars; below ≈1,400)
+
+> RoadSense NS turns your daily drives into a public map of every pothole and rough stretch in Nova Scotia.
+>
+> While you drive — phone in your pocket, screen off, music playing — RoadSense quietly measures road roughness using your phone's accelerometer and GPS. Your readings combine with everyone else's to build a community-owned map of road quality across the province.
+>
+> No account. No sign-up. Open the app, accept location and motion permissions, drive normally.
+>
+> **What you get**
+> - A live map of road quality across Nova Scotia, refreshed nightly
+> - One-tap pothole reports with optional photos
+> - See your kilometres mapped, your contributions, and the community's collective coverage
+>
+> **Privacy you can verify**
+> RoadSense was built privacy-first:
+> - Your home and work are automatically shielded — RoadSense trims trip endpoints before any data leaves the device
+> - You can add custom privacy zones for any place you stop often
+> - Device tokens rotate monthly so contributions can't be linked back to you over time
+> - All on-device data can be deleted from Settings with one tap
+> - Background location is used only during active drives — read the full policy at nsroadsense.ca/privacy
+>
+> **Why this matters**
+> Road quality data has historically been collected by provincial transportation departments using expensive vans on a multi-year cycle. RoadSense puts that capability in every driver's pocket — and makes the result public, so anyone can see which roads need fixing first.
+>
+> Built in Halifax. Free and ad-free.
+
+### Keywords (≤100 chars, comma-separated, no spaces between commas)
+
+```
+pothole,roads,nova scotia,road quality,halifax,driving,commute,infrastructure,civic,transit
+```
+
+(91 chars; budget room for one more concrete-noun term — `mapping` or `community` if you want to fill the keyword surface.)
+
+### Screenshot capture plan
+
+Wait until build 6/7 stabilizes from the first wave of external testers and the public map has filled out from real-world drives (currently 196 km / 4,032 segments — visibly thin in screenshots; needs more density before it markets the product well). Capture from `Staging Debug` (or `Local Debug` with the prod-override secrets file) on a single iPhone 17 Pro Max simulator — Apple auto-scales for smaller devices. Use `xcrun simctl io booted screenshot ~/Desktop/screenshot-N.png` so the captures are clean PNGs at the device's native resolution.
+
+Order in App Store Connect so the hero (#1) is the one Apple shows in search results.
+
+| # | Screen | What to show |
+|---|---|---|
+| 1 | Active drive (hero) | Heatmap rendered behind the road-ribbon overlay, RoadSense chip top-left, pothole FAB visible |
+| 2 | Stats | km mapped, community kilometres this week, drives count |
+| 3 | Segment detail sheet | A coloured road tapped, showing roughness score / freshness / confidence / pothole count |
+| 4 | Settings → Privacy | Privacy zones list, trim-endpoints explanation, delete-local-data button |
+| 5 | First-run mission hook | "A shared map of every pothole and rough stretch in Nova Scotia" with the brand mark |
 
 ## Internal TestFlight Metadata
 
