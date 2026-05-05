@@ -40,6 +40,10 @@ test-results/
 .lighthouseci/
 tsconfig.tsbuildinfo
 
+# Python tooling
+__pycache__/
+*.pyc
+
 # Supabase local state
 .supabase/
 supabase/.temp/
