@@ -2,33 +2,49 @@ import type { ReactNode } from "react";
 
 import { TopNav } from "@/components/chrome/top-nav";
 import { TrustStrip } from "@/components/chrome/trust-strip";
+import { formatPlainFreshness, type FreshnessState } from "@/lib/format";
 
 type AppShellProps = {
   children: ReactNode;
   totalKmMapped?: string;
   municipalitiesCovered?: string;
-  freshness?: string;
+  /** ISO timestamp from the public stats payload. Used to derive the freshness pill. */
+  freshness?: string | null;
   hideTrust?: boolean;
+  /** Render the home full-bleed map shell (no constrained page width, no top padding). */
+  variant?: "default" | "map";
 };
 
 export function AppShell({
   children,
   totalKmMapped = "Loading…",
   municipalitiesCovered = "Loading…",
-  freshness = "Loading…",
+  freshness = null,
   hideTrust = false,
+  variant = "default",
 }: AppShellProps) {
+  const { label, state } = freshnessFor(freshness);
+
   return (
-    <div className="page-shell">
-      <TopNav />
+    <div className={variant === "map" ? "page-shell page-shell--map" : "page-shell"}>
+      <TopNav freshnessLabel={label} freshnessState={state} />
       {hideTrust ? null : (
         <TrustStrip
           totalKmMapped={totalKmMapped}
           municipalitiesCovered={municipalitiesCovered}
-          freshness={freshness}
         />
       )}
       <main id="main-content">{children}</main>
     </div>
   );
+}
+
+function freshnessFor(value: string | null | undefined): {
+  label: string;
+  state: FreshnessState;
+} {
+  if (!value) {
+    return { label: "Awaiting first publish", state: "pending" };
+  }
+  return formatPlainFreshness(value);
 }

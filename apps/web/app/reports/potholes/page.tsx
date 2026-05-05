@@ -37,7 +37,7 @@ export default async function MostReportedPotholesPage({
     <AppShell
       totalKmMapped="Published report"
       municipalitiesCovered="Province-wide"
-      freshness={stats?.generated_at ?? "15-minute cache"}
+      freshness={stats?.generated_at ?? null}
     >
       <PotholesShell
         limit={safeLimit}

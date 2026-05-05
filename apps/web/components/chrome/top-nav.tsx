@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
 import { GetTheAppLinks } from "@/components/chrome/get-the-app-links";
+import { FreshnessPill } from "@/components/chrome/freshness-pill";
+import type { FreshnessState } from "@/lib/format";
 
 const links: Array<{ href: string; label: string }> = [
   { href: "/", label: "Map" },
@@ -15,7 +17,12 @@ const links: Array<{ href: string; label: string }> = [
   { href: "/privacy-and-counts", label: "Counts" },
 ];
 
-export function TopNav() {
+type TopNavProps = {
+  freshnessLabel: string;
+  freshnessState: FreshnessState;
+};
+
+export function TopNav({ freshnessLabel, freshnessState }: TopNavProps) {
   const pathname = usePathname();
 
   return (
@@ -46,7 +53,7 @@ export function TopNav() {
           RoadSense NS
         </Link>
 
-        <nav aria-label="Primary" style={{ display: "inline-flex", flexWrap: "wrap", gap: 6 }}>
+        <nav aria-label="Primary" className="top-nav-pill-group">
           {links.map((link) => (
             <Link
               key={link.href}
@@ -58,8 +65,12 @@ export function TopNav() {
             </Link>
           ))}
           <FeedbackDialog triggerLabel="Send feedback" triggerClassName="top-nav-link" />
-          <GetTheAppLinks className="top-nav-app-links" />
         </nav>
+
+        <div className="top-nav-actions">
+          <FreshnessPill label={freshnessLabel} state={freshnessState} />
+          <GetTheAppLinks className="top-nav-app-links" />
+        </div>
       </header>
     </>
   );

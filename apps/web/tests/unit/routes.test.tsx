@@ -28,9 +28,23 @@ vi.mock("next/navigation", () => ({
 describe("web route shells", () => {
   it("renders the home map shell", async () => {
     const markup = renderToStaticMarkup(await HomePage());
-    expect(markup).toContain("Road quality map");
     expect(markup).toContain("RoadSense NS");
     expect(markup).toContain('aria-current="page"');
+  });
+
+  it("renders a plain-English freshness pill in the topbar", async () => {
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).toContain('class="freshness-pill"');
+    expect(markup).toContain('role="status"');
+    // No live API in tests → null generated_at → pending state.
+    expect(markup).toContain("Awaiting first publish");
+    expect(markup).toContain('data-state="pending"');
+  });
+
+  it("groups primary nav links into the design's pill group", async () => {
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).toContain('class="top-nav-pill-group"');
+    expect(markup).toContain("top-nav-brand-mark");
   });
 
   it("renders a municipality-focused shell for a valid slug", async () => {
@@ -55,7 +69,7 @@ describe("web route shells", () => {
   });
 
   it("renders methodology and privacy pages", () => {
-    expect(renderToStaticMarkup(<MethodologyPage />)).toContain("How RoadSense turns passive driving");
+    expect(renderToStaticMarkup(<MethodologyPage />)).toContain("Every line on the map is a real drive on a real road");
     expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Public map, private contributors");
   });
 

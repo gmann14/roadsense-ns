@@ -13,6 +13,7 @@ import {
   type SearchParamRecord,
 } from "@/lib/url-state";
 
+import { MapStatStrip } from "./map-stat-strip";
 import { ModeSwitcher } from "./mode-switcher";
 import { MunicipalitySearch } from "./municipality-search";
 import { MapLegend } from "./map-legend";
@@ -111,48 +112,16 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
   };
 
   const drawerOpen = !isDrawerDismissed && (routeState.mode === "potholes" || Boolean(routeState.segment));
-  const statsSummary = stats
-    ? `${stats.total_km_mapped.toFixed(1)} km mapped`
-    : "Stats loading";
+
+  const headlineTitle = municipality
+    ? `Road quality in ${municipality.name}`
+    : "Nova Scotia's roads, scored by the people who drive them";
+  const headlineLede = municipality
+    ? `Community-reported road quality across ${municipality.name}, refreshed nightly.`
+    : "Every line on this map is data from real drivers — passively collected, privately filtered, recomputed nightly.";
 
   return (
-    <section className="map-explorer" aria-labelledby="map-explorer-title">
-      <header className="page-header">
-        <span className="eyebrow page-header__eyebrow">
-          {municipality ? municipality.name : "Nova Scotia overview"}
-        </span>
-        <h1 id="map-explorer-title" className="headline">
-          {municipality ? `Road quality in ${municipality.name}` : "Road quality map"}
-        </h1>
-        {municipality ? (
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 10,
-              marginTop: 6,
-              alignItems: "center",
-            }}
-            aria-label={`Quick actions for ${municipality.name}`}
-          >
-            <a
-              href={`/reports/worst-roads?municipality=${encodeURIComponent(municipality.name)}`}
-              className="secondary-button"
-            >
-              Worst roads in {municipality.name}
-            </a>
-            <a href="/" className="secondary-button" aria-label="Switch to province-wide view">
-              Province-wide view
-            </a>
-          </div>
-        ) : null}
-      </header>
-
-      <div className="explorer-controls">
-        <MunicipalitySearch activeMode={routeState.mode} currentQuery={routeState.q} />
-        <ModeSwitcher activeMode={routeState.mode} onSelect={handleModeSelect} />
-      </div>
-
+    <section className="map-explorer map-explorer--overlay" aria-labelledby="map-explorer-title">
       <div className="map-stage-hero">
         <RoadQualityMapView
           municipality={municipality}
@@ -167,19 +136,48 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
           onMapErrorChange={setMapError}
         />
 
-        <div className="map-status-strip" role="status" aria-live="polite">
-          <div className="pill">
-            <span className={`mode-dot ${routeState.mode}`} />
-            {statsSummary}
+        <div className="map-overlay map-headline">
+          <div className="card">
+            <span className="eyebrow page-header__eyebrow">
+              {municipality ? municipality.name : "Live community map"}
+            </span>
+            <h1 id="map-explorer-title">{headlineTitle}</h1>
+            <p>{headlineLede}</p>
+            {municipality ? (
+              <div className="map-headline__actions">
+                <a
+                  href={`/reports/worst-roads?municipality=${encodeURIComponent(municipality.name)}`}
+                  className="secondary-button"
+                >
+                  Worst roads in {municipality.name}
+                </a>
+                <a href="/" className="secondary-button" aria-label="Switch to province-wide view">
+                  Province-wide view
+                </a>
+              </div>
+            ) : null}
           </div>
-          {mapError ? (
-            <div className="pill pill-soft" aria-hidden="true">
-              {mapError}
-            </div>
-          ) : null}
         </div>
 
-        <MapLegend />
+        <div className="map-overlay map-search">
+          <MunicipalitySearch activeMode={routeState.mode} currentQuery={routeState.q} />
+        </div>
+
+        <MapStatStrip stats={stats} />
+
+        <div className="map-overlay mode-switcher-floating">
+          <ModeSwitcher activeMode={routeState.mode} onSelect={handleModeSelect} />
+        </div>
+
+        <div className="map-overlay map-legend-floating">
+          <MapLegend mode={routeState.mode} />
+        </div>
+
+        {mapError ? (
+          <div className="map-overlay map-error" role="status" aria-live="polite">
+            <div className="pill pill-soft">{mapError}</div>
+          </div>
+        ) : null}
       </div>
 
       <SegmentDrawer

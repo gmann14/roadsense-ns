@@ -37,7 +37,7 @@ export default async function WorstRoadsPage({
     <AppShell
       totalKmMapped="Published report"
       municipalitiesCovered={municipality?.name ?? "All tracked"}
-      freshness={result?.generated_at ?? stats?.generated_at ?? "15-minute cache"}
+      freshness={result?.generated_at ?? stats?.generated_at ?? null}
     >
       <WorstRoadsShell
         municipalityName={municipality?.name ?? municipalityName}

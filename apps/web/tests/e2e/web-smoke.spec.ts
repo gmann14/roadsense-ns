@@ -1,12 +1,15 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-test("home route loads with trust framing and map controls", async ({ page }) => {
+test("home route loads with editorial hero and map controls", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("link", { name: "RoadSense NS" })).toBeVisible();
-  await expect(page.getByText("Road quality map")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /scored by the people who drive them/i }),
+  ).toBeVisible();
   await expect(page.getByRole("tablist", { name: "Map mode" })).toBeVisible();
-  await expect(page.getByLabel("Road quality legend")).toBeVisible();
+  await expect(page.getByLabel(/Roughness ramp legend/i)).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: /Updated|Awaiting/i })).toBeVisible();
 });
 
 test("mode switching updates route state", async ({ page }) => {
@@ -82,9 +85,11 @@ test.describe("mobile", () => {
   test("home route remains usable on a phone-sized viewport", async ({ page }) => {
     await page.goto("/");
 
-    await expect(page.getByText("Road quality map")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /scored by the people who drive them/i }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Coverage" })).toBeVisible();
-    await expect(page.getByLabel("Road quality legend")).toBeVisible();
+    await expect(page.getByLabel(/Roughness ramp legend/i)).toBeVisible();
   });
 
   test("worst roads report remains filterable on a phone-sized viewport", async ({ page }) => {

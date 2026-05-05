@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { MapLegend } from "@/components/map/map-legend";
 import { ModeSwitcher } from "@/components/map/mode-switcher";
 import { MunicipalitySearch } from "@/components/map/municipality-search";
 import { SegmentDrawerPanel } from "@/components/map/segment-drawer";
@@ -28,6 +29,30 @@ const { searchPlacesMock } = vi.hoisted(() => ({
 vi.mock("@/lib/search/mapbox-geocoding", () => ({
   searchPlaces: searchPlacesMock,
 }));
+
+describe("map legend (mode-aware)", () => {
+  it("shows the roughness ramp in quality mode", () => {
+    render(<MapLegend mode="quality" defaultExpanded />);
+    expect(screen.getByText("Smooth")).toBeInTheDocument();
+    expect(screen.getByText("Fair")).toBeInTheDocument();
+    expect(screen.getByText("Rough")).toBeInTheDocument();
+    expect(screen.getByText("Very rough")).toBeInTheDocument();
+  });
+
+  it("shows pothole markers in potholes mode", () => {
+    render(<MapLegend mode="potholes" defaultExpanded />);
+    expect(screen.getByText("Confirmed pothole")).toBeInTheDocument();
+    expect(screen.getByText("Top reported pothole")).toBeInTheDocument();
+    expect(screen.queryByText("Smooth")).not.toBeInTheDocument();
+  });
+
+  it("shows coverage tiers in coverage mode", () => {
+    render(<MapLegend mode="coverage" defaultExpanded />);
+    expect(screen.getByText("High confidence")).toBeInTheDocument();
+    expect(screen.getByText("Medium")).toBeInTheDocument();
+    expect(screen.getByText("Emerging")).toBeInTheDocument();
+  });
+});
 
 describe("map mode switcher", () => {
   it("renders every documented mode and calls onSelect", () => {
