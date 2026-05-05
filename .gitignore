@@ -51,3 +51,7 @@ supabase/.branches/
 supabase/functions/.env
 
 .railway-secrets.local
+
+# Tracked agent task source of truth
+!.claude/
+!.claude/tasks.md
