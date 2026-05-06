@@ -28,7 +28,7 @@ struct SensorCollectionDiagnostics: Equatable {
 @MainActor
 final class SensorCoordinator {
     private static let fragmentedSessionMergeGapSeconds: TimeInterval = 60
-    private static let locationBootstrapSpeedKmh = 15.0
+    private static let locationBootstrapSpeedKmh = 45.0
     private static let locationBootstrapAccuracyMeters = 50.0
     private static let manualPotholeCandidateRetentionSeconds: TimeInterval = 30
 

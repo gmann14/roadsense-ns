@@ -17,7 +17,7 @@ export default async function HomePage({
   const shouldLoadTopPotholes = routeState.mode === "potholes";
   const [stats, topPotholes] = await Promise.all([
     getPublicStats(),
-    shouldLoadTopPotholes ? getTopPotholes(50) : Promise.resolve(null),
+    shouldLoadTopPotholes ? getTopPotholes(100) : Promise.resolve(null),
   ]);
 
   return (

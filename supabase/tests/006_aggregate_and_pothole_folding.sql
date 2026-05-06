@@ -1,13 +1,14 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(18);
+SELECT plan(20);
 
 DELETE FROM readings
 WHERE batch_id IN (
     '00000000-0000-0000-0000-000000000601'::UUID,
     '00000000-0000-0000-0000-000000000602'::UUID,
     '00000000-0000-0000-0000-000000000603'::UUID,
-    '00000000-0000-0000-0000-000000000604'::UUID
+    '00000000-0000-0000-0000-000000000604'::UUID,
+    '00000000-0000-0000-0000-000000000605'::UUID
 );
 
 DELETE FROM pothole_reports
@@ -271,6 +272,24 @@ SELECT is(
     ),
     '2',
     'unmatched potholes in one batch cluster into a single new report'
+);
+
+INSERT INTO readings (
+    id, segment_id, batch_id, device_token_hash, roughness_rms, speed_kmh,
+    heading_degrees, gps_accuracy_m, is_pothole, pothole_magnitude, location, recorded_at
+) VALUES
+    ('00000000-0000-0000-0000-00000000090f', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000605', decode('0f', 'hex'), 1.10, 34.0, 90.0, 5.0, TRUE, 2.00, ST_GeomFromText('POINT(-63.5660 44.6530)', 4326), '2026-04-18T15:04:00Z'::TIMESTAMPTZ),
+    ('00000000-0000-0000-0000-000000000910', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000605', decode('10', 'hex'), 1.15, 42.0, 90.0, 5.0, TRUE, 2.10, ST_GeomFromText('POINT(-63.56595 44.6530)', 4326), '2026-04-18T15:05:00Z'::TIMESTAMPTZ);
+
+SELECT lives_ok(
+    $$SELECT fold_pothole_candidates('00000000-0000-0000-0000-000000000605'::UUID)$$,
+    'low-speed sensor pothole folding succeeds without publishing'
+);
+
+SELECT is(
+    (SELECT COUNT(*)::INTEGER FROM pothole_reports WHERE segment_id = '00000000-0000-0000-0000-000000000802'),
+    2,
+    'sensor potholes below driving speed do not create public reports'
 );
 
 SELECT * FROM finish();

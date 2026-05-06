@@ -155,7 +155,8 @@ struct ContentView: View {
                 pendingMapTarget: $pendingMapTarget,
                 onShowStats: { isShowingStats = true },
                 onShowSettings: { isShowingSettings = true },
-                onShowPrivacyZones: { isShowingPrivacyZones = true }
+                onShowPrivacyZones: { isShowingPrivacyZones = true },
+                onShowAlwaysUpgrade: { model.requestAlwaysLocationUpgrade() }
             )
         } else {
             MapScreen(
@@ -163,7 +164,8 @@ struct ContentView: View {
                 pendingMapTarget: $pendingMapTarget,
                 onShowStats: { isShowingStats = true },
                 onShowSettings: { isShowingSettings = true },
-                onShowPrivacyZones: { isShowingPrivacyZones = true }
+                onShowPrivacyZones: { isShowingPrivacyZones = true },
+                onShowAlwaysUpgrade: { model.requestAlwaysLocationUpgrade() }
             )
         }
     }

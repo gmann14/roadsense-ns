@@ -1364,7 +1364,7 @@ final class NetworkAndUploaderTests: XCTestCase {
     }
 
     @MainActor
-    func testSensorCoordinatorStartsCollectionFromMovingLocationBootstrap() async throws {
+    func testSensorCoordinatorIgnoresCyclingSpeedLocationBootstrap() async throws {
         let container = try makeInMemoryContainer()
         let locationService = CountingLocationService()
         let motionService = CountingMotionService()
@@ -1391,6 +1391,47 @@ final class NetworkAndUploaderTests: XCTestCase {
                 longitude: -63.5752,
                 horizontalAccuracyMeters: 12,
                 speedKmh: 42,
+                headingDegrees: 180
+            )
+        )
+        try? await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertFalse(coordinator.monitoringState.isCollecting)
+        XCTAssertEqual(locationService.startCount, 0)
+        XCTAssertEqual(motionService.startCount, 0)
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
+    func testSensorCoordinatorStartsCollectionFromHighSpeedLocationBootstrap() async throws {
+        let container = try makeInMemoryContainer()
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: StreamDrivingDetector(),
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            scheduleUploadDrain: { _ in }
+        )
+
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        locationService.send(
+            LocationSample(
+                timestamp: 1_713_000_000,
+                latitude: 44.6488,
+                longitude: -63.5752,
+                horizontalAccuracyMeters: 12,
+                speedKmh: 48,
                 headingDegrees: 180
             )
         )
