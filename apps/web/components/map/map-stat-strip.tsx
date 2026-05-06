@@ -17,8 +17,9 @@ export function MapStatStrip({ stats }: MapStatStripProps) {
         value={stats ? stats.municipalities_covered.toLocaleString() : "—"}
       />
       <StatCard
-        label="Potholes tracked"
+        label="Pothole reports"
         value={stats ? stats.active_potholes.toLocaleString() : "—"}
+        unit="active"
       />
     </div>
   );

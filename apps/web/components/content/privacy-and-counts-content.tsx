@@ -53,17 +53,15 @@ function formatGeneratedAt(value: string | null | undefined): string {
 
 export function PrivacyAndCountsContent({ stats }: Props) {
   return (
-    <section style={{ display: "grid", gap: 18 }}>
-      <div className="card" style={{ padding: 24, display: "grid", gap: 10 }}>
-        <span className="eyebrow">Privacy & counts</span>
-        <div className="headline" style={{ fontSize: "clamp(1.9rem, 3vw, 3rem)" }}>
-          Every telemetry source, named in plain language
-        </div>
+    <section className="content-page">
+      <div className="card content-card content-card--hero">
+        <span className="eyebrow">Data inventory</span>
+        <h1 className="content-heading">Every telemetry source, named in plain language</h1>
         <p className="lede" style={{ margin: 0 }}>
           RoadSense aggregates community road-quality data without tracking individuals. This page lists every place data
           flows, with live counts where they exist. If a source isn&apos;t named here, it isn&apos;t collected.
         </p>
-        <nav aria-label="Privacy and counts sections" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 4 }}>
+        <nav aria-label="Privacy and counts sections" className="content-toc">
           {sections.map((section) => (
             <a key={section.id} href={`#${section.id}`} className="secondary-button">
               {section.label}
@@ -72,21 +70,14 @@ export function PrivacyAndCountsContent({ stats }: Props) {
         </nav>
       </div>
 
-      <article id="live-counts" className="card" style={{ padding: 24, display: "grid", gap: 12 }}>
+      <article id="live-counts" className="card content-card">
         <span className="eyebrow">01 · Live aggregate counts</span>
-        <h2 style={{ margin: 0, fontSize: "1.6rem" }}>The published map, in numbers</h2>
+        <h2>The published map, in numbers</h2>
         <p className="lede" style={{ margin: 0 }}>
           These come straight from the public statistics view that powers the home map. They refresh every few minutes
           and never reference an individual contributor.
         </p>
-        <dl
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 12,
-            margin: 0,
-          }}
-        >
+        <dl className="count-grid">
           <CountTile
             label="Kilometres mapped"
             value={formatKilometres(stats?.total_km_mapped)}
@@ -120,15 +111,15 @@ export function PrivacyAndCountsContent({ stats }: Props) {
 
       <GetTheAppLinks variant="card" />
 
-      <article id="phone-data" className="card" style={{ padding: 24, display: "grid", gap: 12 }}>
+      <article id="phone-data" className="card content-card">
         <span className="eyebrow">02 · What leaves your phone</span>
-        <h2 style={{ margin: 0, fontSize: "1.6rem" }}>Drive samples and pothole reports — that&apos;s it</h2>
+        <h2>Drive samples and pothole reports — that&apos;s it</h2>
         <p className="lede" style={{ margin: 0 }}>
           The iOS app collects accelerometer, location, speed, and heading while you drive. Privacy zones and endpoint
           trimming run on-device, before anything is queued for upload. The app does not have access to your contacts,
           your photo library beyond a single capture you authorise, your advertising ID, or any account on your phone.
         </p>
-        <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+        <ul className="content-list">
           <li>
             <strong>Drive samples</strong> — uploaded as anonymous batches keyed by a rotating device hash. Endpoints
             (start and end of trip) are trimmed before they leave the phone.
@@ -148,14 +139,14 @@ export function PrivacyAndCountsContent({ stats }: Props) {
         </ul>
       </article>
 
-      <article id="server-data" className="card" style={{ padding: 24, display: "grid", gap: 12 }}>
+      <article id="server-data" className="card content-card">
         <span className="eyebrow">03 · What lives on the server</span>
-        <h2 style={{ margin: 0, fontSize: "1.6rem" }}>Aggregate views, plus the audit rows behind them</h2>
+        <h2>Aggregate views, plus the audit rows behind them</h2>
         <p className="lede" style={{ margin: 0 }}>
           Supabase (PostgreSQL + PostGIS) stores everything below. Raw rows are not exposed publicly — only aggregate
           views that the home map and reports query through.
         </p>
-        <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+        <ul className="content-list">
           <li>
             <strong>readings</strong> — drive samples, retained ~6 months on a rolling basis. Aggregated nightly into
             segment-level scores.
@@ -181,10 +172,10 @@ export function PrivacyAndCountsContent({ stats }: Props) {
         </ul>
       </article>
 
-      <article id="third-parties" className="card" style={{ padding: 24, display: "grid", gap: 12 }}>
+      <article id="third-parties" className="card content-card">
         <span className="eyebrow">04 · Third parties</span>
-        <h2 style={{ margin: 0, fontSize: "1.6rem" }}>Three named services, scoped tightly</h2>
-        <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+        <h2>Three named services, scoped tightly</h2>
+        <ul className="content-list">
           <li>
             <strong>Mapbox</strong> — renders the public map and provides geocoding for the search box. Standard tile
             requests reveal viewport coordinates as you pan, the same as any web map.
@@ -205,10 +196,10 @@ export function PrivacyAndCountsContent({ stats }: Props) {
         </p>
       </article>
 
-      <article id="controls" className="card" style={{ padding: 24, display: "grid", gap: 12 }}>
+      <article id="controls" className="card content-card">
         <span className="eyebrow">05 · Your controls</span>
-        <h2 style={{ margin: 0, fontSize: "1.6rem" }}>Pause, prune, and ask</h2>
-        <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+        <h2>Pause, prune, and ask</h2>
+        <ul className="content-list">
           <li>Pause collection from Settings to stop sending anything new.</li>
           <li>Add a privacy zone to keep an area off the map entirely. Zones are evaluated on-device, before upload.</li>
           <li>Delete local contribution data from Settings. Already published aggregates stay public — they have no link back to your phone.</li>
@@ -225,36 +216,9 @@ export function PrivacyAndCountsContent({ stats }: Props) {
 
 function CountTile({ label, value, testId }: { label: string; value: string; testId: string }) {
   return (
-    <div
-      style={{
-        padding: "12px 16px",
-        background: "var(--rs-canvas-sunken)",
-        borderRadius: "var(--rs-radius-sm)",
-        border: "1px solid var(--rs-border)",
-        display: "grid",
-        gap: 4,
-      }}
-    >
-      <dt
-        style={{
-          fontSize: "0.7rem",
-          letterSpacing: "1.4px",
-          fontWeight: 700,
-          color: "var(--rs-ink-muted)",
-          textTransform: "uppercase",
-          margin: 0,
-        }}
-      >
-        {label}
-      </dt>
+    <div className="count-tile">
+      <dt>{label}</dt>
       <dd
-        style={{
-          margin: 0,
-          fontSize: "1.6rem",
-          fontWeight: 600,
-          fontVariantNumeric: "tabular-nums",
-          color: "var(--rs-ink)",
-        }}
         data-testid={testId}
       >
         {value}

@@ -55,11 +55,14 @@ export function createPgFetchStats(
 function normalizeBounds(value: unknown): PublicMapBounds | null {
     if (!value || typeof value !== "object") return null;
     const candidate = value as Record<string, unknown>;
-    const minLng = Number(candidate.minLng);
-    const minLat = Number(candidate.minLat);
-    const maxLng = Number(candidate.maxLng);
-    const maxLat = Number(candidate.maxLat);
+    const minLng = Number(candidate.minLng ?? candidate.min_lng ?? candidate.minlon ?? candidate.min_lon);
+    const minLat = Number(candidate.minLat ?? candidate.min_lat ?? candidate.minlat);
+    const maxLng = Number(candidate.maxLng ?? candidate.max_lng ?? candidate.maxlon ?? candidate.max_lon);
+    const maxLat = Number(candidate.maxLat ?? candidate.max_lat ?? candidate.maxlat);
     if (![minLng, minLat, maxLng, maxLat].every(Number.isFinite)) {
+        return null;
+    }
+    if (minLng >= maxLng || minLat >= maxLat) {
         return null;
     }
     return { minLng, minLat, maxLng, maxLat };

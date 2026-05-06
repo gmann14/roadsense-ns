@@ -38,6 +38,8 @@ export default async function MostReportedPotholesPage({
       <PotholesShell
         limit={safeLimit}
         rows={rankedRows}
+        activePotholeCount={stats?.active_potholes ?? null}
+        listUnavailable={potholes === null && (stats?.active_potholes ?? 0) > 0}
         generatedAt={stats?.generated_at ?? null}
       />
     </AppShell>
