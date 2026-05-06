@@ -1,21 +1,5 @@
-import { AppShell } from "@/components/chrome/app-shell";
-import { PrivacyAndCountsContent } from "@/components/content/privacy-and-counts-content";
-import { getPublicStats } from "@/lib/api/client";
+import { redirect } from "next/navigation";
 
-export const revalidate = 300;
-
-export const metadata = {
-  title: "Data inventory — RoadSense NS",
-  description:
-    "Every telemetry source RoadSense NS uses, named in plain language, with live aggregate counts.",
-};
-
-export default async function PrivacyAndCountsPage() {
-  const stats = await getPublicStats();
-
-  return (
-    <AppShell freshness={stats?.generated_at ?? null}>
-      <PrivacyAndCountsContent stats={stats} />
-    </AppShell>
-  );
+export default function PrivacyAndCountsPage() {
+  redirect("/privacy");
 }

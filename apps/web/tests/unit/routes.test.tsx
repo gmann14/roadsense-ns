@@ -17,6 +17,9 @@ import {
 import { parseViewportState, withUpdatedRouteState } from "@/lib/url-state";
 
 vi.mock("next/navigation", () => ({
+  redirect: (href: string) => {
+    throw new Error(`NEXT_REDIRECT ${href}`);
+  },
   usePathname: () => "/",
   useRouter: () => ({
     push: vi.fn(),
@@ -74,15 +77,8 @@ describe("web route shells", () => {
     expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Public map, private contributors");
   });
 
-  it("renders the privacy & counts route shell with telemetry sources named", async () => {
-    const markup = renderToStaticMarkup(await PrivacyAndCountsPage());
-    expect(markup).toContain("Every telemetry source, named in plain language");
-    expect(markup).toContain("Sentry");
-    expect(markup).toContain("Mapbox");
-    expect(markup).toContain("feedback_submissions");
-    expect(markup).toContain("Live aggregate counts");
-    // Firebase appears as part of the explicit disclaimer ("no Firebase, no Mixpanel…"), not as a used dependency.
-    expect(markup).toContain("no Firebase");
+  it("redirects the legacy privacy & counts route to privacy", () => {
+    expect(() => PrivacyAndCountsPage()).toThrow(/NEXT_REDIRECT \/privacy/);
   });
 });
 

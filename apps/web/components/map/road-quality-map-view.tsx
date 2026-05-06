@@ -562,8 +562,6 @@ function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
     visibleLayerIds.add(QUALITY_CORRIDOR_LAYER_ID);
     visibleLayerIds.add(SEGMENT_LAYER_ID);
     visibleLayerIds.add(SELECTED_SEGMENT_LAYER_ID);
-    visibleLayerIds.add(POTHOLE_LAYER_ID);
-    visibleLayerIds.add(TOP_POTHOLES_LAYER_ID);
   } else if (mode === "potholes") {
     visibleLayerIds.add(POTHOLE_LAYER_ID);
     visibleLayerIds.add(TOP_POTHOLES_LAYER_ID);
