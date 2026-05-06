@@ -133,17 +133,25 @@ function apiFetchesDisabledInTests(): boolean {
     process.env.ROADSENSE_ALLOW_API_FETCHES_IN_TEST !== "true";
 }
 
-async function fetchJson<T>(path: string, nextOptions?: RequestInit & { next?: { revalidate: number } }): Promise<T | null> {
+async function fetchJson<T>(
+  path: string,
+  nextOptions?: RequestInit & { next?: { revalidate: number }; timeoutMs?: number },
+): Promise<T | null> {
   if (apiFetchesDisabledInTests()) {
     return null;
   }
 
+  const { timeoutMs, ...requestInit } = nextOptions ?? {};
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs ?? 3_000);
+
   try {
     const response = await fetch(buildEndpointUrl(path), {
-      ...nextOptions,
+      ...requestInit,
+      signal: requestInit.signal ?? controller.signal,
       headers: {
         ...getPublicReadHeaders(),
-        ...(nextOptions?.headers ?? {}),
+        ...(requestInit.headers ?? {}),
       },
     });
 
@@ -154,13 +162,16 @@ async function fetchJson<T>(path: string, nextOptions?: RequestInit & { next?: {
     return (await response.json()) as T;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 export async function getPublicStats(): Promise<PublicStats | null> {
-  return await fetchJson<PublicStats>("/stats", {
+  const stats = await fetchJson<PublicStats>("/stats", {
     next: { revalidate: 300 },
   });
+  return normalizePublicStats(stats);
 }
 
 export async function getSegmentDetail(segmentId: string): Promise<SegmentDetail | null> {
@@ -216,7 +227,47 @@ export async function getTopPotholes(limit = 20): Promise<PotholeResponse | null
   const query = new URLSearchParams({ limit: String(limit) });
   return await fetchJson<PotholeResponse>(`/top-potholes?${query.toString()}`, {
     next: { revalidate: 300 },
+    timeoutMs: 1_500,
   });
+}
+
+export function normalizePublicStats(stats: PublicStats | null): PublicStats | null {
+  if (!stats) {
+    return null;
+  }
+
+  return {
+    ...stats,
+    total_km_mapped: Number(stats.total_km_mapped),
+    total_readings: Number(stats.total_readings),
+    segments_scored: Number(stats.segments_scored),
+    active_potholes: Number(stats.active_potholes),
+    municipalities_covered: Number(stats.municipalities_covered),
+    map_bounds: normalizeBbox(stats.map_bounds),
+    pothole_bounds: normalizeBbox(stats.pothole_bounds),
+  };
+}
+
+export function normalizeBbox(value: unknown): Bbox | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const minLng = Number(candidate.minLng ?? candidate.min_lng ?? candidate.minlon ?? candidate.min_lon);
+  const minLat = Number(candidate.minLat ?? candidate.min_lat ?? candidate.minlat);
+  const maxLng = Number(candidate.maxLng ?? candidate.max_lng ?? candidate.maxlon ?? candidate.max_lon);
+  const maxLat = Number(candidate.maxLat ?? candidate.max_lat ?? candidate.maxlat);
+
+  if (![minLng, minLat, maxLng, maxLat].every(Number.isFinite)) {
+    return null;
+  }
+
+  if (minLng >= maxLng || minLat >= maxLat) {
+    return null;
+  }
+
+  return { minLng, minLat, maxLng, maxLat };
 }
 
 export type FeedbackCategoryValue =

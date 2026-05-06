@@ -23,7 +23,7 @@ describe("home map shell — floating chrome", () => {
     const markup = renderToStaticMarkup(await HomePage());
     expect(markup).toContain("Roads mapped");
     expect(markup).toContain("Municipalities covered");
-    expect(markup).toContain("Potholes tracked");
+    expect(markup).toContain("Pothole reports");
     // Don't claim a metric we can't back with PublicStats today.
     expect(markup).not.toContain("Contributing drivers");
   });

@@ -5,7 +5,7 @@ import { getPublicStats } from "@/lib/api/client";
 export const revalidate = 300;
 
 export const metadata = {
-  title: "Privacy & counts — RoadSense NS",
+  title: "Data inventory — RoadSense NS",
   description:
     "Every telemetry source RoadSense NS uses, named in plain language, with live aggregate counts.",
 };

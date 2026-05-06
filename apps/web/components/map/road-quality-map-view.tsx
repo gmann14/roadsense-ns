@@ -74,11 +74,34 @@ export function RoadQualityMapView({
   const mapBoundsRef = useRef(mapBounds);
   const potholeBoundsRef = useRef(potholeBounds);
   const topPotholesRef = useRef(topPotholes);
+  const hasFitInitialDataBoundsRef = useRef(false);
   const [mapSupported, setMapSupported] = useState(true);
   const handleMapReadyChange = useEffectEvent(onMapReadyChange);
   const handleMapErrorChange = useEffectEvent(onMapErrorChange);
   const handleSegmentSelect = useEffectEvent(onSegmentSelect);
   const handleViewportCommit = useEffectEvent(onViewportCommit);
+
+  const fitInitialDataBounds = () => {
+    const map = mapRef.current;
+    const bounds = mapBoundsRef.current;
+    if (
+      !map ||
+      !bounds ||
+      hasFitInitialDataBoundsRef.current ||
+      municipalityRef.current ||
+      hasExplicitRouteViewport(routeStateRef.current)
+    ) {
+      return;
+    }
+
+    map.resize();
+    map.fitBounds(bboxToLngLatBoundsLike(bounds), {
+      padding: 92,
+      maxZoom: DATA_BOUNDS_MAX_ZOOM,
+      duration: 0,
+    });
+    hasFitInitialDataBoundsRef.current = true;
+  };
 
   useEffect(() => {
     modeRef.current = mode;
@@ -413,8 +436,12 @@ export function RoadQualityMapView({
         };
 
         if (initialBounds) {
-          map.once("idle", commitViewport);
+          map.once("idle", () => {
+            fitInitialDataBounds();
+            commitViewport();
+          });
         } else {
+          fitInitialDataBounds();
           commitViewport();
         }
 
@@ -506,6 +533,10 @@ export function RoadQualityMapView({
     }
   }, [mode]);
 
+  useEffect(() => {
+    fitInitialDataBounds();
+  }, [mapBounds]);
+
   return (
     <div className="map-canvas-shell">
       <div ref={mapContainerRef} className="map-canvas" />
@@ -517,6 +548,12 @@ export function RoadQualityMapView({
       ) : null}
     </div>
   );
+}
+
+function hasExplicitRouteViewport(
+  routeState: UrlViewportState,
+): routeState is UrlViewportState & { lat: number; lng: number; z: number } {
+  return routeState.lat !== null && routeState.lng !== null && routeState.z !== null;
 }
 
 function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
@@ -553,11 +590,7 @@ function resolveInitialViewport(
   municipality?: MunicipalityConfig | null,
   mapBounds?: Bbox | null,
 ): InitialViewport {
-  if (
-    routeState.lat !== null &&
-    routeState.lng !== null &&
-    routeState.z !== null
-  ) {
+  if (hasExplicitRouteViewport(routeState)) {
     return {
       lat: routeState.lat,
       lng: routeState.lng,
@@ -593,11 +626,7 @@ function resolveInitialBounds(
   municipality?: MunicipalityConfig | null,
   mapBounds?: Bbox | null,
 ): Bbox | null {
-  if (
-    routeState.lat !== null &&
-    routeState.lng !== null &&
-    routeState.z !== null
-  ) {
+  if (hasExplicitRouteViewport(routeState)) {
     return null;
   }
 

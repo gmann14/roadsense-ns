@@ -45,6 +45,7 @@ describe("web route shells", () => {
     const markup = renderToStaticMarkup(await HomePage());
     expect(markup).toContain('class="top-nav-pill-group"');
     expect(markup).toContain("top-nav-brand-mark");
+    expect(markup).not.toContain('href="/privacy-and-counts"');
   });
 
   it("renders a municipality-focused shell for a valid slug", async () => {

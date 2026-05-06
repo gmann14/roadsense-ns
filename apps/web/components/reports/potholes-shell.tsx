@@ -4,11 +4,20 @@ import type { PotholeRow } from "@/lib/api/client";
 type PotholesShellProps = {
   limit: number;
   rows: PotholeRow[];
+  activePotholeCount: number | null;
+  listUnavailable?: boolean;
   generatedAt: string | null;
 };
 
-export function PotholesShell({ limit, rows, generatedAt }: PotholesShellProps) {
+export function PotholesShell({
+  limit,
+  rows,
+  activePotholeCount,
+  listUnavailable = false,
+  generatedAt,
+}: PotholesShellProps) {
   const visibleRows = rows.slice(0, limit);
+  const countLabel = activePotholeCount === null ? rows.length : activePotholeCount;
 
   return (
     <section className="potholes-shell">
@@ -19,7 +28,7 @@ export function PotholesShell({ limit, rows, generatedAt }: PotholesShellProps) 
           Ranked by how many contributors independently confirmed the same impact. These are community sightings, not a municipal maintenance queue.
         </p>
         <div className="potholes-shell__summary">
-          <strong>{rows.length}</strong>
+          <strong>{countLabel}</strong>
           <span>active reports · updated {formatGeneratedAt(generatedAt)}</span>
         </div>
         <form method="get" className="potholes-shell__limit-form">
@@ -39,7 +48,11 @@ export function PotholesShell({ limit, rows, generatedAt }: PotholesShellProps) 
         </form>
       </header>
 
-      <PotholesExplorer rows={visibleRows} />
+      <PotholesExplorer
+        rows={visibleRows}
+        activePotholeCount={activePotholeCount}
+        listUnavailable={listUnavailable}
+      />
     </section>
   );
 }

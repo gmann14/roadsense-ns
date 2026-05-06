@@ -45,7 +45,7 @@ const sampleRows: PotholeRow[] = [
 describe("potholes shell — split layout", () => {
   it("renders a row per pothole with rank, location, magnitude, confirmations", () => {
     const markup = renderToStaticMarkup(
-      <PotholesShell limit={20} rows={sampleRows} generatedAt={null} />,
+      <PotholesShell limit={20} rows={sampleRows} activePotholeCount={2} generatedAt={null} />,
     );
 
     expect(markup).toContain("Most-reported potholes");
@@ -59,7 +59,7 @@ describe("potholes shell — split layout", () => {
 
   it("renders the photo placeholder and disabled future actions on the detail card", () => {
     const markup = renderToStaticMarkup(
-      <PotholesShell limit={20} rows={sampleRows} generatedAt={null} />,
+      <PotholesShell limit={20} rows={sampleRows} activePotholeCount={2} generatedAt={null} />,
     );
 
     expect(markup).toContain("Photo · coming soon");
@@ -70,7 +70,7 @@ describe("potholes shell — split layout", () => {
 
   it("links each row to /?mode=potholes&lat=…&lng=… on the main map", () => {
     const markup = renderToStaticMarkup(
-      <PotholesShell limit={20} rows={sampleRows} generatedAt={null} />,
+      <PotholesShell limit={20} rows={sampleRows} activePotholeCount={2} generatedAt={null} />,
     );
 
     expect(markup).toContain("/?mode=potholes&amp;lat=44.64880&amp;lng=-63.57520");
@@ -80,12 +80,20 @@ describe("potholes shell — split layout", () => {
 
 describe("potholes explorer — client interactions", () => {
   it("updates the detail card when a row is clicked", () => {
-    render(<PotholesExplorer rows={sampleRows} />);
+    render(<PotholesExplorer rows={sampleRows} activePotholeCount={2} />);
 
     const detailHeading = screen.getByTestId("pothole-detail-coords");
     expect(detailHeading.textContent).toMatch(/44\.6488/);
 
     fireEvent.click(screen.getByRole("button", { name: /pothole #2/i }));
     expect(screen.getByTestId("pothole-detail-coords").textContent).toMatch(/45\.0918/);
+  });
+
+  it("distinguishes an unavailable report feed from an empty pothole dataset", () => {
+    render(<PotholesExplorer rows={[]} activePotholeCount={196} listUnavailable />);
+
+    expect(screen.getByText(/report list unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/196 active pothole reports exist/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open pothole map/i })).toHaveAttribute("href", "/?mode=potholes");
   });
 });

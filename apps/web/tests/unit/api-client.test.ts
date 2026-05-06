@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { getPublicStats, getTopPotholes } from "@/lib/api/client";
+import { getPublicStats, getTopPotholes, normalizeBbox } from "@/lib/api/client";
 
 const ORIGINAL_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 const ORIGINAL_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -56,6 +56,50 @@ describe("read API client", () => {
     expect(url).toBe("https://test.local/functions/v1/stats");
     const headers = init?.headers as Record<string, string>;
     expect(headers.apikey).toBe("anon.test-key");
+  });
+
+  it("normalizes alternate stats bounds key casing before map initialization", async () => {
+    const stats = {
+      total_km_mapped: "12.4",
+      total_readings: "31",
+      segments_scored: "9",
+      active_potholes: "4",
+      municipalities_covered: "2",
+      map_bounds: {
+        min_lng: "-64.34",
+        min_lat: "44.37",
+        max_lng: "-64.31",
+        max_lat: "44.41",
+      },
+      pothole_bounds: null,
+      generated_at: "2026-04-28T15:00:00Z",
+    };
+    const fetchMock = vi.fn<typeof fetch>(async () => jsonResponse(200, stats));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getPublicStats()).resolves.toMatchObject({
+      total_km_mapped: 12.4,
+      total_readings: 31,
+      segments_scored: 9,
+      active_potholes: 4,
+      municipalities_covered: 2,
+      map_bounds: {
+        minLng: -64.34,
+        minLat: 44.37,
+        maxLng: -64.31,
+        maxLat: 44.41,
+      },
+    });
+  });
+
+  it("rejects invalid bounds instead of passing them to Mapbox", () => {
+    expect(normalizeBbox({ minLng: -63, minLat: 45, maxLng: -64, maxLat: 44 })).toBeNull();
+    expect(normalizeBbox({ minLng: -64, minLat: 44, maxLng: -63, maxLat: 45 })).toEqual({
+      minLng: -64,
+      minLat: 44,
+      maxLng: -63,
+      maxLat: 45,
+    });
   });
 
   it("loads top potholes from the Deno top-potholes endpoint", async () => {

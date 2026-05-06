@@ -14,7 +14,6 @@ const links: Array<{ href: string; label: string }> = [
   { href: "/reports/potholes", label: "Potholes" },
   { href: "/methodology", label: "Methodology" },
   { href: "/privacy", label: "Privacy" },
-  { href: "/privacy-and-counts", label: "Counts" },
 ];
 
 type TopNavProps = {

@@ -7,12 +7,33 @@ import type { PotholeRow } from "@/lib/api/client";
 
 type PotholesExplorerProps = {
   rows: PotholeRow[];
+  activePotholeCount: number | null;
+  listUnavailable?: boolean;
 };
 
-export function PotholesExplorer({ rows }: PotholesExplorerProps) {
+export function PotholesExplorer({
+  rows,
+  activePotholeCount,
+  listUnavailable = false,
+}: PotholesExplorerProps) {
   const [selectedId, setSelectedId] = useState<string | null>(rows[0]?.id ?? null);
 
   if (rows.length === 0) {
+    if (listUnavailable && activePotholeCount && activePotholeCount > 0) {
+      return (
+        <div className="drawer-callout">
+          <span className="eyebrow">Report list unavailable</span>
+          <strong>{activePotholeCount.toLocaleString()} active pothole reports exist, but the ranked list did not load.</strong>
+          <span className="lede">
+            The map can still show pothole reports in pothole mode. This list will reappear once the public report feed responds.
+          </span>
+          <Link href="/?mode=potholes" className="secondary-button">
+            Open pothole map
+          </Link>
+        </div>
+      );
+    }
+
     return (
       <div className="drawer-callout">
         <span className="eyebrow">No published potholes</span>
