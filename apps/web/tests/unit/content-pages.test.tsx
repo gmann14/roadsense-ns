@@ -9,27 +9,25 @@ afterEach(() => {
 });
 
 describe("content pages", () => {
-  it("renders the editorial hero copy", () => {
+  it("renders the methodology hero copy", () => {
     render(<MethodologyContent />);
-    expect(
-      screen.getByText(/Every line on the map is a real drive on a real road/i),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /How RoadSense builds the public map/i })).toBeInTheDocument();
   });
 
-  it("renders the table of contents pills with numbered labels", () => {
+  it("renders the table of contents pills", () => {
     render(<MethodologyContent />);
-    expect(screen.getByRole("link", { name: /01 · Collection/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /02 · Aggregation/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /03 · Confidence/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /04 · Refresh/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /05 · What it isn't/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Collection/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Filters/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Aggregation/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Confidence/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Limits/i })).toBeInTheDocument();
   });
 
   it("renders a 4-step collection pipeline diagram", () => {
     const { container } = render(<MethodologyContent />);
     expect(container.querySelectorAll(".pipeline-step")).toHaveLength(4);
     expect(screen.getByText(/Phone records/i)).toBeInTheDocument();
-    expect(screen.getByText(/Public aggregate/i)).toBeInTheDocument();
+    expect(screen.getByText(/Map publishes/i)).toBeInTheDocument();
   });
 
   it("renders a 3-tier confidence diagram", () => {
@@ -42,20 +40,20 @@ describe("content pages", () => {
     expect(labels).toEqual(["Low confidence", "Medium confidence", "High confidence"]);
   });
 
-  it("renders the 'What this isn't' negative-space list", () => {
+  it("renders the map limits list", () => {
     const { container } = render(<MethodologyContent />);
     const items = container.querySelectorAll(".method-not-list li");
     expect(items.length).toBe(4);
     expect(screen.getByText(/Not a maintenance queue/i)).toBeInTheDocument();
-    expect(screen.getByText(/Not a 911 substitute/i)).toBeInTheDocument();
+    expect(screen.getByText(/Not emergency reporting/i)).toBeInTheDocument();
     expect(screen.getByText(/Not surveillance/i)).toBeInTheDocument();
-    expect(screen.getByText(/Not a complete map/i)).toBeInTheDocument();
+    expect(screen.getByText(/Not complete coverage/i)).toBeInTheDocument();
   });
 
   it("renders privacy trust copy", () => {
     render(<PrivacyContent />);
 
-    expect(screen.getByText(/filters privacy zones on-device before upload/i)).toBeInTheDocument();
+    expect(screen.getByText(/Privacy zones are handled on the phone/i)).toBeInTheDocument();
     expect(screen.getByText(/does not use ad trackers or session replay tools/i)).toBeInTheDocument();
     expect(screen.getByText(/raw drive samples are kept for up to 6 months/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /graham\.mann14@gmail\.com/i })).toHaveAttribute(

@@ -145,12 +145,6 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
             <p>{headlineLede}</p>
             {municipality ? (
               <div className="map-headline__actions">
-                <a
-                  href={`/reports/worst-roads?municipality=${encodeURIComponent(municipality.name)}`}
-                  className="secondary-button"
-                >
-                  Worst roads in {municipality.name}
-                </a>
                 <a href="/" className="secondary-button" aria-label="Switch to province-wide view">
                   Province-wide view
                 </a>

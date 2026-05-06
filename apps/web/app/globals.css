@@ -167,6 +167,9 @@ button {
 .content-page {
   display: grid;
   gap: 18px;
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: 24px 0 64px;
 }
 
 .content-card {
@@ -183,6 +186,10 @@ button {
   margin: 0;
   font-size: 1.6rem;
   line-height: 1.15;
+}
+
+.content-card > .lede {
+  margin: 0;
 }
 
 .content-heading {

@@ -441,11 +441,6 @@ export function SegmentDrawerPanel({
           <button type="button" className="secondary-button" onClick={onClearSelection}>
             {mode === "potholes" ? "Reset map focus" : "Clear selection"}
           </button>
-          {mode === "potholes" ? (
-            <a href="/reports/potholes" className="secondary-button">
-              Full report
-            </a>
-          ) : null}
         </div>
       </aside>
     </>

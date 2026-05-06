@@ -48,20 +48,20 @@ test("search exposes a recoverable no-results state", async ({ page }) => {
   await expect(page.getByPlaceholder("Halifax, Truro, Lunenburg…")).toHaveValue("");
 });
 
-test("worst roads report filter round-trips through the URL", async ({ page }) => {
+test("unfinished report routes redirect back to the map", async ({ page }) => {
   await page.goto("/reports/worst-roads");
 
-  await expect(page.getByRole("link", { name: "Worst Roads" })).toBeVisible();
-  await expect(page.locator("#main-content").getByText("Worst Roads")).toBeVisible();
-  await page.getByLabel("Municipality").selectOption("Municipality of the District of Lunenburg");
-  await page.getByRole("button", { name: "Update report" }).click();
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("heading", { name: /scored by the people who drive them/i })).toBeVisible();
 
-  await expect(page).toHaveURL(/municipality=Municipality\+of\+the\+District\+of\+Lunenburg/);
+  await page.goto("/reports/potholes");
+  await expect(page).toHaveURL(/mode=potholes/);
+  await expect(page.getByRole("button", { name: "Potholes" })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("methodology and privacy pages expose trust copy", async ({ page }) => {
   await page.goto("/methodology");
-  await expect(page.getByText(/The server, not the phone/i)).toBeVisible();
+  await expect(page.getByText(/The server matches clean samples to roads/i)).toBeVisible();
 
   await page.goto("/privacy");
   await expect(page.getByText(/does not use ad trackers or session replay tools/i)).toBeVisible();
@@ -92,14 +92,11 @@ test.describe("mobile", () => {
     await expect(page.getByLabel(/Roughness ramp legend/i)).toBeVisible();
   });
 
-  test("worst roads report remains filterable on a phone-sized viewport", async ({ page }) => {
+  test("unfinished report routes redirect on a phone-sized viewport", async ({ page }) => {
     await page.goto("/reports/worst-roads");
 
-    await expect(page.locator("#main-content").getByText("Worst Roads")).toBeVisible();
-    await page.getByLabel("Municipality").selectOption("Truro");
-    await page.getByRole("button", { name: "Update report" }).click();
-
-    await expect(page).toHaveURL(/municipality=Truro/);
+    await expect(page).toHaveURL("/");
+    await expect(page.getByRole("button", { name: "Coverage" })).toBeVisible();
   });
 });
 
