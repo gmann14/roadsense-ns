@@ -1,16 +1,7 @@
-const sections = [
-  { id: "collect", label: "Collected" },
-  { id: "not-collected", label: "Not collected" },
-  { id: "filters", label: "Filters" },
-  { id: "retention", label: "Retention" },
-  { id: "web", label: "Website" },
-  { id: "contact", label: "Contact" },
-] as const;
-
 export function PrivacyContent() {
   return (
     <section className="content-page">
-      <div className="card content-card content-card--hero">
+      <div className="content-card content-card--hero">
         <span className="eyebrow">Privacy</span>
         <h1 className="content-heading">Public map, private contributors</h1>
         <p className="lede">
@@ -18,16 +9,9 @@ export function PrivacyContent() {
           individual drivers or show individual trips.
         </p>
         <p className="lede">Last updated: April 24, 2026.</p>
-        <nav className="content-toc" aria-label="Privacy sections">
-          {sections.map((section) => (
-            <a key={section.id} href={`#${section.id}`} className="secondary-button">
-              {section.label}
-            </a>
-          ))}
-        </nav>
       </div>
 
-      <article id="collect" className="card content-card">
+      <article id="collect" className="content-card">
         <span className="eyebrow">01 · Collected</span>
         <h2>Road scoring needs motion and location</h2>
         <p className="lede">
@@ -40,7 +24,7 @@ export function PrivacyContent() {
         </p>
       </article>
 
-      <article id="not-collected" className="card content-card">
+      <article id="not-collected" className="content-card">
         <span className="eyebrow">02 · Not collected</span>
         <h2>No account, ads, or profile</h2>
         <p className="lede">
@@ -50,7 +34,7 @@ export function PrivacyContent() {
         <p className="lede">The website does not use ad trackers or session replay tools.</p>
       </article>
 
-      <article id="filters" className="card content-card">
+      <article id="filters" className="content-card">
         <span className="eyebrow">03 · Filters</span>
         <h2>Privacy zones are handled on the phone</h2>
         <p className="lede">
@@ -66,7 +50,7 @@ export function PrivacyContent() {
         </div>
       </article>
 
-      <article id="retention" className="card content-card">
+      <article id="retention" className="content-card">
         <span className="eyebrow">04 · Retention</span>
         <h2>Raw samples are temporary</h2>
         <p className="lede">
@@ -79,7 +63,7 @@ export function PrivacyContent() {
         </p>
       </article>
 
-      <article id="web" className="card content-card">
+      <article id="web" className="content-card">
         <span className="eyebrow">05 · Website</span>
         <h2>The public website is read-only</h2>
         <p className="lede">
@@ -92,7 +76,7 @@ export function PrivacyContent() {
         </p>
       </article>
 
-      <article id="contact" className="card content-card">
+      <article id="contact" className="content-card">
         <span className="eyebrow">06 · Contact</span>
         <h2>Questions and privacy requests</h2>
         <p className="lede">

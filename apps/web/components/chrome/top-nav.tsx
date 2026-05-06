@@ -50,7 +50,7 @@ export function TopNav({ freshnessLabel, freshnessState }: TopNavProps) {
           RoadSense NS
         </Link>
 
-        <nav aria-label="Primary" className="top-nav-pill-group">
+        <nav aria-label="Primary" className="top-nav-links">
           {links.map((link) => (
             <Link
               key={link.href}

@@ -1,11 +1,3 @@
-const tocSections = [
-  { id: "collection", label: "Collection" },
-  { id: "filters", label: "Filters" },
-  { id: "aggregation", label: "Aggregation" },
-  { id: "confidence", label: "Confidence" },
-  { id: "limits", label: "Limits" },
-] as const;
-
 const pipelineSteps = [
   {
     tag: "01",
@@ -49,24 +41,17 @@ const confidenceTiers = [
 
 export function MethodologyContent() {
   return (
-    <section className="content-page methodology">
-      <div className="card content-card content-card--hero">
+    <section className="content-page">
+      <div className="content-card content-card--hero">
         <span className="eyebrow">Methodology</span>
         <h1 className="content-heading">How RoadSense builds the public map</h1>
         <p className="lede">
           RoadSense turns phone motion and GPS samples into road-level averages. This page explains
           what is collected, what is filtered out, and how confidence is assigned.
         </p>
-        <nav className="content-toc" aria-label="Methodology sections">
-          {tocSections.map((section) => (
-            <a key={section.id} href={`#${section.id}`} className="secondary-button">
-              {section.label}
-            </a>
-          ))}
-        </nav>
       </div>
 
-      <article id="collection" className="card content-card">
+      <article id="collection" className="content-card">
         <span className="eyebrow">01 · Collection</span>
         <h2>The app records only the signals needed to score roads</h2>
         <p className="lede">
@@ -80,7 +65,7 @@ export function MethodologyContent() {
         <CollectionDiagram />
       </article>
 
-      <article id="filters" className="card content-card">
+      <article id="filters" className="content-card">
         <span className="eyebrow">02 · Filters</span>
         <h2>The phone drops data that should not be uploaded</h2>
         <p className="lede">
@@ -93,7 +78,7 @@ export function MethodologyContent() {
         </p>
       </article>
 
-      <article id="aggregation" className="card content-card">
+      <article id="aggregation" className="content-card">
         <span className="eyebrow">03 · Aggregation</span>
         <h2>The server matches clean samples to roads</h2>
         <p className="lede">
@@ -109,7 +94,7 @@ export function MethodologyContent() {
         </div>
       </article>
 
-      <article id="confidence" className="card content-card">
+      <article id="confidence" className="content-card">
         <span className="eyebrow">04 · Confidence</span>
         <h2>Confidence depends on repeat coverage</h2>
         <p className="lede">
@@ -119,7 +104,7 @@ export function MethodologyContent() {
         <ConfidenceDiagram />
       </article>
 
-      <article id="limits" className="card content-card">
+      <article id="limits" className="content-card">
         <span className="eyebrow">05 · Limits</span>
         <h2>What the map does not mean</h2>
         <ul className="method-not-list">

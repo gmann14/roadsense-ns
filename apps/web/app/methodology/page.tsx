@@ -1,9 +1,12 @@
 import { AppShell } from "@/components/chrome/app-shell";
 import { MethodologyContent } from "@/components/content/methodology-content";
+import { getPublicStats } from "@/lib/api/client";
 
-export default function MethodologyPage() {
+export default async function MethodologyPage() {
+  const stats = await getPublicStats();
+
   return (
-    <AppShell>
+    <AppShell freshness={stats?.generated_at ?? null}>
       <MethodologyContent />
     </AppShell>
   );

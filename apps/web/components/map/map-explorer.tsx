@@ -137,25 +137,15 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
           onMapErrorChange={setMapError}
         />
 
-        <div className="map-overlay map-headline">
-          <div className="card">
-            <span className="eyebrow page-header__eyebrow">
-              {municipality ? municipality.name : "Live community map"}
-            </span>
-            <h1 id="map-explorer-title">{headlineTitle}</h1>
-            <p>{headlineLede}</p>
-            {municipality ? (
-              <div className="map-headline__actions">
-                <a href="/" className="secondary-button" aria-label="Switch to province-wide view">
-                  Province-wide view
-                </a>
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <h1 id="map-explorer-title" className="sr-only">{headlineTitle}. {headlineLede}</h1>
 
         <div className="map-overlay map-search">
           <MunicipalitySearch activeMode={routeState.mode} currentQuery={routeState.q} />
+          {municipality ? (
+            <a href="/" className="secondary-button map-search__clear" aria-label="Switch to province-wide view">
+              Province-wide view
+            </a>
+          ) : null}
         </div>
 
         <MapStatStrip stats={stats} />

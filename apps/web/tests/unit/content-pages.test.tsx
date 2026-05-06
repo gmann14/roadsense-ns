@@ -14,13 +14,9 @@ describe("content pages", () => {
     expect(screen.getByRole("heading", { name: /How RoadSense builds the public map/i })).toBeInTheDocument();
   });
 
-  it("renders the table of contents pills", () => {
+  it("does not render table-of-contents pills", () => {
     render(<MethodologyContent />);
-    expect(screen.getByRole("link", { name: /Collection/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Filters/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Aggregation/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Confidence/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Limits/i })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: /methodology sections/i })).not.toBeInTheDocument();
   });
 
   it("renders a 4-step collection pipeline diagram", () => {

@@ -1,12 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-test("home route loads with editorial hero and map controls", async ({ page }) => {
+test("home route loads with map controls", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("link", { name: "RoadSense NS" })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: /scored by the people who drive them/i }),
-  ).toBeVisible();
   await expect(page.getByRole("tablist", { name: "Map mode" })).toBeVisible();
   await expect(page.getByLabel(/Roughness ramp legend/i)).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: /Updated|Awaiting/i })).toBeVisible();
@@ -52,7 +49,7 @@ test("unfinished report routes redirect back to the map", async ({ page }) => {
   await page.goto("/reports/worst-roads");
 
   await expect(page).toHaveURL("/");
-  await expect(page.getByRole("heading", { name: /scored by the people who drive them/i })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Map mode" })).toBeVisible();
 
   await page.goto("/reports/potholes");
   await expect(page).toHaveURL(/mode=potholes/);
@@ -72,7 +69,7 @@ test("keyboard users can reach skip link, nav, mode controls, and search", async
 
   await tabUntilFocused(page, page.getByRole("link", { name: "Skip to content" }));
   await tabUntilFocused(page, page.getByRole("link", { name: "RoadSense NS" }));
-  await tabUntilFocused(page, page.getByRole("link", { name: "Map" }));
+  await tabUntilFocused(page, page.getByRole("link", { name: "Map", exact: true }));
   await tabUntilFocused(page, page.getByRole("button", { name: "Quality" }));
   await tabUntilFocused(page, page.getByRole("button", { name: "Potholes" }));
   await tabUntilFocused(page, page.getByRole("button", { name: "Coverage" }));
@@ -85,10 +82,7 @@ test.describe("mobile", () => {
   test("home route remains usable on a phone-sized viewport", async ({ page }) => {
     await page.goto("/");
 
-    await expect(
-      page.getByRole("heading", { name: /scored by the people who drive them/i }),
-    ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Coverage" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Coverage", exact: true })).toBeVisible();
     await expect(page.getByLabel(/Roughness ramp legend/i)).toBeVisible();
   });
 
@@ -96,7 +90,7 @@ test.describe("mobile", () => {
     await page.goto("/reports/worst-roads");
 
     await expect(page).toHaveURL("/");
-    await expect(page.getByRole("button", { name: "Coverage" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Coverage", exact: true })).toBeVisible();
   });
 });
 

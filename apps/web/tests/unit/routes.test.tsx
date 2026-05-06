@@ -44,9 +44,9 @@ describe("web route shells", () => {
     expect(markup).toContain('data-state="pending"');
   });
 
-  it("groups primary nav links into the design's pill group", async () => {
+  it("groups primary nav links in the top navigation", async () => {
     const markup = renderToStaticMarkup(await HomePage());
-    expect(markup).toContain('class="top-nav-pill-group"');
+    expect(markup).toContain('class="top-nav-links"');
     expect(markup).toContain("top-nav-brand-mark");
     expect(markup).not.toContain('href="/reports/worst-roads"');
     expect(markup).not.toContain('href="/reports/potholes"');
@@ -70,9 +70,9 @@ describe("web route shells", () => {
     expect(() => MostReportedPotholesPage()).toThrow(/NEXT_REDIRECT \/\?mode=potholes/);
   });
 
-  it("renders methodology and privacy pages", () => {
-    expect(renderToStaticMarkup(<MethodologyPage />)).toContain("How RoadSense builds the public map");
-    expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Public map, private contributors");
+  it("renders methodology and privacy pages", async () => {
+    expect(renderToStaticMarkup(await MethodologyPage())).toContain("How RoadSense builds the public map");
+    expect(renderToStaticMarkup(await PrivacyPage())).toContain("Public map, private contributors");
   });
 
   it("redirects the legacy privacy & counts route to privacy", () => {

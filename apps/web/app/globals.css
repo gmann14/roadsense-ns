@@ -54,15 +54,15 @@ button {
 /* === Layout primitives === */
 
 .page-shell {
-  width: min(1480px, calc(100vw - 28px));
+  width: min(1120px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 16px 0 48px;
+  padding: 0 0 48px;
 }
 
 .page-shell--map {
   width: 100%;
   max-width: none;
-  padding: 8px 12px 0;
+  padding: 0;
 }
 
 .page-shell--map > main {
@@ -166,20 +166,23 @@ button {
 
 .content-page {
   display: grid;
-  gap: 18px;
-  width: min(900px, 100%);
+  gap: 0;
+  width: min(860px, 100%);
   margin: 0 auto;
-  padding: 24px 0 64px;
+  padding: 44px 0 72px;
 }
 
 .content-card {
   display: grid;
   gap: 12px;
-  padding: 24px;
+  padding: 22px 0;
+  border-top: 1px solid var(--rs-border);
 }
 
 .content-card--hero {
   gap: 10px;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .content-card h2 {
@@ -357,12 +360,10 @@ button {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 16px;
-  padding: 14px 18px;
-  margin-bottom: 14px;
+  padding: 12px 24px;
+  margin-bottom: 0;
   background: var(--rs-surface);
-  border: 1px solid var(--rs-border);
-  border-radius: var(--rs-radius-pill);
-  box-shadow: var(--rs-shadow-soft);
+  border-bottom: 1px solid var(--rs-border);
 }
 
 .top-nav-brand {
@@ -395,7 +396,7 @@ button {
   min-height: 44px;
   padding: 8px 12px;
   color: var(--rs-ink-muted);
-  border-radius: var(--rs-radius-pill);
+  border-radius: var(--rs-radius-sm);
   transition: background-color var(--rs-motion-standard), color var(--rs-motion-standard);
 }
 
@@ -407,7 +408,7 @@ button {
 nav a[aria-current="page"] {
   color: var(--rs-deep);
   font-weight: 700;
-  background: rgba(14, 59, 74, 0.08);
+  background: transparent;
 }
 
 /* === Freshness pill === */
@@ -418,35 +419,31 @@ nav a[aria-current="page"] {
   gap: 10px;
 }
 
-.top-nav-pill-group {
+.top-nav-links {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
-  background: var(--rs-canvas-sunken);
-  border-radius: var(--rs-radius-pill);
+  gap: 8px;
 }
 
-.top-nav-pill-group .top-nav-link {
+.top-nav-links .top-nav-link {
   min-height: 36px;
-  padding: 6px 12px;
+  padding: 6px 8px;
   font-size: 0.92rem;
   font-weight: 600;
 }
 
-.top-nav-pill-group .top-nav-link[aria-current="page"] {
-  background: var(--rs-surface);
+.top-nav-links .top-nav-link[aria-current="page"] {
   color: var(--rs-ink);
-  box-shadow: var(--rs-shadow-soft);
+  text-decoration: underline;
+  text-underline-offset: 6px;
 }
 
 .freshness-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px 6px 10px;
-  border-radius: var(--rs-radius-pill);
-  background: var(--rs-canvas-sunken);
+  padding: 0;
+  background: transparent;
   font-size: 0.82rem;
   font-weight: 500;
   color: var(--rs-ink-muted);
@@ -472,6 +469,37 @@ nav a[aria-current="page"] {
 }
 
 @media (max-width: 720px) {
+  .top-nav {
+    gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .top-nav-brand {
+    min-height: 42px;
+  }
+
+  .top-nav-actions {
+    width: 100%;
+  }
+
+  .top-nav-links {
+    width: 100%;
+    flex-wrap: nowrap;
+    gap: 18px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .top-nav-links::-webkit-scrollbar {
+    display: none;
+  }
+
+  .top-nav-links .top-nav-link {
+    min-height: 32px;
+    flex: 0 0 auto;
+    padding: 4px 0;
+  }
+
   .freshness-pill {
     display: none;
   }
@@ -573,18 +601,19 @@ nav a[aria-current="page"] {
 
 .mode-switcher {
   display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--rs-radius-pill);
-  background: var(--rs-canvas-sunken);
+  gap: 0;
+  padding: 0;
+  border-radius: var(--rs-radius-sm);
+  background: rgba(255, 252, 245, 0.94);
   border: 1px solid var(--rs-border);
+  overflow: hidden;
 }
 
 .mode-switcher-button {
   border: 0;
   background: transparent;
   color: var(--rs-ink-muted);
-  border-radius: var(--rs-radius-pill);
+  border-radius: 0;
   padding: 9px 14px;
   display: inline-flex;
   gap: 8px;
@@ -600,7 +629,7 @@ nav a[aria-current="page"] {
 .mode-switcher-button.active {
   color: #fff;
   background: var(--rs-deep);
-  box-shadow: var(--rs-shadow-soft);
+  box-shadow: none;
 }
 
 .mode-switcher-button:not(.active):hover {
@@ -660,14 +689,13 @@ nav a[aria-current="page"] {
 
 .map-stage-hero {
   position: relative;
-  border-radius: var(--rs-radius-lg);
+  border-radius: 0;
   overflow: hidden;
   background:
     radial-gradient(circle at top left, rgba(14, 59, 74, 0.28), transparent 32%),
     linear-gradient(180deg, rgba(14, 59, 74, 0.90), rgba(11, 27, 34, 0.88));
-  border: 1px solid rgba(14, 59, 74, 0.2);
-  min-height: min(760px, calc(100vh - 240px));
-  box-shadow: var(--rs-shadow-hard);
+  border: 0;
+  min-height: calc(100dvh - 69px);
 }
 
 .map-explorer--overlay {
@@ -676,9 +704,9 @@ nav a[aria-current="page"] {
 }
 
 .map-explorer--overlay .map-stage-hero {
-  border-radius: var(--rs-radius-lg);
-  height: calc(100dvh - 90px);
-  min-height: 560px;
+  border-radius: 0;
+  height: calc(100dvh - 69px);
+  min-height: 520px;
 }
 
 /* Floating overlays */
@@ -735,21 +763,31 @@ nav a[aria-current="page"] {
 }
 
 .map-search {
-  top: 18px;
+  top: 14px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(380px, 42vw);
+  width: min(620px, calc(100vw - 32px));
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
 }
 
 .map-search .municipality-search {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 
 .map-search .municipality-search__row .search-input {
   background: rgba(255, 252, 245, 0.96);
   backdrop-filter: blur(8px);
-  border-radius: var(--rs-radius-pill);
+  border-radius: var(--rs-radius-sm);
   box-shadow: var(--rs-shadow-soft);
+}
+
+.map-search__clear {
+  min-height: 40px;
+  padding: 8px 12px;
+  white-space: nowrap;
 }
 
 .map-search .municipality-search__submit {
@@ -759,18 +797,27 @@ nav a[aria-current="page"] {
 }
 
 .stat-strip {
-  top: 18px;
-  right: 18px;
-  display: grid;
-  gap: 8px;
-  width: 260px;
+  right: 14px;
+  bottom: 18px;
+  display: flex;
+  gap: 12px;
+  width: auto;
+  padding: 9px 12px;
+  background: rgba(255, 252, 245, 0.94);
+  border: 1px solid var(--rs-border);
+  border-radius: var(--rs-radius-sm);
+  box-shadow: var(--rs-shadow-soft);
+}
+
+.stat-strip > * {
+  pointer-events: none;
 }
 
 .stat-strip .card {
-  padding: 12px 14px;
-  background: rgba(255, 252, 245, 0.94);
-  backdrop-filter: blur(8px);
-  border-radius: var(--rs-radius-md);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .stat-row {
@@ -789,7 +836,7 @@ nav a[aria-current="page"] {
 .stat-value {
   font-family: var(--rs-font-display);
   font-weight: 600;
-  font-size: 1.5rem;
+  font-size: 1rem;
   letter-spacing: -0.015em;
   line-height: 1;
   color: var(--rs-ink);
@@ -806,21 +853,18 @@ nav a[aria-current="page"] {
 }
 
 .mode-switcher-floating {
-  bottom: 22px;
+  bottom: 18px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .mode-switcher-floating .mode-switcher {
-  background: rgba(255, 252, 245, 0.96);
-  backdrop-filter: blur(10px);
-  box-shadow: var(--rs-shadow-hard);
-  border: 1px solid var(--rs-border);
+  box-shadow: var(--rs-shadow-soft);
 }
 
 .map-legend-floating {
-  bottom: 22px;
-  left: 18px;
+  bottom: 18px;
+  left: 14px;
   max-width: 280px;
 }
 
@@ -838,10 +882,7 @@ nav a[aria-current="page"] {
 
 @media (max-width: 1100px) {
   .stat-strip {
-    width: 220px;
-  }
-  .map-headline {
-    max-width: 360px;
+    display: none;
   }
 }
 
@@ -850,21 +891,30 @@ nav a[aria-current="page"] {
     display: none;
   }
   .map-explorer--overlay .map-stage-hero {
-    height: calc(100dvh - 118px);
-    min-height: 500px;
+    height: calc(100dvh - 106px);
+    min-height: 0;
   }
-  .map-headline {
-    left: 12px;
-    right: 12px;
-    max-width: none;
+  .mode-switcher-floating {
+    right: 14px;
+    bottom: 28px;
+    left: 14px;
+    transform: none;
   }
-  .map-headline .card,
+  .mode-switcher-floating .mode-switcher {
+    width: 100%;
+  }
+  .mode-switcher-button {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 8px 10px;
+  }
+  .map-legend-floating {
+    bottom: 82px;
+    left: 14px;
+  }
   .mode-switcher-floating .mode-switcher,
   .map-legend-floating .map-legend-chip {
     backdrop-filter: none;
-  }
-  .map-headline p {
-    display: none;
   }
   .map-search {
     display: none;
@@ -2010,8 +2060,13 @@ nav a[aria-current="page"] {
     padding-top: 16px;
   }
 
+  .page-shell--map {
+    width: 100%;
+    padding-top: 0;
+  }
+
   .map-stage-hero {
-    min-height: 560px;
+    min-height: 500px;
   }
 
   .page-header {

@@ -17,6 +17,7 @@ describe("home map shell — floating chrome", () => {
   it("renders the editorial hero copy from the design", async () => {
     const markup = renderToStaticMarkup(await HomePage());
     expect(markup).toContain("Nova Scotia&#x27;s roads, scored by the people who drive them");
+    expect(markup).toContain('class="sr-only"');
   });
 
   it("renders three stat cards with truthful labels (no fabricated 'Contributing drivers')", async () => {
@@ -38,9 +39,9 @@ describe("home map shell — floating chrome", () => {
     expect(markup).toContain("page-shell--map");
   });
 
-  it("renders the floating overlays (headline, stat strip, mode switcher)", async () => {
+  it("renders the map controls without a visible headline card", async () => {
     const markup = renderToStaticMarkup(await HomePage());
-    expect(markup).toContain("map-overlay map-headline");
+    expect(markup).not.toContain("map-overlay map-headline");
     expect(markup).toContain("map-overlay stat-strip");
     expect(markup).toContain("map-overlay mode-switcher");
   });
