@@ -10,17 +10,18 @@ type AppShellProps = {
   municipalitiesCovered?: string;
   /** ISO timestamp from the public stats payload. Used to derive the freshness pill. */
   freshness?: string | null;
-  hideTrust?: boolean;
+  /** Show the legacy two-metric trust strip below the nav. Off by default — freshness lives in the topbar pill. */
+  showTrust?: boolean;
   /** Render the home full-bleed map shell (no constrained page width, no top padding). */
   variant?: "default" | "map";
 };
 
 export function AppShell({
   children,
-  totalKmMapped = "Loading…",
-  municipalitiesCovered = "Loading…",
+  totalKmMapped = "—",
+  municipalitiesCovered = "—",
   freshness = null,
-  hideTrust = false,
+  showTrust = false,
   variant = "default",
 }: AppShellProps) {
   const { label, state } = freshnessFor(freshness);
@@ -28,12 +29,12 @@ export function AppShell({
   return (
     <div className={variant === "map" ? "page-shell page-shell--map" : "page-shell"}>
       <TopNav freshnessLabel={label} freshnessState={state} />
-      {hideTrust ? null : (
+      {showTrust ? (
         <TrustStrip
           totalKmMapped={totalKmMapped}
           municipalitiesCovered={municipalitiesCovered}
         />
-      )}
+      ) : null}
       <main id="main-content">{children}</main>
     </div>
   );

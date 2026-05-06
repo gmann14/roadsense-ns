@@ -14,11 +14,7 @@ export default async function PrivacyAndCountsPage() {
   const stats = await getPublicStats();
 
   return (
-    <AppShell
-      totalKmMapped="Privacy & counts"
-      municipalitiesCovered="Telemetry transparency"
-      freshness="Live aggregates"
-    >
+    <AppShell freshness={stats?.generated_at ?? null}>
       <PrivacyAndCountsContent stats={stats} />
     </AppShell>
   );

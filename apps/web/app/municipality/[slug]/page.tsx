@@ -46,11 +46,7 @@ export default async function MunicipalityPage({
   }
 
   return (
-    <AppShell
-      totalKmMapped={stats ? `${stats.total_km_mapped.toFixed(1)} km` : "Municipality focus"}
-      municipalitiesCovered={municipality.name}
-      freshness={stats?.generated_at ?? null}
-    >
+    <AppShell variant="map" freshness={stats?.generated_at ?? null}>
       <MapShell
         stats={stats}
         municipality={municipality}

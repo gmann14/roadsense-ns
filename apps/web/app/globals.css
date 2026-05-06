@@ -46,6 +46,9 @@ select {
 
 button {
   cursor: pointer;
+  background: transparent;
+  border: 0;
+  color: inherit;
 }
 
 /* === Layout primitives === */

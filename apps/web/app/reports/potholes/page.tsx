@@ -34,11 +34,7 @@ export default async function MostReportedPotholesPage({
     });
 
   return (
-    <AppShell
-      totalKmMapped="Published report"
-      municipalitiesCovered="Province-wide"
-      freshness={stats?.generated_at ?? null}
-    >
+    <AppShell freshness={stats?.generated_at ?? null}>
       <PotholesShell
         limit={safeLimit}
         rows={rankedRows}

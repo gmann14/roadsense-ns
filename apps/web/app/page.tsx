@@ -15,7 +15,7 @@ export default async function HomePage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
 
   return (
-    <AppShell hideTrust variant="map" freshness={stats?.generated_at ?? null}>
+    <AppShell variant="map" freshness={stats?.generated_at ?? null}>
       <MapShell
         stats={stats}
         searchParams={resolvedSearchParams}
