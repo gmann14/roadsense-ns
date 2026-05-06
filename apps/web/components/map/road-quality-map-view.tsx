@@ -33,6 +33,7 @@ type RoadQualityMapViewProps = {
   municipality?: MunicipalityConfig | null;
   routeState: UrlViewportState;
   mapBounds: Bbox | null;
+  mapFocusBounds: Bbox | null;
   potholeBounds: Bbox | null;
   topPotholes: PotholeRow[];
   onViewportCommit: (viewport: ViewportCommit) => void;
@@ -59,6 +60,7 @@ export function RoadQualityMapView({
   municipality,
   routeState,
   mapBounds,
+  mapFocusBounds,
   potholeBounds,
   topPotholes,
   onViewportCommit,
@@ -72,6 +74,7 @@ export function RoadQualityMapView({
   const municipalityRef = useRef(municipality);
   const routeStateRef = useRef(routeState);
   const mapBoundsRef = useRef(mapBounds);
+  const mapFocusBoundsRef = useRef(mapFocusBounds);
   const potholeBoundsRef = useRef(potholeBounds);
   const topPotholesRef = useRef(topPotholes);
   const hasFitInitialDataBoundsRef = useRef(false);
@@ -83,7 +86,7 @@ export function RoadQualityMapView({
 
   const fitInitialDataBounds = () => {
     const map = mapRef.current;
-    const bounds = mapBoundsRef.current;
+    const bounds = mapFocusBoundsRef.current ?? mapBoundsRef.current;
     if (
       !map ||
       !bounds ||
@@ -120,6 +123,10 @@ export function RoadQualityMapView({
   }, [mapBounds]);
 
   useEffect(() => {
+    mapFocusBoundsRef.current = mapFocusBounds;
+  }, [mapFocusBounds]);
+
+  useEffect(() => {
     potholeBoundsRef.current = potholeBounds;
   }, [potholeBounds]);
 
@@ -149,12 +156,12 @@ export function RoadQualityMapView({
     const initialBounds = resolveInitialBounds(
       routeStateRef.current,
       municipalityRef.current,
-      mapBoundsRef.current,
+      mapFocusBoundsRef.current ?? mapBoundsRef.current,
     );
     const initialViewport = resolveInitialViewport(
       routeStateRef.current,
       municipalityRef.current,
-      mapBoundsRef.current,
+      mapFocusBoundsRef.current ?? mapBoundsRef.current,
     );
     let mapInstance: mapboxgl.Map | null = null;
 
@@ -535,7 +542,7 @@ export function RoadQualityMapView({
 
   useEffect(() => {
     fitInitialDataBounds();
-  }, [mapBounds]);
+  }, [mapBounds, mapFocusBounds]);
 
   return (
     <div className="map-canvas-shell">

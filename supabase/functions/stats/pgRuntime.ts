@@ -13,6 +13,7 @@ type PublicStatsRow = {
     active_potholes: number | string;
     municipalities_covered: number | string;
     map_bounds: unknown;
+    focus_bounds: unknown;
     pothole_bounds: unknown;
     generated_at: Date | string;
 };
@@ -30,6 +31,7 @@ export function createPgFetchStats(
                 active_potholes,
                 municipalities_covered,
                 map_bounds,
+                focus_bounds,
                 pothole_bounds,
                 generated_at
             FROM public_stats_mv
@@ -44,6 +46,7 @@ export function createPgFetchStats(
             active_potholes: Number(row.active_potholes),
             municipalities_covered: Number(row.municipalities_covered),
             map_bounds: normalizeBounds(row.map_bounds),
+            focus_bounds: normalizeBounds(row.focus_bounds),
             pothole_bounds: normalizeBounds(row.pothole_bounds),
             generated_at: row.generated_at instanceof Date
                 ? row.generated_at.toISOString()

@@ -5,6 +5,7 @@ export type PublicStats = {
   active_potholes: number;
   municipalities_covered: number;
   map_bounds: Bbox | null;
+  focus_bounds: Bbox | null;
   pothole_bounds: Bbox | null;
   generated_at: string;
 };
@@ -244,6 +245,7 @@ export function normalizePublicStats(stats: PublicStats | null): PublicStats | n
     active_potholes: Number(stats.active_potholes),
     municipalities_covered: Number(stats.municipalities_covered),
     map_bounds: normalizeBbox(stats.map_bounds),
+    focus_bounds: normalizeBbox(stats.focus_bounds),
     pothole_bounds: normalizeBbox(stats.pothole_bounds),
   };
 }

@@ -7,6 +7,7 @@ export type PublicStats = {
     active_potholes: number;
     municipalities_covered: number;
     map_bounds: PublicMapBounds | null;
+    focus_bounds: PublicMapBounds | null;
     pothole_bounds: PublicMapBounds | null;
     generated_at: string;
 };

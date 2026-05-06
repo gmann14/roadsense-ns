@@ -128,6 +128,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
           mode={routeState.mode}
           routeState={routeState}
           mapBounds={stats?.map_bounds ?? null}
+          mapFocusBounds={stats?.focus_bounds ?? stats?.map_bounds ?? null}
           potholeBounds={stats?.pothole_bounds ?? null}
           topPotholes={topPotholes}
           onSegmentSelect={handleSegmentSelect}

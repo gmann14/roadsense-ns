@@ -1,8 +1,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createStatsHandler, type PublicMapBounds, type PublicStats } from "./handler.ts";
 
-type PublicStatsRow = Omit<PublicStats, "map_bounds" | "pothole_bounds"> & {
+type PublicStatsRow = Omit<PublicStats, "map_bounds" | "focus_bounds" | "pothole_bounds"> & {
     map_bounds?: unknown;
+    focus_bounds?: unknown;
     pothole_bounds?: unknown;
 };
 
@@ -22,6 +23,7 @@ function createFetchStats() {
                 active_potholes,
                 municipalities_covered,
                 map_bounds,
+                focus_bounds,
                 pothole_bounds,
                 generated_at
             `)
@@ -43,6 +45,7 @@ function createFetchStats() {
             active_potholes: row.active_potholes,
             municipalities_covered: row.municipalities_covered,
             map_bounds: normalizeBounds(row.map_bounds),
+            focus_bounds: normalizeBounds(row.focus_bounds),
             pothole_bounds: normalizeBounds(row.pothole_bounds),
             generated_at: row.generated_at,
         };

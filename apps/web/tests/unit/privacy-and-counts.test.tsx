@@ -21,6 +21,7 @@ function renderWithStats(stats: Partial<Parameters<typeof PrivacyAndCountsConten
               active_potholes: 0,
               municipalities_covered: 0,
               map_bounds: null,
+              focus_bounds: null,
               pothole_bounds: null,
               generated_at: null,
               ...stats,
@@ -41,6 +42,7 @@ describe("PrivacyAndCountsContent", () => {
           active_potholes: 47,
           municipalities_covered: 9,
           map_bounds: null,
+          focus_bounds: null,
           pothole_bounds: null,
           generated_at: "2026-04-26T17:30:00Z",
         }}

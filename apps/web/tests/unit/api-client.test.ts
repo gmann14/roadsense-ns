@@ -43,6 +43,7 @@ describe("read API client", () => {
       active_potholes: 4,
       municipalities_covered: 2,
       map_bounds: null,
+      focus_bounds: null,
       pothole_bounds: null,
       generated_at: "2026-04-28T15:00:00Z",
     };
@@ -71,6 +72,12 @@ describe("read API client", () => {
         max_lng: "-64.31",
         max_lat: "44.41",
       },
+      focus_bounds: {
+        min_lng: "-64.33",
+        min_lat: "44.38",
+        max_lng: "-64.32",
+        max_lat: "44.40",
+      },
       pothole_bounds: null,
       generated_at: "2026-04-28T15:00:00Z",
     };
@@ -88,6 +95,12 @@ describe("read API client", () => {
         minLat: 44.37,
         maxLng: -64.31,
         maxLat: 44.41,
+      },
+      focus_bounds: {
+        minLng: -64.33,
+        minLat: 44.38,
+        maxLng: -64.32,
+        maxLat: 44.4,
       },
     });
   });
