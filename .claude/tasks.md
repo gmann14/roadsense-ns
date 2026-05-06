@@ -19,6 +19,7 @@ Source of truth for RoadSense NS project work. Keep this public-safe: no secrets
 - [ ] Promote the Deno service connection from the postgres superuser to a least-privilege app role with explicit GRANTs (carry-over from P15 review).
 - [ ] Replace the hardcoded `as` casts in `supabase/functions/server.ts` handler/runtime alignment by converging on a single canonical RateLimitResult shape per handler (carry-over from P15 review).
 - [ ] Follow-up public web performance pass: test a lighter Mapbox style and/or a non-interactive map preview while Mapbox hydrates, with mobile Lighthouse/WebPageTest checks before shipping.
+- [ ] Replace the temporary pothole speed guard with trip-level drive classification: use overall session duration, speed distribution, sustained-speed windows, CoreMotion automotive confidence, and route context so low-speed car driving can still publish potholes while bike rides are filtered.
 
 ## Done
 
