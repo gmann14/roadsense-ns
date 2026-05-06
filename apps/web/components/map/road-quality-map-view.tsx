@@ -172,7 +172,7 @@ export function RoadQualityMapView({
         center: [initialViewport.lng, initialViewport.lat],
         zoom: initialViewport.z,
         attributionControl: true,
-        antialias: true,
+        antialias: false,
         transformRequest(url) {
           if (!url.startsWith(sourceBaseUrl)) {
             return { url };

@@ -15,13 +15,13 @@ test("home route loads with editorial hero and map controls", async ({ page }) =
 test("mode switching updates route state", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByRole("button", { name: "Coverage" }).click();
+  await page.getByRole("button", { name: "Coverage", exact: true }).click();
   await expect(page).toHaveURL(/mode=coverage/);
-  await expect(page.getByRole("button", { name: "Coverage" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Coverage", exact: true })).toHaveAttribute("aria-pressed", "true");
 
-  await page.getByRole("button", { name: "Potholes" }).click();
+  await page.getByRole("button", { name: "Potholes", exact: true }).click();
   await expect(page).toHaveURL(/mode=potholes/);
-  await expect(page.getByRole("button", { name: "Potholes" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Potholes", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("complementary").getByText(/Pothole map/i)).toBeVisible();
 });
 
@@ -56,7 +56,7 @@ test("unfinished report routes redirect back to the map", async ({ page }) => {
 
   await page.goto("/reports/potholes");
   await expect(page).toHaveURL(/mode=potholes/);
-  await expect(page.getByRole("button", { name: "Potholes" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Potholes", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("methodology and privacy pages expose trust copy", async ({ page }) => {
@@ -100,7 +100,7 @@ test.describe("mobile", () => {
   });
 });
 
-async function tabUntilFocused(page: Page, locator: Locator, maxTabs = 12) {
+async function tabUntilFocused(page: Page, locator: Locator, maxTabs = 30) {
   for (let index = 0; index < maxTabs; index += 1) {
     if (await locator.evaluate((element) => element === document.activeElement)) {
       return;

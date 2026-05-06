@@ -849,10 +849,22 @@ nav a[aria-current="page"] {
   .stat-strip {
     display: none;
   }
+  .map-explorer--overlay .map-stage-hero {
+    height: calc(100dvh - 118px);
+    min-height: 500px;
+  }
   .map-headline {
     left: 12px;
     right: 12px;
     max-width: none;
+  }
+  .map-headline .card,
+  .mode-switcher-floating .mode-switcher,
+  .map-legend-floating .map-legend-chip {
+    backdrop-filter: none;
+  }
+  .map-headline p {
+    display: none;
   }
   .map-search {
     display: none;

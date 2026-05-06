@@ -1,18 +1,24 @@
 import { AppShell } from "@/components/chrome/app-shell";
 import { MapShell } from "@/components/map/map-shell";
 import { getPublicStats, getTopPotholes } from "@/lib/api/client";
-import type { SearchParamRecord } from "@/lib/url-state";
+import {
+  parseViewportState,
+  searchParamRecordToUrlSearchParams,
+  type SearchParamRecord,
+} from "@/lib/url-state";
 
 export default async function HomePage({
   searchParams,
 }: {
   searchParams?: Promise<SearchParamRecord>;
 } = {}) {
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const routeState = parseViewportState(searchParamRecordToUrlSearchParams(resolvedSearchParams));
+  const shouldLoadTopPotholes = routeState.mode === "potholes";
   const [stats, topPotholes] = await Promise.all([
     getPublicStats(),
-    getTopPotholes(50),
+    shouldLoadTopPotholes ? getTopPotholes(50) : Promise.resolve(null),
   ]);
-  const resolvedSearchParams = searchParams ? await searchParams : {};
 
   return (
     <AppShell variant="map" freshness={stats?.generated_at ?? null}>

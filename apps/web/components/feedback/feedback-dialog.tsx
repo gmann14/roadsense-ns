@@ -114,105 +114,107 @@ export function FeedbackDialog({
         {triggerLabel}
       </button>
 
-      <dialog
-        ref={dialogRef}
-        className="feedback-dialog"
-        aria-labelledby="feedback-dialog-title"
-        onClose={() => setIsOpen(false)}
-      >
-        <form method="dialog" onSubmit={handleSubmit} className="feedback-form">
-          <header className="feedback-form-header">
-            <h2 id="feedback-dialog-title">Send feedback</h2>
-            <button
-              type="button"
-              onClick={close}
-              className="feedback-close"
-              aria-label="Close feedback form"
-            >
-              ×
-            </button>
-          </header>
+      {isOpen ? (
+        <dialog
+          ref={dialogRef}
+          className="feedback-dialog"
+          aria-labelledby="feedback-dialog-title"
+          onClose={() => setIsOpen(false)}
+        >
+          <form method="dialog" onSubmit={handleSubmit} className="feedback-form">
+            <header className="feedback-form-header">
+              <h2 id="feedback-dialog-title">Send feedback</h2>
+              <button
+                type="button"
+                onClick={close}
+                className="feedback-close"
+                aria-label="Close feedback form"
+              >
+                ×
+              </button>
+            </header>
 
-          <p className="feedback-privacy-note">
-            We don&apos;t include your location, drive data, or device ID. We do
-            attach your browser version and the page you came from so a tester
-            report is reproducible.
-          </p>
-
-          <fieldset className="feedback-field-set">
-            <legend>What&apos;s it about?</legend>
-            <div className="feedback-categories">
-              {CATEGORY_OPTIONS.map((option) => (
-                <label key={option.value} className="feedback-category-option">
-                  <input
-                    type="radio"
-                    name="feedback-category"
-                    value={option.value}
-                    checked={category === option.value}
-                    onChange={() => setCategory(option.value)}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <div className="feedback-field">
-            <label htmlFor={messageId}>What happened?</label>
-            <textarea
-              id={messageId}
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              minLength={MESSAGE_MIN}
-              maxLength={MESSAGE_MAX}
-              rows={6}
-              required
-              data-testid="feedback-message"
-            />
-            <p className="feedback-helper">
-              At least {MESSAGE_MIN} characters. {trimmedMessage.length}/{MESSAGE_MAX}
+            <p className="feedback-privacy-note">
+              We don&apos;t include your location, drive data, or device ID. We do
+              attach your browser version and the page you came from so a tester
+              report is reproducible.
             </p>
-          </div>
 
-          <div className="feedback-field">
-            <label htmlFor={emailId}>Reply email (optional)</label>
-            <input
-              id={emailId}
-              type="email"
-              value={replyEmail}
-              onChange={(event) => setReplyEmail(event.target.value)}
-              autoComplete="email"
-              data-testid="feedback-email"
-            />
-            <label htmlFor={consentId} className="feedback-consent">
-              <input
-                id={consentId}
-                type="checkbox"
-                checked={contactConsent}
-                onChange={(event) => setContactConsent(event.target.checked)}
-                data-testid="feedback-consent"
+            <fieldset className="feedback-field-set">
+              <legend>What&apos;s it about?</legend>
+              <div className="feedback-categories">
+                {CATEGORY_OPTIONS.map((option) => (
+                  <label key={option.value} className="feedback-category-option">
+                    <input
+                      type="radio"
+                      name="feedback-category"
+                      value={option.value}
+                      checked={category === option.value}
+                      onChange={() => setCategory(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="feedback-field">
+              <label htmlFor={messageId}>What happened?</label>
+              <textarea
+                id={messageId}
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                minLength={MESSAGE_MIN}
+                maxLength={MESSAGE_MAX}
+                rows={6}
+                required
+                data-testid="feedback-message"
               />
-              <span>OK to email me about this report</span>
-            </label>
-          </div>
+              <p className="feedback-helper">
+                At least {MESSAGE_MIN} characters. {trimmedMessage.length}/{MESSAGE_MAX}
+              </p>
+            </div>
 
-          {renderStatusBanner(status)}
+            <div className="feedback-field">
+              <label htmlFor={emailId}>Reply email (optional)</label>
+              <input
+                id={emailId}
+                type="email"
+                value={replyEmail}
+                onChange={(event) => setReplyEmail(event.target.value)}
+                autoComplete="email"
+                data-testid="feedback-email"
+              />
+              <label htmlFor={consentId} className="feedback-consent">
+                <input
+                  id={consentId}
+                  type="checkbox"
+                  checked={contactConsent}
+                  onChange={(event) => setContactConsent(event.target.checked)}
+                  data-testid="feedback-consent"
+                />
+                <span>OK to email me about this report</span>
+              </label>
+            </div>
 
-          <div className="feedback-actions">
-            <button type="button" onClick={close} className="feedback-secondary">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="feedback-primary"
-              data-testid="feedback-submit"
-            >
-              {status.kind === "submitting" ? "Sending…" : "Send"}
-            </button>
-          </div>
-        </form>
-      </dialog>
+            {renderStatusBanner(status)}
+
+            <div className="feedback-actions">
+              <button type="button" onClick={close} className="feedback-secondary">
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!canSubmit}
+                className="feedback-primary"
+                data-testid="feedback-submit"
+              >
+                {status.kind === "submitting" ? "Sending…" : "Send"}
+              </button>
+            </div>
+          </form>
+        </dialog>
+      ) : null}
     </>
   );
 }
