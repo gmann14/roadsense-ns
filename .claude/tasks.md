@@ -18,6 +18,7 @@ Source of truth for RoadSense NS project work. Keep this public-safe: no secrets
 - [ ] Run the stress-test pass in `docs/implementation/14-stress-test-runbook.md` before each TestFlight cycle, after any new SQL migration, and after changes to scheduler / db.ts / pgRpc.ts. File CRITICAL/HIGH findings here as Active items.
 - [ ] Promote the Deno service connection from the postgres superuser to a least-privilege app role with explicit GRANTs (carry-over from P15 review).
 - [ ] Replace the hardcoded `as` casts in `supabase/functions/server.ts` handler/runtime alignment by converging on a single canonical RateLimitResult shape per handler (carry-over from P15 review).
+- [ ] Follow-up public web performance pass: test a lighter Mapbox style and/or a non-interactive map preview while Mapbox hydrates, with mobile Lighthouse/WebPageTest checks before shipping.
 
 ## Done
 
