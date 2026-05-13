@@ -121,6 +121,8 @@ jobs:
               puts "Revoked stale signing certificate #{certificate_id}"
             when 404
               puts "Signing certificate #{certificate_id} was already absent"
+            when 409
+              puts "Signing certificate #{certificate_id} could not be revoked in its current state; continuing cleanup"
             else
               warn "Failed to revoke signing certificate #{certificate_id}: HTTP #{response.code} #{response.body}"
               exit 1
