@@ -41,7 +41,7 @@ jobs:
       ROAD_SENSE_PUBLIC_API_KEY: ${{ secrets.ROAD_SENSE_PUBLIC_API_KEY }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       ENABLE_POTHOLE_PHOTOS: "YES"
-      ROAD_SENSE_REVOKE_CERT_IDS: FH72ND76K9,V474C8PDG4
+      ROAD_SENSE_REVOKE_CERT_IDS: FH72ND76K9,V474C8PDG4,BX942RKP22
       ROAD_SENSE_APP_IDENTIFIER: ca.roadsense.ios
       IOS_RELEASE_CONFIGURATION: ${{ inputs.configuration }}
       IOS_BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
