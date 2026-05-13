@@ -82,15 +82,9 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: $(ROAD_SENSE_APP_BUNDLE_IDENTIFIER)
         Staging Release:
           INFOPLIST_KEY_CFBundleDisplayName: RoadSense NS
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: Apple Distribution
-          PROVISIONING_PROFILE_SPECIFIER: $(ROAD_SENSE_APP_PROFILE_SPECIFIER)
           PRODUCT_BUNDLE_IDENTIFIER: $(ROAD_SENSE_APP_BUNDLE_IDENTIFIER)
         Production Release:
           INFOPLIST_KEY_CFBundleDisplayName: RoadSense NS
-          CODE_SIGN_STYLE: Manual
-          CODE_SIGN_IDENTITY: Apple Distribution
-          PROVISIONING_PROFILE_SPECIFIER: $(ROAD_SENSE_APP_PROFILE_SPECIFIER)
           PRODUCT_BUNDLE_IDENTIFIER: $(ROAD_SENSE_APP_BUNDLE_IDENTIFIER)
   RoadSenseNSTests:
     type: bundle.unit-test

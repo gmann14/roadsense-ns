@@ -41,7 +41,6 @@ jobs:
       ROAD_SENSE_PUBLIC_API_KEY: ${{ secrets.ROAD_SENSE_PUBLIC_API_KEY }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       ENABLE_POTHOLE_PHOTOS: "YES"
-      ROAD_SENSE_REVOKE_CERT_IDS: FH72ND76K9,V474C8PDG4,BX942RKP22
       ROAD_SENSE_APP_IDENTIFIER: ca.roadsense.ios
       IOS_RELEASE_CONFIGURATION: ${{ inputs.configuration }}
       IOS_BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
@@ -87,48 +86,6 @@ jobs:
           printf '%s' "${APPLE_ASC_API_PRIVATE_KEY}" > "${key_path}"
           chmod 600 "${key_path}"
           echo "APPLE_ASC_API_PRIVATE_KEY_PATH=${key_path}" >> "${GITHUB_ENV}"
-
-      - name: Revoke stale CI signing certificates
-        if: env.ROAD_SENSE_REVOKE_CERT_IDS != ''
-        shell: bash
-        run: |
-          bundle exec ruby <<'RUBY'
-          require "jwt"
-          require "net/http"
-          require "openssl"
-          require "uri"
-
-          key_id = ENV.fetch("APPLE_ASC_API_KEY_ID")
-          issuer_id = ENV.fetch("APPLE_ASC_API_ISSUER_ID")
-          key = OpenSSL::PKey::EC.new(File.read(ENV.fetch("APPLE_ASC_API_PRIVATE_KEY_PATH")))
-          now = Time.now.to_i
-          token = JWT.encode(
-            { iss: issuer_id, iat: now, exp: now + 600, aud: "appstoreconnect-v1" },
-            key,
-            "ES256",
-            kid: key_id,
-            typ: "JWT"
-          )
-
-          ENV.fetch("ROAD_SENSE_REVOKE_CERT_IDS").split(",").map(&:strip).reject(&:empty?).each do |certificate_id|
-            uri = URI("https://api.appstoreconnect.apple.com/v1/certificates/#{certificate_id}")
-            request = Net::HTTP::Delete.new(uri)
-            request["Authorization"] = "Bearer #{token}"
-            response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) { |http| http.request(request) }
-
-            case response.code.to_i
-            when 204
-              puts "Revoked stale signing certificate #{certificate_id}"
-            when 404
-              puts "Signing certificate #{certificate_id} was already absent"
-            when 409
-              puts "Signing certificate #{certificate_id} could not be revoked in its current state; continuing cleanup"
-            else
-              warn "Failed to revoke signing certificate #{certificate_id}: HTTP #{response.code} #{response.body}"
-              exit 1
-            end
-          end
-          RUBY
 
       - name: Build and upload internal TestFlight build
         shell: bash

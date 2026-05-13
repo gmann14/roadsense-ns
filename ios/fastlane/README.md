@@ -22,7 +22,7 @@ Optional environment:
 - `ENABLE_POTHOLE_PHOTOS` defaults to `NO` locally; the GitHub TestFlight workflow sets it to `YES` for field-test builds
 - `SKIP_TESTFLIGHT_UPLOAD=1` builds the IPA without uploading
 
-The release lane creates or renews an Apple Distribution certificate and App Store provisioning profile, then writes the actual profile name returned by `sigh` into the app target's release xcconfig for manual App Store signing. This keeps GitHub Actions independent from a logged-in Xcode account on the runner without forcing provisioning settings onto Swift Package dependencies.
+The release lane must use a stable Apple Distribution signing setup that already exists in CI. Routine TestFlight builds must not create, renew, or revoke Apple signing certificates.
 
 Local build/upload:
 

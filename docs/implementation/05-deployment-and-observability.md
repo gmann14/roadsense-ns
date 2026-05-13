@@ -321,7 +321,7 @@ Required repository secrets:
 - `MAPBOX_ACCESS_TOKEN`
 - `ROAD_SENSE_PUBLIC_API_KEY`
 
-The workflow sets `ENABLE_POTHOLE_PHOTOS=YES` for field-test builds so the in-app camera/reporting flow stays available to TestFlight testers. The fastlane lane prepares Apple Distribution signing with `cert` + `sigh`, then writes the actual `sigh` profile name into only the app target's release xcconfig.
+The workflow sets `ENABLE_POTHOLE_PHOTOS=YES` for field-test builds so the in-app camera/reporting flow stays available to TestFlight testers. CI signing should use a stable Apple Distribution certificate/provisioning profile setup; routine TestFlight builds must not create, renew, or revoke Apple signing certificates.
 
 ## Observability Verification Checklist
 
