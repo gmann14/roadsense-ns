@@ -22,6 +22,8 @@ Optional environment:
 - `ENABLE_POTHOLE_PHOTOS` defaults to `NO` locally; the GitHub TestFlight workflow sets it to `YES` for field-test builds
 - `SKIP_TESTFLIGHT_UPLOAD=1` builds the IPA without uploading
 
+The release lane creates or renews an Apple Distribution certificate and an App Store provisioning profile named `RoadSense NS App Store ca.roadsense.ios`, then archives with manual App Store signing. This keeps GitHub Actions independent from a logged-in Xcode account on the runner.
+
 Local build/upload:
 
 ```bash
