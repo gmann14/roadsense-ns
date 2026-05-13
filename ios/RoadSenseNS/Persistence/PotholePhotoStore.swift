@@ -2,12 +2,16 @@ import Foundation
 import SwiftData
 
 struct PotholePhotoStatusSummary: Equatable {
+    let pendingUploadCount: Int
+    let pendingModerationCount: Int
     let pendingCount: Int
     let failedPermanentCount: Int
     let nextRetryAt: Date?
     let lastSuccessfulUploadAt: Date?
 
     static let empty = PotholePhotoStatusSummary(
+        pendingUploadCount: 0,
+        pendingModerationCount: 0,
         pendingCount: 0,
         failedPermanentCount: 0,
         nextRetryAt: nil,
@@ -172,9 +176,8 @@ final class PotholePhotoStore {
         let context = ModelContext(container)
         let reports = try context.fetch(FetchDescriptor<PotholeReportRecord>())
 
-        let pendingCount = reports.filter { report in
-            report.uploadState == .pendingMetadata || report.uploadState == .pendingModeration
-        }.count
+        let pendingUploadCount = reports.filter { $0.uploadState == .pendingMetadata }.count
+        let pendingModerationCount = reports.filter { $0.uploadState == .pendingModeration }.count
         let failedPermanentCount = reports.filter { $0.uploadState == .failedPermanent }.count
         let nextRetryAt = reports
             .filter { $0.uploadState == .pendingMetadata }
@@ -187,7 +190,9 @@ final class PotholePhotoStore {
             .max()
 
         return PotholePhotoStatusSummary(
-            pendingCount: pendingCount,
+            pendingUploadCount: pendingUploadCount,
+            pendingModerationCount: pendingModerationCount,
+            pendingCount: pendingUploadCount + pendingModerationCount,
             failedPermanentCount: failedPermanentCount,
             nextRetryAt: nextRetryAt,
             lastSuccessfulUploadAt: lastSuccessfulUploadAt

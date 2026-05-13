@@ -695,20 +695,20 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					14C89C9C29065D1BBF8B539B = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = D7WP753WUK;
 						ProvisioningStyle = Automatic;
 					};
 					6C4282FA31560B7A152AC1C4 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = D7WP753WUK;
 						ProvisioningStyle = Automatic;
 						TestTargetID = AB1A93DA517C7F350A9E30F7;
 					};
 					AB1A93DA517C7F350A9E30F7 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = D7WP753WUK;
 						ProvisioningStyle = Automatic;
 					};
 					F3B73F912150FE5952CCF260 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = D7WP753WUK;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -1047,9 +1047,9 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = D7WP753WUK;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -1170,9 +1170,9 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = D7WP753WUK;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1235,9 +1235,9 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = D7WP753WUK;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;

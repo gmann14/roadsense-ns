@@ -147,8 +147,14 @@ struct SettingsView: View {
                 )
                 Divider()
                 statusRow(
-                    label: "Photo reports waiting",
-                    value: "\(model.potholePhotoStatusSummary.pendingCount)",
+                    label: "Photo uploads waiting",
+                    value: "\(model.potholePhotoStatusSummary.pendingUploadCount)",
+                    valueTint: DesignTokens.Palette.ink
+                )
+                Divider()
+                statusRow(
+                    label: "Photos awaiting review",
+                    value: "\(model.potholePhotoStatusSummary.pendingModerationCount)",
                     valueTint: DesignTokens.Palette.ink
                 )
                 Divider()
@@ -361,6 +367,10 @@ struct SettingsView: View {
 
         if model.pendingUploadCount > 0 {
             return "Waiting to upload"
+        }
+
+        if model.potholePhotoStatusSummary.pendingModerationCount > 0 {
+            return "Awaiting review"
         }
 
         return "Up to date"

@@ -1,0 +1,173 @@
+name: TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_number:
+        description: "Optional App Store build number. Defaults to the GitHub run number."
+        required: false
+        type: string
+      api_base_url:
+        description: "Production API base URL."
+        required: false
+        default: "https://api-production-075e9.up.railway.app"
+        type: string
+
+concurrency:
+  group: testflight-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve build number
+        id: build
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.build_number }}" ]]; then
+            echo "number=${{ inputs.build_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "number=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install XcodeGen
+        shell: bash
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+
+      - name: Write production config
+        shell: bash
+        env:
+          API_BASE_URL: ${{ inputs.api_base_url }}
+          MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
+          ROAD_SENSE_PUBLIC_API_KEY: ${{ secrets.ROAD_SENSE_PUBLIC_API_KEY }}
+        run: |
+          test -n "$API_BASE_URL"
+          test -n "$MAPBOX_ACCESS_TOKEN"
+          test -n "$ROAD_SENSE_PUBLIC_API_KEY"
+          cat > ios/Config/RoadSenseNS.Production.secrets.xcconfig <<EOF
+          API_BASE_URL = $API_BASE_URL
+          MAPBOX_ACCESS_TOKEN = $MAPBOX_ACCESS_TOKEN
+          SUPABASE_ANON_KEY = $ROAD_SENSE_PUBLIC_API_KEY
+          SENTRY_DSN =
+          EOF
+
+      - name: Generate Xcode project
+        shell: bash
+        run: |
+          cd ios
+          xcodegen generate
+
+      - name: Run targeted release tests
+        shell: bash
+        run: |
+          cd ios
+          SIMULATOR_ID="$(
+            xcrun simctl list devices available -j \
+              | python3 -c 'import json, sys
+          data = json.load(sys.stdin)
+          for runtime_devices in data.get("devices", {}).values():
+              for device in runtime_devices:
+                  if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
+                      print(device["udid"])
+                      raise SystemExit(0)
+          raise SystemExit("No available iPhone simulator found")'
+          )"
+          xcodebuild test \
+            -project RoadSenseNS.xcodeproj \
+            -scheme RoadSenseNS \
+            -configuration "Production Release" \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -only-testing:RoadSenseNSTests/PotholePhotoStoreTests \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            ENABLE_PREVIEWS=NO
+
+      - name: Prepare App Store Connect key
+        shell: bash
+        env:
+          APPLE_ASC_API_KEY_ID: ${{ secrets.APPLE_ASC_API_KEY_ID }}
+          APPLE_ASC_API_PRIVATE_KEY: ${{ secrets.APPLE_ASC_API_PRIVATE_KEY }}
+        run: |
+          test -n "$APPLE_ASC_API_KEY_ID"
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s' "$APPLE_ASC_API_PRIVATE_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_${APPLE_ASC_API_KEY_ID}.p8"
+          chmod 600 "$HOME/.appstoreconnect/private_keys/AuthKey_${APPLE_ASC_API_KEY_ID}.p8"
+
+      - name: Archive
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ASC_API_KEY_ID: ${{ secrets.APPLE_ASC_API_KEY_ID }}
+          APPLE_ASC_API_ISSUER_ID: ${{ secrets.APPLE_ASC_API_ISSUER_ID }}
+        run: |
+          cd ios
+          xcodebuild archive \
+            -project RoadSenseNS.xcodeproj \
+            -scheme RoadSenseNS \
+            -configuration "Production Release" \
+            -destination "generic/platform=iOS" \
+            -archivePath "$PWD/build/RoadSenseNS.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CURRENT_PROJECT_VERSION="${{ steps.build.outputs.number }}" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            ENABLE_PREVIEWS=NO \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_${APPLE_ASC_API_KEY_ID}.p8" \
+            -authenticationKeyID "$APPLE_ASC_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPLE_ASC_API_ISSUER_ID"
+
+      - name: Export IPA
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ASC_API_KEY_ID: ${{ secrets.APPLE_ASC_API_KEY_ID }}
+          APPLE_ASC_API_ISSUER_ID: ${{ secrets.APPLE_ASC_API_ISSUER_ID }}
+        run: |
+          cat > ios/build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>teamID</key>
+            <string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key>
+            <string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$PWD/ios/build/RoadSenseNS.xcarchive" \
+            -exportPath "$PWD/ios/build/export" \
+            -exportOptionsPlist "$PWD/ios/build/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/.appstoreconnect/private_keys/AuthKey_${APPLE_ASC_API_KEY_ID}.p8" \
+            -authenticationKeyID "$APPLE_ASC_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPLE_ASC_API_ISSUER_ID"
+
+      - name: Upload to TestFlight
+        shell: bash
+        env:
+          APPLE_ASC_API_KEY_ID: ${{ secrets.APPLE_ASC_API_KEY_ID }}
+          APPLE_ASC_API_ISSUER_ID: ${{ secrets.APPLE_ASC_API_ISSUER_ID }}
+        run: |
+          IPA_PATH="$(find ios/build/export -name '*.ipa' -print -quit)"
+          test -n "$IPA_PATH"
+          xcrun altool --upload-app \
+            --type ios \
+            -f "$IPA_PATH" \
+            --apiKey "$APPLE_ASC_API_KEY_ID" \
+            --apiIssuer "$APPLE_ASC_API_ISSUER_ID"
