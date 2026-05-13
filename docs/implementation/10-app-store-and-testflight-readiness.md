@@ -16,7 +16,7 @@ This doc is intentionally operational. [06-security-and-privacy.md](06-security-
 
 ## What To Finish Before Apple Approval Lands
 
-1. Keep `RoadSense NS`, `ca.roadsense.ios`, and `https://roadsense.ca/privacy` consistent everywhere.
+1. Keep `RoadSense NS`, `ca.roadsense.ios`, and `https://nsroadsense.ca/privacy` consistent everywhere.
 2. Make sure the privacy policy URL is live before any external TestFlight submission.
 3. Keep [06-security-and-privacy.md](06-security-and-privacy.md) authoritative for App Store privacy labels.
 4. Archive the app once from the production config and run `xcrun PrivacyReport` before the first real upload.
@@ -30,11 +30,11 @@ Fields that should not drift:
 |---|---|
 | App name | `RoadSense NS` |
 | Bundle ID | `ca.roadsense.ios` |
-| Privacy policy URL | Current live URL: `https://roadsense-web.vercel.app/privacy`; branded target before external release: `https://roadsense.ca/privacy` |
+| Privacy policy URL | `https://nsroadsense.ca/privacy` |
 | Contact email | `graham.mann14@gmail.com` |
 | Account requirement | none |
 | Demo credentials | N/A |
-| Support URL | Current live URL: `https://roadsense-web.vercel.app`; branded target before external release: `https://roadsense.ca` |
+| Support URL | `https://nsroadsense.ca` |
 | Primary category | Travel |
 | Secondary category | Utilities |
 | Age rating | 4+ |

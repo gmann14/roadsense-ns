@@ -397,7 +397,7 @@ Week 7: expand to ~30 internal testers (friends, willing neighbours).
 
 Week 8: submit for Beta App Review to unlock external testing. Prepare:
 - Test Information: describe the app's purpose, test focus (driving scenarios), how to report bugs
-- Privacy policy URL (required — host at `https://roadsense.ca/privacy` to match 06; do not ship with two different domains across the app and the privacy policy link)
+- Privacy policy URL (required — use `https://nsroadsense.ca/privacy`; do not ship with two different domains across the app and the privacy policy link)
 - Contact email (graham.mann14@gmail.com OK for MVP)
 - Demo credentials: N/A (no account required, mention this in notes)
 
