@@ -211,8 +211,14 @@ struct SettingsView: View {
                 )
                 Divider()
                 statusRow(
-                    label: "Photo reports waiting",
-                    value: "\(model.potholePhotoStatusSummary.pendingCount)",
+                    label: "Photo uploads waiting",
+                    value: "\(model.potholePhotoStatusSummary.pendingUploadCount)",
+                    valueTint: DesignTokens.Palette.ink
+                )
+                Divider()
+                statusRow(
+                    label: "Photos awaiting review",
+                    value: "\(model.potholePhotoStatusSummary.pendingModerationCount)",
                     valueTint: DesignTokens.Palette.ink
                 )
                 Divider()
@@ -579,6 +585,10 @@ struct SettingsView: View {
             return "Waiting to upload"
         }
 
+        if model.potholePhotoStatusSummary.pendingModerationCount > 0 {
+            return "Awaiting review"
+        }
+
         return "Up to date"
     }
 
@@ -739,7 +749,7 @@ struct SettingsView: View {
             potholePhotoStatusSummary: model.potholePhotoStatusSummary,
             pendingTripUploadCount: model.userStatsSummary.pendingTripUploadCount,
             pendingPotholeMarkCount: model.potholeActionStatusSummary.pendingCount,
-            pendingPhotoCount: model.potholePhotoStatusSummary.pendingCount
+            pendingPhotoUploadCount: model.potholePhotoStatusSummary.pendingUploadCount
         )
     }
 
@@ -751,7 +761,7 @@ struct SettingsView: View {
         potholePhotoStatusSummary: PotholePhotoStatusSummary,
         pendingTripUploadCount: Int,
         pendingPotholeMarkCount: Int,
-        pendingPhotoCount: Int
+        pendingPhotoUploadCount: Int
     ) -> UploadHealthAlert? {
         let failedPermanentTotal = uploadStatusSummary.failedPermanentBatchCount
             + potholeActionStatusSummary.failedPermanentCount
@@ -765,7 +775,7 @@ struct SettingsView: View {
             )
         }
 
-        let totalPending = pendingTripUploadCount + pendingPotholeMarkCount + pendingPhotoCount
+        let totalPending = pendingTripUploadCount + pendingPotholeMarkCount + pendingPhotoUploadCount
         guard totalPending > 0 else {
             return nil
         }

@@ -30,11 +30,11 @@ Fields that should not drift:
 |---|---|
 | App name | `RoadSense NS` |
 | Bundle ID | `ca.roadsense.ios` |
-| Privacy policy URL | `https://nsroadsense.ca/privacy` |
+| Privacy policy URL | Current live URL: `https://roadsense-web.vercel.app/privacy`; branded target before external release: `https://roadsense.ca/privacy` |
 | Contact email | `graham.mann14@gmail.com` |
 | Account requirement | none |
 | Demo credentials | N/A |
-| Support URL | `https://nsroadsense.ca` (homepage; add a dedicated `/contact` later if you want a richer support surface) |
+| Support URL | Current live URL: `https://roadsense-web.vercel.app`; branded target before external release: `https://roadsense.ca` |
 | Primary category | Travel |
 | Secondary category | Utilities |
 | Age rating | 4+ |

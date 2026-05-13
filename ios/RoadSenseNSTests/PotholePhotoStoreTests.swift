@@ -58,6 +58,50 @@ final class PotholePhotoStoreTests: XCTestCase {
         XCTAssertEqual(persisted.first?.uploadState, .pendingModeration)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
         XCTAssertEqual(try store.pendingCount(), 1)
+
+        let summary = try store.statusSummary()
+        XCTAssertEqual(summary.pendingUploadCount, 0)
+        XCTAssertEqual(summary.pendingModerationCount, 1)
+        XCTAssertEqual(summary.pendingCount, 1)
+    }
+
+    func testStatusSummarySeparatesWaitingUploadsFromModerationQueue() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholePhotoStore(container: container)
+        let context = ModelContext(container)
+
+        context.insert(
+            PotholeReportRecord(
+                segmentID: nil,
+                photoFilePath: "/tmp/waiting.jpg",
+                latitude: 44.6488,
+                longitude: -63.5752,
+                accuracyM: 6,
+                capturedAt: Date(timeIntervalSince1970: 1_713_000_000),
+                uploadState: .pendingMetadata,
+                byteSize: 3,
+                sha256Hex: String(repeating: "d", count: 64)
+            )
+        )
+        context.insert(
+            PotholeReportRecord(
+                segmentID: nil,
+                photoFilePath: "/tmp/review.jpg",
+                latitude: 44.6489,
+                longitude: -63.5753,
+                accuracyM: 6,
+                capturedAt: Date(timeIntervalSince1970: 1_713_000_060),
+                uploadState: .pendingModeration,
+                byteSize: 3,
+                sha256Hex: String(repeating: "e", count: 64)
+            )
+        )
+        try context.save()
+
+        let summary = try store.statusSummary()
+        XCTAssertEqual(summary.pendingUploadCount, 1)
+        XCTAssertEqual(summary.pendingModerationCount, 1)
+        XCTAssertEqual(summary.pendingCount, 2)
     }
 
     func testRetryFailedReportsResetsPermanentFailures() throws {

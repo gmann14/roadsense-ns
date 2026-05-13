@@ -15,10 +15,32 @@ final class UploadHealthAlertTests: XCTestCase {
             potholePhotoStatusSummary: .empty,
             pendingTripUploadCount: 0,
             pendingPotholeMarkCount: 0,
-            pendingPhotoCount: 0
+            pendingPhotoUploadCount: 0
         )
 
         XCTAssertNil(alert)
+    }
+
+    func testReturnsNilWhenPhotosOnlyAwaitModeration() {
+        let alert = SettingsView.uploadHealthAlert(
+            now: now,
+            lastSuccessfulUploadAt: now.addingTimeInterval(-30 * 60),
+            uploadStatusSummary: .empty,
+            potholeActionStatusSummary: .empty,
+            potholePhotoStatusSummary: PotholePhotoStatusSummary(
+                pendingUploadCount: 0,
+                pendingModerationCount: 3,
+                pendingCount: 3,
+                failedPermanentCount: 0,
+                nextRetryAt: nil,
+                lastSuccessfulUploadAt: now.addingTimeInterval(-30 * 60)
+            ),
+            pendingTripUploadCount: 0,
+            pendingPotholeMarkCount: 0,
+            pendingPhotoUploadCount: 0
+        )
+
+        XCTAssertNil(alert, "Photos already uploaded and awaiting moderation should not be treated as stuck local uploads")
     }
 
     func testReturnsNilWhenPendingButLastSuccessIsRecent() {
@@ -30,7 +52,7 @@ final class UploadHealthAlertTests: XCTestCase {
             potholePhotoStatusSummary: .empty,
             pendingTripUploadCount: 3,
             pendingPotholeMarkCount: 0,
-            pendingPhotoCount: 0
+            pendingPhotoUploadCount: 0
         )
 
         XCTAssertNil(alert, "30 minutes since last success is healthy and should not nag")
@@ -45,7 +67,7 @@ final class UploadHealthAlertTests: XCTestCase {
             potholePhotoStatusSummary: .empty,
             pendingTripUploadCount: 2,
             pendingPotholeMarkCount: 1,
-            pendingPhotoCount: 0
+            pendingPhotoUploadCount: 0
         )
 
         XCTAssertEqual(alert?.severity, .warning)
@@ -62,7 +84,7 @@ final class UploadHealthAlertTests: XCTestCase {
             potholePhotoStatusSummary: .empty,
             pendingTripUploadCount: 5,
             pendingPotholeMarkCount: 2,
-            pendingPhotoCount: 0
+            pendingPhotoUploadCount: 0
         )
 
         XCTAssertEqual(alert?.severity, .danger)
@@ -79,7 +101,7 @@ final class UploadHealthAlertTests: XCTestCase {
             potholePhotoStatusSummary: .empty,
             pendingTripUploadCount: 1,
             pendingPotholeMarkCount: 0,
-            pendingPhotoCount: 0
+            pendingPhotoUploadCount: 0
         )
 
         XCTAssertEqual(alert?.severity, .warning)
@@ -100,7 +122,7 @@ final class UploadHealthAlertTests: XCTestCase {
             potholePhotoStatusSummary: .empty,
             pendingTripUploadCount: 0,
             pendingPotholeMarkCount: 0,
-            pendingPhotoCount: 0
+            pendingPhotoUploadCount: 0
         )
 
         XCTAssertEqual(alert?.severity, .danger)
@@ -122,7 +144,7 @@ final class UploadHealthAlertTests: XCTestCase {
             potholePhotoStatusSummary: .empty,
             pendingTripUploadCount: 5,
             pendingPotholeMarkCount: 0,
-            pendingPhotoCount: 0
+            pendingPhotoUploadCount: 0
         )
 
         // Both conditions are true; the failed-permanent one is the more
@@ -140,7 +162,7 @@ final class UploadHealthAlertTests: XCTestCase {
             potholePhotoStatusSummary: .empty,
             pendingTripUploadCount: 0,
             pendingPotholeMarkCount: 1,
-            pendingPhotoCount: 0
+            pendingPhotoUploadCount: 0
         )
 
         XCTAssertNotNil(alert)

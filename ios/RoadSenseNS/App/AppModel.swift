@@ -123,7 +123,7 @@ final class AppModel {
         self.failedPotholePhotos = (try? container.potholePhotoStore.failedPermanentReports()) ?? []
         self.pendingUploadCount = ((try? container.uploadQueueStore.pendingReadingCount()) ?? 0)
             + ((try? container.potholeActionStore.pendingCount()) ?? 0)
-            + potholePhotoStatusSummary.pendingCount
+            + potholePhotoStatusSummary.pendingUploadCount
         self.acceptedReadingCount = (try? container.readingStore.acceptedReadingCount()) ?? 0
         self.privacyFilteredCount = (try? container.readingStore.privacyFilteredReadingCount()) ?? 0
         self.localDriveOverlayPoints = (try? container.readingStore.localDriveOverlayPoints()) ?? []
@@ -490,7 +490,7 @@ final class AppModel {
         failedPotholePhotos = (try? potholePhotoStore.failedPermanentReports()) ?? []
         pendingUploadCount = ((try? uploadQueueStore.pendingReadingCount()) ?? 0)
             + ((try? potholeActionStore.pendingCount()) ?? 0)
-            + potholePhotoStatusSummary.pendingCount
+            + potholePhotoStatusSummary.pendingUploadCount
         acceptedReadingCount = (try? readingStore.acceptedReadingCount()) ?? 0
         privacyFilteredCount = (try? readingStore.privacyFilteredReadingCount()) ?? 0
         localDriveOverlayPoints = (try? readingStore.localDriveOverlayPoints()) ?? []

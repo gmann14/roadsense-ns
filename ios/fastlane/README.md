@@ -9,6 +9,7 @@ Required environment:
 - `APPLE_ASC_API_PRIVATE_KEY_PATH` or `APPLE_ASC_API_PRIVATE_KEY`
 - `APPLE_TEAM_ID`
 - `MAPBOX_ACCESS_TOKEN`
+- `ROAD_SENSE_PUBLIC_API_KEY` for shared TestFlight builds
 
 Optional environment:
 
@@ -18,7 +19,7 @@ Optional environment:
 - `ROAD_SENSE_PUBLIC_API_KEY` overrides the API key baked into the selected xcconfig
 - `API_BASE_URL` overrides the selected environment API URL
 - `SENTRY_DSN`
-- `ENABLE_POTHOLE_PHOTOS` defaults to `NO`
+- `ENABLE_POTHOLE_PHOTOS` defaults to `NO` locally; the GitHub TestFlight workflow sets it to `YES` for field-test builds
 - `SKIP_TESTFLIGHT_UPLOAD=1` builds the IPA without uploading
 
 Local build/upload:

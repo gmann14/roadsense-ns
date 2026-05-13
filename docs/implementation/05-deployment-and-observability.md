@@ -319,8 +319,9 @@ Required repository secrets:
 - `APPLE_ASC_API_PRIVATE_KEY`
 - `APPLE_TEAM_ID`
 - `MAPBOX_ACCESS_TOKEN`
+- `ROAD_SENSE_PUBLIC_API_KEY`
 
-The workflow still needs valid Apple distribution signing material for CI. If App Store Connect API authentication cannot provision/sign automatically on a clean runner, use `fastlane match` or manually import an Apple Distribution certificate plus App Store provisioning profile before `build_app`.
+The workflow sets `ENABLE_POTHOLE_PHOTOS=YES` for field-test builds so the in-app camera/reporting flow stays available to TestFlight testers. The workflow still needs valid Apple distribution signing material for CI. If App Store Connect API authentication cannot provision/sign automatically on a clean runner, use `fastlane match` or manually import an Apple Distribution certificate plus App Store provisioning profile before `build_app`.
 
 ## Observability Verification Checklist
 

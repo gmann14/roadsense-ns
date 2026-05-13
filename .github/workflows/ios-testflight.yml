@@ -40,6 +40,7 @@ jobs:
       MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
       ROAD_SENSE_PUBLIC_API_KEY: ${{ secrets.ROAD_SENSE_PUBLIC_API_KEY }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      ENABLE_POTHOLE_PHOTOS: "YES"
       ROAD_SENSE_APP_IDENTIFIER: ca.roadsense.ios
       IOS_RELEASE_CONFIGURATION: ${{ inputs.configuration }}
       IOS_BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
@@ -53,7 +54,7 @@ jobs:
         shell: bash
         run: |
           missing=()
-          for name in APPLE_ASC_API_KEY_ID APPLE_ASC_API_ISSUER_ID APPLE_ASC_API_PRIVATE_KEY APPLE_TEAM_ID MAPBOX_ACCESS_TOKEN; do
+          for name in APPLE_ASC_API_KEY_ID APPLE_ASC_API_ISSUER_ID APPLE_ASC_API_PRIVATE_KEY APPLE_TEAM_ID MAPBOX_ACCESS_TOKEN ROAD_SENSE_PUBLIC_API_KEY; do
             if [[ -z "${!name}" ]]; then
               missing+=("$name")
             fi
