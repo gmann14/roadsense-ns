@@ -131,8 +131,6 @@ def prepare_app_store_signing(api_key)
     api_key: api_key,
     app_identifier: app_identifier,
     provisioning_name: release_profile_name,
-    development: false,
-    adhoc: false,
     force: true,
     team_id: required_env("APPLE_TEAM_ID")
   )
