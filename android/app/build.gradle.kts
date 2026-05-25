@@ -162,6 +162,17 @@ android {
     sourceSets {
         getByName("androidTest").assets.srcDir("$projectDir/schemas")
         getByName("test").resources.srcDir("$rootDir/core-fixtures")
+
+        // Swap in the Mapbox-typed `MapboxBridge` when the private Maven was
+        // reachable at sync time; otherwise compile the no-op stub so the
+        // project keeps building on a public CI runner. Both source dirs
+        // declare the same `object MapboxBridge` symbol with the same public
+        // surface, so the rest of the app never branches on availability
+        // beyond reading `MapboxBridge.isAvailable`.
+        val mapboxAvailable = (rootProject.extra.has("mapboxAvailable") &&
+            rootProject.extra["mapboxAvailable"] as Boolean)
+        val bridgeDir = if (mapboxAvailable) "src/mapboxMain/kotlin" else "src/noMapboxMain/kotlin"
+        getByName("main").java.srcDir(bridgeDir)
     }
 
     packaging {

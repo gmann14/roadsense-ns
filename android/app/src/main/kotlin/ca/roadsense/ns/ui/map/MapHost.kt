@@ -22,23 +22,27 @@ import ca.roadsense.ns.api.Endpoints
 /**
  * Compose host for the road-quality map shell.
  *
- * Two render paths:
- *   - **Mapbox path** — used when the build was assembled with the Mapbox
- *     Maps SDK on the classpath (controlled by `MAPBOX_AVAILABLE` in
- *     [BuildConfig], driven by `MAPBOX_DOWNLOADS_TOKEN` at sync time).
- *     Loaded reflectively so the project still compiles on a public CI
- *     runner without the private Maven token.
- *   - **WebView fallback** — used in the public/CI build flavor: shows the
- *     same `https://roadsense.ca` map iOS already links to, pointed at the
- *     configured tile endpoint via URL flag so the in-app preview matches
- *     the user's environment.
+ * Two render paths, picked at composition time:
+ *   - **Native Mapbox** — [MapboxBridge.createMapView] inflates a real
+ *     `MapView` and wires the same vector-tile source iOS uses. Compiled in
+ *     when the project synced with `MAPBOX_DOWNLOADS_TOKEN` set (see
+ *     `android/settings.gradle.kts`); the no-Mapbox build sees only the
+ *     `MapboxBridge` stub, which reports `isAvailable = false`.
+ *   - **WebView fallback** — points at `https://roadsense.ca` so the in-app
+ *     preview still shows the public map on CI/public-clone builds that
+ *     have not provisioned the Mapbox SDK. Production builds always take
+ *     the native path once the token is provisioned and a real
+ *     `MAPBOX_ACCESS_TOKEN` is configured for the environment.
  */
 @Composable
 fun MapHost(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val container = RoadSenseContainer.from(context)
     val endpoints = Endpoints(container.config)
-    val mapboxAvailable = BuildConfig.MAPBOX_AVAILABLE && hasMapboxRuntime()
+    val accessToken = container.config.mapboxAccessToken
+    val useNativeMapbox = BuildConfig.MAPBOX_AVAILABLE &&
+        MapboxBridge.isAvailable &&
+        accessToken.startsWith("pk.")
 
     Box(modifier = modifier) {
         AndroidView(
@@ -46,9 +50,16 @@ fun MapHost(modifier: Modifier = Modifier) {
                 .fillMaxWidth()
                 .height(280.dp),
             factory = { ctx ->
-                if (mapboxAvailable) {
-                    runCatching { reflectiveMapboxView(ctx) }
-                        .getOrElse { fallbackWebView(ctx, endpoints) }
+                if (useNativeMapbox) {
+                    runCatching {
+                        MapboxBridge.createMapView(
+                            ctx,
+                            MapboxConfig(
+                                tileTemplateURL = endpoints.tileTemplateURLString,
+                                accessToken = accessToken,
+                            ),
+                        )
+                    }.getOrElse { fallbackWebView(ctx, endpoints) }
                 } else {
                     fallbackWebView(ctx, endpoints)
                 }
@@ -67,16 +78,6 @@ fun MapHost(modifier: Modifier = Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-}
-
-private fun hasMapboxRuntime(): Boolean = runCatching {
-    Class.forName("com.mapbox.maps.MapView")
-}.isSuccess
-
-private fun reflectiveMapboxView(context: android.content.Context): android.view.View {
-    val mapViewClass = Class.forName("com.mapbox.maps.MapView")
-    return mapViewClass.getConstructor(android.content.Context::class.java)
-        .newInstance(context) as android.view.View
 }
 
 @SuppressLint("SetJavaScriptEnabled")
