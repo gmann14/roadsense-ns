@@ -64,6 +64,67 @@ Battery + foreground-service survivability (per OEM):
 
 If a step cannot be exercised (no device, no Play account, no `MAPBOX_DOWNLOADS_TOKEN` yet), leave the checkbox unticked and note the blocker. Do not pre-tick on the assumption it will probably work.
 
+## Credentials You Personally Have To Create
+
+The wiring is in the repo. These are the human-only steps that the agent cannot do for you. Each item produces a value that ends up either in `android/config/<env>.env.secrets.properties` (gitignored), in your local shell's environment variables, or as a GitHub Actions secret.
+
+### `MAPBOX_DOWNLOADS_TOKEN` — private Maven scope
+
+This is **not** the public `pk.…` access token the app sends with each tile request — it's a separate **secret** token (Mapbox calls them "secret tokens", prefixed `sk.…`) that authenticates Gradle against `api.mapbox.com/downloads/v2/releases/maven` so the Mapbox SDK artifacts can be fetched.
+
+1. Sign in at `https://account.mapbox.com/`.
+2. **Tokens → Create a token**.
+3. Name: `roadsense-android-downloads`.
+4. Scopes: enable **`DOWNLOADS:READ`** only. Leave everything else off.
+5. Copy the resulting `sk.…` token immediately (it is shown only once).
+6. Store it in:
+   - your local shell: `export MAPBOX_DOWNLOADS_TOKEN='sk.…'` in `~/.zshrc`, or equivalently as `MAPBOX_DOWNLOADS_TOKEN=sk.…` in `~/.gradle/gradle.properties`.
+   - GitHub Actions repo secrets (used by the future Mapbox-aware CI job): `gh secret set MAPBOX_DOWNLOADS_TOKEN`.
+7. Resync Android Studio (or run `./gradlew help`) and confirm `BuildConfig.MAPBOX_AVAILABLE == true` — the project will now pull `com.mapbox.maps:android:11.7.0` from the private Maven and `MapboxBridge` (Mapbox-typed) will land on the classpath.
+
+### `MAPBOX_ACCESS_TOKEN` — runtime tile auth
+
+This is the public `pk.…` token the app embeds in every tile request URL. It does **not** authorize Maven access.
+
+1. Same Mapbox dashboard, **Tokens → Create a token**.
+2. Name: `roadsense-android-runtime`.
+3. Scopes: leave the default **public** scopes selected (no `DOWNLOADS:*` scopes). The token starts with `pk.…`.
+4. Add to each environment's secrets file (gitignored):
+   - `android/config/staging.env.secrets.properties` → `MAPBOX_ACCESS_TOKEN=pk.…`
+   - `android/config/production.env.secrets.properties` → `MAPBOX_ACCESS_TOKEN=pk.…` (can be the same token; Mapbox bills per request)
+5. For the Play publishing CI workflow, also add it as a GitHub Actions repo secret: `gh secret set MAPBOX_ACCESS_TOKEN`.
+
+### `SENTRY_DSN` — Android project DSN
+
+The Android app already wires `SentryBootstrapper.bootstrap(...)` from `RoadSenseApp.onCreate`. It is a no-op until a DSN is configured.
+
+1. Sign in at `https://sentry.io/` (same org as the iOS project; create a new org if you don't have one — free tier covers a small beta).
+2. **Projects → Create Project** → platform **Android** → name `roadsense-android` → team your default team. Keep "Set your default rules" enabled.
+3. Copy the DSN from **Settings → Projects → roadsense-android → Client Keys (DSN)**. It looks like `https://abcdef1234@o123456.ingest.sentry.io/789012`.
+4. Add it to each environment's secrets file:
+   - `android/config/staging.env.secrets.properties` → `SENTRY_DSN=https://…`
+   - `android/config/production.env.secrets.properties` → `SENTRY_DSN=https://…`
+   - Local-debug intentionally has no DSN so development crashes don't pollute the issue list.
+5. Smoke-test the wiring: launch a debug build with the staging DSN configured, trigger an intentional crash (uncomment a `throw RuntimeException("sentry smoke")` line in a button handler, then revert), confirm the event lands in Sentry within ~60s.
+
+### `GOOGLE_PLAY_JSON_KEY` — Play Developer API service account
+
+Required by `.github/workflows/android-internal.yml` to push AABs to Internal Testing. Even if you only plan to upload by hand the first time, the workflow is the long-term path.
+
+1. Sign in to **Google Play Console**. **Setup → API access**.
+2. If you haven't linked a Google Cloud project yet, click **Create new Google Cloud project** (Play will hand you back to the API access page with the new project linked).
+3. **Service accounts → Create new service account** → click through to Google Cloud Console.
+4. In Cloud Console: name `roadsense-play-publisher`, role **none** (Play Console grants the permissions, not IAM). Create.
+5. On the service account page **Keys → Add key → JSON**. The browser downloads `roadsense-play-publisher-….json`. Treat this file like a password.
+6. Back in Play Console **API access → Grant access** for the new service account. Grant: **Release manager** at the app level. Select the `RoadSense NS` app.
+7. Store the JSON:
+   - `gh secret set GOOGLE_PLAY_JSON_KEY < roadsense-play-publisher-….json`
+   - delete the local copy when you confirm the workflow can use it.
+
+### `ANDROID_UPLOAD_*` — upload keystore
+
+The four `ANDROID_UPLOAD_*` env vars (already covered later in this doc) are not third-party credentials — they're generated locally with `keytool -genkey -v -keystore upload-key.jks ...`. The keystore itself must never enter the repo.
+
 ## What To Finish Before Play Console Submission
 
 1. Register the Google Play developer account; verify identity (current Play policy requires government ID).
@@ -216,7 +277,7 @@ Rules:
 
 Before the first Internal Testing AAB upload:
 
-1. confirm GitHub secrets exist for `ANDROID_UPLOAD_KEYSTORE` (base64-encoded), `ANDROID_UPLOAD_KEYSTORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_KEY_PASSWORD`, `GOOGLE_PLAY_JSON_KEY` (Play Developer API service account), and `MAPBOX_ACCESS_TOKEN`
+1. confirm GitHub secrets exist for `ANDROID_UPLOAD_KEYSTORE` (base64-encoded), `ANDROID_UPLOAD_KEYSTORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_KEY_PASSWORD`, `GOOGLE_PLAY_JSON_KEY` (Play Developer API service account), `MAPBOX_DOWNLOADS_TOKEN` (secret `sk.…` token with `DOWNLOADS:READ` scope, drives Maven access at sync time), and `MAPBOX_ACCESS_TOKEN` (public `pk.…` token, drives runtime tile auth). See "Credentials You Personally Have To Create" above for the click-path to each.
 2. add `.github/workflows/android-internal.yml` mirroring `ios-testflight.yml`: builds the AAB, signs with the upload key, uploads to Internal Testing via the Play Developer API
 3. dry-run the workflow with upload disabled and confirm the AAB exists and is signed (`bundletool dump manifest --bundle app-release.aab`)
 4. enable upload and confirm the build appears in Play Console → Internal Testing
