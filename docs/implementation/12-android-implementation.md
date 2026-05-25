@@ -1,10 +1,30 @@
 # 12 — Android Implementation Plan
 
-*Last updated: 2026-04-27*
+*Last updated: 2026-05-08*
 
 Covers: Kotlin/Compose project layout, sensor pipeline port, foreground-service collection, Room persistence, upload pipeline, privacy zones, Mapbox Android, permissions/onboarding, shared-fixture testing, distribution.
 
 This doc plans the Android client described as backlog item B120 in [08-implementation-backlog.md](08-implementation-backlog.md). Android is explicitly post-iOS-MVP: do not start coding it until iOS has at least one stable calibration dataset and a clean run of the upload pipeline against staging Supabase.
+
+## Current implementation status
+
+The repo now contains an `android/` project with:
+
+- pure Kotlin `core-sensor` fixture replay against the same CSV corpus used by iOS
+- pure Kotlin `core-api` upload DTOs, endpoint helpers, retention, eligibility, retry policy, plus the `pothole-actions` and `feedback` request/response shapes with iOS JSON parity tests
+- Android `:app` module with Room persistence (9 entities), Retrofit/OkHttp `BackendClient` covering `upload-readings` + `pothole-actions` + `feedback`, foreground collection service, **production Compose Material 3 shell** (Map / Stats / Settings tabs, drive controls, manual pothole flow with 8s undo, in-app feedback queue, Settings → Delete local data, permissions ladder), unified `UploadDrainWorker` that drains readings + pothole actions + feedback on the same heartbeat, and backup disabled for local data
+- production permission ladder via `PermissionState` (fine location → activity recognition → notifications → background location), with API 30+ background routed to system Settings (Play Store policy)
+- optional release signing wired from `ANDROID_UPLOAD_*` env vars so a release machine can produce a Play-acceptable signed AAB without committing a keystore; CI keeps building without the env vars
+- CI entrypoint at `.github/workflows/android-ci.yml` (now also runs `:app:bundleStagingRelease` to catch signing-config + minification regressions) plus `scripts/check-android-fixture-parity.sh`
+- manual Play Internal Testing publish workflow at `.github/workflows/android-internal.yml` (gated on the `ANDROID_PUBLISH_ENABLED` repo variable so it never auto-uploads)
+- Play release checklist in [15-google-play-readiness.md](15-google-play-readiness.md)
+
+The implementation is ready for **internal Android collection beta validation**, not broad Play production. Remaining production-facing work is tracked in `.claude/tasks.md`:
+
+- real-device Pixel/Samsung drives, battery evidence, foreground-service survivability evidence, plus exercising the new manual pothole + feedback + delete-local-data flows
+- native Mapbox vector-tile + pothole overlay rendering. The Compose `MapHost` is now wired to swap a real Mapbox `MapView` in the moment `MAPBOX_DOWNLOADS_TOKEN` is provisioned at sync time; until then it falls back to a WebView pointing at the public web map so CI builds keep working without a private Maven credential
+- pothole *photo* capture (CameraX + photo upload). The action flow ships in beta; the photo upgrade is a follow-up
+- Play Console developer account + upload keystore offline-generated; the build wiring is done, only the operational steps remain
 
 ## Goals
 

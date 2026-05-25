@@ -1,0 +1,65 @@
+name: Android CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "android/**"
+      - "scripts/check-android-fixture-parity.sh"
+      - ".github/workflows/android-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "android/**"
+      - "scripts/check-android-fixture-parity.sh"
+      - ".github/workflows/android-ci.yml"
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Verify Android fixture parity
+        shell: bash
+        run: ./scripts/check-android-fixture-parity.sh
+
+      - name: Run Android JVM tests
+        shell: bash
+        run: |
+          cd android
+          ./gradlew test
+
+      - name: Build staging debug APK
+        shell: bash
+        run: |
+          cd android
+          ./gradlew :app:assembleStagingDebug
+
+      - name: Build staging release AAB
+        # Catches signing-config and minification regressions early without
+        # requiring an upload keystore — the release bundle falls back to the
+        # debug-signed AAB when ANDROID_UPLOAD_KEYSTORE_PATH is absent.
+        shell: bash
+        run: |
+          cd android
+          ./gradlew :app:bundleStagingRelease

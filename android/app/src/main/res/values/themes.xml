@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material3 themes are applied via Compose's MaterialTheme; this base is
+         only what activities inherit before setContent runs. -->
+    <style name="Theme.RoadSense" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

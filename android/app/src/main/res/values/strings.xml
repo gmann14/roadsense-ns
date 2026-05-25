@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- app_name is defined per flavor via resValue in build.gradle.kts so
+         the install can show "RoadSense NS Local" vs "RoadSense NS" the way
+         iOS xcconfig does via APP_DISPLAY_NAME. -->
+</resources>

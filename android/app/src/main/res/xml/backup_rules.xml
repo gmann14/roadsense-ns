@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  We exclude the Room database from Auto Backup so raw drive samples never
+  ride a cloud-backup channel. Same reasoning as iOS keeping the SwiftData
+  store under NSFileProtectionComplete: the readings are pseudonymous in
+  aggregate, but should not be exposed in a backup-restore flow.
+-->
+<full-backup-content>
+    <exclude domain="database" path="roadsense.db" />
+    <exclude domain="database" path="roadsense.db-shm" />
+    <exclude domain="database" path="roadsense.db-wal" />
+</full-backup-content>
