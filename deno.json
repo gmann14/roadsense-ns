@@ -1,0 +1,8 @@
+{
+  "tasks": {
+    "api:test": "deno test -A api/railway"
+  },
+  "fmt": {
+    "lineWidth": 120
+  }
+}

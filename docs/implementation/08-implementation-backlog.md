@@ -1,8 +1,8 @@
 # 08 — Implementation Backlog
 
-*Last updated: 2026-04-23*
+*Last updated: 2026-05-25*
 
-Covers: the literal execution backlog for implementing the spec set in [00](00-execution-plan.md) through [07](07-web-dashboard-implementation.md).
+Covers: the literal execution backlog for implementing the spec set in [00](00-execution-plan.md) through [07](07-web-dashboard-implementation.md), plus the Android follow-on spec in [11](11-android-implementation.md).
 
 This doc is deliberately task-shaped rather than explanatory. The goal is that a solo developer can work through it top to bottom without re-plioritizing the whole project every morning.
 
@@ -53,6 +53,20 @@ Post-MVP phases:
 9. Web dashboard backend additions
 10. Web dashboard frontend
 11. Quarterly operational procedures (OSM refresh rematch, etc.) — runs on a calendar, not a release
+12. Android project bootstrap and domain parity
+13. Android collection loop and persistence
+14. Android map/UI parity
+15. Android field testing and Play release
+
+## Cross-Cutting Data-Model Decision
+
+Distance, drive history, and public road quality are separate concepts:
+
+- **Drive distance** is local, odometer-style distance from plausible `CLLocation` deltas during an active automotive drive. Stop-and-go and `<15 km/h` movement count only after the session has passed the driving/automotive gate; walking, cycling, running, and unknown activity must not open a drive just because GPS speed is plausible.
+- **Quality readings** are uploadable roughness observations. Low-speed windows can be valid parts of a drive but are not reliable roughness measurements.
+- **Public mapped coverage** remains segment-based: it measures road segments with accepted/scored aggregate data, not how far one person drove.
+
+The implementation path below moves core `DriveSessionRecord` lifecycle and distance accounting into the MVP hardening path. The later "My Drives" feature keeps only the user-facing list/detail UI and richer history affordances.
 
 ## Phase 1 — Project And Environment Setup
 
@@ -143,6 +157,28 @@ Post-MVP phases:
   - no PK-race surfaces as 5xx
   - returned payload shape matches [03](03-api-contracts.md)
 
+### B013a — Path-aware upload metadata and segment matching hardening
+
+- **Spec refs:** [02](02-backend-implementation.md), [03](03-api-contracts.md)
+- **Depends on:** B011, B013
+- **Why now:** point-only matching is fragile near intersections, ramps, divided roads, and parallel streets. We still aggregate by server-owned road segment, but the matcher should use the shape and ordering of each observation window when clients provide it.
+- **Compatibility rule:** all new upload fields are optional. Existing point-only clients must keep working and must produce identical responses for the current contract tests.
+- **RED**
+  - Deno contract tests proving `/upload-readings` accepts both legacy point-only readings and new readings with `window_start_lat/lng`, `window_end_lat/lng`, `window_distance_m`, `duration_s`, and `sequence_index`
+  - pgTAP fixture where two parallel roads are within the distance threshold and heading/continuity selects the correct road
+  - pgTAP fixture where a window crosses a segment boundary and is assigned without double-counting the whole distance as one segment
+  - pgTAP fixture where low-speed observations are absent from upload but adjacent higher-speed windows still match continuously
+  - regression test proving existing `no_segment_match`, `unpaved`, duplicate replay, and aggregate-update behavior is unchanged for legacy batches
+- **GREEN**
+  - extend Edge Function validation to tolerate optional window metadata without requiring it
+  - stage optional start/end geometries and sequence order in `ingest_reading_batch`
+  - add a path-aware candidate scorer that considers distance, heading, optional window geometry overlap, and continuity with neighboring readings in the same batch
+  - retain the current nearest-point matcher as the fallback path when optional metadata is missing or unusable
+- **Acceptance**
+  - no existing upload, rejection-reason, idempotency, or aggregate tests regress
+  - ambiguous-road fixtures pick the intended segment without weakening the 20m max-distance safety guard
+  - matching diagnostics can count point-fallback vs path-aware matches for field-test review
+
 ### B014 — Incremental aggregate updates and pothole folding
 
 - **Spec refs:** [02](02-backend-implementation.md)
@@ -178,12 +214,13 @@ Post-MVP phases:
 - **Depends on:** B014
 - **RED**
   - Deno/contract tests for 200 vs 204 behavior, headers, and source layers
-  - SQL-level verification that low-confidence segments are excluded
+  - SQL-level verification that low-confidence scored segments are included in beta quality tiles and still carry `confidence = low`
 - **GREEN**
   - implement `get_tile`
   - implement tiles Edge Function
 - **Acceptance**
   - tile endpoint serves MVT with stable attributes and proper cache headers
+  - beta quality tiles show all scored segments while clients visually de-emphasize `confidence = low`
 
 ### B021 — Segment, potholes, stats, and health endpoints
 
@@ -290,20 +327,50 @@ Post-MVP phases:
   - app-hosted test can open a prior-schema store without data loss
 - **Current repo note:** `ModelContainerProvider`, `PrivacyZoneStore`, and `UploadQueueStore` now land this slice beyond just model definitions. Relauch persistence still needs app-target validation.
 
+### B039 — Drive session odometer and low-speed accounting
+
+- **Spec refs:** [01](01-ios-implementation.md), [03](03-api-contracts.md), [06](06-security-and-privacy.md)
+- **Depends on:** B033, B034
+- **Why now:** users expect stop-and-go traffic to count as part of a drive even when it is not reliable enough for roughness scoring. Distance stats should not depend on how many quality readings survive upload eligibility.
+- **RED**
+  - unit test: `DrivingDetector.events -> true` opens exactly one `DriveSessionRecord`, and `-> false` seals it idempotently
+  - unit test: plausible 0-15 km/h GPS deltas in stop-and-go traffic increase `totalDistanceM` only after an automotive session is active, and create no uploadable roughness reading
+  - unit test: bicycle-like GPS traces, including sustained 15-35 km/h movement with non-automotive or unknown motion activity, do not open a drive session and do not increase `totalKmRecorded`
+  - unit test: if Motion Activity is unavailable, GPS-only fallback requires a higher-confidence automotive signature than ordinary cycling: sustained higher speed and/or an already-open automotive session; 15-35 km/h alone is insufficient
+  - unit test: speeds `>160 km/h`, poor GPS accuracy, teleport jumps, and stale samples do not inflate `totalDistanceM`
+  - unit test: fully privacy-filtered drives preserve approximate local distance and `privacyFilteredCount`, while enqueuing no uploads
+  - unit test: stale in-progress drives (`>2h`) are force-sealed on foreground without losing counters
+  - migration test proving existing `ReadingRecord`, upload queue, token, and privacy-zone stores open after adding the drive-session schema
+  - simulator fixture replay for a stop-and-go drive: expected drive distance is within tolerance, accepted reading count is lower than movement windows, and pending upload count matches quality-eligible windows only
+- **GREEN**
+  - add MVP `DriveSessionRecord` SwiftData model with `startedAt`, `endedAt`, `totalDistanceM`, `readingCount`, `privacyFilteredCount`, `potholesDetected`, `uploadStatus`, start/end coordinates, and a deleted/local tombstone flag
+  - add optional relationship from `ReadingRecord` to its active drive session
+  - move `totalKmRecorded` updates from accepted-reading math to drive-session odometer accounting
+  - extend `SensorCoordinator` to maintain active drive state, odometer deltas, privacy-filtered counters, and stale-session cleanup
+  - treat `<15 km/h` windows as drive movement but `qualityIneligibleLowSpeed` for upload/roughness scoring only while an automotive drive session is active
+- **Acceptance**
+  - personal distance stats match plausible driven distance in stop-and-go fixtures
+  - a captured bike-ride fixture does not create a drive or contribute kilometres
+  - low-speed traffic no longer causes the app to appear as if it stopped tracking the drive
+  - upload batching and existing accepted-reading persistence behavior remain backward compatible
+
 ## Phase 5 — End-To-End Stub Loop
 
 ### B040 — Reading window assembly
 
 - **Spec refs:** [01](01-ios-implementation.md), [04](04-testing-and-quality.md)
-- **Depends on:** B033, B034
+- **Depends on:** B033, B034, B039
 - **RED**
-  - unit tests for windowing by distance/time
+  - unit tests for windowing by distance/time, including start/end coordinates and `window_distance_m`
+  - unit tests proving low-speed movement advances an already-active automotive drive but does not emit an uploadable roughness window
   - simulator harness fixture replay
 - **GREEN**
   - implement `ReadingBuilder`
-  - produce POINT reading payloads from sensor streams
+  - produce observation windows with midpoint, start/end coordinates, distance, duration, sample counts, and quality eligibility
+  - produce backward-compatible POINT reading payloads from eligible windows
 - **Acceptance**
   - app can generate uploadable reading batches from replayed fixtures
+  - app can account for drive distance from replayed fixtures even when no windows are uploadable
 - **Current repo note:** The app target now has a first `SensorCoordinator` that runs `ReadingBuilder` against live streams and persists accepted windows through `ReadingStore`. What remains is fixture replay, checkpoint persistence, and app-target validation.
 - **Current repo note:** `SensorCheckpoint` + `SensorCheckpointStore` now exist and the coordinator checkpoints every 60 seconds. What remains is fixture replay and app-target validation.
 - **Current repo note:** `SensorFixtureParser` + `SensorFixtureRunner` now exist in the pure Swift layer, the bootstrap suite auto-discovers checked-in `Fixtures/*.csv` + `Fixtures/*.expected.json` resources, and `RoadSenseNSSimHarness` now replays the same fixture pattern in a lightweight developer app. The deterministic fixture corpus now covers pothole, smooth-cruise, privacy-zone recovery, and thermal rejection scenarios. What remains is adding more captured-drive fixtures and keeping the harness target green in CI.
@@ -335,6 +402,25 @@ Post-MVP phases:
 - **Acceptance**
   - one real or replayed batch appears in `readings`, aggregates update, tile renders, app map can display it
 - **Current repo note:** The deterministic backend smoke layer is now in place: `./scripts/api-smoke.sh` and `./scripts/seeded-e2e-smoke.sh` run in backend CI, and the repo now includes `deploy-staging.yml` / `deploy-production.yml` for later hosted deploys. What still remains is the human drive/replay pass and, later, provisioning a shared hosted env if signed testers need one.
+
+### B043 — Production data hygiene gate before public map exposure
+
+- **Spec refs:** [03](03-api-contracts.md), [05](05-deployment-and-observability.md), [09](09-internal-field-test-pack.md)
+- **Depends on:** B020, B021, B042
+- **Why now:** a live Railway data review on 2026-05-11 found accepted production rows from `0.1.0-seed`, `codex-live-load/2026-04-28`, and `codex-rate-limit/2026-04-28`. The API and tile paths were healthy, but public confidence tiers and stats cannot be treated as launch-clean while synthetic/test batches contribute to aggregates.
+- **RED**
+  - read-only SQL report that fails if any synthetic/test `client_app_version` contributes rows to `readings`, `segment_aggregates`, `pothole_reports`, or `public_stats_mv`
+  - regression test or script guard proving `seeded-e2e-smoke.sh` refuses to run against production/shared publishable backends
+  - read-only endpoint smoke for `/functions/v1/stats`, quality tiles, and coverage tiles against production
+- **GREEN**
+  - add an explicit production data-hygiene script/query bundle under `scripts/`
+  - document the cleanup runbook for deleting synthetic batches and rebuilding derived aggregates/potholes/stats from remaining real readings
+  - ensure production deploy/release checklist calls only non-mutating smoke checks
+- **Acceptance**
+  - production contains no accepted synthetic/test readings that influence public stats or tiles
+  - `segment_aggregates` and `public_stats_mv` have been recomputed/refreshed after cleanup
+  - publishable quality tiles still return non-empty MVT for known populated real-data tiles
+  - active pothole counts are explainable from real app builds only
 
 ## Phase 6 — Scoring, Privacy, And Publishability
 
@@ -371,15 +457,16 @@ Post-MVP phases:
 ### B052 — Quality filters and uploader hardening
 
 - **Spec refs:** [01](01-ios-implementation.md), [03](03-api-contracts.md)
-- **Depends on:** B041, B050
+- **Depends on:** B039, B041, B050
 - **RED**
-  - truth-table tests for GPS accuracy, speed, thermal, and activity gates
+  - truth-table tests for GPS accuracy, speed, thermal, activity gates, and the distinction between drive-distance eligibility and upload/roughness eligibility
   - retry tests for network failure, 429, and permanent 400
 - **GREEN**
   - implement `QualityFilter`
   - finish uploader backoff and permanent-failure handling
 - **Acceptance**
   - app behaves exactly per documented retry rules
+  - `<15 km/h` movement is retained in local drive stats only inside an active automotive drive and is never used to score roughness unless a future calibrated low-speed model explicitly enables it
 
 ### B053 — Mapbox map and segment detail UI
 
@@ -739,7 +826,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp), [03](03-api-contracts.md)
 - **Depends on:** B010-range backend foundation, B074
-- **Status:** implemented. `POST /pothole-photos`, the `pothole_photos` schema, rate-limit isolation, signed-upload reissue semantics, and cron-based promotion to `pending_moderation` are live. The current build also persists `segment_id` from iOS, treats already-stored pending objects as `409 already_uploaded`, issues single-write signed upload URLs with `upsert: false`, and aligns the docs/tests with metadata-consistency checks instead of a nonexistent Storage-side `Content-SHA256` verification step.
+- **Status:** implemented. `POST /pothole-photos`, the `pothole_photos` schema, rate-limit isolation, signed-upload reissue semantics, and upload promotion to `pending_moderation` are live. The current build also persists `segment_id` from iOS, treats already-stored pending objects as `409 already_uploaded`, issues single-write signed upload URLs, and aligns the docs/tests with metadata-consistency checks instead of a nonexistent Storage-side `Content-SHA256` verification step. The Railway production API now serves this route directly instead of returning `404`.
 - **RED**
   - preview-project end-to-end smoke for real signed PUT upload, retry after interrupted metadata/PUT split, and cron/webhook promotion to `pending_moderation`
 - **GREEN**
@@ -747,7 +834,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
   - Edge Function `pothole-photos/index.ts` issuing signed PUT URLs and idempotent reissue before upload completes
   - Storage bucket provisioning with byte-size + content-type restrictions
   - Storage webhook or cron that promotes uploaded objects from `pending/` to `pending_moderation/`
-- **Current repo note:** pgTAP, Deno, and targeted iOS tests now cover the local contract; the remaining gap is a live preview-environment Storage smoke.
+- **Current repo note:** pgTAP, Deno, and targeted iOS tests cover the local contract. A controlled Railway production smoke on 2026-05-13 verified metadata creation plus signed `PUT` to `pending_moderation`; the synthetic row was cleaned up afterward. A disposable preview-project Supabase Storage smoke remains useful before relying on the Supabase Edge deployment shape.
 - **Acceptance**
   - E2E contract tests pass against a preview Supabase project
   - a timed-out PUT followed by retry creates one server row and eventually lands in `pending_moderation`
@@ -756,7 +843,7 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 - **Spec refs:** [02](02-backend-implementation.md#pothole-photo-moderation-post-mvp)
 - **Depends on:** B077
-- **Status:** implemented. The backend now has `approve_pothole_photo()` / `reject_pothole_photo()` procedures, the `moderation_pothole_photo_queue` view, internal signed-image preview, internal moderation actions that move/delete Storage objects, and pothole fold-in on approval. The current build also adds rollback if a Storage move succeeds but the approval RPC fails, reject-before-delete ordering, `security_invoker` on the moderation queue view, and a geography index for the approval-path nearby lookup.
+- **Status:** implemented. The backend now has `approve_pothole_photo()` / `reject_pothole_photo()` procedures, the `moderation_pothole_photo_queue` view, internal signed-image preview, internal moderation actions that move/delete stored photo objects, and pothole fold-in on approval. The current build also adds rollback if a Storage move succeeds but the approval RPC fails, reject-before-delete ordering, `security_invoker` on the moderation queue view, expiring Railway preview URLs for stored blobs, and a geography index for the approval-path nearby lookup.
 - **RED**
   - preview-project moderation smoke verifying real Storage move/delete behavior plus published-map visibility after approval
 - **GREEN**
@@ -769,20 +856,20 @@ These tasks finish the background-upload loop that today is partially stubbed. T
 
 ## Phase 11c — My Drives list (post-MVP feature)
 
-### B076 — DriveSession persistence and lifecycle
+### B076 — My Drives history polish
 
 - **Spec refs:** [01](01-ios-implementation.md#my-drives-list-post-mvp)
-- **Depends on:** B070
+- **Depends on:** B039, B070
 - **RED**
-  - unit test: `DrivingDetector.events -> true` creates a `DriveSessionRecord`, `-> false` seals it
-  - unit test: stale in-progress drives (> 2h open) are force-sealed on foreground
-  - unit test: a fully-privacy-filtered drive has `readingCount == 0 && privacyFilteredCount > 0`
+  - unit tests for retained drive summaries after uploaded readings are pruned
+  - unit tests for local delete tombstones and upload-status rollups
+  - unit test: a fully-privacy-filtered drive summary stays approximate and never exposes a precise route
 - **GREEN**
-  - add `DriveSessionRecord` SwiftData model, relationship on `ReadingRecord`
-  - extend `SensorCoordinator` to stamp readings with the active drive
-  - add foreground-cleanup pass for stale drives
+  - extend the MVP drive-session model with any UI-only summary fields needed by the list/detail screens
+  - preserve counters after uploaded `ReadingRecord` rows age out
+  - add local-only delete/tombstone behavior for drive history rows
 - **Acceptance**
-  - a simulated drive produces exactly one `DriveSessionRecord` with accurate distance and counters
+  - drive-history UI can be built without changing the upload contract or server persistence model
 
 ### B077 — Drives list and detail UI
 
@@ -821,6 +908,207 @@ These tasks ship **after** MVP TestFlight launch. They exist on a quarterly cade
   - quarterly refresh completes inside its documented operational budget on production-scale data
   - `/stats` and the quality map reflect the post-refresh world within one nightly cycle
 
+## Phase 12 - Android Project Bootstrap And Domain Parity
+
+Start only after the iOS/TestFlight MVP is live or intentionally paused. The Android source of truth is [11-android-implementation.md](11-android-implementation.md). Android must reuse [03-api-contracts.md](03-api-contracts.md) as-is.
+
+### B200 - Android Gradle scaffold
+
+- **Spec refs:** [11](11-android-implementation.md)
+- **Depends on:** iOS MVP live or intentionally paused
+- **RED**
+  - CI/manual command fails because `android/` does not exist
+  - document expected package ID and build variants in `android/README.md`
+- **GREEN**
+  - create `android/` Gradle Kotlin DSL project
+  - add `:app`, `:core:domain`, and `:core:testfixtures`
+  - configure Compose, Kotlin, Android Gradle Plugin, version catalog, and base build variants
+  - add empty `RoadSenseApplication`, `MainActivity`, and manual `AppGraph`
+- **Acceptance**
+  - `./gradlew :app:assembleLocalDebug` succeeds
+  - package ID is `ca.roadsense.android`
+  - app launches to a placeholder Compose shell
+
+### B201 - Port pure domain pipeline to Kotlin
+
+- **Spec refs:** [01](01-ios-implementation.md), [04](04-testing-and-quality.md), [11](11-android-implementation.md)
+- **Depends on:** B200
+- **RED**
+  - add shared fixture tests for pothole hit, smooth cruise, privacy-zone recovery, and thermal rejection
+  - tests fail against empty Kotlin pipeline
+- **GREEN**
+  - port `MotionMath`, `HighPassBiquad`, `DrivingHeuristic`, `QualityFilter`, `PrivacyZoneFilter`, `ReadingBuilder`, `ReadingWindowProcessor`, `PotholeDetector`, `UploadPolicy`, request/response parsers, and endpoint trimming
+  - keep these components Android-framework-free under `:core:domain`
+- **Acceptance**
+  - JVM fixture tests pass
+  - roughness outputs match iOS fixture expectations within the tolerance in [11](11-android-implementation.md)
+  - no Android framework imports appear in `:core:domain`
+
+### B202 - Android permission and readiness state machine
+
+- **Spec refs:** [06](06-security-and-privacy.md), [11](11-android-implementation.md)
+- **Depends on:** B200
+- **RED**
+  - unit tests enumerate fine denied, approximate-only, background denied, activity recognition denied, notifications denied, and ready states
+- **GREEN**
+  - implement permission repository/checker
+  - add onboarding and repair UI copy for each degraded state
+  - gate passive monitoring on precise fine location, activity recognition, notifications where required, and background location
+- **Acceptance**
+  - approximate location cannot enter uploadable collection state
+  - foreground-only mode is explicit when background location is denied
+  - settings repair actions route to the correct Android settings screens
+
+## Phase 13 - Android Collection Loop And Persistence
+
+### B210 - Room schema and local stores
+
+- **Spec refs:** [11](11-android-implementation.md)
+- **Depends on:** B201
+- **RED**
+  - Room migration/schema tests fail for missing entities
+  - DAO tests describe pending upload, successful upload, delete-local-data, and retention cleanup behavior
+- **GREEN**
+  - implement Room entities for readings, upload batches, privacy zones, user stats, device token, drive sessions, checkpoints, pothole actions, and photos
+  - implement DataStore settings/token metadata
+  - set `android:allowBackup="false"`
+- **Acceptance**
+  - Room schema export is checked in
+  - local data retention can delete oldest processed readings without deleting privacy zones
+  - delete-local-data matches iOS behavior
+
+### B211 - Upload queue and WorkManager drain
+
+- **Spec refs:** [03](03-api-contracts.md), [11](11-android-implementation.md)
+- **Depends on:** B210
+- **RED**
+  - tests for idempotent `batch_id`, retry backoff, 429 `Retry-After`, permanent 400, and max 1000 readings
+- **GREEN**
+  - implement Retrofit/OkHttp API client
+  - implement upload request factory/parser
+  - implement `UploadDrainWorker` as unique WorkManager work with network constraint
+  - implement retention cleanup worker
+- **Acceptance**
+  - Android emits the same upload JSON shape as [03](03-api-contracts.md)
+  - network/5xx retries reuse the same `batch_id`
+  - permanent failures surface in Settings
+
+### B212 - Activity recognition and foreground collection service
+
+- **Spec refs:** [11](11-android-implementation.md)
+- **Depends on:** B202, B210
+- **RED**
+  - service policy tests cover background-location denied, user paused, thermal serious/critical, and notification action states
+  - fake activity transition test proves `IN_VEHICLE` enter starts collection only when readiness permits
+- **GREEN**
+  - register Activity Recognition Transition API for `IN_VEHICLE` enter/exit
+  - implement `CollectionForegroundService` with `location` foreground-service type
+  - add persistent notification with Pause and Stop actions
+  - implement checkpoint persistence every 60 seconds
+- **Acceptance**
+  - active background collection never runs without a visible notification
+  - service stops or pauses on permission revoke, user pause, driving exit, or serious thermal state
+  - service does not use WorkManager for active sensor collection
+
+### B213 - Android location and motion sampler integration
+
+- **Spec refs:** [11](11-android-implementation.md)
+- **Depends on:** B212, B201
+- **RED**
+  - fake sampler integration test feeds 50 Hz motion + 1 Hz location into the real pipeline and expects persisted readings
+- **GREEN**
+  - wrap `FusedLocationProviderClient`
+  - wrap `SensorManager` for linear acceleration, rotation vector, and fallback gravity/accelerometer path
+  - integrate `SensorCoordinator` with Room stores and upload scheduling
+- **Acceptance**
+  - foreground drive on a real device persists accepted local readings
+  - low-speed movement counts only as local drive distance after an active in-vehicle session starts
+  - privacy-zone and endpoint trimming happen before upload
+
+## Phase 14 - Android Map/UI Parity
+
+### B220 - Mapbox Android quality map
+
+- **Spec refs:** [03](03-api-contracts.md), [11](11-android-implementation.md)
+- **Depends on:** B211
+- **RED**
+  - UI tests cover map shell fallback states without requiring Mapbox startup
+  - style config test asserts source-layer names match `segment_aggregates` and `potholes`
+- **GREEN**
+  - integrate Mapbox Maps SDK for Android
+  - add vector tile source for `/tiles/{z}/{x}/{y}.mvt`
+  - render category/confidence styling and pothole markers
+  - render local unuploaded readings as dashed teal overlay
+  - support segment tap -> `GET /segments/{id}` -> detail sheet
+- **Acceptance**
+  - staging map renders community tiles and local overlay on device
+  - low-confidence styling is visually distinct
+  - segment detail handles empty `history` and null `neighbors`
+
+### B221 - Android product surfaces
+
+- **Spec refs:** [11](11-android-implementation.md), [design tokens](../design-tokens.md)
+- **Depends on:** B202, B210, B220
+- **RED**
+  - Compose tests for onboarding/repair, map shell, stats, settings, privacy zones, delete-local-data
+- **GREEN**
+  - implement onboarding and permission repair screens
+  - implement stats/settings/privacy-zone editor
+  - use shared design tokens for roughness colors and UI theme
+  - expose passive monitoring toggle, upload drain, and delete-local-data actions
+- **Acceptance**
+  - user can recover from every degraded permission state
+  - privacy-zone editor stores offset centers only
+  - UI remains usable at large font scale
+
+### B222 - Android pothole actions and photos
+
+- **Spec refs:** [03](03-api-contracts.md), [11](11-android-implementation.md)
+- **Depends on:** B211, B221
+- **RED**
+  - tests for manual report idempotency, undo window, privacy-zone rejection, photo metadata POST, signed URL reissue, and 409 already-uploaded handling
+- **GREEN**
+  - implement `POST /pothole-actions` queue/uploader
+  - add manual `Mark pothole` action
+  - add CameraX photo capture and signed upload only after passive loop is stable
+- **Acceptance**
+  - actions drain before photos before passive readings
+  - photo bytes are deleted locally only after confirmed upload success
+  - Android request body matches [03](03-api-contracts.md)
+
+## Phase 15 - Android Field Testing And Play Release
+
+### B230 - Android real-device field pack
+
+- **Spec refs:** [09](09-internal-field-test-pack.md), [11](11-android-implementation.md)
+- **Depends on:** B213, B220, B221
+- **RED**
+  - field-test checklist exists for Pixel, Samsung, and one older Android device if available
+- **GREEN**
+  - run foreground-only drive, passive background drive, offline-to-online upload, privacy-zone drive-through, battery-saver drive, and long-drive thermal observation
+  - capture battery drain, collection continuity, accepted/rejected counts, and map render evidence
+- **Acceptance**
+  - 1 hour of Android driving uploads successfully on 2+ Android devices
+  - battery drain is below the [11](11-android-implementation.md) release threshold
+  - no privacy-filtered or endpoint-trimmed readings reach staging/prod
+
+### B231 - Play internal/closed testing readiness
+
+- **Spec refs:** [11](11-android-implementation.md)
+- **Depends on:** B230
+- **RED**
+  - release checklist identifies missing Play Console, data safety, signing, background-location declaration, and developer-verification items
+- **GREEN**
+  - create Play app record and internal testing track
+  - configure Play App Signing
+  - complete Data Safety form based on actual implementation
+  - prepare background-location demo video and disclosure copy
+  - add Android release workflow/manual build command
+- **Acceptance**
+  - signed `stagingRelease` build is available through Play Internal Testing
+  - background location declaration accurately reflects foreground-service behavior
+  - Android release notes include known limitations and battery guidance
+
 ## Suggested PR Slicing
 
 Keep changes narrow. A good slicing strategy:
@@ -837,6 +1125,10 @@ Keep changes narrow. A good slicing strategy:
 10. observability + release polish
 11. web backend additions only
 12. web frontend vertical slices
+13. Android Gradle/domain scaffold only
+14. Android collection/persistence only
+15. Android map/UI only
+16. Android Play release polish only
 
 ## Hard Stop Rules
 
@@ -847,5 +1139,8 @@ Stop and reassess if:
 - nightly recompute exceeds its documented operational budget
 - Coverage mode or `Worst Roads` requires raw-reading exposure to feel useful
 - App Store privacy answers no longer match actual data flow
+- Android requires an API contract change that would break iOS
+- Android background collection cannot run with a visible foreground service and documented permissions
+- Android fixture roughness output diverges from iOS beyond the tolerance in [11](11-android-implementation.md)
 
 These are architecture warnings, not "keep pushing harder" tasks.

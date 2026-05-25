@@ -514,7 +514,7 @@ This already returns:
 - unique_contributors
 - pothole_count
 
-It is **not** sufficient for coverage mode because it hides low-confidence and unscored roads.
+It is **not** sufficient for coverage mode because it only shows scored roads. Beta quality mode should include low-confidence scored roads, but coverage mode is still needed to show unscored roads and broader collection progress.
 
 ### New contract: `GET /tiles/coverage/{z}/{x}/{y}.mvt`
 

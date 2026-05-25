@@ -19,6 +19,7 @@ These docs translate [product-spec.md](../product-spec.md) into concrete, action
 | 08 | [Implementation Backlog](08-implementation-backlog.md) | Literal task order, dependencies, red/green plan, and acceptance criteria |
 | 09 | [Internal Field-Test Pack](09-internal-field-test-pack.md) | Operational checklist for signed-device dogfooding and evidence capture |
 | 10 | [App Store & TestFlight Readiness](10-app-store-and-testflight-readiness.md) | App Store Connect fields, privacy labels, reviewer notes, and release checklists |
+| 11 | [Android Implementation](11-android-implementation.md) | Kotlin Android follow-on client: permissions, foreground collection, sensors, Room, Mapbox, Play testing |
 
 ## Conventions Used Across Specs
 
@@ -33,7 +34,7 @@ If you are starting implementation rather than reviewing architecture, read [08-
 
 These are real product needs, but punted past MVP launch to keep the critical path short:
 
-- Android client (product-spec Phase 6)
+- Android client is deferred from the iOS/TestFlight MVP, but the implementation handoff spec now lives in [11-android-implementation.md](11-android-implementation.md)
 - Web dashboard implementation deferred from MVP launch, but now specified in [07-web-dashboard-implementation.md](07-web-dashboard-implementation.md)
 - iOS DeviceCheck attestation — wait until abuse is a real problem
 - Gamification (leaderboards, badges)

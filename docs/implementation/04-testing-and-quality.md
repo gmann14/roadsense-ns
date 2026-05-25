@@ -1,6 +1,6 @@
 # 04 — Testing & Quality
 
-*Last updated: 2026-04-23*
+*Last updated: 2026-05-25*
 
 How we verify each part of the system works, stays working, and that the roughness data we publish is trustworthy. Sensor apps fail in subtle ways (small drift, bad in edge cases, fine in simulator); this doc is biased toward catching those failures.
 
@@ -38,10 +38,11 @@ Generated-project note:
 | `RoughnessScorer` | Deterministic scoring of canned signals (synthetic sine, step, real CSV clip). Asserts RMS within ±0.02g of expected. |
 | `PotholeDetector` | Synthetic dip-then-spike, synthetic braking (should NOT trigger), real pothole CSV (should trigger). |
 | `PrivacyZoneFilter` | Point in zone, point at boundary, point outside, multiple overlapping zones. |
+| `DriveSessionStore` / odometer accounting | drive start/seal idempotency, stop-and-go `<15 km/h` distance counted locally only inside an active automotive session, bicycle/walking/unknown activity does not open a drive, teleport / poor-accuracy / impossible-speed deltas ignored, fully privacy-filtered drive counters preserved, stale in-progress drive cleanup. |
 | `DriveEndpointTrimmer` | Prefix/suffix time trimming, start/end radius trimming, overlap of both rules, short-drive fully-trimmed behavior, and deterministic recovery after relaunch from persisted session endpoints. |
 | `ManualPotholeLocator` | chooses the buffered location nearest `tapTimestamp - 0.75s`, falls back to `latestSample`, rejects stale/poor-accuracy state, and preserves deterministic behavior around sparse GPS samples. |
-| `QualityFilter` | Speed, GPS accuracy, thermal state combinations — truth table. |
-| `ReadingBuilder` | Window closes at 50m, window aborts at > 15s, window discards at thermal.serious. |
+| `QualityFilter` | Speed, GPS accuracy, thermal state combinations, with separate verdicts for drive-distance eligibility vs upload/roughness eligibility. |
+| `ReadingBuilder` | Window closes at 50m, emits midpoint + start/end + distance metadata, window aborts at > 15s, low-speed movement advances an already-active automotive drive but emits no uploadable roughness window, window discards at thermal.serious. |
 | `Uploader` | Retry backoff scheduling (inject clock), idempotency (same batch_id on retry), 429 respects Retry-After, batch_size cap, `.inFlight` crash recovery, and `drainUntilBlocked()` stopping on `nextAttemptAt`. |
 | `UploadDrainCoordinator` | Foreground + BG triggers collapse to one active drain; cancellation clears active task; drain order runs pothole actions before photos before readings. |
 | `PotholeActionUploader` | 5-second undo window, dedupe of repeated taps within 20m / 8s, idempotent retry on `action_id`, `409 stale_target` handling for follow-up, privacy-zone rejection before enqueue, and refusal to discard expired pending-undo rows after the window has closed. |
@@ -71,8 +72,8 @@ Tests live in `supabase/tests/`. Use `pgTAP` (Postgres test framework). Run in C
 
 | Module | Coverage |
 |---|---|
-| `ingest_reading_batch` | Happy path, duplicate batch returns the same result, concurrent duplicate retry on the same `batch_id` returns a clean duplicate response rather than a PK-violation 502, and batches with no matches / out-of-bounds readings are counted correctly. |
-| Map-matching KNN query | Known point on known segment → correct segment_id. Known point between parallel roads → correct disambiguation by heading. |
+| `ingest_reading_batch` | Happy path, duplicate batch returns the same result, concurrent duplicate retry on the same `batch_id` returns a clean duplicate response rather than a PK-violation 502, and batches with no matches / out-of-bounds readings are counted correctly. Legacy point-only batches remain covered after path-aware matching lands. |
+| Map-matching query | Known point on known segment → correct segment_id. Known point between parallel roads → correct disambiguation by heading. Optional window metadata improves ambiguous matches without weakening max-distance rejection. Segment-boundary windows do not double-count as one full segment. |
 | `update_segment_aggregates_from_batch` | Weighted average math, confidence tier thresholds, category boundaries. |
 | `nightly_recompute_aggregates` | Outlier trimming correctness, recency weighting, trend detection (improving/worsening/stable). |
 | `fold_pothole_candidates` | New pothole, confirmation of existing, too-far-away creates new. |
@@ -86,11 +87,44 @@ Tests live in `supabase/tests/`. Use `pgTAP` (Postgres test framework). Run in C
 
 **Avoid:** Testing via anon-key only — some tests need service-role; mark those clearly.
 
+### Android
+
+Android follow-on testing is specified in detail in [11-android-implementation.md](11-android-implementation.md). The short version: keep the roughness/privacy/upload pipeline in pure Kotlin and verify it with the same fixture corpus as iOS before wiring Android framework services around it.
+
+**What gets unit-tested (non-exhaustive):**
+
+| Module | Coverage |
+|---|---|
+| `MotionMath` / orientation projection | Android rotation-vector path, gravity fallback path, unit conversion to g |
+| `HighPassBiquad` / `ReadingWindowProcessor` | same canned signals and CSV fixtures as iOS |
+| `QualityFilter` | speed, GPS accuracy, thermal, approximate-location blocked state |
+| `PrivacyZoneFilter` / endpoint trimmer | same zone and drive-end trimming expectations as iOS |
+| `UploadPolicy` / request parser | retry, idempotency, 429, 400 permanent failure, max batch size |
+| `DeviceTokenManager` | monthly rotation and persistence through DataStore |
+| `PermissionReadiness` | fine denied, approximate only, background denied, activity recognition denied, notifications denied, ready |
+
+**Android integration coverage:**
+
+- Room schema/migration tests and DAO behavior
+- WorkManager unique upload drain behavior
+- foreground-service notification actions
+- Activity Recognition transition receiver policy with fake transition events
+- Mapbox-free Compose UI smoke tests for onboarding, map shell, stats, settings, privacy zones, and delete-local-data
+
+**Real-device Android coverage before closed testing:**
+
+- Pixel 7-class or newer
+- Samsung Galaxy S/A-series
+- one older Android 10/11 device if available
+
+Do not let Android emulator tests stand in for field validation. The release gate is real motion, real location, a real foreground service, and a measured battery run.
+
 ### Edge Functions
 
 Tests live in `supabase/functions/<fn>/test.ts`. Use Deno's built-in `Deno.test` + `supabase start` for a local stack.
 
 - Contract tests per endpoint: valid payload → 200, malformed payload → 400 with exact field_errors, all-soft-rejected payload → 200 with populated `rejected_reasons`
+- Upload compatibility tests: `/upload-readings` accepts legacy point-only readings and readings with optional observation-window metadata; malformed optional metadata falls back or validates without changing required-field behavior.
 - Rate limit test: 51st request in 24h → 429 with Retry-After
 - `POST /pothole-actions`: duplicate `action_id` is idempotent, same-device repeats within 24h do not inflate counters, `confirm_fixed` does not resolve on one vote, second distinct fixed vote resolves, and a later positive confirmation re-activates the same pothole
 - `POST /pothole-photos`: repeat POST while `pending_upload` returns a fresh signed URL, 409 after completed upload, and mismatched metadata (`sha256` / size / content type) on the same `report_id` is rejected
@@ -188,7 +222,7 @@ timestamp,type,value1,value2,value3,value4,value5
 `type=accel`: `value1=x, value2=y, value3=z` (raw `userAcceleration` in G's; value4/value5 empty)
 `type=gravity`: `value1=x, value2=y, value3=z` (gravity vector in G's; value4/value5 empty)
 `type=thermal`: `value1=state` (0=nominal, 1=fair, 2=serious, 3=critical; value2..5 empty) — synthesize these in tests to exercise thermal throttling
-`type=activity`: `value1=automotive|stationary|walking|unknown` (value2..5 empty) — drives the Motion-activity gate
+`type=activity`: `value1=automotive|stationary|walking|cycling|running|unknown` (value2..5 empty) — drives the Motion-activity gate
 
 Timestamps must be strictly monotonic. Fixture files are UTF-8, LF line endings, no BOM, no trailing comma. The harness rejects files that violate any of these.
 
@@ -203,6 +237,7 @@ Commit these to the repo (small — ~1MB each):
 - `speed-bump.csv` — 30s approach+cross of a known speed bump
 - `rail-crossing.csv` — 30s approach+cross of a known rail crossing
 - `stopped-at-light.csv` — 5 min with multiple stops
+- `bike-ride.csv` — sustained 15–35 km/h cycling trace that must not create a drive or count kilometres
 - `pocket-orientation.csv` — recorded with phone in pocket (orientation test)
 - `mount-orientation.csv` — recorded with phone dash-mounted
 - `low-gps-urban.csv` — downtown Halifax with known GPS dropouts
@@ -223,6 +258,21 @@ Each fixture has an accompanying `.expected.json` with the assertion targets:
 CI runs the harness against every fixture on every PR.
 
 For `home-endpoints.csv`, `.expected.json` must also assert `trimmed_prefix_count`, `trimmed_suffix_count`, and `eligible_upload_count` so endpoint privacy is regression-tested, not just documented.
+
+### Drive-Session Stress Matrix
+
+Before implementing or shipping B039, every row below needs either a unit test, harness fixture, or field-test note:
+
+| Scenario | Expected Result |
+|---|---|
+| Urban stop-and-go after `automotive` activity starts | One drive remains open; plausible low-speed distance counts locally; no low-speed roughness windows upload. |
+| Bike ride with sustained 15-35 km/h | No drive session; no kilometres; no upload queue entries. |
+| Motion denied/unavailable plus 15-35 km/h GPS movement | No passive drive start from speed alone. |
+| Motion denied/unavailable plus clearly automotive-speed movement | Either no passive start for MVP, or a separately tested conservative fallback; never infer from 15 km/h threshold alone. |
+| Car parks, then user walks away with phone | Drive seals on non-automotive/walking activity; walking distance does not add to drive total. |
+| Drive-through / parking lot after active automotive session | Plausible distance can count locally; quality windows remain ineligible if speed is too low; endpoint trimming can still suppress upload near destination. |
+| GPS jump / tunnel recovery / urban canyon | Implausible deltas and poor-accuracy samples do not inflate `totalDistanceM`; quality window resets. |
+| System termination mid-drive | Stale in-progress session force-seals without creating a second active drive or losing counters already persisted. |
 
 Current repo note:
 

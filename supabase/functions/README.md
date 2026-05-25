@@ -10,6 +10,10 @@ Planned initial functions:
 - `potholes`
 - `stats`
 - `health`
+- `pothole-actions`
+- `pothole-photos`
+- `pothole-photo-image`
+- `pothole-photo-moderation`
 
 Phase-2 web additions:
 
@@ -38,6 +42,19 @@ Implemented so far:
 - `segments-worst`
   - validates `limit` and municipality display names, then reads the ranked `public_worst_segments_mv`
   - returns the public `Worst Roads` report contract with a 15-minute cache header
+- `pothole-actions`
+  - validates manual pothole, still-there, and looks-fixed actions before dispatching to `apply_pothole_action`
+- `pothole-photos`
+  - creates idempotent photo metadata rows and issues opaque signed upload URLs for the exact JPEG bytes
+- `pothole-photo-image`
+  - internal moderation helper that returns short-lived signed preview URLs for pending/approved photos
+- `pothole-photo-moderation`
+  - internal approve/reject helper that coordinates stored object state with the SQL moderation procedures
+
+Railway production note:
+
+- `api/railway/` hosts the same public `/functions/v1/*` route shape for the current Railway deployment.
+- Railway photo uploads use an API-local signed `PUT` URL and private `pothole_photo_blobs` storage while preserving the same `pothole_photos` state model.
 
 Local development note:
 

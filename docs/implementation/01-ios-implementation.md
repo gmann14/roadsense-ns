@@ -315,35 +315,58 @@ a2 = 1 - α            ≈ 0.9556
 
 Normalize by dividing `b0..b2, a1, a2` by `a0` before use. Unit-test the filter against a 0.1Hz sine (should attenuate ~40dB) and a 5Hz sine (should pass unchanged). Battery-saver mode recomputes for 25Hz.
 
-### Reading Window Assembly
+### Drive Distance And Observation Window Assembly
 
-We don't upload 50Hz accel. We bucket into ~50m of travel and compute one RMS per bucket.
+Drive tracking and road-quality scoring are intentionally separate.
+
+- The active `DriveSessionRecord` tracks odometer-style distance from plausible `CLLocation` deltas while an automotive drive is active.
+- Stop-and-go movement and `<15 km/h` movement count toward the local drive distance only after the app has already entered an automotive drive session.
+- Cycling, walking, running, and unknown activity must not open a drive just because GPS movement is plausible.
+- Low-speed movement is not used for roughness scoring in MVP because acceleration RMS is speed-sensitive and unreliable there.
+- Uploadable quality readings are derived from eligible observation windows; drive distance is not derived from accepted upload readings.
+
+Drive start gate:
+
+- Preferred signal: `CMMotionActivity.automotive == true && stationary != true`.
+- GPS-only fallback is allowed only when Motion Activity is unavailable or denied, and it must be conservative enough not to classify a normal bike ride as driving. Sustained 15-35 km/h movement alone is not sufficient evidence.
+- Once an automotive drive is active, slow/stopped intervals keep the drive open until the detector emits a non-driving event or the stale-session cleanup closes it.
+
+We don't upload 50Hz accel. We bucket eligible movement into ~50m observation windows and compute one RMS per bucket.
 
 - Track cumulative haversine distance from the last "window start" location
 - When cumulative ≥ 40m (undershoot — server segments are 50m; targeting 40m keeps 95%+ of midpoints unambiguous to one segment): close window
-- Window output: `{lat, lng, roughness_rms, speed_kmh, heading, gps_accuracy_m, started_at, duration_s, sample_count, pothole_spike_count, pothole_max_g}`
+- Window output: `{lat, lng, window_start_lat, window_start_lng, window_end_lat, window_end_lng, window_distance_m, roughness_rms, speed_kmh, heading, gps_accuracy_m, started_at, duration_s, sample_count, pothole_spike_count, pothole_max_g, sequence_index, quality_eligibility}`
 - Location reported is the **midpoint** of the window (to reduce edge-of-segment ambiguity for the server matcher)
+- Start/end coordinates and `window_distance_m` are retained locally and sent as optional upload metadata by new clients so the server can do path-aware matching
 - `heading` averaged across GPS samples in the window, weighted by instantaneous speed
 
 **Window abort conditions** — drop the window (do not emit) if any:
-- Duration exceeds 15s (stopped at a light; stale data)
+- Duration exceeds 15s while trying to form a quality window
 - No GPS update received in 3s while accel is still streaming (GPS dropout; coordinate uncertainty too high)
 - `CLLocation.horizontalAccuracy > 20m` on any sample in the window
 - Heading variance across samples > 60° (user turned mid-window; spans multiple segments)
 - Fewer than 30 accel samples collected in the window (hardware hiccup)
 
-On any abort, reset the window and continue with the next GPS fix as the new start point.
+On any abort, reset the quality window and continue with the next GPS fix as the new start point. Do **not** close the drive session just because the quality window aborted.
+
+Low-speed behavior:
+
+- `0 < speed_kmh < 15`: update the active drive odometer if an automotive drive is already active and the GPS delta is plausible, but mark the window `qualityIneligibleLowSpeed` and do not enqueue it for roughness upload.
+- `speed_kmh == 0`: keep the drive session open, do not increase distance, and do not emit a quality reading.
+- Once speed rises back into the eligible range, start a fresh quality window; do not stitch stopped/low-speed time into the next RMS bucket.
 
 ### Quality Gates (per reading, before store/upload)
 
 Drop if any:
 
 - `gps_accuracy_m > 20`
-- `speed_kmh < 15` or `speed_kmh > 160`
+- `speed_kmh > 160`
 - `sample_count < 30` (would be < 0.6s of accel — probably a glitch)
 - `duration_s > 15`
 - Any `ProcessInfo.thermalState` of `.serious` or `.critical` during the window → drop the window, stop collection
 - `ProcessInfo.isLowPowerModeEnabled` does NOT drop readings — it switches us to reduced-sampling mode instead (see below)
+
+`speed_kmh < 15` is not a drive rejection inside an already-active automotive session. It is an upload/roughness ineligibility reason for MVP. The movement still counts toward the local drive distance if the underlying GPS deltas pass plausibility checks and the activity gate says this is a drive, not a bike ride or walk.
 
 ### Pothole Spike Detection
 
@@ -399,9 +422,9 @@ func start(onChange: @escaping (Bool) -> Void) {
 }
 ```
 
-**Permission prompt trigger:** `CMMotionActivityManager` has no explicit `requestAuthorization` method. The Motion & Fitness system prompt appears on the first call to `startActivityUpdates` or `queryActivityStarting(from:to:)`. Check status via `CMMotionActivityManager.authorizationStatus()` (iOS 11+) after a short delay; if `.denied`, fall back to the GPS-only heuristic.
+**Permission prompt trigger:** `CMMotionActivityManager` has no explicit `requestAuthorization` method. The Motion & Fitness system prompt appears on the first call to `startActivityUpdates` or `queryActivityStarting(from:to:)`. Check status via `CMMotionActivityManager.authorizationStatus()` (iOS 11+) after a short delay; if `.denied`, use the conservative GPS-only fallback below.
 
-**Fallback when Motion permission denied:** GPS-only heuristic — if `speed_kmh > 15` sustained for > 30s, treat as driving.
+**Fallback when Motion permission denied/unavailable:** GPS-only detection is intentionally conservative because ordinary cycling can sustain 15-35 km/h. Do not treat `speed_kmh > 15` for 30s as driving. For MVP, either disable passive drive starts without Motion Activity or require a stricter automotive signature, such as sustained higher speeds, road-class plausibility once map matching is available, and negative tests proving `bike-ride.csv` does not open a drive.
 
 **Edge case — stopped at a light:** `a.automotive && a.stationary` → keep session alive but pause collection. Resume on next non-stationary automotive event.
 
@@ -635,8 +658,8 @@ Implementation note: the app target can delegate the rotation decision to the pu
 Do **not** rely on implicit SwiftData migration once TestFlight users exist. The app uses explicit `VersionedSchema` + `SchemaMigrationPlan` from the first shipping build onward.
 
 - **Schema v1 (MVP launch):** `ReadingRecord`, `UploadBatch`, `PrivacyZoneRecord`, `UserStats`, `DeviceTokenRecord`
-- **Schema v2 (post-MVP photos):** add `PotholeReportRecord`
-- **Schema v3 (post-MVP drives):** add `DriveSessionRecord` and the optional `ReadingRecord.drive` relationship
+- **Schema v2 (MVP hardening before wider TestFlight):** add `DriveSessionRecord` and the optional `ReadingRecord.drive` relationship
+- **Schema v3 (post-MVP photos):** add `PotholeReportRecord`
 
 Rules:
 
@@ -1565,7 +1588,7 @@ See [02-backend-implementation.md §Pothole Photo Moderation](02-backend-impleme
 
 ## My Drives List (Post-MVP)
 
-*Status: not implemented. Partial infrastructure exists via the teal local-overlay.*
+*Status: UI not implemented. Core drive-session lifecycle and odometer accounting are now MVP hardening work in [08](08-implementation-backlog.md#b039--drive-session-odometer-and-low-speed-accounting); this section covers the later user-facing history list/detail feature.*
 
 ### Is This Feature Necessary?
 
@@ -1581,7 +1604,7 @@ The reason it's post-MVP: the aggregate overlay already does the "proof of contr
 
 ### Data Model
 
-Introduce `DriveSessionRecord` as a first-class SwiftData model, upstream of `ReadingRecord`:
+The MVP drive-session model is introduced before this feature so distance accounting, endpoint trimming, and stop-and-go handling are already correct. The post-MVP list can extend that same model rather than inventing a second trip store:
 
 ```swift
 @Model

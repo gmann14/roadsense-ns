@@ -1,6 +1,6 @@
 # 05 — Deployment & Observability
 
-*Last updated: 2026-04-23*
+*Last updated: 2026-05-13*
 
 Covers: environments, CI/CD, secrets, logging, metrics, alerting, and the "what to do when something breaks at 11pm" playbook.
 
@@ -62,6 +62,8 @@ roadsense-ns/
 ├── docs/
 ├── apps/
 │   └── web/                     # Phase-2 public dashboard (Next.js)
+├── api/
+│   └── railway/                 # Railway-hosted API compatibility server
 ├── ios/                         # Xcode project + Swift source
 ├── supabase/
 │   ├── migrations/              # timestamped .sql files
@@ -73,7 +75,11 @@ roadsense-ns/
 │   │   ├── segments-worst/
 │   │   ├── potholes/
 │   │   ├── stats/
-│   │   └── health/
+│   │   ├── health/
+│   │   ├── pothole-actions/
+│   │   ├── pothole-photos/
+│   │   ├── pothole-photo-image/
+│   │   └── pothole-photo-moderation/
 │   ├── tests/                   # pgTAP
 │   └── seed.sql                 # staging-only seed data
 ├── scripts/
@@ -122,11 +128,13 @@ Current repo note:
 4. supabase db reset (applies migrations)
 5. supabase test db (pgTAP)
 6. For each function: deno test
-7. Run `./scripts/api-smoke.sh`
+7. Run `./scripts/api-smoke.sh`, including the non-mutating `/pothole-photos` route-shape check
 8. Run `./scripts/seeded-e2e-smoke.sh`
 ```
 
 Runs on `ubuntu-22.04`. Target: < 10 min.
+
+`seeded-e2e-smoke.sh` is a mutating synthetic-data test. It is valid only against local CI databases, disposable review databases, or staging databases that can be reset before humans use them. It must never run against production or any shared backend whose data may be published.
 
 Current repo note:
 
@@ -162,7 +170,7 @@ Runs on `ubuntu-22.04`. Target: < 10 min. Add preview-URL Playwright smoke only 
 4. `supabase secrets set` for function-only secrets
 5. deploy every function under `supabase/functions/` except `_shared`
 6. run `./scripts/api-smoke.sh`
-7. run `./scripts/seeded-e2e-smoke.sh`
+7. run `./scripts/seeded-e2e-smoke.sh` only if the staging database is disposable or will be reset before field testing
 ```
 
 If the required environment secrets are absent, the workflow should skip rather than fail. This is intentional while staging is deferred.
@@ -185,11 +193,12 @@ Once staging exists, it runs on schedule to catch drift early; production runs o
 
 ### `deploy-production.yml` (manual dispatch only)
 
-Uses the `production` GitHub Environment with the same secret names as staging. Requires an explicit GitHub Environment approval before it runs. Same steps as staging but against prod once real users exist. Always preceded by:
+Uses the `production` GitHub Environment with the same secret names as staging. Requires an explicit GitHub Environment approval before it runs. Production deploys run migrations/functions plus non-mutating health and read-path smoke only; seeded/synthetic upload smoke is forbidden in production. The current Railway production API is deployed from the root `Dockerfile` and must pass health, stats, tile, and non-mutating photo-route checks after each deploy. Always preceded by:
 
 1. Manual smoke test on staging if staging exists; otherwise do not use production yet
-2. Tag the commit `prod-<date>`
-3. Dispatch workflow
+2. Read-only production data hygiene report showing no `*-seed`, `smoke-*`, `codex-*`, or other synthetic `client_app_version` rows contribute to public aggregates
+3. Tag the commit `prod-<date>`
+4. Dispatch workflow
 
 ### TestFlight release automation
 
@@ -230,6 +239,8 @@ Before inviting wider testers, run this checklist once against a signed build an
   - full request payload dumps
 - confirm at least one forced 5xx reaches backend Sentry
 - confirm rate-limit events still avoid raw token/IP leakage
+- confirm `POST /pothole-photos` is present by sending a malformed `{}` body and expecting `400 validation_failed`, not `404 not_found`
+- confirm one controlled photo metadata + signed `PUT` smoke reaches `pending_moderation`, then delete the synthetic `pothole_photos`, `pothole_photo_blobs`, and `storage.objects` rows before public data checks
 
 ### Web
 
@@ -297,10 +308,10 @@ Week 8: submit for Beta App Review to unlock external testing. Prepare:
   - a `VersionedSchema`
   - a `SchemaMigrationPlan`
   - a fixture store created by the prior schema and opened in CI by the new schema
-- Post-MVP additive migrations are expected in this order:
-  1. add `PotholeReportRecord`
-  2. add `DriveSessionRecord`
-  3. add optional `ReadingRecord.drive` relationship
+- Additive migrations currently expected in this order:
+  1. add `DriveSessionRecord`
+  2. add optional `ReadingRecord.drive` relationship
+  3. add `PotholeReportRecord`
 - Never ship a build that both changes the schema and silently deletes the prior local store as the fallback path
 
 ## Logging
@@ -394,7 +405,7 @@ Pager-style alerts (SMS/phone) are overkill for MVP. Email + checking in once a 
 ## Health Check Strategy
 
 - `GET /health` endpoint verifies DB connectivity + returns deploy metadata
-- `GET /health` is the only unauthenticated endpoint; everything else still sends the anon key
+- `GET /health` is the only unauthenticated endpoint; everything else still sends the anon/API key except opaque signed photo upload/read URLs
 - External uptime monitor pings `/health` every 5 minutes (UptimeRobot free tier or similar)
 - Alert on 3+ consecutive failures (15 min down)
 
@@ -508,6 +519,12 @@ Run these on both preview and production:
 4. open `/municipality/halifax`
 5. open `/reports/worst-roads`
 6. verify `/privacy` and `/methodology`
+
+Before promoting the production web map, also run a read-only data hygiene check against the production backend:
+
+- no synthetic/test app versions appear in `processed_batches` for data that contributes to `readings`, `segment_aggregates`, `pothole_reports`, or `public_stats_mv`
+- quality and coverage tile endpoints return MVT bytes for known populated tiles
+- public stats match the cleaned aggregate counts and generated timestamp is fresh
 
 ### Web observability
 

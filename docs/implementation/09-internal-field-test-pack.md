@@ -29,8 +29,9 @@ Before any human drive:
   - `supabase test db`
   - `deno test -A $(find supabase/functions -type f -name '*_test.ts' | sort)`
   - `./scripts/api-smoke.sh`
-  - `./scripts/seeded-e2e-smoke.sh`
-- if the run uses a hosted shared backend, its deploy + smoke checks have already passed
+  - `./scripts/seeded-e2e-smoke.sh` against local or disposable staging only
+- if the run uses a hosted shared backend, its deploy + non-mutating smoke checks have already passed
+- if the hosted backend may be published, a read-only data hygiene report shows no `*-seed`, `smoke-*`, `codex-*`, or other synthetic app versions contribute to public aggregates, potholes, or stats
 - privacy policy URL resolves
 - tester knows this is a road-quality beta, not turn-by-turn navigation
 
@@ -71,7 +72,7 @@ Run these on internal builds before inviting broader testers:
    - expected result: pothole or very-rough classification appears plausibly
 4. Stop-and-go urban drive
    - several lights / intersections
-   - expected result: stopped periods do not create bogus readings
+   - expected result: stopped periods count toward the same active drive but do not create bogus roughness readings
 5. Privacy-zone departure / arrival
    - leave from home-like zone and return
    - expected result: no locally visible contribution inside the protected area
@@ -79,6 +80,9 @@ Run these on internal builds before inviting broader testers:
    - lock screen during drive
    - optionally switch away from app before movement starts
    - expected result: collection resumes/survives within documented limits short of force-quit
+7. Bike-ride false-positive check
+   - 10–15 minutes by bicycle, including a stretch above 15 km/h if safe
+   - expected result: no drive session, no kilometres recorded, no upload queued
 
 ## Optional Stress Scenarios
 
@@ -177,6 +181,7 @@ Do not expand tester count until these are true:
 - one smooth route stays smooth
 - uploads succeed without manual intervention on at least two devices
 - no forbidden fields appear in backend logs, `os_log`, or Sentry events
+- hosted-backend public stats and quality tiles are based on real app builds only; seeded/smoke batches have been purged or are isolated to a disposable environment
 
 ## Manual Follow-Ups Still Required
 

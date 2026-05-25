@@ -242,7 +242,7 @@ Primary audiences:
 
 ## Android Follow-On (weeks 13–18)
 
-Android doubles the addressable beta pool in Halifax and unlocks Google Pixel / Samsung sensor quality for the scoring model. iOS-first gives us a tight MVP; Android second keeps the data model and backend identical.
+Android doubles the addressable beta pool in Halifax and unlocks Google Pixel / Samsung sensor quality for the scoring model. iOS-first gives us a tight MVP; Android second keeps the data model and backend identical. The detailed Android handoff spec lives in [11-android-implementation.md](11-android-implementation.md); this section only preserves roadmap intent.
 
 ### Platform Choice
 
@@ -254,14 +254,15 @@ Android doubles the addressable beta pool in Halifax and unlocks Google Pixel / 
 
 ### Tech Stack
 
-- Kotlin 2.x, Android Gradle Plugin latest
+- Kotlin 2.x, Android Gradle Plugin latest stable
 - Jetpack Compose for UI
-- Hilt for DI (lightweight; we're deliberately not overengineering)
+- Manual `AppGraph` / constructor injection first; add Hilt only if the Android codebase grows enough to justify it
 - Mapbox Maps SDK for Android (parity with iOS)
 - Retrofit + OkHttp + kotlinx-serialization for networking
 - Room for local queue + cache (SwiftData analogue)
 - WorkManager for background upload flushing
-- `ForegroundService` with LocationManager FOREGROUND_SERVICE_LOCATION permission for active recording
+- foreground service with `location` foreground-service type for active recording
+- Android Studio Gemini Agent Mode is useful for bounded implementation/test tasks, but generated app scaffolds do not replace the background-location/sensor spec in [11](11-android-implementation.md)
 
 ### Critical Differences from iOS
 
@@ -280,7 +281,7 @@ Android doubles the addressable beta pool in Halifax and unlocks Google Pixel / 
 ### Weeks 13–18 Plan
 
 ```
-Week 13 ──┬─ Kotlin project bootstrap + Compose + Hilt scaffold
+Week 13 ──┬─ Kotlin project bootstrap + Compose + manual AppGraph scaffold
           ├─ Port the domain model (Reading, Segment, RoughnessScorer)
           └─ Google Play Console enrollment (one-time $25)
 

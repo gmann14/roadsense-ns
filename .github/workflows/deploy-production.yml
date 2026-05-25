@@ -97,4 +97,3 @@ jobs:
           bash -n ./scripts/api-smoke.sh
           bash -n ./scripts/seeded-e2e-smoke.sh
           ./scripts/api-smoke.sh
-          ./scripts/seeded-e2e-smoke.sh

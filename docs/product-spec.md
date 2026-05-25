@@ -2,6 +2,8 @@
 
 *Draft: 2026-03-22*
 *Updated: 2026-03-23 (stress-tested)*
+*Updated: 2026-05-07 (drive sessions + path-aware matching clarified)*
+*Updated: 2026-05-25 (Android follow-on spec linked)*
 *Status: Spec*
 
 ---
@@ -39,7 +41,7 @@ Roads in Nova Scotia are rough. Municipalities know some roads are bad but lack 
 
 ### 1. Passive Background Collection
 - Detect driving via CMMotionActivityManager (iOS activity recognition)
-- When driving detected AND speed > 15 km/h, start collecting:
+- When automotive driving is detected, start an active drive session:
   - Accelerometer data (z-axis primarily, sampled at 50Hz)
   - GPS coordinates (sampled at 1Hz — battery optimization)
   - GPS horizontal accuracy (for quality filtering)
@@ -47,7 +49,8 @@ Roads in Nova Scotia are rough. Municipalities know some roads are bad but lack 
   - Timestamp
 - All collection is automatic — user just installs the app and drives
 - Discard readings where `CLLocation.horizontalAccuracy > 20m` (urban canyon / poor GPS)
-- Discard readings where speed < 15 km/h (engine vibration dominates) or > 160 km/h (implausible)
+- Count plausible stop-and-go movement as part of the local drive only after the automotive session is active
+- Do not upload roughness readings where speed < 15 km/h (engine vibration dominates) or > 160 km/h (implausible)
 
 ### 2. Road Roughness Scoring
 - Process accelerometer data into roughness scores per GPS reading (point-based)
@@ -128,7 +131,7 @@ iOS best practice: don't request "Always" location on first launch (high denial 
 
 | Permission State | App Behavior |
 |---|---|
-| Motion denied | Fall back to GPS-only driving detection (speed > 15 km/h = likely driving). Show banner explaining reduced accuracy. |
+| Motion denied | Use a conservative GPS-only fallback only when confidence is high enough to avoid ordinary cycling/walking false positives. Sustained 15-35 km/h movement alone is not enough to open a drive. Show banner explaining reduced accuracy. |
 | Location "When In Use" only | Foreground-only collection. Persistent banner: "Enable 'Always' location for passive background collection" with Settings button. |
 | Location denied entirely | App cannot collect data. Show onboarding-style screen explaining why location is needed, with Settings button. Map browsing still works. |
 | Precise Location off (iOS 14+) | Approximate location makes segment matching impossible. Show alert explaining precise location is required for road quality mapping. |
@@ -224,6 +227,15 @@ activityManager.startActivityUpdates(to: queue) { activity in
 - **SwiftData** — local data persistence (processed readings, upload queue, personal stats)
 - **Background Modes** — location updates + motion processing
 
+### Android App (Follow-On)
+- **Kotlin + Jetpack Compose** — native Android client after the iOS/TestFlight MVP
+- **Activity Recognition Transition API** — driving entry/exit trigger
+- **Fused Location Provider + SensorManager** — GPS and 50Hz motion sampling
+- **Foreground service with location type** — visible active collection while the app is backgrounded
+- **Room + DataStore** — local readings, upload queue, privacy zones, token metadata, and settings
+- **Mapbox Maps SDK for Android** — consumes the same vector tiles as iOS/web
+- Detailed handoff spec: [docs/implementation/11-android-implementation.md](implementation/11-android-implementation.md)
+
 ### Backend
 - **Supabase** — PostgreSQL + PostGIS
   - PostGIS for spatial queries (assign readings to road segments)
@@ -277,11 +289,12 @@ activityManager.startActivityUpdates(to: queue) { activity in
 │  │                                                │   │
 │  │  1. Rotate accel to Earth frame (gravity comp)│   │
 │  │  2. High-pass filter (Butterworth, 0.5Hz)     │   │
-│  │  3. Compute roughness RMS per ~50m of travel  │   │
-│  │  4. Strip privacy zone readings               │   │
-│  │  5. Quality filter (speed, GPS accuracy)      │   │
-│  │  6. Store as POINT readings (SwiftData)        │   │
-│  │  7. Render local data on map immediately       │   │
+│  │  3. Track drive distance from plausible GPS    │   │
+│  │  4. Compute roughness RMS per eligible ~50m    │   │
+│  │  5. Strip privacy zone readings               │   │
+│  │  6. Quality filter (speed, GPS accuracy)       │   │
+│  │  7. Store drive sessions + observation windows │   │
+│  │  8. Render local data on map immediately       │   │
 │  └──────────────────┬───────────────────────────┘   │
 │                      │ (batch upload, 1K/batch)        │
 └──────────────────────┬──────────────────────────────┘
@@ -302,7 +315,7 @@ activityManager.startActivityUpdates(to: queue) { activity in
 │                      │                                │
 │  ┌──────────────────▼───────────────────────────┐    │
 │  │  PostgreSQL Stored Procedure                  │    │
-│  │  - Batch spatial match (KNN + heading filter) │    │
+│  │  - Batch spatial match (path + heading filter)│    │
 │  │  - Insert into readings (partitioned monthly) │    │
 │  │  - Incremental aggregate update               │    │
 │  └──────────────────┬───────────────────────────┘    │
@@ -342,7 +355,9 @@ The International Roughness Index (IRI) is the standard for road quality (measur
 ### Algorithm (on-device)
 
 ```
-For each ~50m of GPS travel distance:
+For each automotive drive, track local odometer-style distance from plausible GPS deltas. Stop-and-go and `<15 km/h` movement count as part of an already-active drive, but cycling/walking/running/unknown activity must not open a drive just because GPS speed is plausible. Low-speed movement is not used for roughness scoring in MVP.
+
+For each eligible ~50m of GPS travel distance:
 
 1. Collect accelerometer data via CMDeviceMotion at 50Hz
 2. Rotate acceleration vector to Earth frame using gravity vector
@@ -357,9 +372,10 @@ For each ~50m of GPS travel distance:
    - Highway correction factor for > 100 km/h
 6. Quality checks:
    - GPS accuracy must be < 20m
-   - Speed must be 15-160 km/h
-   - Discard if any check fails
-7. Output: (lat, lng, roughness_rms, speed, heading, gps_accuracy, timestamp)
+   - Speed must be 15-160 km/h for roughness upload
+   - Low-speed movement remains in local drive distance; it is not an uploadable quality reading
+   - Discard/upload-ineligible if any quality check fails
+7. Output: (midpoint lat/lng, optional window start/end, window distance, roughness_rms, speed, heading, gps_accuracy, timestamp)
 8. Store locally (SwiftData) for immediate map rendering + later upload
 ```
 
@@ -752,7 +768,7 @@ The app should feel **simple, beautiful, and modern** — approachable for non-t
 - [ ] Implement progressive permission flow (When In Use -> Always escalation)
 - [ ] Handle all degraded permission states
 - [ ] Implement quality filters (speed threshold, GPS accuracy threshold)
-- [ ] Log processed point readings to SwiftData
+- [ ] Log drive sessions and processed observation windows to SwiftData
 - [ ] Register for `significantLocationChange` (background relaunch)
 - [ ] Implement `ProcessInfo.thermalState` and `isLowPowerModeEnabled` checks
 - [ ] Drive around Halifax, verify data looks reasonable
@@ -811,7 +827,7 @@ The app should feel **simple, beautiful, and modern** — approachable for non-t
 - [ ] Automated "worst roads" reports per municipality
 - [ ] Road repair tracking: integrate municipal repair schedules if available
 - [ ] Fleet mode (higher frequency collection, real-time upload, vehicle type tagging)
-- [ ] Android version (Kotlin, shared backend)
+- [ ] Android version (Kotlin, shared backend; detailed spec in [implementation/11-android-implementation.md](implementation/11-android-implementation.md))
 - [ ] Gamification: leaderboard for km contributed, badges
 - [ ] iOS DeviceCheck attestation for anti-abuse
 
@@ -857,7 +873,7 @@ The app should feel **simple, beautiful, and modern** — approachable for non-t
 4. **Open-source from day one?** → **Yes.** Builds trust, civic tech ethos, strongest portfolio signal.
 5. **Cold start problem?** → Show personal data immediately. "Be the first to map" messaging. Coverage percentage gamification.
 6. **Privacy zone default?** → **500m** (changed from 200m). Safer default, especially in low-density areas.
-7. **On-device vs server-side segmentation?** → **Server-side.** Client uploads point readings. Server owns road network and segment assignment.
+7. **On-device vs server-side segmentation?** → **Server-side.** Client uploads processed quality observations with a required midpoint point and optional window metadata; server owns road network and segment assignment. Personal drive sessions remain local.
 8. **MapKit vs Mapbox?** → **Mapbox.** Built-in heat map layers, data-driven line styling, vector tiles, offline support. MapKit would require extensive custom rendering.
 
 ---

@@ -1,10 +1,10 @@
 # 02 — Backend Implementation
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-05-13*
 
 Covers: Supabase project setup, schema migrations, OSM import, ingestion Edge Function, stored procedures, vector tile endpoint, and nightly aggregation.
 
-Prereqs from [product-spec.md](../product-spec.md) that we don't re-derive: client uploads POINTs; server owns road network and segment assignment; PostGIS + stored procedures; vector tiles via `ST_AsMVT`; monthly partitioning from day one.
+Prereqs from [product-spec.md](../product-spec.md) that we don't re-derive: client uploads processed quality readings; server owns road network and segment assignment; PostGIS + stored procedures; vector tiles via `ST_AsMVT`; monthly partitioning from day one. Legacy clients upload midpoint POINTs only. New clients may include optional observation-window start/end/distance metadata for path-aware matching, but the backend does not persist full personal drive paths.
 
 ## Supabase Project Setup
 
@@ -153,6 +153,8 @@ CREATE INDEX ON readings_2026_04 (batch_id);
 CREATE INDEX ON readings_2026_04 (device_token_hash);
 -- (repeat for each partition)
 ```
+
+`readings.location` is the matched observation midpoint, not a user-visible trip trace. Optional window start/end metadata is used during ingestion to improve segment matching and may be represented in temp tables or short-lived diagnostics, but MVP should not persist a full per-drive polyline server-side.
 
 **Partition creation automation:** See Migration 010 below — a `pg_cron` job creates next month's partition on the 25th of each month.
 
@@ -1024,6 +1026,14 @@ async function checkRateLimit(
 ```
 
 ### Stored Procedure: `ingest_reading_batch`
+
+Compatibility and matching rules:
+
+- The current point-only matcher remains the fallback for legacy clients and for malformed/missing optional window metadata.
+- New clients may send `window_start_lat/lng`, `window_end_lat/lng`, `window_distance_m`, `duration_s`, and `sequence_index`. Those fields are for ingestion-time candidate scoring only.
+- The matcher should prefer a segment candidate that is plausible for the point, heading, optional window geometry, and neighboring readings in the same ordered batch. It must still reject candidates outside the existing distance guard instead of "forcing" a continuous but wrong road.
+- `<15 km/h` observations are not reliable roughness readings. New clients should keep them local for drive-distance accounting rather than upload them. If an old or buggy client uploads them, the backend continues to soft-reject them as `low_quality` so existing response semantics remain stable.
+- RED/GREEN work for the path-aware matcher lives in B013a. Until that lands, the SQL below documents the stable legacy behavior.
 
 ```sql
 CREATE OR REPLACE FUNCTION ingest_reading_batch(
@@ -2037,18 +2047,22 @@ Run `EXPLAIN ANALYZE` on the ingestion match query after first 100k readings exi
 
 ## Pothole Photo Moderation (Post-MVP)
 
-*Status: implemented end-to-end in the current build for the internal moderation workflow: `pothole_photos` schema, private Storage bucket, `POST /pothole-photos` signed-upload endpoint, rate limiting, cron-based promotion from `pending_upload` to `pending_moderation`, moderation queue view, approve/reject procedures, signed image preview, and publishing/rejection storage actions. The current build also hardens the path with single-write signed upload URLs (`upsert: false`), `segment_id` persistence from iOS, moderation move rollback on failed approval RPCs, reject-before-delete ordering, `security_invoker` on the moderation queue view, and a geography index for the approval-path nearby lookup.*
+*Status: implemented end-to-end in the current build for the internal moderation workflow: `pothole_photos` schema, private photo object storage, `POST /pothole-photos` signed-upload endpoint, rate limiting, promotion from `pending_upload` to `pending_moderation`, moderation queue view, approve/reject procedures, signed image preview, and publishing/rejection storage actions. The current build also hardens the path with single-write signed upload URLs, `segment_id` persistence from iOS, moderation move rollback on failed approval RPCs, reject-before-delete ordering, `security_invoker` on the moderation queue view, and a geography index for the approval-path nearby lookup.*
 
 This section covers the server half of the photo capture feature: storage, moderation queue, and publishing flow.
 
-### Storage Bucket
+### Photo Object Storage
 
-One Supabase Storage bucket, `pothole-photos`, with:
+The client contract is intentionally storage-provider-neutral: `POST /pothole-photos` returns an opaque `upload_url`, and the client `PUT`s the exact JPEG bytes to that URL. The backend owns how the upload URL is served.
+
+Supabase Edge Function deployments use one private Supabase Storage bucket, `pothole-photos`, with:
 
 - **Access:** private by default. Reads for the moderation tool go through a dedicated internal-only `pothole-photo-image` Edge Function that enforces moderation status and emits signed read URLs with a short TTL (60s). This is **not** part of the public mobile API contract in [03-api-contracts.md](03-api-contracts.md).
-- **Write path:** signed PUT URLs issued by `POST /pothole-photos` (see [03-api-contracts.md](03-api-contracts.md)). In practice these are treated as ~2 hour Supabase signed upload URLs and can only write to `pending/{report_id}.jpg`. URLs are issued with `upsert: false`, so the object path is single-write; repeating the metadata POST while the row is still `pending_upload` reissues a fresh signed URL only until the object actually exists.
+- **Write path:** signed PUT URLs issued by `POST /pothole-photos` (see [03-api-contracts.md](03-api-contracts.md)). These URLs can only write to `pending/{report_id}.jpg`. Supabase Storage URLs are issued with `upsert: false`, so the object path is single-write; repeating the metadata POST while the row is still `pending_upload` reissues a fresh signed URL only until the object actually exists.
 - **Max object size:** 1.5 MB enforced at the bucket level. Client target is ≤ 400 KB; the extra headroom tolerates compression variance. Anything larger is a bug or abuse.
 - **Content-Type allowlist:** `image/jpeg` only. HEIC is converted to JPEG client-side before upload.
+
+The current Railway production API does not have Supabase Storage credentials in-process. It serves the same contract with an API-local signed upload URL at `/functions/v1/pothole-photo-upload/{report_id}` and persists the bytes in the private `pothole_photo_blobs` table. It also writes a matching `storage.objects` metadata row so existing SQL that checks for uploaded objects keeps working. The upload handler verifies content type, byte size, and SHA-256 before promoting the photo row to `pending_moderation`.
 
 On successful upload, a Storage webhook (or a one-minute `pg_cron` scan if webhooks are unavailable) promotes the row from `pending_upload` to `pending_moderation`. Approvals move the object to `published/{report_id}.jpg`; rejections delete the object from Storage immediately.
 
@@ -2088,13 +2102,29 @@ CREATE INDEX idx_pothole_photos_status ON pothole_photos (status);
 CREATE INDEX idx_pothole_photos_device ON pothole_photos (device_token_hash, submitted_at DESC);
 ```
 
+Railway production additionally creates:
+
+```sql
+CREATE TABLE pothole_photo_blobs (
+    report_id UUID PRIMARY KEY REFERENCES pothole_photos(report_id) ON DELETE CASCADE,
+    storage_object_path TEXT NOT NULL UNIQUE,
+    content_type TEXT NOT NULL,
+    byte_size INTEGER NOT NULL,
+    content_sha256 BYTEA NOT NULL,
+    image_bytes BYTEA NOT NULL,
+    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+This table is private backend storage, not a public API surface.
+
 **Relationship to `pothole_reports`:** an approved photo that matches (or creates) a nearby pothole cluster links back via `pothole_report_id`. The existing pothole folding logic (see Migration 012) is extended: a photo's `geom` participates in the same 15m-radius cluster merge as accelerometer-detected pothole points and manual pothole actions, and the resulting `pothole_reports` row carries `has_photo = true`. The public map uses the merged `pothole_reports` point, not the raw `pothole_photos.geom`.
 
 ### Moderation Tooling
 
 MVP moderation is deliberately low-tech: a Supabase Studio view (`moderation_pothole_photo_queue`) showing the `pending_moderation` queue sorted by `submitted_at ASC`, with:
 
-- the image (fetched via the internal `pothole-photo-image` function)
+- the image (fetched via the internal `pothole-photo-image` function, which returns an expiring signed preview URL)
 - the reported lat/lng pinned on a small map
 - approve / reject actions wired through the internal `pothole-photo-moderation` function, which coordinates Storage move/delete with the SQL procedures, including rollback on failed approve RPCs and delete-after-state-change ordering on reject
 

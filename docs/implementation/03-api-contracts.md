@@ -1,12 +1,12 @@
 # 03 — API Contracts
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-05-13*
 
 Authoritative request/response shapes for all endpoints. **Lock this doc by end of week 2** so iOS and backend can work in parallel without churn.
 
 ## Conventions
 
-- Base URL: `https://<project-ref>.supabase.co/functions/v1`
+- Base URL: `https://<project-ref>.supabase.co/functions/v1` for Supabase Edge deployments, or the hosted Railway API origin plus `/functions/v1` for the current production API. Clients must read this from build configuration.
 - Content-Type: `application/json` for JSON endpoints, `application/vnd.mapbox-vector-tile` for tiles
 - Auth: Supabase anon key in `Authorization: Bearer <anon>` header for all requests except `GET /health`, which is intentionally unauthenticated for uptime monitoring. Supabase Edge Functions require the Authorization header; the `apikey` header is also accepted for compatibility. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
 - The `ingest_reading_batch` RPC is `SECURITY DEFINER` with `EXECUTE` granted only to `service_role`; the anon key cannot invoke it directly. Uploads MUST go through the `/functions/v1/upload-readings` Edge Function, which holds the service role key and enforces rate limits before dispatching.
@@ -53,7 +53,7 @@ Every response includes `x-request-id` header for support/debugging. Client logs
 
 ### `POST /upload-readings`
 
-Batch upload of processed point readings.
+Batch upload of processed road-quality readings. Legacy clients send point-only readings; newer clients may add optional observation-window metadata so the server can perform path-aware segment matching. The public aggregate unit remains `road_segments`.
 
 **Request**
 
@@ -68,6 +68,13 @@ Batch upload of processed point readings.
         {
             "lat": 44.6488,
             "lng": -63.5752,
+            "window_start_lat": 44.6486,
+            "window_start_lng": -63.5755,
+            "window_end_lat": 44.6490,
+            "window_end_lng": -63.5749,
+            "window_distance_m": 41.8,
+            "duration_s": 6.4,
+            "sequence_index": 17,
             "roughness_rms": 0.47,
             "speed_kmh": 62.3,
             "heading": 184.5,
@@ -85,6 +92,9 @@ Batch upload of processed point readings.
 - `batch_id` must be UUIDv4, generated on client. Server uses it for idempotency — retried uploads with the same `batch_id` replay the original `{accepted, rejected, duplicate, rejected_reasons}` result.
 - `device_token` is a UUIDv4 generated on client, rotated monthly. It is sent over TLS to the Edge Function, hashed there with a server-side pepper, and discarded. The raw token is never persisted.
 - `readings.length ≤ 1000`. Larger → `batch_too_large` error; client must split.
+- `lat`/`lng` remain the midpoint of the observation window and are still required.
+- `window_start_lat`, `window_start_lng`, `window_end_lat`, `window_end_lng`, `window_distance_m`, `duration_s`, and `sequence_index` are optional additive fields. When present and valid, the backend may use them for path-aware segment matching. When absent, the backend falls back to the legacy point matcher.
+- Clients should not upload low-speed-only windows for roughness scoring. `<15 km/h` movement still counts toward local drive distance only inside an already-active automotive drive, but the current API is for quality readings, not personal odometer samples.
 - Hard 400s are only for malformed payloads: missing required fields, non-UUID `batch_id` / `device_token`, non-numeric scalar fields, or `batch_too_large`.
 - Domain-level bad readings are soft-rejected and counted in `rejected_reasons` with a 200 response. That includes stale/future timestamps, out-of-bounds coordinates, low-quality readings, unpaved matches, and no-match cases.
 
@@ -109,7 +119,7 @@ Batch upload of processed point readings.
 - `rejected_reasons`: counts by reason code. Only codes the server actually emits are listed — clients must tolerate unknown keys for forward-compat. MVP-emitted enum:
   - `out_of_bounds` — lat/lng outside NS bbox
   - `no_segment_match` — no road segment within 25m / heading window
-  - `low_quality` — server-visible quality gates failed (`gps_accuracy_m > 20`, `speed_kmh < 15`, `speed_kmh > 160`, or `roughness_rms` outside `[0, 15]`). Client-only gates such as `duration_s > 15` and `sample_count < 30` should have been dropped before upload and never reach the backend.
+  - `low_quality` — server-visible quality gates failed (`gps_accuracy_m > 20`, `speed_kmh < 15`, `speed_kmh > 160`, or `roughness_rms` outside `[0, 15]`). New clients should keep `<15 km/h` movement local as drive distance instead of uploading it for roughness scoring. Client-only gates such as `duration_s > 15` and `sample_count < 30` should have been dropped before upload and never reach the backend.
   - `future_timestamp` — `recorded_at` in the future by > 60s
   - `stale_timestamp` — `recorded_at` older than 7 days
   - `unpaved` — matched segment surface is non-paved in OSM
@@ -172,7 +182,7 @@ Vector tile with road quality overlays and pothole markers.
 | `road_type` | string | motorway, primary, ... |
 | `roughness_score` | float | 0–2.0 typical range |
 | `category` | string | smooth, fair, rough, very_rough, unpaved |
-| `confidence` | string | low, medium, high (low is filtered out) |
+| `confidence` | string | low, medium, high. Beta quality tiles include low confidence so live tester data appears immediately; clients must render it less prominently than medium/high. |
 | `total_readings` | int | |
 | `unique_contributors` | int | |
 | `pothole_count` | int | |
@@ -314,7 +324,7 @@ These are not part of the iOS/TestFlight MVP, but they are required for the publ
 
 Coverage tile for the public web `Coverage` mode.
 
-Use this instead of the normal quality tile when the UI is answering: "where do we have enough community data?" The standard tile endpoint is intentionally not enough because it hides low-confidence and unscored roads.
+Use this instead of the normal quality tile when the UI is answering: "where do we have enough community data?" The standard tile endpoint shows scored roads, including low-confidence beta signals, but it still does not show unscored roads.
 
 **Request**
 
@@ -529,15 +539,15 @@ Two-step signed-URL upload for pothole photos. Matches [01-ios-implementation.md
 ```json
 {
     "report_id": "c2f1a4b3-1234-4c5d-8e9f-112233445566",
-    "upload_url": "https://...supabase.co/storage/v1/object/sign/pothole-photos/pending/c2f1a4b3-...jpg?token=...",
+    "upload_url": "https://api.example.com/functions/v1/pothole-photo-upload/c2f1a4b3-1234-4c5d-8e9f-112233445566?token=...",
     "upload_expires_at": "2026-04-21T20:22:05Z",
     "expected_object_path": "pending/c2f1a4b3-....jpg"
 }
 ```
 
-Client then `PUT`s the JPEG bytes to `upload_url` directly. The Storage service enforces byte size, content type, path pattern, and single-write semantics on the signed upload path. Clients must treat the URL as ephemeral and restart from the metadata POST after interruption instead of persisting it.
+Client then `PUT`s the JPEG bytes to `upload_url` directly with `Content-Type: image/jpeg`. The URL is opaque: Supabase deployments may return a Supabase Storage signed URL, while the Railway production API returns an API-local signed upload URL. In both cases the backend enforces byte size, content type, path pattern, hash consistency, and single-write semantics. Clients must treat the URL as ephemeral and restart from the metadata POST after interruption instead of persisting it.
 
-`upload_expires_at` is currently emitted as a ~2 hour window to match Supabase signed-upload URL behavior. The client must still treat it as ephemeral and restart from the metadata POST after interruption instead of persisting signed URLs.
+`upload_expires_at` is currently emitted as a ~2 hour window. The client must still treat it as advisory and restart from the metadata POST after interruption instead of persisting signed URLs.
 
 **Response — 409 already_uploaded**
 

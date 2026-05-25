@@ -97,4 +97,8 @@ jobs:
           bash -n ./scripts/api-smoke.sh
           bash -n ./scripts/seeded-e2e-smoke.sh
           ./scripts/api-smoke.sh
-          ./scripts/seeded-e2e-smoke.sh
+          if [[ "${ALLOW_SEEDED_HOSTED_SMOKE:-}" == "true" ]]; then
+            ./scripts/seeded-e2e-smoke.sh
+          else
+            echo "Skipping seeded hosted smoke; set ALLOW_SEEDED_HOSTED_SMOKE=true only for disposable staging."
+          fi

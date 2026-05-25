@@ -132,6 +132,24 @@ missing = required - payload.keys()
 assert not missing, missing
 PY
 
+printf '{}' > "${tmpdir}/invalid-photo.json"
+photo_status="$(request POST "${FUNCTIONS_BASE_URL}/pothole-photos" "${tmpdir}/invalid-photo.json" "${tmpdir}/photo-response.json")"
+if [[ "${photo_status}" != "400" ]]; then
+  echo "pothole-photos route check failed with HTTP ${photo_status}; expected validation 400" >&2
+  cat "${tmpdir}/photo-response.json" >&2
+  exit 1
+fi
+
+python3 - "${tmpdir}/photo-response.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    payload = json.load(fh)
+
+assert payload["error"] == "validation_failed", payload
+PY
+
 upload_status="$(request POST "${FUNCTIONS_BASE_URL}/upload-readings" "${tmpdir}/upload.json" "${tmpdir}/upload-response.json")"
 if [[ "${upload_status}" != "200" ]]; then
   echo "upload-readings failed with HTTP ${upload_status}" >&2
@@ -192,5 +210,6 @@ PY
 echo "API smoke passed against ${FUNCTIONS_BASE_URL}"
 echo "  /health: ok"
 echo "  /stats: contract ok"
+echo "  /pothole-photos: route/validation ok"
 echo "  /upload-readings: ${summary}"
 echo "  /upload-readings duplicate replay: ok"

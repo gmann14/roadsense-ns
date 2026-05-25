@@ -9,6 +9,7 @@ Start here:
 - [docs/product-spec.md](docs/product-spec.md) — product scope and goals
 - [docs/implementation/README.md](docs/implementation/README.md) — implementation spec index
 - [docs/implementation/08-implementation-backlog.md](docs/implementation/08-implementation-backlog.md) — literal task order and acceptance criteria
+- [docs/implementation/11-android-implementation.md](docs/implementation/11-android-implementation.md) — Android follow-on handoff spec
 
 Current repo structure:
 

@@ -4,7 +4,7 @@ Operational and import scripts for backend maintenance live here.
 
 Current B011 pipeline:
 
-- `api-smoke.sh` — contract smoke for `/health`, `/stats`, and duplicate-safe `/upload-readings` against local or staging Edge Functions
+- `api-smoke.sh` — contract smoke for `/health`, `/stats`, duplicate-safe `/upload-readings`, and the non-mutating `/pothole-photos` validation path against local/staging Edge Functions or the Railway-compatible API
 - `seeded-e2e-smoke.sh` — seeded local/staging smoke that inserts a synthetic paved segment, uploads three matching batches, refreshes stats, and verifies segment detail plus tile emission
 - `osm-import.sh` — downloads the Nova Scotia Geofabrik snapshot, runs `osm2pgsql`, segmentizes roads, tags municipalities/features, and applies the staged refresh
 - `osm2pgsql-style.lua` — flex-output Lua config that keeps only drivable roads plus the node tags used for speed bumps and rail crossings
@@ -34,6 +34,7 @@ What it validates:
 
 - `GET /health` returns `{"status":"ok", ...}`
 - `GET /stats` returns the documented public stats shape
+- malformed `POST /pothole-photos` returns `400 validation_failed`, proving the route is present without creating photo rows
 - `POST /upload-readings` accepts a valid one-reading payload
 - reposting the same payload returns `duplicate: true` with the original summary replayed
 
