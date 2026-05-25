@@ -536,6 +536,38 @@ final class PotholeActionStoreTests: XCTestCase {
         XCTAssertEqual(refreshedPermanent?.lastHTTPStatusCode, 400)
     }
 
+    func testRecoverRecoverableFailuresResurrectsNetworkErrorRows() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let store = PotholeActionStore(container: container)
+        let context = ModelContext(container)
+
+        let networkErrored = PotholeActionRecord(
+            actionType: .manualReport,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            accuracyM: 6,
+            recordedAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000.0),
+            uploadState: .failedPermanent,
+            uploadAttemptCount: 6,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030.0),
+            lastHTTPStatusCode: nil,
+            lastRequestID: nil
+        )
+        context.insert(networkErrored)
+        try context.save()
+
+        let recovered = try store.recoverRecoverableFailures()
+        let refreshed = try context.fetch(FetchDescriptor<PotholeActionRecord>())
+            .first(where: { $0.id == networkErrored.id })
+
+        XCTAssertEqual(recovered, 1)
+        XCTAssertEqual(refreshed?.uploadState, .pendingUpload)
+        XCTAssertEqual(refreshed?.uploadAttemptCount, 0)
+        XCTAssertNil(refreshed?.lastAttemptAt)
+        XCTAssertNil(refreshed?.lastHTTPStatusCode)
+    }
+
     func testPendingManualReportCoordinatesIncludesOnlyNonFailedManualReports() throws {
         let container = try ModelContainerProvider.makeInMemory()
         let store = PotholeActionStore(container: container)

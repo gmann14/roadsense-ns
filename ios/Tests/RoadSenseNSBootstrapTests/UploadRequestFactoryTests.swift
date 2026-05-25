@@ -59,5 +59,45 @@ struct UploadRequestFactoryTests {
         #expect(readings?.first?["roughness_rms"] as? Double == 0.72)
         #expect(readings?.first?["is_pothole"] as? Bool == true)
         #expect(readings?.first?["recorded_at"] as? String == "2023-11-14T22:13:20Z")
+        #expect(readings?.first?["heading"] as? Double == 92)
+    }
+
+    @Test
+    func omitsHeadingKeyWhenNil() throws {
+        let config = AppConfig(
+            environment: .local,
+            apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
+            mapboxAccessToken: "pk.test-token",
+            supabaseAnonKey: "anon.test-key"
+        )
+        let endpoints = Endpoints(config: config)
+
+        let request = try UploadRequestFactory.makeRequest(
+            endpoints: endpoints,
+            batchID: UUID(),
+            deviceToken: "11111111-2222-4333-8444-555555555555",
+            clientSentAt: Date(timeIntervalSince1970: 1_700_000_100),
+            clientAppVersion: "0.1.0 (1)",
+            clientOSVersion: "iOS 26.3.1",
+            readings: [
+                UploadReadingPayload(
+                    lat: 44.6488,
+                    lng: -63.5752,
+                    roughnessRms: 0.72,
+                    speedKmh: 57.2,
+                    heading: nil,
+                    gpsAccuracyM: 6.4,
+                    isPothole: false,
+                    potholeMagnitude: nil,
+                    recordedAt: Date(timeIntervalSince1970: 1_700_000_000)
+                )
+            ]
+        )
+
+        let payload = try JSONSerialization.jsonObject(with: try #require(request.httpBody), options: []) as? [String: Any]
+        let reading = (payload?["readings"] as? [[String: Any]])?.first
+        // The server's match logic uses COALESCE(t.heading, rs.bearing_degrees);
+        // a missing key reads as NULL. Confirm we don't smuggle a "0" here.
+        #expect(reading?["heading"] == nil)
     }
 }

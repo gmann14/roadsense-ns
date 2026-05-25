@@ -286,8 +286,13 @@ final class PotholeActionStore {
     }
 
     private static func isRecoverableFailureStatus(_ statusCode: Int?) -> Bool {
+        // nil means the request never reached the server (DNS failure, no
+        // route, TLS error, timeout). Off-WiFi or cellular-dead-zone drives
+        // burn the retry budget here; treat as recoverable so the row gets
+        // resurrected when connectivity returns and the next foreground
+        // triggers `recoverRecoverableFailures`.
         guard let statusCode else {
-            return false
+            return true
         }
 
         if statusCode == 404 || statusCode == 408 || statusCode == 429 {

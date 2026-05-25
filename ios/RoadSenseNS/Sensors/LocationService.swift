@@ -105,14 +105,19 @@ extension LocationService: @preconcurrency CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         for location in locations where location.horizontalAccuracy >= 0 {
             let speedKmh = max(location.speed, 0) * 3.6
-            let heading = location.course >= 0 ? location.course : 0
+            // CLLocation.course returns -1 when course is unknown (slow start,
+            // urban canyon, brief stop). Preserve that sentinel through the
+            // pipeline so the upload payload can encode it as JSON null —
+            // the server's match is permissive when heading is null but
+            // treats `0` as a literal "due north" claim, which previously
+            // caused mass rejections on east-west roads.
             let sample = LocationSample(
                 timestamp: location.timestamp.timeIntervalSince1970,
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude,
                 horizontalAccuracyMeters: location.horizontalAccuracy,
                 speedKmh: speedKmh,
-                headingDegrees: heading
+                headingDegrees: location.course
             )
             bufferedSamples.append(sample)
             bufferedSamples = prunedBufferedSamples(referenceTime: sample.timestamp)

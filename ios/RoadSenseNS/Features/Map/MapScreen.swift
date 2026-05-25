@@ -23,12 +23,15 @@ struct MapScreen: View {
     @State private var isWaitingToPresentCamera = false
     @State private var scopedPhotoSegmentID: UUID?
     @State private var bottomCardHeight: CGFloat = 0
+    @AppStorage("map.showMyDrives") private var showMyDrives: Bool = true
 
     var body: some View {
         ZStack(alignment: .top) {
             RoadQualityMapView(
                 config: model.config,
                 localDriveOverlayPoints: model.localDriveOverlayPoints,
+                myDrivesOverlayPoints: model.myDrivesOverlayPoints,
+                showMyDrives: showMyDrives,
                 pendingPotholeCoordinates: model.pendingPotholeCoordinates,
                 pendingMapTarget: $pendingMapTarget,
                 onMapLoaded: {

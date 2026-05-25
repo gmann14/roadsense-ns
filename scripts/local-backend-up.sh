@@ -179,6 +179,53 @@ else
   tiles_status="${response_code}"
 fi
 
+db_container="supabase_db_${project_id}"
+
+road_segments_count() {
+  if ! docker container inspect "${db_container}" >/dev/null 2>&1; then
+    return 1
+  fi
+  docker exec "${db_container}" psql -U postgres -d postgres -At -c \
+    "SELECT count(*) FROM road_segments" 2>/dev/null
+}
+
+# Without road_segments populated, every reading uploaded by the iOS client
+# rejects as `no_segment_match` and lands in unmatched_readings. Surface this
+# loudly because the failure mode is invisible from the API surface — health
+# checks pass, tiles return 200 — but the heat-map stays blank forever.
+#
+# WITH_OSM_IMPORT=1 triggers osm-import.sh inline; otherwise we just warn so
+# the existing engineer's flow isn't extended by ~5 min on every restart.
+maybe_import_osm() {
+  local count
+  count="$(road_segments_count || true)"
+  if [[ -z "${count}" ]]; then
+    return 0
+  fi
+
+  # 7 is the seed-data fixture count (`Coverage None Road`, etc.). Anything
+  # under ~100 means a real OSM import never ran.
+  if (( count > 100 )); then
+    printf '  road_segments: %s\n' "${count}"
+    return 0
+  fi
+
+  if [[ "${WITH_OSM_IMPORT:-0}" == "1" ]]; then
+    log "road_segments has only ${count} rows — running osm-import.sh"
+    local pg_port
+    pg_port="$(docker port "${db_container}" 5432/tcp 2>/dev/null | head -1 | awk -F: '{print $NF}')"
+    pg_port="${pg_port:-54322}"
+    DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:${pg_port}/postgres" \
+      bash "${ROOT_DIR}/scripts/osm-import.sh"
+    count="$(road_segments_count || true)"
+    printf '  road_segments: %s (after import)\n' "${count}"
+  else
+    warn "road_segments has only ${count} rows; readings will reject as no_segment_match."
+    warn "Run with WITH_OSM_IMPORT=1 ./scripts/local-backend-up.sh, or:"
+    warn "  DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres ./scripts/osm-import.sh"
+  fi
+}
+
 log "local backend ready"
 printf '  API: %s\n' "${base_url}"
 printf '  Functions health: ok\n'
@@ -189,3 +236,4 @@ fi
 if [[ "${tiles_status}" != "skipped" ]]; then
   printf '  Tiles: HTTP %s\n' "${tiles_status}"
 fi
+maybe_import_osm

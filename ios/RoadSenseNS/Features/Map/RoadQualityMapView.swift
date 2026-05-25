@@ -5,6 +5,8 @@ import SwiftUI
 struct RoadQualityMapView: View {
     let config: AppConfig
     let localDriveOverlayPoints: [LocalDriveOverlayPoint]
+    let myDrivesOverlayPoints: [LocalDriveOverlayPoint]
+    let showMyDrives: Bool
     let pendingPotholeCoordinates: [CLLocationCoordinate2D]
     @Binding var pendingMapTarget: DriveBoundingBox?
     let onMapLoaded: () -> Void
@@ -30,58 +32,95 @@ struct RoadQualityMapView: View {
 
     private var liveMap: some View {
         MapReader { proxy in
-            Map(viewport: $viewport) {
-                Puck2D(bearing: .heading)
-                    .showsAccuracyRing(true)
+            ZStack(alignment: .bottomTrailing) {
+                Map(viewport: $viewport) {
+                    Puck2D(bearing: .heading)
+                        .showsAccuracyRing(true)
 
-                RoadQualityMapStyleContent(tileTemplateURL: Endpoints(config: config).tileTemplateURLString)
-                LocalDriveOverlayStyleContent(points: localDriveOverlayPoints)
-                PendingPotholeOverlayStyleContent(coordinates: pendingPotholeCoordinates)
+                    RoadQualityMapStyleContent(tileTemplateURL: Endpoints(config: config).tileTemplateURLString)
+                    if showMyDrives {
+                        MyDrivesOverlayStyleContent(points: myDrivesOverlayPoints)
+                    }
+                    LocalDriveOverlayStyleContent(points: localDriveOverlayPoints)
+                    PendingPotholeOverlayStyleContent(coordinates: pendingPotholeCoordinates)
 
-                TapInteraction(.layer(RoadQualityMapStyleContent.segmentLayerID)) { feature, _ in
-                    guard let map = proxy.map,
-                          let featureID = feature.id?.id,
-                          let segmentID = UUID(uuidString: featureID) else {
-                        return false
+                    TapInteraction(.layer(RoadQualityMapStyleContent.segmentLayerID)) { feature, _ in
+                        guard let map = proxy.map,
+                              let featureID = feature.id?.id,
+                              let segmentID = UUID(uuidString: featureID) else {
+                            return false
+                        }
+
+                        map.resetFeatureStates(
+                            sourceId: RoadQualityMapStyleContent.sourceID,
+                            sourceLayerId: RoadQualityMapStyleContent.segmentSourceLayer
+                        ) { _ in }
+                        map.setFeatureState(feature, state: ["selected": true]) { _ in }
+
+                        onSelectSegment(segmentID)
+                        return true
                     }
 
-                    map.resetFeatureStates(
-                        sourceId: RoadQualityMapStyleContent.sourceID,
-                        sourceLayerId: RoadQualityMapStyleContent.segmentSourceLayer
-                    ) { _ in }
-                    map.setFeatureState(feature, state: ["selected": true]) { _ in }
-
-                    onSelectSegment(segmentID)
-                    return true
+                    TapInteraction { _ in
+                        proxy.map?.resetFeatureStates(
+                            sourceId: RoadQualityMapStyleContent.sourceID,
+                            sourceLayerId: RoadQualityMapStyleContent.segmentSourceLayer
+                        ) { _ in }
+                        onClearSelection()
+                        return false
+                    }
                 }
-
-                TapInteraction { _ in
-                    proxy.map?.resetFeatureStates(
-                        sourceId: RoadQualityMapStyleContent.sourceID,
-                        sourceLayerId: RoadQualityMapStyleContent.segmentSourceLayer
-                    ) { _ in }
-                    onClearSelection()
-                    return false
-                }
-            }
-            .mapStyle(.standard(theme: .default))
-            .ornamentOptions(
-                OrnamentOptions(
-                    scaleBar: .init(visibility: .hidden),
-                    compass: .init(visibility: .hidden)
+                .mapStyle(.standard(theme: .default))
+                .ornamentOptions(
+                    OrnamentOptions(
+                        scaleBar: .init(visibility: .hidden),
+                        compass: .init(visibility: .hidden)
+                    )
                 )
-            )
-            .onMapLoaded { _ in
-                onMapLoaded()
+                .onMapLoaded { _ in
+                    onMapLoaded()
+                }
+                .onMapLoadingError { event in
+                    onMapLoadingError(event.message)
+                }
+                .ignoresSafeArea()
+                .onChange(of: pendingMapTarget) { _, newTarget in
+                    applyPendingTarget(newTarget)
+                }
+
+                if !isFollowingPuck {
+                    recenterButton
+                        .padding(.trailing, DesignTokens.Space.lg)
+                        .padding(.bottom, DesignTokens.Space.lg)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                }
             }
-            .onMapLoadingError { event in
-                onMapLoadingError(event.message)
-            }
-            .ignoresSafeArea()
-            .onChange(of: pendingMapTarget) { _, newTarget in
-                applyPendingTarget(newTarget)
-            }
+            .animation(.easeOut(duration: 0.18), value: isFollowingPuck)
         }
+    }
+
+    private var recenterButton: some View {
+        Button {
+            viewport = .followPuck(zoom: 13.8, bearing: .constant(0))
+        } label: {
+            Image(systemName: "location.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(DesignTokens.Palette.deep)
+                .frame(width: 44, height: 44)
+                .background(.white, in: Circle())
+                .shadow(color: .black.opacity(0.15), radius: 6, x: 0, y: 2)
+        }
+        .accessibilityLabel("Recenter on current location")
+        .accessibilityIdentifier("map.recenter")
+    }
+
+    private var isFollowingPuck: Bool {
+        // Mapbox transitions viewport to `.idle` when the user pans/zooms.
+        // Programmatic camera assignment (e.g. drive-target framing) sets
+        // `.camera`. In both non-follow states we surface the recenter
+        // button. `Viewport.followPuck` is a non-nil accessor only when
+        // the viewport storage case is `.followPuck`.
+        viewport.followPuck != nil
     }
 
     private func applyPendingTarget(_ target: DriveBoundingBox?) {
@@ -251,6 +290,93 @@ private struct LocalDriveCategoryOverlayStyleContent: MapStyleContent {
             3.5
             18
             6.5
+        }
+    }
+}
+
+private struct MyDrivesOverlayStyleContent: MapStyleContent {
+    let points: [LocalDriveOverlayPoint]
+
+    var body: some MapStyleContent {
+        MyDrivesCategoryOverlayStyleContent(
+            category: "smooth",
+            color: DesignTokens.Palette.smooth,
+            segments: segments(for: "smooth")
+        )
+        MyDrivesCategoryOverlayStyleContent(
+            category: "fair",
+            color: DesignTokens.Palette.fair,
+            segments: segments(for: "fair")
+        )
+        MyDrivesCategoryOverlayStyleContent(
+            category: "rough",
+            color: DesignTokens.Palette.rough,
+            segments: segments(for: "rough")
+        )
+        MyDrivesCategoryOverlayStyleContent(
+            category: "very_rough",
+            color: DesignTokens.Palette.veryRough,
+            segments: segments(for: "very_rough")
+        )
+    }
+
+    private func segments(for category: String) -> [[CLLocationCoordinate2D]] {
+        guard points.count >= 2 else { return [] }
+
+        return zip(points, points.dropFirst()).compactMap { previous, current in
+            guard current.roughnessCategory == category else { return nil }
+            return [previous.coordinate, current.coordinate]
+        }
+    }
+}
+
+private struct MyDrivesCategoryOverlayStyleContent: MapStyleContent {
+    let category: String
+    let color: Color
+    let segments: [[CLLocationCoordinate2D]]
+
+    var body: some MapStyleContent {
+        if !segments.isEmpty {
+            GeoJSONSource(id: sourceID)
+                .data(geoJSON)
+
+            // Solid lower-opacity line, distinct from the bright dashed
+            // "current drive" overlay above so the historical record reads
+            // as background context rather than competing with live data.
+            LineLayer(id: layerID, source: sourceID)
+                .lineCap(.round)
+                .lineJoin(.round)
+                .lineColor(StyleColor(color))
+                .lineOpacity(0.55)
+                .lineWidth(widthExpression)
+        }
+    }
+
+    private var sourceID: String {
+        "roadsense-my-drives-\(category)-source"
+    }
+
+    private var layerID: String {
+        "roadsense-my-drives-\(category)-line"
+    }
+
+    private var geoJSON: GeoJSONSourceData {
+        let features = segments.map { coordinates in
+            Feature(geometry: Geometry(LineString(coordinates)))
+        }
+        return .featureCollection(FeatureCollection(features: features))
+    }
+
+    private var widthExpression: Exp {
+        Exp(.interpolate) {
+            Exp(.linear)
+            Exp(.zoom)
+            10
+            1.5
+            14
+            2.8
+            18
+            5.0
         }
     }
 }

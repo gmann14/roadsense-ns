@@ -84,7 +84,10 @@ final class Uploader: UploadDrainPerforming {
                 lng: $0.longitude,
                 roughnessRms: $0.roughnessRMS,
                 speedKmh: $0.speedKMH,
-                heading: $0.heading,
+                // ReadingRecord stores the CLLocation sentinel (-1) when
+                // course was unknown at capture. Convert to JSON null at the
+                // wire boundary so the server's COALESCE-based match fires.
+                heading: $0.heading >= 0 ? $0.heading : nil,
                 gpsAccuracyM: $0.gpsAccuracyM,
                 isPothole: $0.isPothole,
                 potholeMagnitude: $0.potholeMagnitude,

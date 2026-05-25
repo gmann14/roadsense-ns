@@ -248,11 +248,18 @@ public struct ReadingBuilder: Sendable {
     }
 
     private func weightedHeading(for samples: [LocationSample]) -> Double {
-        let weights = samples.map { max($0.speedKmh, 0.1) }
-        let x = zip(samples, weights).reduce(0.0) { partialResult, pair in
+        // Skip samples whose course was unknown (CLLocation returns -1).
+        // If every sample is unknown, propagate the sentinel; the upload
+        // boundary converts <0 to JSON null so the server's permissive
+        // COALESCE branch fires.
+        let valid = samples.filter { $0.headingDegrees >= 0 }
+        guard !valid.isEmpty else { return -1 }
+
+        let weights = valid.map { max($0.speedKmh, 0.1) }
+        let x = zip(valid, weights).reduce(0.0) { partialResult, pair in
             partialResult + cos(pair.0.headingDegrees * .pi / 180) * pair.1
         }
-        let y = zip(samples, weights).reduce(0.0) { partialResult, pair in
+        let y = zip(valid, weights).reduce(0.0) { partialResult, pair in
             partialResult + sin(pair.0.headingDegrees * .pi / 180) * pair.1
         }
 
@@ -261,9 +268,12 @@ public struct ReadingBuilder: Sendable {
     }
 
     private func headingVarianceDegrees(for samples: [LocationSample]) -> Double {
-        let mean = weightedHeading(for: samples)
+        let valid = samples.filter { $0.headingDegrees >= 0 }
+        guard valid.count >= 2 else { return 0 }
 
-        return samples.reduce(0.0) { partialResult, sample in
+        let mean = weightedHeading(for: valid)
+
+        return valid.reduce(0.0) { partialResult, sample in
             max(partialResult, angularDistanceDegrees(from: sample.headingDegrees, to: mean))
         }
     }

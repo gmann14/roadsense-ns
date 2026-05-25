@@ -83,6 +83,7 @@ final class AppModel {
     private(set) var acceptedReadingCount = 0
     private(set) var privacyFilteredCount = 0
     private(set) var localDriveOverlayPoints: [LocalDriveOverlayPoint] = []
+    private(set) var myDrivesOverlayPoints: [LocalDriveOverlayPoint] = []
     private(set) var pendingPotholeCoordinates: [CLLocationCoordinate2D] = []
     private(set) var userStatsSummary = UserStatsSummary.zero
     private(set) var collectionDiagnostics = CollectionDiagnosticsSummary.empty
@@ -127,6 +128,7 @@ final class AppModel {
         self.acceptedReadingCount = (try? container.readingStore.acceptedReadingCount()) ?? 0
         self.privacyFilteredCount = (try? container.readingStore.privacyFilteredReadingCount()) ?? 0
         self.localDriveOverlayPoints = (try? container.readingStore.localDriveOverlayPoints()) ?? []
+        self.myDrivesOverlayPoints = (try? container.readingStore.allDriveOverlayPoints()) ?? []
         self.pendingPotholeCoordinates = (try? container.potholeActionStore.pendingManualReportCoordinates()) ?? []
         self.userStatsSummary = (try? container.userStatsStore.summary()) ?? .zero
         self.isCollectionPausedByUser = defaults.bool(forKey: collectionPausedKey)
@@ -494,6 +496,7 @@ final class AppModel {
         acceptedReadingCount = (try? readingStore.acceptedReadingCount()) ?? 0
         privacyFilteredCount = (try? readingStore.privacyFilteredReadingCount()) ?? 0
         localDriveOverlayPoints = (try? readingStore.localDriveOverlayPoints()) ?? []
+        myDrivesOverlayPoints = (try? readingStore.allDriveOverlayPoints()) ?? []
         pendingPotholeCoordinates = (try? potholeActionStore.pendingManualReportCoordinates()) ?? []
         userStatsSummary = (try? userStatsStore.summary()) ?? .zero
         isCollectionPausedByUser = defaults.bool(forKey: collectionPausedKey)

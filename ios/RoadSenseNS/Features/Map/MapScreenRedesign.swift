@@ -46,11 +46,18 @@ struct MapScreenRedesign: View {
     /// once they hide the well to explore the map, we don't keep reopening it.
     @AppStorage("driving.idleWellExpanded") private var idleWellExpanded: Bool = true
 
+    /// Whether the historical "my drives" overlay is rendered behind the
+    /// server quality tiles. Defaults on so the user has a persistent,
+    /// offline-first record of where they've driven; toggleable via Settings.
+    @AppStorage("map.showMyDrives") private var showMyDrives: Bool = true
+
     var body: some View {
         ZStack(alignment: .top) {
             RoadQualityMapView(
                 config: model.config,
                 localDriveOverlayPoints: model.localDriveOverlayPoints,
+                myDrivesOverlayPoints: model.myDrivesOverlayPoints,
+                showMyDrives: showMyDrives,
                 pendingPotholeCoordinates: model.pendingPotholeCoordinates,
                 pendingMapTarget: $pendingMapTarget,
                 onMapLoaded: {

@@ -475,6 +475,33 @@ final class ReadingStore {
         }
     }
 
+    /// All historical readings the user has driven, regardless of upload state.
+    /// Privacy-filtered samples are still excluded (privacy contract). Endpoint-
+    /// trimmed samples are also excluded — they're noisy GPS captures from
+    /// park-up/start moments that don't represent real road quality. This
+    /// powers the "my drives" overlay so users can see the rough roads they've
+    /// driven personally, even when the server's accepted-segment heat-map is
+    /// empty (offline, sparse coverage, or rejected for other reasons).
+    func allDriveOverlayPoints(limit: Int = 50_000) throws -> [LocalDriveOverlayPoint] {
+        let context = ModelContext(container)
+        let descriptor = FetchDescriptor<ReadingRecord>(
+            predicate: #Predicate {
+                $0.droppedByPrivacyZone == false
+                    && $0.endpointTrimmedAt == nil
+            },
+            sortBy: [SortDescriptor(\.recordedAt, order: .forward)]
+        )
+        let readings = try context.fetch(descriptor).suffix(max(limit, 0))
+
+        return readings.map { record in
+            LocalDriveOverlayPoint(
+                latitude: record.latitude,
+                longitude: record.longitude,
+                roughnessCategory: LocalDriveOverlayPoint.category(for: record.roughnessRMS)
+            )
+        }
+    }
+
     private func groupedFragmentedSessions(
         from sessions: [DriveSessionRecord],
         maximumGapSeconds: TimeInterval

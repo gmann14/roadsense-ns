@@ -5,7 +5,10 @@ public struct UploadReadingPayload: Codable, Equatable, Sendable {
     public let lng: Double
     public let roughnessRms: Double
     public let speedKmh: Double
-    public let heading: Double
+    /// Course in degrees clockwise from north. Nil when CLLocation reported an
+    /// invalid course (`location.course < 0`); the server's match logic treats
+    /// null as "no heading constraint" via COALESCE.
+    public let heading: Double?
     public let gpsAccuracyM: Double
     public let isPothole: Bool
     public let potholeMagnitude: Double?
@@ -16,7 +19,7 @@ public struct UploadReadingPayload: Codable, Equatable, Sendable {
         lng: Double,
         roughnessRms: Double,
         speedKmh: Double,
-        heading: Double,
+        heading: Double?,
         gpsAccuracyM: Double,
         isPothole: Bool,
         potholeMagnitude: Double?,

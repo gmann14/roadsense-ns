@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var queuedFeedbackCount: Int = 0
     @State private var isConfirmingDelete = false
     @State private var errorMessage: String?
+    @AppStorage("map.showMyDrives") private var showMyDrives: Bool = true
 
     var body: some View {
         ScrollView {
@@ -25,6 +26,7 @@ struct SettingsView: View {
                 collectionCard
                 diagnosticsCard
                 uploadsCard
+                mapCard
                 privacyCard
                 dataCard
                 feedbackCard
@@ -318,6 +320,22 @@ struct SettingsView: View {
                     }
                 }
             }
+        }
+    }
+
+    private var mapCard: some View {
+        groupedCard(
+            iconSystemName: "map.fill",
+            iconTint: DesignTokens.Palette.deep,
+            title: "Map",
+            subtitle: "Show the roads you've personally driven, colored by roughness — works offline."
+        ) {
+            Toggle(isOn: $showMyDrives) {
+                Text("Show my drives")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .tint(DesignTokens.Palette.deep)
+            .accessibilityIdentifier("settings.toggle-my-drives")
         }
     }
 
