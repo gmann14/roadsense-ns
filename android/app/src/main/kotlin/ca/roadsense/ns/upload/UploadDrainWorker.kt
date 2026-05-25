@@ -12,6 +12,9 @@ import ca.roadsense.ns.feedback.FeedbackQueueDrainer
 import ca.roadsense.ns.feedback.FeedbackSubmitter
 import ca.roadsense.ns.pothole.PotholeActionCoordinator
 import ca.roadsense.ns.pothole.PotholeActionRpc
+import ca.roadsense.ns.pothole.PotholePhotoBytesRpc
+import ca.roadsense.ns.pothole.PotholePhotoCoordinator
+import ca.roadsense.ns.pothole.PotholePhotoMetadataRpc
 
 /**
  * WorkManager entry point for the unified upload drain — readings, pothole
@@ -54,19 +57,35 @@ class UploadDrainWorker(
             platform = container.clientOSVersion,
         )
 
+        // Pothole photo drain — only meaningful once the CameraX capture UI
+        // populates pending_metadata rows. The coordinator is wired now so
+        // that as soon as a photo lands in Room, the next heartbeat picks
+        // it up; until then `drain()` is a no-op.
+        val photoCoordinator = PotholePhotoCoordinator(
+            dao = container.database.potholePhotoDao(),
+            metadataRpc = PotholePhotoMetadataRpc { container.backendClient.beginPotholePhotoUpload(it) },
+            bytesRpc = PotholePhotoBytesRpc { url, file -> container.backendClient.putPotholePhotoBytes(url, file) },
+            deviceTokenProvider = { container.deviceTokenStore.currentToken() },
+            clientAppVersion = container.clientAppVersion,
+            clientOSVersion = container.clientOSVersion,
+        )
+
         val network = networkSnapshot()
         if (network.status == NetworkPathStatus.UNSATISFIED) return Result.retry()
 
         val readingOutcome = readingCoordinator.drainOnce(network)
-        // Drain the action / feedback queues regardless of the reading outcome
-        // so a permanently-failed reading batch doesn't block other queues.
+        // Drain the action / feedback / photo queues regardless of the reading
+        // outcome so a permanently-failed reading batch doesn't block other
+        // queues.
         val potholeOutcomes = potholeCoordinator.drain()
         val feedbackOutcomes = feedbackDrainer.drain()
+        val photoOutcomes = photoCoordinator.drain()
 
         val needsRetry = readingOutcome is UploadDrainCoordinator.Outcome.BatchRetry ||
             readingOutcome is UploadDrainCoordinator.Outcome.Offline ||
             potholeOutcomes.any { it is PotholeActionCoordinator.Outcome.Retry } ||
-            feedbackOutcomes.any { it is FeedbackQueueDrainer.Outcome.Retry }
+            feedbackOutcomes.any { it is FeedbackQueueDrainer.Outcome.Retry } ||
+            photoOutcomes.any { it is PotholePhotoCoordinator.Outcome.Retry }
 
         return if (needsRetry) Result.retry() else Result.success()
     }
