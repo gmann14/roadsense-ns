@@ -28,6 +28,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.RoadSense">
 
+        <!-- Sentry: disable auto-init so SentryBootstrapper owns the lifecycle.
+             Without this, the SDK tries to read `io.sentry.dsn` from the
+             manifest and crashes-with-warning when it isn't present in the
+             no-DSN flavors (CI, sideload, debug). -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true">

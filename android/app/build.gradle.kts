@@ -225,6 +225,11 @@ dependencies {
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
+    // Sentry — mirrors the iOS `sentry-cocoa` choice. We manually init it
+    // from `SentryBootstrapper` so the DSN flows in from BuildConfig (auto-
+    // init is disabled in AndroidManifest via the io.sentry.auto-init flag).
+    implementation("io.sentry:sentry-android:7.18.0")
+
     // Mapbox Maps SDK — only added when `MAPBOX_DOWNLOADS_TOKEN` is set in
     // the environment / gradle.properties (see `settings.gradle.kts`). Builds
     // without the token still compile because `MapHost` falls back to a
@@ -246,6 +251,22 @@ dependencies {
     testImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     testImplementation("com.squareup.okhttp3:mockwebserver:5.0.0-alpha.14")
+    // Compose UI tests run under Robolectric so we can smoke-test the
+    // AppShell composables without an emulator. `ui-test-manifest` ships a
+    // manifest that registers `ComponentActivity`, which Robolectric needs
+    // when `createComposeRule()` launches its host activity; AGP only merges
+    // it into the variant when it's a `debugImplementation`, so smoke tests
+    // are gated to debug-flavored variants (`testStaging*Debug*UnitTest`).
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Instrumentation tests (androidTest/) — only consumed by
+    // `connectedAndroidTest`. CI does not currently boot an emulator so these
+    // are local-only, but the source set + runner wiring stays present so
+    // contributors can run them via `./gradlew connectedStagingDebugAndroidTest`.
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
 }
 
 ksp {

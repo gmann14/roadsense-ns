@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit
 class RoadSenseApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        SentryBootstrapper.bootstrap(this, AppConfigProvider.current())
         scheduleUploadHeartbeat()
     }
 
