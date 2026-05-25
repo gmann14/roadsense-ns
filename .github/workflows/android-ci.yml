@@ -63,3 +63,21 @@ jobs:
         run: |
           cd android
           ./gradlew :app:bundleStagingRelease
+
+      - name: Type-check Mapbox-typed bridge (when token available)
+        # The `src/mapboxMain/kotlin/MapboxBridge.kt` source set only enters
+        # the build when MAPBOX_DOWNLOADS_TOKEN unlocks the private Maven.
+        # PRs from forks never see the secret (GitHub policy), so the step
+        # exits cleanly there. Any push or PR from a branch in this repo
+        # with the secret available will type-check the live bridge and
+        # catch Mapbox API drift before a real-device build.
+        env:
+          MAPBOX_DOWNLOADS_TOKEN: ${{ secrets.MAPBOX_DOWNLOADS_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "${MAPBOX_DOWNLOADS_TOKEN:-}" ]; then
+            echo "MAPBOX_DOWNLOADS_TOKEN secret not set; skipping Mapbox-typed compile."
+            exit 0
+          fi
+          cd android
+          ./gradlew :app:assembleStagingDebug
