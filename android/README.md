@@ -10,7 +10,7 @@ Android client for the RoadSense NS road-quality measurement project. Plan and a
 | A12-2a — Wire-format DTOs + policies | Landed | `core-api` JVM module + iOS JSON parity, now also covering `pothole-actions` and `feedback` |
 | A12-2b — Room + Retrofit shells | Landed | `:app` module compiles, schema exported, DAO tests pass |
 | A12-3 — Foreground service + permissions | Landed | Production permission ladder (`PermissionState`), foreground notification, Android sensor/location subscriptions, Room-backed collection pipeline, unified `UploadDrainWorker`, manifest declares `FOREGROUND_SERVICE_LOCATION` |
-| A12-4 — Compose UI + manual pothole + feedback | Landed (beta) | Material 3 shell with Map / Stats / Settings tabs, drive controls, manual pothole report with 8s undo, in-app feedback queue, Settings → Delete local data, Material You dynamic colors. Native Mapbox map shell is the remaining sub-task — see "What does not exist yet" |
+| A12-4 — Compose UI + manual pothole + feedback | Landed | Material 3 shell with Map / Stats / Settings tabs, drive controls, manual pothole report with 8s undo, in-app feedback queue, Settings → Delete local data, Material You dynamic colors. Native Mapbox `MapView` wiring landed via the `MapboxBridge` source-set split — actual rendering still gated on `MAPBOX_DOWNLOADS_TOKEN` + real `MAPBOX_ACCESS_TOKEN` provisioning |
 | A12-5 — Feedback queue | Landed | Room-backed `FeedbackEntity` + `FeedbackQueueDrainer` mirroring iOS, drains on the same heartbeat as readings + pothole actions |
 | A12-6 — Sideload distribution + Play prep | Scaffolded | Optional env-driven release signing config + `.github/workflows/android-internal.yml` placeholder; needs Play Console developer account + upload keystore offline-generated. See `docs/implementation/15-google-play-readiness.md` |
 
@@ -32,10 +32,10 @@ What exists:
 
 What does **not** exist yet:
 
-- Native Mapbox Android map rendering (vector-tile + pothole overlay). The Compose `MapHost` is wired to use the real Mapbox `MapView` the moment `MAPBOX_DOWNLOADS_TOKEN` is exposed at sync time (env var or `~/.gradle/gradle.properties`); without the token the host falls back to a WebView pointing at the public web map so CI builds keep working without a private Maven credential. Once the token is provisioned, the Mapbox SDK is added automatically and `MapHost` swaps the WebView for an in-process `MapView`.
+- Real-device evidence on at least one Pixel-class and one Samsung-class phone: sensor parity, upload acceptance, battery drain, foreground-service survivability, plus the new manual pothole + feedback + delete-local-data flows. Step-by-step checklist in [`docs/implementation/15-google-play-readiness.md`](../docs/implementation/15-google-play-readiness.md) → "Real-device validation checklist".
+- Mapbox token provisioning. The native rendering code is in `android/app/src/mapboxMain/kotlin/MapboxBridge.kt` and is compiled in automatically when `MAPBOX_DOWNLOADS_TOKEN` is exposed at sync time; the same file registers the `segment_aggregates` + `potholes` source-layers, the road-quality ramp, and the pothole markers. Without the token the project still compiles — `MapboxBridge.isAvailable` returns `false` and `MapHost` falls back to a WebView pointing at the public web map. Production builds need both `MAPBOX_DOWNLOADS_TOKEN` (sync time) **and** a real `pk.…` `MAPBOX_ACCESS_TOKEN` (per-environment secrets file).
 - Pothole photo capture. The action flow (manual report + upload) ships in beta; the photo follow-up is iOS-parity work tracked separately.
 - Signing keystore + Google Play Console developer account. Build wiring is done — the release machine just exports the four `ANDROID_UPLOAD_*` env vars to produce an upload-key-signed AAB.
-- Real-device evidence on at least one Pixel-class and one Samsung-class phone: sensor parity, upload acceptance, battery drain, foreground-service survivability, plus the new manual pothole + feedback + delete-local-data flows.
 
 ## Prerequisites
 

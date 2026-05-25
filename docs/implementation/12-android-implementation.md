@@ -21,8 +21,8 @@ The repo now contains an `android/` project with:
 
 The implementation is ready for **internal Android collection beta validation**, not broad Play production. Remaining production-facing work is tracked in `.claude/tasks.md`:
 
-- real-device Pixel/Samsung drives, battery evidence, foreground-service survivability evidence, plus exercising the new manual pothole + feedback + delete-local-data flows
-- native Mapbox vector-tile + pothole overlay rendering. The Compose `MapHost` is now wired to swap a real Mapbox `MapView` in the moment `MAPBOX_DOWNLOADS_TOKEN` is provisioned at sync time; until then it falls back to a WebView pointing at the public web map so CI builds keep working without a private Maven credential
+- real-device Pixel/Samsung drives, battery evidence, foreground-service survivability evidence, plus exercising the new manual pothole + feedback + delete-local-data flows. Concrete step-by-step checklist now lives in [15-google-play-readiness.md](15-google-play-readiness.md) → "Real-device validation checklist"
+- native Mapbox vector-tile + pothole overlay rendering. The Compose `MapHost` delegates to `MapboxBridge` (`android/app/src/mapboxMain/kotlin/MapboxBridge.kt`), which is compiled in automatically when `MAPBOX_DOWNLOADS_TOKEN` is provisioned at sync time. That bridge registers the same `segment_aggregates` + `potholes` source-layers iOS uses, points at the configured `tiles/{z}/{x}/{y}.mvt?apikey=…` endpoint, and applies the road-quality ramp from `RoadQualityStyle` (hex bodies pinned to `DesignTokens.Palette` via a JVM parity test). Until the token is provisioned the host falls back to a WebView pointing at the public web map so CI builds keep working without a private Maven credential
 - pothole *photo* capture (CameraX + photo upload). The action flow ships in beta; the photo upgrade is a follow-up
 - Play Console developer account + upload keystore offline-generated; the build wiring is done, only the operational steps remain
 

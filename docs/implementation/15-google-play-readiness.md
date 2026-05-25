@@ -8,6 +8,7 @@ This doc is the Android twin of [10-app-store-and-testflight-readiness.md](10-ap
 
 ## Current Status
 
+- Native Mapbox vector-tile + pothole overlay rendering wiring landed on `gmann14/android-beta-test-fixes`. The Compose `MapHost` calls into `MapboxBridge` (`android/app/src/mapboxMain/kotlin/`) which is compiled in whenever `MAPBOX_DOWNLOADS_TOKEN` is set at sync time; otherwise the no-Mapbox stub keeps reporting unavailable so CI keeps building. Real-device verification on a Pixel still pending — see "Real-device validation checklist" below.
 - Google Play Console developer account not yet created. One-time $25 fee applies.
 - New developer accounts created after 2023-11-13 must complete Closed Testing with **at least 12 testers opted in for at least 14 continuous days** before Production access is granted. Plan around that gate from day one.
 - No Android signing keys exist. Sideload (Phase 1 of doc 12) uses a debug-style keystore at `android/keystores/dev.keystore` (gitignored). Play distribution (Phase 2) uses Google Play App Signing — we hold an **upload key**, Google holds the app-signing key.
@@ -15,6 +16,53 @@ This doc is the Android twin of [10-app-store-and-testflight-readiness.md](10-ap
 - `.github/workflows/android-internal.yml` exists as the manually-dispatched workflow that builds the production-flavor AAB and (when the `ANDROID_PUBLISH_ENABLED` repo variable is `true`) uploads it to Internal Testing via the Play Developer API. It is dormant until the secrets below are populated.
 - `https://roadsense.ca/privacy` already covers the iOS app and is acceptable for Android too. Confirm the page mentions Android by name before the first Closed Testing submission.
 - `apps/web` is the host for the privacy policy + (optional) support page. No Android-specific marketing site is required.
+
+## Real-device validation checklist (unverified — no field evidence yet)
+
+These steps are blocked on access to physical Android devices and an active Play developer account. They are intentionally not faked. Owner / date / device fingerprint must be filled in by the engineer running the drive — do not copy a stale "OK" from a prior cycle.
+
+Foreground collection + permission ladder (Pixel-class device):
+
+- [ ] install the latest staging-debug APK (`./gradlew :app:installStagingDebug`)
+- [ ] grant fine location, activity recognition, and notifications when prompted at first launch
+- [ ] confirm the persistent "Recording road quality" notification appears within 2 seconds of tapping Start
+- [ ] confirm the notification cannot be dismissed without tapping Stop
+- [ ] drive ≥10 minutes, screen on; confirm GPS fix card updates at ≥1 Hz cadence and the recording indicator stays green
+- [ ] drive ≥10 minutes, screen off (locked); confirm the foreground service is still running on return — task manager + adb shell `dumpsys activity services ca.roadsense.android.staging | head` shows `running=true`
+- [ ] tap Stop; confirm pending readings count drops to 0 within one heartbeat tick (≤15 min) and the upload result card surfaces no errors
+
+Background collection upgrade:
+
+- [ ] from the in-app "Open Android settings" affordance, switch the location permission to "Allow all the time"
+- [ ] start a drive, walk into a Faraday-y building / put the phone face-down on the desk for ≥5 minutes, return — confirm the drive is still recording
+
+Manual pothole + feedback + delete flows:
+
+- [ ] tap "Mark pothole here" while stopped; confirm the 8-second undo appears and clears on its own
+- [ ] tap "Mark pothole here" then "Undo last report" within 8 seconds; confirm no upload happens
+- [ ] submit a feedback message offline (airplane mode), enable network, confirm it drains on the next heartbeat
+- [ ] Settings → Delete all local data; confirm pending counts read 0 and the drive control card returns to "Grant permissions to start" state until permissions are re-requested
+
+Upload acceptance against staging backend:
+
+- [ ] after the first clean ≥10 minute drive, hit `https://roadsense.ca/?staging` (or the staging web URL) and confirm the segments the device covered show up in the public map within ~15 minutes
+- [ ] verify the `x-request-id` of an `upload-readings` 200 response lands in the staging logs (Railway dashboard) with `accepted > 0`
+
+Native Mapbox map shell (requires `MAPBOX_DOWNLOADS_TOKEN` + real `MAPBOX_ACCESS_TOKEN`):
+
+- [ ] export `MAPBOX_DOWNLOADS_TOKEN` in the build environment and re-sync; confirm `BuildConfig.MAPBOX_AVAILABLE == true`
+- [ ] add a real `pk.…` token to `android/config/staging.env.secrets.properties` (gitignored), rebuild
+- [ ] launch the app; confirm the Map tab renders the native `MapView` (not the WebView) and the `© Mapbox © OpenStreetMap` plate is visible bottom-right
+- [ ] confirm road-quality lines appear at zooms ≥10 and pothole circles at zooms ≥13 (matches the iOS source-layer min-zoom bounds in `RoadQualityStyle`)
+- [ ] confirm category colors match the iOS ramp (smooth/fair/rough/very_rough match `DesignTokens.Palette` hexes)
+
+Battery + foreground-service survivability (per OEM):
+
+- [ ] Pixel-class device: 30-minute continuous drive, screen off; battery delta should be ≤6%. Record `adb shell dumpsys batterystats --charged ca.roadsense.android.staging | head -200` for evidence
+- [ ] Samsung One UI device: same drive, same evidence; battery delta should be ≤12% per the hard-stop rule in `docs/implementation/12-android-implementation.md`
+- [ ] confirm Samsung's "Put unused apps to sleep" policy does not auto-suspend the app between drives; if it does, document the user-facing setting change in the onboarding screen
+
+If a step cannot be exercised (no device, no Play account, no `MAPBOX_DOWNLOADS_TOKEN` yet), leave the checkbox unticked and note the blocker. Do not pre-tick on the assumption it will probably work.
 
 ## What To Finish Before Play Console Submission
 
