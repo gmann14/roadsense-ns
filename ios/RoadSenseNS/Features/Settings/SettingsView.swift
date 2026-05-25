@@ -185,6 +185,24 @@ struct SettingsView: View {
                     value: formattedDiagnosticsTime(model.collectionDiagnostics.lastPotholeCandidateAt),
                     valueTint: DesignTokens.Palette.inkMuted
                 )
+                Divider()
+                statusRow(
+                    label: "Last trip readings skipped",
+                    value: "\(model.userStatsSummary.lastTripRejectionTotals.total(for: .readingWindow))",
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
+                Divider()
+                statusRow(
+                    label: "Lifetime readings skipped",
+                    value: "\(model.userStatsSummary.lifetimeRejectionTotals.total(for: .readingWindow))",
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
+                Divider()
+                statusRow(
+                    label: "Pre-collection GPS samples ignored",
+                    value: "\(model.collectionDiagnostics.preCollectionLocationSamples)",
+                    valueTint: DesignTokens.Palette.inkMuted
+                )
             }
             .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
         }

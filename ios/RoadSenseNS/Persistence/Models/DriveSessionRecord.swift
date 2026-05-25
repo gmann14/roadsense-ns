@@ -11,6 +11,9 @@ final class DriveSessionRecord {
     var endLatitude: Double?
     var endLongitude: Double?
     var isSealed: Bool
+    /// Codable JSON of `ReadingDiagnosticTotals` for this single session.
+    /// Optional and additive only — `nil` for sessions written before V6.
+    var rejectionTotalsJSON: String?
 
     init(
         id: UUID = UUID(),
@@ -20,7 +23,8 @@ final class DriveSessionRecord {
         startLongitude: Double,
         endLatitude: Double? = nil,
         endLongitude: Double? = nil,
-        isSealed: Bool = false
+        isSealed: Bool = false,
+        rejectionTotalsJSON: String? = nil
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -30,5 +34,6 @@ final class DriveSessionRecord {
         self.endLatitude = endLatitude
         self.endLongitude = endLongitude
         self.isSealed = isSealed
+        self.rejectionTotalsJSON = rejectionTotalsJSON
     }
 }

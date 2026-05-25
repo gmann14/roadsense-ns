@@ -256,6 +256,7 @@ func makePreviewContainer() -> AppContainer {
         uploader: uploader,
         logger: .upload
     )
+    let rejectionRecorder = ReadingRejectionRecorder(container: modelContainer)
 
     return AppContainer(
         config: config,
@@ -285,8 +286,10 @@ func makePreviewContainer() -> AppContainer {
             readingStore: readingStore,
             logger: .app,
             checkpointStore: checkpointStore,
+            rejectionRecorder: rejectionRecorder,
             scheduleUploadDrain: { _ in }
         ),
+        rejectionRecorder: rejectionRecorder,
         locationService: PreviewLocationService(),
         motionService: PreviewMotionService(),
         drivingDetector: PreviewDrivingDetector(),

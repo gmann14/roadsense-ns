@@ -247,6 +247,80 @@ enum RoadSenseSchemaV5: VersionedSchema {
             DriveSessionRecord.self,
         ]
     }
+
+    @Model
+    final class UserStats {
+        @Attribute(.unique) var id: UUID
+        var totalKmRecorded: Double
+        var totalSegmentsContributed: Int
+        var lastDriveAt: Date?
+        var potholesReported: Int
+
+        init(
+            id: UUID = UUID(),
+            totalKmRecorded: Double = 0,
+            totalSegmentsContributed: Int = 0,
+            lastDriveAt: Date? = nil,
+            potholesReported: Int = 0
+        ) {
+            self.id = id
+            self.totalKmRecorded = totalKmRecorded
+            self.totalSegmentsContributed = totalSegmentsContributed
+            self.lastDriveAt = lastDriveAt
+            self.potholesReported = potholesReported
+        }
+    }
+
+    @Model
+    final class DriveSessionRecord {
+        @Attribute(.unique) var id: UUID
+        var startedAt: Date
+        var endedAt: Date?
+        var startLatitude: Double
+        var startLongitude: Double
+        var endLatitude: Double?
+        var endLongitude: Double?
+        var isSealed: Bool
+
+        init(
+            id: UUID = UUID(),
+            startedAt: Date,
+            endedAt: Date? = nil,
+            startLatitude: Double,
+            startLongitude: Double,
+            endLatitude: Double? = nil,
+            endLongitude: Double? = nil,
+            isSealed: Bool = false
+        ) {
+            self.id = id
+            self.startedAt = startedAt
+            self.endedAt = endedAt
+            self.startLatitude = startLatitude
+            self.startLongitude = startLongitude
+            self.endLatitude = endLatitude
+            self.endLongitude = endLongitude
+            self.isSealed = isSealed
+        }
+    }
+}
+
+enum RoadSenseSchemaV6: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(6, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            ReadingRecord.self,
+            UploadBatch.self,
+            PrivacyZoneRecord.self,
+            UserStats.self,
+            DeviceTokenRecord.self,
+            PotholeActionRecord.self,
+            PotholeReportRecord.self,
+            DriveSessionRecord.self,
+        ]
+    }
 }
 
 enum RoadSenseSchemaMigrationPlan: SchemaMigrationPlan {
@@ -257,6 +331,7 @@ enum RoadSenseSchemaMigrationPlan: SchemaMigrationPlan {
             RoadSenseSchemaV3.self,
             RoadSenseSchemaV4.self,
             RoadSenseSchemaV5.self,
+            RoadSenseSchemaV6.self,
         ]
     }
 
@@ -266,6 +341,7 @@ enum RoadSenseSchemaMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: RoadSenseSchemaV2.self, toVersion: RoadSenseSchemaV3.self),
             .lightweight(fromVersion: RoadSenseSchemaV3.self, toVersion: RoadSenseSchemaV4.self),
             .lightweight(fromVersion: RoadSenseSchemaV4.self, toVersion: RoadSenseSchemaV5.self),
+            .lightweight(fromVersion: RoadSenseSchemaV5.self, toVersion: RoadSenseSchemaV6.self),
         ]
     }
 }

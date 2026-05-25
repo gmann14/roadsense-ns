@@ -32,6 +32,7 @@ struct CollectionDiagnosticsSummary: Equatable {
     let lastDrivingEventAt: Date?
     let lastDrivingEventWasDriving: Bool?
     let lastPotholeCandidateAt: Date?
+    let preCollectionLocationSamples: Int
 
     static let empty = CollectionDiagnosticsSummary(
         isMonitoring: false,
@@ -42,7 +43,8 @@ struct CollectionDiagnosticsSummary: Equatable {
         lastLocationSampleAt: nil,
         lastDrivingEventAt: nil,
         lastDrivingEventWasDriving: nil,
-        lastPotholeCandidateAt: nil
+        lastPotholeCandidateAt: nil,
+        preCollectionLocationSamples: 0
     )
 }
 
@@ -509,7 +511,8 @@ final class AppModel {
             lastLocationSampleAt: diagnostics.lastLocationSampleAt,
             lastDrivingEventAt: diagnostics.lastDrivingEventAt,
             lastDrivingEventWasDriving: diagnostics.lastDrivingEventWasDriving,
-            lastPotholeCandidateAt: diagnostics.lastPotholeCandidateAt
+            lastPotholeCandidateAt: diagnostics.lastPotholeCandidateAt,
+            preCollectionLocationSamples: diagnostics.preCollectionLocationSamples
         )
     }
 

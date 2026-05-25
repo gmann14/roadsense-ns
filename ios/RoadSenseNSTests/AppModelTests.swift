@@ -669,6 +669,7 @@ final class AppModelTests: XCTestCase {
             uploader: uploader,
             logger: .upload
         )
+        let rejectionRecorder = ReadingRejectionRecorder(container: modelContainer)
 
         return AppContainer(
             config: config,
@@ -699,8 +700,10 @@ final class AppModelTests: XCTestCase {
                 readingStore: readingStore,
                 logger: .app,
                 checkpointStore: checkpointStore,
+                rejectionRecorder: rejectionRecorder,
                 scheduleUploadDrain: { _ in }
             ),
+            rejectionRecorder: rejectionRecorder,
             locationService: locationService,
             motionService: motionService,
             drivingDetector: drivingDetector,

@@ -119,6 +119,67 @@ final class ModelMigrationTests: XCTestCase {
         try assertMigratedLegacyPotholeAction(at: storeURL, actionID: actionID)
     }
 
+    func testMigratesV5UserStatsAndDriveSessionsWithEmptyRejectionTotals() throws {
+        let directory = try makeTemporaryDirectory()
+        let storeURL = directory.appendingPathComponent("default.store", isDirectory: false)
+        let statsID = UUID()
+        let sessionID = UUID()
+        let startedAt = Date(timeIntervalSince1970: 1_777_200_000)
+
+        do {
+            let legacySchema = Schema(versionedSchema: RoadSenseSchemaV5.self)
+            let legacyConfiguration = ModelConfiguration(
+                schema: legacySchema,
+                url: storeURL,
+                allowsSave: true,
+                cloudKitDatabase: .none
+            )
+            let legacyContainer = try ModelContainer(
+                for: legacySchema,
+                configurations: [legacyConfiguration]
+            )
+            let legacyContext = ModelContext(legacyContainer)
+            legacyContext.insert(
+                RoadSenseSchemaV5.UserStats(
+                    id: statsID,
+                    totalKmRecorded: 12.3,
+                    totalSegmentsContributed: 18,
+                    lastDriveAt: startedAt,
+                    potholesReported: 1
+                )
+            )
+            legacyContext.insert(
+                RoadSenseSchemaV5.DriveSessionRecord(
+                    id: sessionID,
+                    startedAt: startedAt,
+                    endedAt: startedAt.addingTimeInterval(600),
+                    startLatitude: 44.64,
+                    startLongitude: -63.57,
+                    endLatitude: 44.65,
+                    endLongitude: -63.58,
+                    isSealed: true
+                )
+            )
+            try legacyContext.save()
+        }
+
+        let migratedContainer = try ModelContainerProvider.makePersistentStore(at: storeURL)
+        let migratedContext = ModelContext(migratedContainer)
+        let stats = try migratedContext.fetch(FetchDescriptor<UserStats>())
+        let sessions = try migratedContext.fetch(FetchDescriptor<DriveSessionRecord>())
+
+        XCTAssertEqual(stats.count, 1)
+        XCTAssertEqual(stats.first?.id, statsID)
+        XCTAssertEqual(stats.first?.totalKmRecorded, 12.3, accuracy: 0.0001)
+        XCTAssertEqual(stats.first?.totalSegmentsContributed, 18)
+        XCTAssertNil(stats.first?.rejectionTotalsJSON)
+
+        XCTAssertEqual(sessions.count, 1)
+        XCTAssertEqual(sessions.first?.id, sessionID)
+        XCTAssertTrue(sessions.first?.isSealed ?? false)
+        XCTAssertNil(sessions.first?.rejectionTotalsJSON)
+    }
+
     func testRecoveryBacksUpUnreadablePersistentStoreAndCreatesFreshStore() throws {
         let directory = try makeTemporaryDirectory()
         let storeURL = directory.appendingPathComponent("default.store", isDirectory: false)

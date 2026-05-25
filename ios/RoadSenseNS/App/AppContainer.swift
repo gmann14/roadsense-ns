@@ -16,6 +16,7 @@ struct AppContainer {
     let uploader: Uploader
     let uploadDrainCoordinator: UploadDrainCoordinator
     let sensorCoordinator: SensorCoordinator
+    let rejectionRecorder: ReadingRejectionRecorder
     let locationService: LocationServicing
     let motionService: MotionServicing
     let drivingDetector: DrivingDetecting
@@ -56,6 +57,10 @@ struct AppContainer {
             uploader: uploader,
             logger: .upload
         )
+        let rejectionRecorder = ReadingRejectionRecorder(
+            container: modelContainer,
+            logger: logger
+        )
         return AppContainer(
             config: config,
             permissions: SystemPermissionManager(),
@@ -78,6 +83,7 @@ struct AppContainer {
                 readingStore: readingStore,
                 logger: logger,
                 checkpointStore: checkpointStore,
+                rejectionRecorder: rejectionRecorder,
                 scheduleUploadDrain: { earliestBegin in
                     BackgroundTaskRegistrar.scheduleNextUploadDrain(
                         earliestBegin: earliestBegin,
@@ -85,6 +91,7 @@ struct AppContainer {
                     )
                 }
             ),
+            rejectionRecorder: rejectionRecorder,
             locationService: locationService,
             motionService: motionService,
             drivingDetector: drivingDetector,

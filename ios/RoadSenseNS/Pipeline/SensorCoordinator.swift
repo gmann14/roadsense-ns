@@ -11,6 +11,10 @@ struct SensorCollectionDiagnostics: Equatable {
     let lastDrivingEventAt: Date?
     let lastDrivingEventWasDriving: Bool?
     let lastPotholeCandidateAt: Date?
+    /// Count of GPS samples observed while monitoring but before collection
+    /// engaged. Resets on app launch. Useful when a tester reports zero
+    /// collection activity but the OS is still feeding samples.
+    let preCollectionLocationSamples: Int
 
     static let empty = SensorCollectionDiagnostics(
         isMonitoring: false,
@@ -21,7 +25,8 @@ struct SensorCollectionDiagnostics: Equatable {
         lastLocationSampleAt: nil,
         lastDrivingEventAt: nil,
         lastDrivingEventWasDriving: nil,
-        lastPotholeCandidateAt: nil
+        lastPotholeCandidateAt: nil,
+        preCollectionLocationSamples: 0
     )
 }
 
@@ -40,6 +45,7 @@ final class SensorCoordinator {
     private let readingStore: ReadingStore
     private let logger: RoadSenseLogger
     private let checkpointStore: SensorCheckpointStore
+    private let rejectionRecorder: ReadingRejectionRecorder?
     private let nowProvider: @Sendable () -> Date
     private let scheduleUploadDrain: @MainActor (Date) -> Void
     private let stopCollectionGracePeriod: Duration
@@ -77,6 +83,7 @@ final class SensorCoordinator {
         readingStore: ReadingStore,
         logger: RoadSenseLogger,
         checkpointStore: SensorCheckpointStore,
+        rejectionRecorder: ReadingRejectionRecorder? = nil,
         stopCollectionGracePeriod: Duration = .seconds(60),
         nowProvider: @escaping @Sendable () -> Date = { Date() },
         scheduleUploadDrain: @escaping @MainActor (Date) -> Void
@@ -89,6 +96,7 @@ final class SensorCoordinator {
         self.readingStore = readingStore
         self.logger = logger
         self.checkpointStore = checkpointStore
+        self.rejectionRecorder = rejectionRecorder
         self.nowProvider = nowProvider
         self.stopCollectionGracePeriod = stopCollectionGracePeriod
         self.scheduleUploadDrain = scheduleUploadDrain
@@ -103,6 +111,7 @@ final class SensorCoordinator {
         readingStore: ReadingStore,
         logger: RoadSenseLogger,
         checkpointStore: SensorCheckpointStore,
+        rejectionRecorder: ReadingRejectionRecorder? = nil,
         scheduleUploadDrain: @escaping @MainActor (Date) -> Void
     ) {
         self.init(
@@ -114,6 +123,7 @@ final class SensorCoordinator {
             readingStore: readingStore,
             logger: logger,
             checkpointStore: checkpointStore,
+            rejectionRecorder: rejectionRecorder,
             stopCollectionGracePeriod: .seconds(60),
             scheduleUploadDrain: scheduleUploadDrain
         )
@@ -233,7 +243,8 @@ final class SensorCoordinator {
             lastLocationSampleAt: lastLocationSampleAt,
             lastDrivingEventAt: lastDrivingEventAt,
             lastDrivingEventWasDriving: lastDrivingEventWasDriving,
-            lastPotholeCandidateAt: lastPotholeCandidateAt
+            lastPotholeCandidateAt: lastPotholeCandidateAt,
+            preCollectionLocationSamples: rejectionRecorder?.preCollectionLocationSampleCount ?? 0
         )
     }
 
@@ -318,6 +329,7 @@ final class SensorCoordinator {
         }
 
         guard isCollecting else {
+            rejectionRecorder?.recordPreCollectionLocationSample()
             return
         }
 
@@ -337,7 +349,15 @@ final class SensorCoordinator {
             return
         }
 
-        guard let window = readingBuilder.addLocationSample(sample) else {
+        let outcome = readingBuilder.addLocationSample(sample)
+        let window: ReadingWindow
+        switch outcome {
+        case .window(let candidate):
+            window = candidate
+        case .inProgress:
+            return
+        case .reset(let reason):
+            rejectionRecorder?.recordReadingWindowReset(reason, sessionID: driveSessionID)
             return
         }
 
@@ -361,9 +381,11 @@ final class SensorCoordinator {
                 try readingStore.saveAccepted(candidate, driveSessionID: driveSessionID)
             } catch {
                 logger.error("failed to persist accepted reading: \(error.localizedDescription)")
+                rejectionRecorder?.recordPersistFailure(sessionID: driveSessionID)
             }
         case let .rejected(reason):
             logger.info("reading window rejected: \(String(describing: reason))")
+            rejectionRecorder?.recordQualityRejection(reason, sessionID: driveSessionID)
         }
 
         recentPotholes.removeAll {
@@ -463,6 +485,8 @@ final class SensorCoordinator {
         } catch {
             logger.error("failed to save sensor checkpoint: \(error.localizedDescription)")
         }
+
+        rejectionRecorder?.flush()
     }
 
     private func ensureCurrentDriveSession(for sample: LocationSample) -> UUID? {
@@ -484,6 +508,11 @@ final class SensorCoordinator {
         guard let currentDriveSessionID else {
             return
         }
+
+        if readingBuilder.partialWindowDiagnostic() != nil {
+            rejectionRecorder?.recordPartialAtSeal(sessionID: currentDriveSessionID)
+        }
+        rejectionRecorder?.flush()
 
         do {
             if let summary = try readingStore.finalizeDriveSession(

@@ -87,6 +87,7 @@ extension AppContainer {
             uploader: uploader,
             logger: .upload
         )
+        let rejectionRecorder = ReadingRejectionRecorder(container: modelContainer, logger: logger)
 
         seedTestingScenario(
             scenario: scenario,
@@ -116,8 +117,10 @@ extension AppContainer {
                 readingStore: readingStore,
                 logger: logger,
                 checkpointStore: checkpointStore,
+                rejectionRecorder: rejectionRecorder,
                 scheduleUploadDrain: { _ in }
             ),
+            rejectionRecorder: rejectionRecorder,
             locationService: locationService,
             motionService: motionService,
             drivingDetector: drivingDetector,

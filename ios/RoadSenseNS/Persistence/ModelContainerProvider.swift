@@ -9,7 +9,7 @@ enum PersistentStoreRecoveryStrategy: Equatable {
 enum ModelContainerProvider {
     @MainActor
     static func schema() -> Schema {
-        Schema(versionedSchema: RoadSenseSchemaV5.self)
+        Schema(versionedSchema: RoadSenseSchemaV6.self)
     }
 
     @MainActor

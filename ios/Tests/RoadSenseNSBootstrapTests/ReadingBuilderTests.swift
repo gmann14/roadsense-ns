@@ -23,10 +23,10 @@ struct ReadingBuilderTests {
             )
         }
 
-        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0)) == nil)
-        #expect(builder.addLocationSample(sample(atMeters: 20, second: 5)) == nil)
+        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0)) == .inProgress)
+        #expect(builder.addLocationSample(sample(atMeters: 20, second: 5)) == .inProgress)
 
-        guard let reading = builder.addLocationSample(sample(atMeters: 40, second: 10)) else {
+        guard case let .window(reading) = builder.addLocationSample(sample(atMeters: 40, second: 10)) else {
             Issue.record("Expected an emitted reading window")
             return
         }
@@ -53,9 +53,12 @@ struct ReadingBuilderTests {
             )
         }
 
-        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0)) == nil)
-        #expect(builder.addLocationSample(sample(atMeters: 10, second: 3, horizontalAccuracy: 25)) == nil)
-        #expect(builder.addLocationSample(sample(atMeters: 50, second: 8)) == nil)
+        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0)) == .inProgress)
+        #expect(
+            builder.addLocationSample(sample(atMeters: 10, second: 3, horizontalAccuracy: 25))
+                == .reset(.builderGpsAccuracy)
+        )
+        #expect(builder.addLocationSample(sample(atMeters: 50, second: 8)) == .inProgress)
     }
 
     @Test("drops window when duration exceeds 15 seconds")
@@ -72,9 +75,12 @@ struct ReadingBuilderTests {
             )
         }
 
-        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0)) == nil)
-        #expect(builder.addLocationSample(sample(atMeters: 20, second: 8)) == nil)
-        #expect(builder.addLocationSample(sample(atMeters: 40, second: 16)) == nil)
+        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0)) == .inProgress)
+        #expect(builder.addLocationSample(sample(atMeters: 20, second: 8)) == .inProgress)
+        #expect(
+            builder.addLocationSample(sample(atMeters: 40, second: 16))
+                == .reset(.builderDuration)
+        )
     }
 
     @Test("drops window when heading variance exceeds 60 degrees")
@@ -91,9 +97,12 @@ struct ReadingBuilderTests {
             )
         }
 
-        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0, headingDegrees: 0)) == nil)
-        #expect(builder.addLocationSample(sample(atMeters: 20, second: 4, headingDegrees: 10)) == nil)
-        #expect(builder.addLocationSample(sample(atMeters: 40, second: 8, headingDegrees: 120)) == nil)
+        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0, headingDegrees: 0)) == .inProgress)
+        #expect(builder.addLocationSample(sample(atMeters: 20, second: 4, headingDegrees: 10)) == .inProgress)
+        #expect(
+            builder.addLocationSample(sample(atMeters: 40, second: 8, headingDegrees: 120))
+                == .reset(.builderHeadingVariance)
+        )
     }
 
     @Test("drops window with fewer than 30 motion samples")
@@ -110,9 +119,45 @@ struct ReadingBuilderTests {
             )
         }
 
-        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0)) == nil)
-        #expect(builder.addLocationSample(sample(atMeters: 20, second: 3)) == nil)
-        #expect(builder.addLocationSample(sample(atMeters: 40, second: 6)) == nil)
+        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0)) == .inProgress)
+        #expect(builder.addLocationSample(sample(atMeters: 20, second: 3)) == .inProgress)
+        #expect(
+            builder.addLocationSample(sample(atMeters: 40, second: 6))
+                == .reset(.builderSampleCount)
+        )
+    }
+
+    @Test("partial window diagnostic is nil with no samples")
+    func partialDiagnosticIsNilForEmptyBuilder() {
+        let builder = ReadingBuilder()
+        #expect(builder.partialWindowDiagnostic() == nil)
+    }
+
+    @Test("partial window diagnostic reports in-flight state")
+    func partialDiagnosticReportsInFlight() {
+        var builder = ReadingBuilder()
+        for index in 0..<10 {
+            builder.addMotionSample(
+                MotionSample(
+                    timestamp: Double(index) / 50.0,
+                    userAcceleration: MotionVector3(x: 0, y: 0, z: 0.2),
+                    gravity: MotionVector3(x: 0, y: 0, z: 1)
+                )
+            )
+        }
+        #expect(builder.addLocationSample(sample(atMeters: 0, second: 0)) == .inProgress)
+        #expect(builder.addLocationSample(sample(atMeters: 10, second: 2)) == .inProgress)
+
+        guard let diagnostic = builder.partialWindowDiagnostic() else {
+            Issue.record("Expected a partial diagnostic")
+            return
+        }
+
+        #expect(diagnostic.locationSampleCount == 2)
+        #expect(diagnostic.motionSampleCount == 10)
+        #expect(diagnostic.durationSeconds == 2)
+        #expect(diagnostic.travelMeters > 0)
+        #expect(diagnostic.travelMeters < 40)
     }
 
     private func sample(

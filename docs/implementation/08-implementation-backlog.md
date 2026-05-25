@@ -1089,6 +1089,47 @@ Android is explicitly post-iOS MVP. Do not start this until the iOS app has prov
   - either: short README in `ios/Config/Templates/` describing the override pattern + revert step; OR a structured "Connect to environment" picker in the Local-build app's debug settings that flips API_BASE_URL at runtime (without rebuild) so testers can route a single install at staging or production from the device
 - **Out of scope:** any change to TestFlight or App Store builds — this is dev-only ergonomics
 
+### B099 — Per-trip and phone-mount-aware calibration normalization
+
+- **Spec refs:** [01](01-ios-implementation.md), [04](04-testing-and-quality.md)
+- **Depends on:** B050 (roughness scorer), and at least a few multi-vehicle / multi-mount field datasets to calibrate against
+- **Why field-test discovery:** the same phone produces materially different roughness readings depending on how it is carried during a drive. Observed example: a passenger phone resting on a lap absorbs vibration very differently from the same phone in its usual dashboard mount, biasing scores low for the lap-carried trip on the same road. Per-vehicle calibration alone won't fix this — calibration may have to be per-trip, since the same vehicle can carry the phone in a mount one day and on a lap the next. With a large enough sample size this likely averages out across users, but biased single-tester data and small-N segments will reflect it directly until then.
+- **Why captured now:** B050's "Current repo note" already flags future per-vehicle normalization. This task makes the per-trip dimension explicit so we don't ship vehicle-only calibration and assume the problem is solved.
+- **Possible approaches (pick after a small spike):**
+  - infer mount vs handheld vs lap from the gravity-axis stability and low-frequency tilt drift at trip start, then apply a per-trip scale factor
+  - add a one-tap "How is your phone carried?" prompt at trip start when the inferred class is ambiguous, defaulted off so it never blocks passive collection
+  - downweight (or exclude from aggregates) trips whose inferred carry-class deviates from the user's typical pattern, instead of trying to normalize them
+  - rely on cross-user averaging once N per segment is large enough and explicitly de-prioritize per-trip calibration until a coverage threshold is hit
+- **RED**
+  - fixture-replay test: two recordings of the same drive with different phone placements produce roughness scores within an agreed tolerance after normalization, and produce visibly divergent scores without it
+  - unit test for the carry-class inference (mount vs lap vs handheld) on labeled fixtures
+  - regression guard: applying per-trip normalization to a known-good calibration drive does not move its scores outside the existing scorer-stability tolerance
+- **Acceptance**
+  - documented decision on per-vehicle vs per-trip vs both, with the chosen approach implemented
+  - on the lap-vs-mount fixture pair, normalized roughness scores agree within the documented tolerance on shared road segments
+  - the chosen UX (silent inference vs optional prompt) does not block or slow passive collection
+- **Out of scope:** sensor-fusion with vehicle CAN-bus data, or any normalization that requires the user to identify the vehicle make/model
+
+### B111 — Proactive "still there?" pothole confirmation while passing nearby
+
+- **Spec refs:** [01](01-ios-implementation.md#manual-pothole-reporting-and-follow-up), [07](07-web-dashboard-implementation.md)
+- **Depends on:** B073, B074, B075 (core action model + initial stopped-only follow-up prompt)
+- **Why captured:** B075 already ships the stopped-only deferred follow-up prompt and B110 captures broader follow-up UX, but the explicit Waze-style behavior — "you just passed an active pothole, is it still here?" with `Still there` / `Looks fixed` — is currently filed as "optional polish". This task makes that proactive resurfacing model concrete so a clear pothole-resolution flow is on the roadmap rather than implicit.
+- **RED**
+  - UI/integration tests proving prompts only fire when the user is stopped or the trip has ended, never while actively driving
+  - tests for prompt suppression rules: do not re-prompt the same user about the same pothole more often than a documented cooldown, and never within active privacy zones
+  - server-side test that two independent `confirm_fixed` actions from the proactive prompt resolve a pothole the same way segment-sheet actions do (uses the same `apply_pothole_action` path, no second resolution code path)
+- **GREEN**
+  - extend the existing follow-up prompt scheduler to consider "passed near an active pothole on a recent trip" as a trigger, not just "user opened a nearby segment sheet"
+  - tune cooldown and per-pothole prompt budgets so a single long commute past a known pothole doesn't generate repeated prompts
+  - keep all prompt actions wired to `PotholeActionRecord` / `apply_pothole_action` so server-side resolution semantics stay identical to the segment-sheet path
+  - reuse the public-copy treatment from B110 for `active` vs `resolved` so the web/public surfaces stay consistent with what the prompt is asking
+- **Acceptance**
+  - on a documented test drive past an active pothole, the user sees at most one `Still there? / Looks fixed` prompt after the trip ends, never during driving
+  - confirming `Looks fixed` from the proactive prompt produces exactly the same backend state transition as confirming it from the segment detail sheet
+  - prompt frequency stays within the documented per-user / per-pothole budget on a multi-pothole route
+- **Out of scope:** push notifications outside the app (this is in-app only), and any flow that lets a single user instantly delete a pothole marker
+
 ## Suggested PR Slicing
 
 Keep changes narrow. A good slicing strategy:

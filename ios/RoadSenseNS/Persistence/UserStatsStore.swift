@@ -11,6 +11,15 @@ struct UserStatsSummary: Equatable {
     let privacyFilteredCount: Int
     let pendingUploadCount: Int
     let pendingTripUploadCount: Int
+    /// Diagnostic totals across the install lifetime. Always present, may be
+    /// empty for fresh installs or stores migrated from V5 before the recorder
+    /// has flushed its first event.
+    let lifetimeRejectionTotals: ReadingDiagnosticTotals
+    /// Diagnostic totals for the most recent trip, where a trip groups
+    /// consecutive sessions less than 60 s apart (matches `totalTripsRecorded`).
+    let lastTripRejectionTotals: ReadingDiagnosticTotals
+    let lastTripStartedAt: Date?
+    let lastTripEndedAt: Date?
 
     static let zero = UserStatsSummary(
         totalKmRecorded: 0,
@@ -21,7 +30,11 @@ struct UserStatsSummary: Equatable {
         acceptedReadingCount: 0,
         privacyFilteredCount: 0,
         pendingUploadCount: 0,
-        pendingTripUploadCount: 0
+        pendingTripUploadCount: 0,
+        lifetimeRejectionTotals: .empty,
+        lastTripRejectionTotals: .empty,
+        lastTripStartedAt: nil,
+        lastTripEndedAt: nil
     )
 }
 
@@ -68,6 +81,9 @@ final class UserStatsStore {
             )
         )
 
+        let lifetimeTotals = ReadingDiagnosticTotals.decode(fromJSON: stats?.rejectionTotalsJSON)
+        let trip = Self.lastGroupedTrip(in: driveSessions)
+
         return UserStatsSummary(
             totalKmRecorded: stats?.totalKmRecorded ?? 0,
             totalSegmentsContributed: stats?.totalSegmentsContributed ?? 0,
@@ -80,7 +96,11 @@ final class UserStatsStore {
             pendingTripUploadCount: Self.pendingTripUploadCount(
                 pendingReadings: pendingReadings,
                 driveSessions: driveSessions
-            )
+            ),
+            lifetimeRejectionTotals: lifetimeTotals,
+            lastTripRejectionTotals: trip?.totals ?? .empty,
+            lastTripStartedAt: trip?.startedAt,
+            lastTripEndedAt: trip?.endedAt
         )
     }
 
@@ -115,5 +135,53 @@ final class UserStatsStore {
 
     private static func resolvedEnd(for session: DriveSessionRecord) -> Date {
         session.endedAt ?? session.startedAt
+    }
+
+    /// Aggregates the most recent grouped trip — same <= 60 s grouping rule as
+    /// `groupedTripCount`. Returns the union of session totals and the trip's
+    /// time bounds. `nil` when there are no sessions.
+    private static func lastGroupedTrip(in sessions: [DriveSessionRecord])
+        -> (totals: ReadingDiagnosticTotals, startedAt: Date, endedAt: Date)?
+    {
+        let sorted = sessions.sorted(by: { $0.startedAt < $1.startedAt })
+        guard !sorted.isEmpty else {
+            return nil
+        }
+
+        var groups: [[DriveSessionRecord]] = []
+        var current: [DriveSessionRecord] = []
+        var currentEnd: Date?
+
+        for session in sorted {
+            let sessionEnd = resolvedEnd(for: session)
+            if let end = currentEnd,
+               session.startedAt.timeIntervalSince(end) <= fragmentedTripMergeGapSeconds {
+                current.append(session)
+                currentEnd = max(end, sessionEnd)
+            } else {
+                if !current.isEmpty {
+                    groups.append(current)
+                }
+                current = [session]
+                currentEnd = sessionEnd
+            }
+        }
+        if !current.isEmpty {
+            groups.append(current)
+        }
+
+        guard let last = groups.last else {
+            return nil
+        }
+
+        var totals = ReadingDiagnosticTotals.empty
+        for session in last {
+            totals.add(ReadingDiagnosticTotals.decode(fromJSON: session.rejectionTotalsJSON))
+        }
+
+        let startedAt = last.first!.startedAt
+        let endedAt = last.map(resolvedEnd).max() ?? startedAt
+
+        return (totals, startedAt, endedAt)
     }
 }

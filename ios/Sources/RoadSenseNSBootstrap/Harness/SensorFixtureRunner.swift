@@ -121,7 +121,11 @@ public enum SensorFixtureRunner {
                     continue
                 }
 
-                guard let window = readingBuilder.addLocationSample(sample) else {
+                let window: ReadingWindow
+                switch readingBuilder.addLocationSample(sample) {
+                case .window(let candidate):
+                    window = candidate
+                case .inProgress, .reset:
                     continue
                 }
 

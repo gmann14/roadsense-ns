@@ -65,6 +65,31 @@ public struct ReadingWindow: Equatable, Sendable, Codable {
     }
 }
 
+public enum ReadingBuilderOutcome: Equatable, Sendable {
+    case window(ReadingWindow)
+    case inProgress
+    case reset(ReadingDiagnosticReason)
+}
+
+public struct ReadingBuilderPartialDiagnostic: Equatable, Sendable {
+    public let travelMeters: Double
+    public let durationSeconds: TimeInterval
+    public let locationSampleCount: Int
+    public let motionSampleCount: Int
+
+    public init(
+        travelMeters: Double,
+        durationSeconds: TimeInterval,
+        locationSampleCount: Int,
+        motionSampleCount: Int
+    ) {
+        self.travelMeters = travelMeters
+        self.durationSeconds = durationSeconds
+        self.locationSampleCount = locationSampleCount
+        self.motionSampleCount = motionSampleCount
+    }
+}
+
 public struct ReadingBuilder: Sendable {
     public struct Snapshot: Equatable, Sendable, Codable {
         public let targetDistanceMeters: Double
@@ -120,15 +145,15 @@ public struct ReadingBuilder: Sendable {
         motionSamples.append(sample)
     }
 
-    public mutating func addLocationSample(_ sample: LocationSample) -> ReadingWindow? {
+    public mutating func addLocationSample(_ sample: LocationSample) -> ReadingBuilderOutcome {
         guard sample.horizontalAccuracyMeters <= maxHorizontalAccuracyMeters else {
             reset()
-            return nil
+            return .reset(.builderGpsAccuracy)
         }
 
         if locationSamples.isEmpty {
             locationSamples = [sample]
-            return nil
+            return .inProgress
         }
 
         locationSamples.append(sample)
@@ -136,21 +161,21 @@ public struct ReadingBuilder: Sendable {
         let duration = sample.timestamp - locationSamples[0].timestamp
         guard duration <= maxDurationSeconds else {
             reset(startingWith: sample)
-            return nil
+            return .reset(.builderDuration)
         }
 
         guard headingVarianceDegrees(for: locationSamples) <= maxHeadingVarianceDegrees else {
             reset(startingWith: sample)
-            return nil
+            return .reset(.builderHeadingVariance)
         }
 
         guard traveledDistanceMeters(for: locationSamples) >= targetDistanceMeters else {
-            return nil
+            return .inProgress
         }
 
         guard motionSamples.count >= minimumSampleCount else {
             reset(startingWith: sample)
-            return nil
+            return .reset(.builderSampleCount)
         }
 
         let reading = ReadingWindow(
@@ -168,7 +193,31 @@ public struct ReadingBuilder: Sendable {
         )
 
         reset(startingWith: sample)
-        return reading
+        return .window(reading)
+    }
+
+    /// Returns a snapshot of any in-flight window only when there is meaningful
+    /// progress to report — i.e. a location sample is held but the window has
+    /// not yet sealed. Used at session-seal time to record `builderPartialAtSeal`
+    /// once, never per location sample.
+    public func partialWindowDiagnostic() -> ReadingBuilderPartialDiagnostic? {
+        guard locationSamples.count > 1 else {
+            return nil
+        }
+
+        let travel = traveledDistanceMeters(for: locationSamples)
+        let duration = locationSamples.last!.timestamp - locationSamples[0].timestamp
+
+        guard travel > 0 || duration > 0 else {
+            return nil
+        }
+
+        return ReadingBuilderPartialDiagnostic(
+            travelMeters: travel,
+            durationSeconds: duration,
+            locationSampleCount: locationSamples.count,
+            motionSampleCount: motionSamples.count
+        )
     }
 
     public func snapshot() -> Snapshot {

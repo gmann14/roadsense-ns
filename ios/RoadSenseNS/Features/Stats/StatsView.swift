@@ -8,12 +8,14 @@ struct StatsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var summary = UserStatsSummary.zero
     @State private var errorMessage: String?
+    @State private var showAllSkipReasons = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Space.xl) {
                 hero
                 contributionCard
+                skippedCard
                 if onShowDrives != nil {
                     drivesShortcutCard
                 }
@@ -140,6 +142,76 @@ struct StatsView: View {
         }
     }
 
+    private var skippedCard: some View {
+        let groups = StatsView.skipGroups(for: summary.lastTripRejectionTotals)
+        let nonEmpty = groups.filter { $0.count > 0 }
+        let emptyGroups = groups.filter { $0.count == 0 }
+        let totalSkipped = nonEmpty.reduce(0) { $0 + $1.count }
+
+        return sectionCard(title: "Why readings were skipped") {
+            VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
+                Text(skippedHeadline(totalSkipped: totalSkipped))
+                    .font(.system(size: 13))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    .accessibilityIdentifier("stats.skipped-headline")
+
+                if nonEmpty.isEmpty {
+                    Text("Everything captured cleanly.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(DesignTokens.Palette.inkMuted)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(nonEmpty) { group in
+                            statRow(
+                                label: group.label,
+                                value: "\(group.count)",
+                                identifier: "stats.skipped.\(group.id)"
+                            )
+                            if group.id != nonEmpty.last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+
+                if !emptyGroups.isEmpty {
+                    Button(showAllSkipReasons ? "Hide other reasons" : "Show all") {
+                        showAllSkipReasons.toggle()
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .accessibilityIdentifier("stats.skipped.toggle")
+
+                    if showAllSkipReasons {
+                        VStack(spacing: 0) {
+                            ForEach(emptyGroups) { group in
+                                statRow(
+                                    label: group.label,
+                                    value: "0",
+                                    identifier: "stats.skipped.\(group.id)",
+                                    valueTint: DesignTokens.Palette.inkMuted
+                                )
+                                if group.id != emptyGroups.last?.id {
+                                    Divider()
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func skippedHeadline(totalSkipped: Int) -> String {
+        if let endedAt = summary.lastTripEndedAt {
+            let formatted = endedAt.formatted(date: .abbreviated, time: .shortened)
+            return "Last trip · \(formatted) · \(totalSkipped) skipped"
+        }
+        if summary.totalTripsRecorded == 0 {
+            return "No trips yet."
+        }
+        return "\(totalSkipped) skipped on last trip"
+    }
+
     private var drivesShortcutCard: some View {
         sectionCard(title: "Recent drives") {
             VStack(alignment: .leading, spacing: DesignTokens.Space.sm) {
@@ -248,6 +320,37 @@ struct StatsView: View {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    struct SkipGroup: Identifiable, Equatable {
+        let id: String
+        let label: String
+        let reasons: [ReadingDiagnosticReason]
+        let count: Int
+    }
+
+    static func skipGroups(for totals: ReadingDiagnosticTotals) -> [SkipGroup] {
+        let definitions: [(id: String, label: String, reasons: [ReadingDiagnosticReason])] = [
+            ("slow", "Slow / stop-and-go", [.qualitySpeed]),
+            ("gps", "GPS accuracy lost", [.builderGpsAccuracy, .qualityGpsAccuracy]),
+            ("sensor", "Sensor data sparse", [.builderSampleCount, .qualitySampleCount]),
+            ("heading", "Heading changed", [.builderHeadingVariance]),
+            ("duration", "Window timed out", [.builderDuration, .qualityDuration]),
+            ("incomplete", "Incomplete at stop", [.builderPartialAtSeal]),
+            ("thermal", "Too hot to record", [.qualityThermal]),
+            ("save", "Save errors", [.persistFailure]),
+        ]
+        return definitions.map { definition in
+            let count = definition.reasons.reduce(0) { partial, reason in
+                partial + totals.count(for: reason)
+            }
+            return SkipGroup(
+                id: definition.id,
+                label: definition.label,
+                reasons: definition.reasons,
+                count: count
+            )
         }
     }
 }
