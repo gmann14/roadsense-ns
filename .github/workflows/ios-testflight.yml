@@ -37,6 +37,9 @@ jobs:
       APPLE_ASC_API_ISSUER_ID: ${{ secrets.APPLE_ASC_API_ISSUER_ID }}
       APPLE_ASC_API_PRIVATE_KEY: ${{ secrets.APPLE_ASC_API_PRIVATE_KEY }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_DISTRIBUTION_CERTIFICATE_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 || secrets.APPLE_DISTRIBUTION_SECRET_BASE64 }}
+      APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD }}
+      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
       MAPBOX_ACCESS_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
       ROAD_SENSE_PUBLIC_API_KEY: ${{ secrets.ROAD_SENSE_PUBLIC_API_KEY }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
@@ -54,7 +57,7 @@ jobs:
         shell: bash
         run: |
           missing=()
-          for name in APPLE_ASC_API_KEY_ID APPLE_ASC_API_ISSUER_ID APPLE_ASC_API_PRIVATE_KEY APPLE_TEAM_ID MAPBOX_ACCESS_TOKEN ROAD_SENSE_PUBLIC_API_KEY; do
+          for name in APPLE_ASC_API_KEY_ID APPLE_ASC_API_ISSUER_ID APPLE_ASC_API_PRIVATE_KEY APPLE_TEAM_ID APPLE_DISTRIBUTION_CERTIFICATE_BASE64 APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD APPLE_PROVISIONING_PROFILE_BASE64 MAPBOX_ACCESS_TOKEN ROAD_SENSE_PUBLIC_API_KEY; do
             if [[ -z "${!name}" ]]; then
               missing+=("$name")
             fi
@@ -86,6 +89,43 @@ jobs:
           printf '%s' "${APPLE_ASC_API_PRIVATE_KEY}" > "${key_path}"
           chmod 600 "${key_path}"
           echo "APPLE_ASC_API_PRIVATE_KEY_PATH=${key_path}" >> "${GITHUB_ENV}"
+
+      - name: Install Apple signing assets
+        shell: bash
+        env:
+          SIGNING_KEYCHAIN_PASSWORD: ${{ runner.temp }}-${{ github.run_id }}
+        run: |
+          keychain_path="${RUNNER_TEMP}/roadsense-signing.keychain-db"
+          certificate_path="${RUNNER_TEMP}/distribution.p12"
+          profile_path="${RUNNER_TEMP}/app-store.mobileprovision"
+          profile_plist_path="${RUNNER_TEMP}/app-store-profile.plist"
+          profiles_dir="${HOME}/Library/MobileDevice/Provisioning Profiles"
+
+          printf '%s' "${APPLE_DISTRIBUTION_CERTIFICATE_BASE64}" | base64 --decode > "${certificate_path}" \
+            || printf '%s' "${APPLE_DISTRIBUTION_CERTIFICATE_BASE64}" | base64 -D > "${certificate_path}"
+          printf '%s' "${APPLE_PROVISIONING_PROFILE_BASE64}" | base64 --decode > "${profile_path}" \
+            || printf '%s' "${APPLE_PROVISIONING_PROFILE_BASE64}" | base64 -D > "${profile_path}"
+
+          security create-keychain -p "${SIGNING_KEYCHAIN_PASSWORD}" "${keychain_path}"
+          security set-keychain-settings -lut 21600 "${keychain_path}"
+          security unlock-keychain -p "${SIGNING_KEYCHAIN_PASSWORD}" "${keychain_path}"
+          security import "${certificate_path}" \
+            -P "${APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD}" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "${keychain_path}"
+          security list-keychains -d user -s "${keychain_path}" "${HOME}/Library/Keychains/login.keychain-db"
+          security default-keychain -s "${keychain_path}"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${SIGNING_KEYCHAIN_PASSWORD}" "${keychain_path}"
+
+          security cms -D -i "${profile_path}" > "${profile_plist_path}"
+          profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print UUID' "${profile_plist_path}")"
+          profile_name="$(/usr/libexec/PlistBuddy -c 'Print Name' "${profile_plist_path}")"
+          mkdir -p "${profiles_dir}"
+          cp "${profile_path}" "${profiles_dir}/${profile_uuid}.mobileprovision"
+
+          echo "Installed provisioning profile: ${profile_name}"
 
       - name: Build and upload internal TestFlight build
         shell: bash

@@ -11,6 +11,8 @@
 .cloudflare-token*
 .cloudflare-config*
 .railway-secrets*
+*.p12
+*.mobileprovision
 
 # Xcode
 DerivedData/

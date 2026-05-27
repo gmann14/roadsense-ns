@@ -318,10 +318,13 @@ Required repository secrets:
 - `APPLE_ASC_API_ISSUER_ID`
 - `APPLE_ASC_API_PRIVATE_KEY`
 - `APPLE_TEAM_ID`
+- `APPLE_DISTRIBUTION_CERTIFICATE_BASE64` — base64-encoded Apple Distribution `.p12`; the workflow also accepts the legacy typo `APPLE_DISTRIBUTION_SECRET_BASE64`
+- `APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD`
+- `APPLE_PROVISIONING_PROFILE_BASE64` — base64-encoded App Store `.mobileprovision` for `ca.roadsense.ios`
 - `MAPBOX_ACCESS_TOKEN`
 - `ROAD_SENSE_PUBLIC_API_KEY`
 
-The workflow sets `ENABLE_POTHOLE_PHOTOS=YES` for field-test builds so the in-app camera/reporting flow stays available to TestFlight testers. CI signing should use a stable Apple Distribution certificate/provisioning profile setup; routine TestFlight builds must not create, renew, or revoke Apple signing certificates.
+The workflow sets `ENABLE_POTHOLE_PHOTOS=YES` for field-test builds so the in-app camera/reporting flow stays available to TestFlight testers. CI signing imports a stable Apple Distribution certificate/provisioning profile into a temporary keychain; routine TestFlight builds must not create, renew, or revoke Apple signing certificates.
 
 ## Observability Verification Checklist
 
