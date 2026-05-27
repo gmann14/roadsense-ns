@@ -62,17 +62,17 @@ Post-MVP phases:
 - **Spec refs:** [00](00-execution-plan.md), [05](05-deployment-and-observability.md), [06](06-security-and-privacy.md)
 - **Depends on:** none
 - **RED**
-  - checklist doc or PR note confirming `RoadSense NS`, `ca.roadsense.ios`, and `roadsense.ca` are used consistently
+  - checklist doc or PR note confirming `RoadSense NS`, `ca.roadsense.ios`, and `nsroadsense.ca` are used consistently
   - verify no old working-name strings remain in implementation docs
 - **GREEN**
   - create App Store Connect record
   - create Apple bundle ID
-  - reserve/configure `roadsense.ca`
+  - reserve/configure `nsroadsense.ca`
   - create Supabase project in `us-east-1`
   - create Sentry projects for iOS and backend
 - **Acceptance**
   - all credentials/secrets named in [05](05-deployment-and-observability.md) are provisioned
-  - privacy policy placeholder URL is resolvable at `roadsense.ca/privacy` before external TestFlight
+  - privacy policy placeholder URL is resolvable at `nsroadsense.ca/privacy` before external TestFlight
 - **Current repo note:** The repo-side environment plumbing is now in place: GitHub Environments named `staging` and `production` exist, and deploy workflows target them. A dedicated hosted `roadsense-staging` project is intentionally deferred until Apple approval and signed multi-device testing make a shared backend worthwhile. Until then, local Supabase plus CI is the default.
 
 ### B002 — Repo scaffold and CI skeleton

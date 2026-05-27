@@ -15,6 +15,10 @@ on:
         description: Optional CFBundleVersion override
         required: false
         type: string
+      marketing_version:
+        description: Optional CFBundleShortVersionString override, for example 1.0
+        required: false
+        type: string
       upload_to_testflight:
         description: Upload the signed IPA to internal TestFlight
         required: true
@@ -47,6 +51,7 @@ jobs:
       ROAD_SENSE_APP_IDENTIFIER: ca.roadsense.ios
       IOS_RELEASE_CONFIGURATION: ${{ inputs.configuration }}
       IOS_BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}
+      IOS_MARKETING_VERSION: ${{ inputs.marketing_version }}
       SKIP_TESTFLIGHT_UPLOAD: ${{ inputs.upload_to_testflight == false && '1' || '0' }}
       TESTFLIGHT_CHANGELOG: Internal RoadSense NS field-test build from ${{ github.sha }}.
     steps:

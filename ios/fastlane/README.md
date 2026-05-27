@@ -19,6 +19,7 @@ Optional environment:
 - `ROAD_SENSE_APP_IDENTIFIER` defaults to `ca.roadsense.ios`
 - `IOS_RELEASE_CONFIGURATION` defaults to `Staging Release`
 - `IOS_BUILD_NUMBER` defaults to the GitHub run number, or a UTC timestamp locally
+- `IOS_MARKETING_VERSION` overrides `CFBundleShortVersionString`; use `1.0` when uploading the first public App Store build
 - `ROAD_SENSE_PUBLIC_API_KEY` overrides the API key baked into the selected xcconfig
 - `API_BASE_URL` overrides the selected environment API URL
 - `SENTRY_DSN`

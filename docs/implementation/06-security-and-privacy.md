@@ -54,7 +54,7 @@ No age-gating in MVP. Our data collection model doesn't ID minors because it doe
 
 ## Privacy Policy (content outline)
 
-Publish at `https://roadsense.ca/privacy` before TestFlight external review.
+Publish at `https://nsroadsense.ca/privacy` before TestFlight external review.
 
 Sections:
 
@@ -193,7 +193,7 @@ Separate from general ops incidents (see [05-deployment-and-observability.md](05
 
 ### Reporting
 
-Contact form at `https://roadsense.ca/privacy#contact` (or a simple `mailto:`). Public GPG key for sensitive reports (post-launch polish, not MVP).
+Contact form at `https://nsroadsense.ca/privacy#contact` (or a simple `mailto:`). Public GPG key for sensitive reports (post-launch polish, not MVP).
 
 ## Security Hardening Checklist
 

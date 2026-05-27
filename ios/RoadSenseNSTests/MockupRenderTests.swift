@@ -18,22 +18,27 @@ import XCTest
 @MainActor
 final class MockupRenderTests: XCTestCase {
     func testRenderMockups() throws {
-        guard ProcessInfo.processInfo.environment["MOCKUP_RENDER"] == "1" else {
+        let iosRootURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let markerURL = iosRootURL.appendingPathComponent("fastlane/screenshots/.render-enabled")
+        let shouldRender = ProcessInfo.processInfo.environment["MOCKUP_RENDER"] == "1"
+            || FileManager.default.fileExists(atPath: markerURL.path)
+
+        guard shouldRender else {
             throw XCTSkip("Set MOCKUP_RENDER=1 to render mockups.")
         }
 
-        let outputURL = URL(
-            fileURLWithPath: "/Users/grahammann/conductor/workspaces/roadsense-ns/lima/docs/reviews/assets",
-            isDirectory: true
-        )
+        let outputPath = ProcessInfo.processInfo.environment["MOCKUP_RENDER_OUTPUT_DIR"]
+            ?? iosRootURL.appendingPathComponent("fastlane/screenshots/en-CA").path
+        let outputURL = URL(fileURLWithPath: outputPath, isDirectory: true)
         try FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
 
         // Render each scenario at two sizes:
         // - Standard: iPhone 17 Pro logical (393×852) → 1179×2556 px @3×.
-        // - App Store: iPhone 6.7" (430×932) → 1290×2796 px @3×, the required
-        //   submission size in App Store Connect.
+        // - App Store: iPhone 6.5" accepted size (428×926) → 1284×2778 px @3×.
         let standardSize = CGSize(width: 393, height: 852)
-        let appStoreSize = CGSize(width: 430, height: 932)
+        let appStoreSize = CGSize(width: 428, height: 926)
 
         for scenario in MapScreenRedesignPreview.MockScenario.allCases {
             try renderScenario(

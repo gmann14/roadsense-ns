@@ -86,7 +86,7 @@ These are reversible-but-expensive choices. Make them early and explicitly:
 3. **[DECISION] `batch_id` generation.** Client generates UUIDv4 per batch; server enforces uniqueness for idempotent retries. See [03-api-contracts.md](03-api-contracts.md).
 4. **[DECISION] Device token rotation cadence.** Monthly, generated on device, sent as a cleartext UUID over TLS, and hashed with a server-side pepper inside the upload Edge Function before persistence. Rotation means one person = multiple contributor counts over time; accept this.
 5. **[DECISION] OSM snapshot date for MVP.** Pin a specific Geofabrik `nova-scotia-latest.osm.pbf` download date in the import script (lets us reproduce segment IDs). Refresh quarterly after launch.
-6. **[DECISION] Bundle ID / app name.** Lock to bundle ID `ca.roadsense.ios`, display name `RoadSense NS`, and public site domain `roadsense.ca`. Use those values consistently across App Store Connect, privacy policy, screenshots, and deployment config.
+6. **[DECISION] Bundle ID / app name.** Lock to bundle ID `ca.roadsense.ios`, display name `RoadSense NS`, and public site domain `nsroadsense.ca`. Use those values consistently across App Store Connect, privacy policy, screenshots, and deployment config.
 7. **[DECISION] Platform: iOS native first.** Decision made. Swift + SwiftUI + CoreMotion + CoreLocation. No React Native / Flutter for MVP. Rationale: raw-sensor access and tight battery control are the differentiator; cross-platform frameworks add friction with no upside in our 8-week window. Android follow-on starts week 9 (see §Android Follow-On below).
 
 ## Risks to Watch (and Trip-Wires)

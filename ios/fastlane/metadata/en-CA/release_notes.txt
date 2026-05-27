@@ -1,0 +1,1 @@
+Initial RoadSense NS release for public road-quality mapping, passive drive collection, privacy zones, contribution stats, and pothole reporting.

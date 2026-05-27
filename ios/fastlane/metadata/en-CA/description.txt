@@ -1,0 +1,26 @@
+RoadSense NS turns everyday drives into a public map of potholes and rough road conditions across Nova Scotia.
+
+While you drive, RoadSense measures road roughness using your phone's motion and location sensors. Your readings combine with everyone else's to build a community road-quality map that can help drivers, residents, and decision-makers see which roads need attention.
+
+No account. No sign-up. Open the app, allow location and motion access, and drive normally.
+
+What you get:
+
+- A public road-quality map for Nova Scotia
+- Passive drive collection while your phone is locked or in your pocket
+- One-tap pothole reports, with optional photos while stopped
+- Personal stats showing kilometres mapped and contributions made
+- Privacy controls for places you do not want included
+
+Privacy you can verify:
+
+- RoadSense trims sensitive trip endpoints before upload
+- You can add privacy zones for home, work, or other frequent stops
+- No account is required
+- Device tokens rotate periodically
+- You can delete local app data from Settings
+- Background location is used only for road-quality collection
+
+Road quality is usually measured with expensive equipment on long cycles. RoadSense puts a lightweight version of that public-interest data collection in every driver's pocket and makes the result visible to the community.
+
+Built in Halifax. Free and ad-free.
