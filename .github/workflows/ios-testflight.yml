@@ -126,6 +126,7 @@ jobs:
           cp "${profile_path}" "${profiles_dir}/${profile_uuid}.mobileprovision"
 
           echo "Installed provisioning profile: ${profile_name}"
+          echo "ROAD_SENSE_APP_PROFILE_SPECIFIER=${profile_name}" >> "${GITHUB_ENV}"
 
       - name: Build and upload internal TestFlight build
         shell: bash

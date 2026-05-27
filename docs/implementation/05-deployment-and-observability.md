@@ -324,7 +324,7 @@ Required repository secrets:
 - `MAPBOX_ACCESS_TOKEN`
 - `ROAD_SENSE_PUBLIC_API_KEY`
 
-The workflow sets `ENABLE_POTHOLE_PHOTOS=YES` for field-test builds so the in-app camera/reporting flow stays available to TestFlight testers. CI signing imports a stable Apple Distribution certificate/provisioning profile into a temporary keychain; routine TestFlight builds must not create, renew, or revoke Apple signing certificates.
+The workflow sets `ENABLE_POTHOLE_PHOTOS=YES` for field-test builds so the in-app camera/reporting flow stays available to TestFlight testers. CI signing imports a stable Apple Distribution certificate/provisioning profile into a temporary keychain, extracts the profile name, and uses manual App Store signing for the app target only; routine TestFlight builds must not create, renew, or revoke Apple signing certificates.
 
 ## Observability Verification Checklist
 
