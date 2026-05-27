@@ -122,10 +122,13 @@ jobs:
           security cms -D -i "${profile_path}" > "${profile_plist_path}"
           profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print UUID' "${profile_plist_path}")"
           profile_name="$(/usr/libexec/PlistBuddy -c 'Print Name' "${profile_plist_path}")"
+          profile_team_id="$(/usr/libexec/PlistBuddy -c 'Print TeamIdentifier:0' "${profile_plist_path}")"
           mkdir -p "${profiles_dir}"
           cp "${profile_path}" "${profiles_dir}/${profile_uuid}.mobileprovision"
 
-          echo "Installed provisioning profile: ${profile_name}"
+          echo "Installed provisioning profile: ${profile_name} (${profile_uuid})"
+          echo "APPLE_TEAM_ID=${profile_team_id}" >> "${GITHUB_ENV}"
+          echo "ROAD_SENSE_APP_PROFILE_UUID=${profile_uuid}" >> "${GITHUB_ENV}"
           echo "ROAD_SENSE_APP_PROFILE_SPECIFIER=${profile_name}" >> "${GITHUB_ENV}"
 
       - name: Build and upload internal TestFlight build
