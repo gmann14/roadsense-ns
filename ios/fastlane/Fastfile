@@ -149,7 +149,6 @@ platform :ios do
       include_symbols: true,
       include_bitcode: false,
       xcargs: xcode_auth_args,
-      export_xcargs: xcode_auth_args,
       export_options: export_options
     )
   end
