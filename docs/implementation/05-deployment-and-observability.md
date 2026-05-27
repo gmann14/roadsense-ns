@@ -310,7 +310,7 @@ Uses the `production` GitHub Environment with the same secret names as staging. 
 
 ### TestFlight release automation
 
-GitHub Actions now owns the repeatable TestFlight path in `.github/workflows/ios-testflight.yml`. It builds `Staging Release` by default, can switch to `Production Release`, and can run with upload disabled for signing dry runs.
+GitHub Actions now owns the repeatable TestFlight path in `.github/workflows/ios-testflight.yml`. It builds `Staging Release` by default, can switch to `Production Release`, and can run with upload disabled for signing dry runs. The job uses the `macos-26` hosted runner because App Store Connect requires iOS 26 SDK / Xcode 26 or later for uploaded iOS builds.
 
 Required repository secrets:
 
