@@ -23,10 +23,11 @@ Optional environment:
 - `ROAD_SENSE_PUBLIC_API_KEY` overrides the API key baked into the selected xcconfig
 - `API_BASE_URL` overrides the selected environment API URL
 - `SENTRY_DSN`
+- `ENABLE_SENTRY=YES` enables Sentry crash reporting in the app binary; it defaults to `NO` while build 24's device-only launch crash is investigated
 - `ENABLE_POTHOLE_PHOTOS` defaults to `NO` locally; the GitHub TestFlight workflow sets it to `YES` for field-test builds
 - `SKIP_TESTFLIGHT_UPLOAD=1` builds the IPA without uploading
 
-Production Release builds require `SENTRY_DSN` in GitHub Actions so TestFlight crash reports are not the only crash source.
+GitHub Actions requires `SENTRY_DSN` only when `enable_sentry` is selected for the TestFlight workflow.
 
 The release lane must use a stable Apple Distribution signing setup that already exists in CI. Routine TestFlight builds must not create, renew, or revoke Apple signing certificates.
 

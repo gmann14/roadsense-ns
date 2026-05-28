@@ -11,6 +11,7 @@ struct AppConfigTests {
             "MAPBOX_ACCESS_TOKEN": "pk.test-token",
             "SUPABASE_ANON_KEY": "anon.test-key",
             "SENTRY_DSN": "https://public@sentry.example/1",
+            "ENABLE_SENTRY": "YES",
             "APP_GROUP_IDENTIFIER": "group.ca.roadsense.ios"
         ])
 
@@ -20,8 +21,46 @@ struct AppConfigTests {
         #expect(config.mapboxAccessToken == "pk.test-token")
         #expect(config.supabaseAnonKey == "anon.test-key")
         #expect(config.sentryDSN == "https://public@sentry.example/1")
+        #expect(config.enableSentry == true)
         #expect(config.appGroupIdentifier == "group.ca.roadsense.ios")
         #expect(config.enablePotholePhotos == true)
+    }
+
+    @Test
+    func disablesSentryByDefaultEvenWithDSN() throws {
+        let config = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "SENTRY_DSN": "https://public@sentry.example/1"
+        ])
+
+        #expect(config.sentryDSN == "https://public@sentry.example/1")
+        #expect(config.enableSentry == false)
+    }
+
+    @Test
+    func parsesSentryFlag() throws {
+        let disabled = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "SENTRY_DSN": "https://public@sentry.example/1",
+            "ENABLE_SENTRY": "NO"
+        ])
+        #expect(disabled.enableSentry == false)
+
+        let bogus = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "SENTRY_DSN": "https://public@sentry.example/1",
+            "ENABLE_SENTRY": "maybe"
+        ])
+        #expect(bogus.enableSentry == false)
     }
 
     @Test

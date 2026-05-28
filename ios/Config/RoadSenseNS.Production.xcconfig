@@ -5,6 +5,7 @@ ROAD_SENSE_APP_BUNDLE_IDENTIFIER = ca.roadsense.ios
 MAPBOX_ACCESS_TOKEN = pk.placeholder.production
 SUPABASE_ANON_KEY = anon.placeholder.production
 SENTRY_DSN =
+ENABLE_SENTRY = NO
 APP_GROUP_IDENTIFIER = group.ca.roadsense.ios
 
 // Create RoadSenseNS.Production.secrets.xcconfig for local overrides.

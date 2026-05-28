@@ -56,6 +56,8 @@
 	</dict>
 	<key>SENTRY_DSN</key>
 	<string>$(SENTRY_DSN)</string>
+	<key>ENABLE_SENTRY</key>
+	<string>$(ENABLE_SENTRY)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

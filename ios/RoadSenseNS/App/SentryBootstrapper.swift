@@ -7,7 +7,9 @@ import Sentry
 enum SentryBootstrapper {
     static func bootstrap(config: AppConfig) {
         #if canImport(Sentry)
-        guard let dsn = config.sentryDSN, !dsn.isEmpty else {
+        guard config.enableSentry,
+              let dsn = config.sentryDSN,
+              !dsn.isEmpty else {
             return
         }
 

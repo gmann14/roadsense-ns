@@ -15,6 +15,7 @@ enum AppBootstrap {
             "MAPBOX_ACCESS_TOKEN",
             "SUPABASE_ANON_KEY",
             "SENTRY_DSN",
+            "ENABLE_SENTRY",
             "APP_GROUP_IDENTIFIER",
         ]
 

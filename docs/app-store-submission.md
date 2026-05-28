@@ -66,7 +66,8 @@ The app uses standard Apple platform networking/HTTPS and does not include custo
 ## Final Manual Checks
 
 - Confirm no new TestFlight crash cluster exists for the selected build.
-- Confirm the selected production build was created with `SENTRY_DSN` present in GitHub Actions.
+- Do not submit build `1.0 (24)`; testers saw a device-only launch crash after Sentry was enabled.
+- Use build `1.0 (25)` or newer with `enable_sentry=false` unless build 24's crash stack has been reviewed and Sentry has been re-enabled deliberately.
 - Upload/select a `1.0` build for version `1.0` in App Store Connect.
 - The GitHub workflow can create one by running `iOS TestFlight` with `Production Release`, `build_number` set to the next unused number, and `marketing_version` set to `1.0`.
 - Set pricing to Free.
@@ -83,4 +84,4 @@ If testers report crash notices, pause App Store submission until one of these s
 
 - App Store Connect: `RoadSense NS` -> `TestFlight` -> `Crashes`, filter to the affected build, open the newest crash group, and download/share the stack trace.
 - Tester device: `Settings` -> `Privacy & Security` -> `Analytics & Improvements` -> `Analytics Data`, search for `RoadSense`, then share the newest `.ips` file.
-- Sentry: verify the GitHub secret `SENTRY_DSN` is set before cutting the next production build, then use Sentry issues/events for the crash stack.
+- Sentry: verify the GitHub secret `SENTRY_DSN` is set before cutting a Sentry-enabled build, then use Sentry issues/events for the crash stack.

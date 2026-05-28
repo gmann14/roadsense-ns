@@ -6,6 +6,7 @@ public struct AppConfig: Equatable, Sendable {
     public let mapboxAccessToken: String
     public let supabaseAnonKey: String
     public let sentryDSN: String?
+    public let enableSentry: Bool
     public let appGroupIdentifier: String?
     public let enablePotholePhotos: Bool
 
@@ -15,6 +16,7 @@ public struct AppConfig: Equatable, Sendable {
         mapboxAccessToken: String,
         supabaseAnonKey: String,
         sentryDSN: String? = nil,
+        enableSentry: Bool = false,
         appGroupIdentifier: String? = nil,
         enablePotholePhotos: Bool = true
     ) {
@@ -23,6 +25,7 @@ public struct AppConfig: Equatable, Sendable {
         self.mapboxAccessToken = mapboxAccessToken
         self.supabaseAnonKey = supabaseAnonKey
         self.sentryDSN = sentryDSN?.nilIfEmpty
+        self.enableSentry = enableSentry
         self.appGroupIdentifier = appGroupIdentifier?.nilIfEmpty
         self.enablePotholePhotos = enablePotholePhotos
     }
@@ -59,6 +62,7 @@ public struct AppConfig: Equatable, Sendable {
             mapboxAccessToken: mapboxAccessToken,
             supabaseAnonKey: supabaseAnonKey,
             sentryDSN: values["SENTRY_DSN"],
+            enableSentry: parseBool(values["ENABLE_SENTRY"], default: false),
             appGroupIdentifier: values["APP_GROUP_IDENTIFIER"],
             enablePotholePhotos: parseBool(values["ENABLE_POTHOLE_PHOTOS"], default: true)
         )
