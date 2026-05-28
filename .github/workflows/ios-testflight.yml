@@ -68,6 +68,10 @@ jobs:
             fi
           done
 
+          if [[ "${IOS_RELEASE_CONFIGURATION}" == "Production Release" && -z "${SENTRY_DSN}" ]]; then
+            missing+=("SENTRY_DSN")
+          fi
+
           if (( ${#missing[@]} > 0 )); then
             printf 'Missing required secret(s): %s\n' "${missing[*]}"
             exit 1

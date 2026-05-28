@@ -26,6 +26,8 @@ Optional environment:
 - `ENABLE_POTHOLE_PHOTOS` defaults to `NO` locally; the GitHub TestFlight workflow sets it to `YES` for field-test builds
 - `SKIP_TESTFLIGHT_UPLOAD=1` builds the IPA without uploading
 
+Production Release builds require `SENTRY_DSN` in GitHub Actions so TestFlight crash reports are not the only crash source.
+
 The release lane must use a stable Apple Distribution signing setup that already exists in CI. Routine TestFlight builds must not create, renew, or revoke Apple signing certificates.
 
 Local build/upload:
