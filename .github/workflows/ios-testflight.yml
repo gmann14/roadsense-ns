@@ -53,6 +53,7 @@ jobs:
       ROAD_SENSE_PUBLIC_API_KEY: ${{ secrets.ROAD_SENSE_PUBLIC_API_KEY }}
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       ENABLE_SENTRY: ${{ inputs.enable_sentry && 'YES' || 'NO' }}
+      ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH: "NO"
       ENABLE_POTHOLE_PHOTOS: "YES"
       ROAD_SENSE_APP_IDENTIFIER: ca.roadsense.ios
       IOS_RELEASE_CONFIGURATION: ${{ inputs.configuration }}

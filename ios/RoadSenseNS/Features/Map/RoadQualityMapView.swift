@@ -12,7 +12,32 @@ struct RoadQualityMapView: View {
     let onSelectSegment: (UUID) -> Void
     let onClearSelection: () -> Void
 
-    @State private var viewport: Viewport = .followPuck(zoom: 13.8, bearing: .constant(0))
+    @State private var viewport: Viewport
+
+    init(
+        config: AppConfig,
+        localDriveOverlayPoints: [LocalDriveOverlayPoint],
+        pendingPotholeCoordinates: [CLLocationCoordinate2D],
+        pendingMapTarget: Binding<DriveBoundingBox?>,
+        onMapLoaded: @escaping () -> Void,
+        onMapLoadingError: @escaping (String) -> Void,
+        onSelectSegment: @escaping (UUID) -> Void,
+        onClearSelection: @escaping () -> Void
+    ) {
+        self.config = config
+        self.localDriveOverlayPoints = localDriveOverlayPoints
+        self.pendingPotholeCoordinates = pendingPotholeCoordinates
+        self._pendingMapTarget = pendingMapTarget
+        self.onMapLoaded = onMapLoaded
+        self.onMapLoadingError = onMapLoadingError
+        self.onSelectSegment = onSelectSegment
+        self.onClearSelection = onClearSelection
+        self._viewport = State(
+            initialValue: Self.initialViewport(
+                policy: MapStartupViewportPolicy.initialViewport(for: config)
+            )
+        )
+    }
 
     var body: some View {
         Group {
@@ -26,6 +51,22 @@ struct RoadQualityMapView: View {
                 liveMap
             }
         }
+    }
+
+    private static func initialViewport(policy: MapStartupViewportPolicy) -> Viewport {
+        if policy.mode == .followPuck {
+            return .followPuck(zoom: policy.zoom, bearing: .constant(0))
+        }
+
+        return .camera(
+            center: CLLocationCoordinate2D(
+                latitude: policy.centerLatitude,
+                longitude: policy.centerLongitude
+            ),
+            zoom: policy.zoom,
+            bearing: 0,
+            pitch: 0
+        )
     }
 
     private var liveMap: some View {

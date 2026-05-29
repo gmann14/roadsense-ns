@@ -396,6 +396,7 @@ Post-MVP phases:
 - **Acceptance**
   - user can tap a segment and see the documented detail sheet
 - **Current repo note:** This slice is now materially implemented: `MapScreen` replaced the debug shell, `RoadQualityMapView` renders live backend vector tiles through Mapbox, potholes render on-map, pending local drives render as a dashed teal overlay, segment taps highlight via feature-state, the existing `SegmentDetailSheet` is presented from real `GET /segments/{id}` fetches, and simulator UI smokes cover shell/settings/privacy-editor navigation through a deterministic non-Mapbox testing surface. Remaining work is deeper drawer-selection UI coverage and real-device field validation.
+- **Release hardening note (2026-05-28):** TestFlight build `1.0 (25)` produced a launch `SIGTRAP` while Mapbox SwiftUI was updating its `UIViewControllerRepresentable`; local approximate symbols point around `FollowPuckViewportState`. Build `1.0 (26)` must keep `ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH=NO` and start from a fixed Nova Scotia camera. Re-enable follow-puck-on-launch only after a red/green device regression pass proves it does not recreate the launch trap.
 
 ## Phase 7 — Reliability, Observability, And UX Hardening
 

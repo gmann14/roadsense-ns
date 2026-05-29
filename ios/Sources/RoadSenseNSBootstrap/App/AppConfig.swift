@@ -9,6 +9,7 @@ public struct AppConfig: Equatable, Sendable {
     public let enableSentry: Bool
     public let appGroupIdentifier: String?
     public let enablePotholePhotos: Bool
+    public let enableMapFollowPuckOnLaunch: Bool
 
     public init(
         environment: AppEnvironment,
@@ -18,7 +19,8 @@ public struct AppConfig: Equatable, Sendable {
         sentryDSN: String? = nil,
         enableSentry: Bool = false,
         appGroupIdentifier: String? = nil,
-        enablePotholePhotos: Bool = true
+        enablePotholePhotos: Bool = true,
+        enableMapFollowPuckOnLaunch: Bool = false
     ) {
         self.environment = environment
         self.apiBaseURL = apiBaseURL
@@ -28,6 +30,7 @@ public struct AppConfig: Equatable, Sendable {
         self.enableSentry = enableSentry
         self.appGroupIdentifier = appGroupIdentifier?.nilIfEmpty
         self.enablePotholePhotos = enablePotholePhotos
+        self.enableMapFollowPuckOnLaunch = enableMapFollowPuckOnLaunch
     }
 
     public var functionsBaseURL: URL {
@@ -64,7 +67,8 @@ public struct AppConfig: Equatable, Sendable {
             sentryDSN: values["SENTRY_DSN"],
             enableSentry: parseBool(values["ENABLE_SENTRY"], default: false),
             appGroupIdentifier: values["APP_GROUP_IDENTIFIER"],
-            enablePotholePhotos: parseBool(values["ENABLE_POTHOLE_PHOTOS"], default: true)
+            enablePotholePhotos: parseBool(values["ENABLE_POTHOLE_PHOTOS"], default: true),
+            enableMapFollowPuckOnLaunch: parseBool(values["ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH"], default: false)
         )
     }
 }

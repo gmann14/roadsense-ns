@@ -7,6 +7,8 @@ SUPABASE_ANON_KEY = anon.placeholder.local
 SENTRY_DSN =
 ENABLE_SENTRY = NO
 APP_GROUP_IDENTIFIER = group.ca.roadsense.ios.local
+ENABLE_POTHOLE_PHOTOS = NO
+ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH = NO
 
 // Create RoadSenseNS.Local.secrets.xcconfig for local overrides.
 // This file is optional and ignored by git.

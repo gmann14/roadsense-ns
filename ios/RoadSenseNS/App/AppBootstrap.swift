@@ -17,6 +17,8 @@ enum AppBootstrap {
             "SENTRY_DSN",
             "ENABLE_SENTRY",
             "APP_GROUP_IDENTIFIER",
+            "ENABLE_POTHOLE_PHOTOS",
+            "ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH",
         ]
 
         let values = Dictionary(uniqueKeysWithValues: keys.map { key in

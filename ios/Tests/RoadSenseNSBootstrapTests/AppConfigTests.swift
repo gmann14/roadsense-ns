@@ -24,6 +24,7 @@ struct AppConfigTests {
         #expect(config.enableSentry == true)
         #expect(config.appGroupIdentifier == "group.ca.roadsense.ios")
         #expect(config.enablePotholePhotos == true)
+        #expect(config.enableMapFollowPuckOnLaunch == false)
     }
 
     @Test
@@ -91,6 +92,36 @@ struct AppConfigTests {
             "ENABLE_POTHOLE_PHOTOS": "maybe"
         ])
         #expect(bogus.enablePotholePhotos == true)
+    }
+
+    @Test
+    func parsesMapFollowPuckLaunchFlag() throws {
+        let disabled = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH": "NO"
+        ])
+        #expect(disabled.enableMapFollowPuckOnLaunch == false)
+
+        let explicitlyEnabled = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH": "YES"
+        ])
+        #expect(explicitlyEnabled.enableMapFollowPuckOnLaunch == true)
+
+        let bogus = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH": "maybe"
+        ])
+        #expect(bogus.enableMapFollowPuckOnLaunch == false)
     }
 
     @Test

@@ -25,6 +25,7 @@ Optional environment:
 - `SENTRY_DSN`
 - `ENABLE_SENTRY=YES` enables Sentry crash reporting in the app binary; it defaults to `NO` while build 24's device-only launch crash is investigated
 - `ENABLE_POTHOLE_PHOTOS` defaults to `NO` locally; the GitHub TestFlight workflow sets it to `YES` for field-test builds
+- `ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH=YES` restores Mapbox follow-puck as the initial map viewport. Leave it `NO` for TestFlight/App Store builds until the build 25 launch trap is closed.
 - `SKIP_TESTFLIGHT_UPLOAD=1` builds the IPA without uploading
 
 GitHub Actions requires `SENTRY_DSN` only when `enable_sentry` is selected for the TestFlight workflow.

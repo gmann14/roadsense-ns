@@ -73,6 +73,7 @@ def write_release_xcconfig
   sentry_dsn = optional_env("SENTRY_DSN")
   enable_sentry = ENV.fetch("ENABLE_SENTRY", "NO")
   enable_pothole_photos = ENV.fetch("ENABLE_POTHOLE_PHOTOS", "NO")
+  enable_map_follow_puck_on_launch = ENV.fetch("ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH", "NO")
   profile_name = optional_env("ROAD_SENSE_APP_PROFILE_SPECIFIER")
   profile_uuid = optional_env("ROAD_SENSE_APP_PROFILE_UUID")
 
@@ -81,7 +82,8 @@ def write_release_xcconfig
     "DEVELOPMENT_TEAM = #{team_id}",
     "ROAD_SENSE_APP_BUNDLE_IDENTIFIER = #{app_identifier}",
     "MAPBOX_ACCESS_TOKEN = #{mapbox_token}",
-    "ENABLE_POTHOLE_PHOTOS = #{enable_pothole_photos}"
+    "ENABLE_POTHOLE_PHOTOS = #{enable_pothole_photos}",
+    "ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH = #{enable_map_follow_puck_on_launch}"
   ]
   lines << "API_BASE_URL = #{api_base_url}" if api_base_url
   lines << "SUPABASE_ANON_KEY = #{api_key}" if api_key

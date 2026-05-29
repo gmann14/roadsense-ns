@@ -58,6 +58,10 @@
 	<string>$(SENTRY_DSN)</string>
 	<key>ENABLE_SENTRY</key>
 	<string>$(ENABLE_SENTRY)</string>
+	<key>ENABLE_POTHOLE_PHOTOS</key>
+	<string>$(ENABLE_POTHOLE_PHOTOS)</string>
+	<key>ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH</key>
+	<string>$(ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

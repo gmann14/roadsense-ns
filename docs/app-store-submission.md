@@ -67,7 +67,8 @@ The app uses standard Apple platform networking/HTTPS and does not include custo
 
 - Confirm no new TestFlight crash cluster exists for the selected build.
 - Do not submit build `1.0 (24)`; testers saw a device-only launch crash after Sentry was enabled.
-- Use build `1.0 (25)` or newer with `enable_sentry=false` unless build 24's crash stack has been reviewed and Sentry has been re-enabled deliberately.
+- Do not submit build `1.0 (25)`; its device `.ips` showed a launch `SIGTRAP` while Mapbox SwiftUI was updating a `UIViewControllerRepresentable`, likely around follow-puck startup.
+- Use build `1.0 (26)` or newer with `enable_sentry=false` and `ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH=NO` unless the Mapbox follow-puck launch path has been re-enabled deliberately and validated on device.
 - Upload/select a `1.0` build for version `1.0` in App Store Connect.
 - The GitHub workflow can create one by running `iOS TestFlight` with `Production Release`, `build_number` set to the next unused number, and `marketing_version` set to `1.0`.
 - Set pricing to Free.
@@ -85,3 +86,12 @@ If testers report crash notices, pause App Store submission until one of these s
 - App Store Connect: `RoadSense NS` -> `TestFlight` -> `Crashes`, filter to the affected build, open the newest crash group, and download/share the stack trace.
 - Tester device: `Settings` -> `Privacy & Security` -> `Analytics & Improvements` -> `Analytics Data`, search for `RoadSense`, then share the newest `.ips` file.
 - Sentry: verify the GitHub secret `SENTRY_DSN` is set before cutting a Sentry-enabled build, then use Sentry issues/events for the crash stack.
+
+Build `1.0 (26)` changes the first map render to a fixed Nova Scotia camera instead of Mapbox follow-puck. Puck rendering and map tiles remain enabled; only automatic follow-puck during the initial SwiftUI update is disabled.
+
+## Build 26 Launch-Risk Audit
+
+- Main map launch: fixed Nova Scotia camera by default; `ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH=NO` is asserted by package tests against release xcconfigs and the TestFlight workflow.
+- Privacy Zones map: still uses Mapbox, but starts from a fixed camera and is not created on app launch.
+- Pothole photos: `ENABLE_POTHOLE_PHOTOS` is now passed through `Info.plist`; production and TestFlight keep it enabled.
+- SwiftData launch: `ModelContainerProvider` still backs up and resets unreadable stores. If that recovery itself fails, `AppContainer.bootstrap` can still fatal; treat any future SwiftData launch report as a separate store-recovery bug, not this Mapbox follow-puck bug.
