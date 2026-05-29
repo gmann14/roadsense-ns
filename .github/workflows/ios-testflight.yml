@@ -54,6 +54,7 @@ jobs:
       SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
       ENABLE_SENTRY: ${{ inputs.enable_sentry && 'YES' || 'NO' }}
       ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH: "NO"
+      ENABLE_LIVE_MAPBOX_MAP: "NO"
       ENABLE_POTHOLE_PHOTOS: "YES"
       ROAD_SENSE_APP_IDENTIFIER: ca.roadsense.ios
       IOS_RELEASE_CONFIGURATION: ${{ inputs.configuration }}
@@ -159,6 +160,14 @@ jobs:
         with:
           name: roadsense-ios-ipa
           path: ios/build/ipas/*.ipa
+          if-no-files-found: ignore
+
+      - name: Upload dSYM artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roadsense-ios-dsyms
+          path: ios/build/archives/*.xcarchive/dSYMs
           if-no-files-found: ignore
 
       - name: Upload archive logs

@@ -25,6 +25,7 @@ struct AppConfigTests {
         #expect(config.appGroupIdentifier == "group.ca.roadsense.ios")
         #expect(config.enablePotholePhotos == true)
         #expect(config.enableMapFollowPuckOnLaunch == false)
+        #expect(config.enableLiveMapboxMap == false)
     }
 
     @Test
@@ -122,6 +123,36 @@ struct AppConfigTests {
             "ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH": "maybe"
         ])
         #expect(bogus.enableMapFollowPuckOnLaunch == false)
+    }
+
+    @Test
+    func parsesLiveMapboxMapFlag() throws {
+        let disabled = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_LIVE_MAPBOX_MAP": "NO"
+        ])
+        #expect(disabled.enableLiveMapboxMap == false)
+
+        let explicitlyEnabled = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_LIVE_MAPBOX_MAP": "YES"
+        ])
+        #expect(explicitlyEnabled.enableLiveMapboxMap == true)
+
+        let bogus = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_LIVE_MAPBOX_MAP": "maybe"
+        ])
+        #expect(bogus.enableLiveMapboxMap == false)
     }
 
     @Test

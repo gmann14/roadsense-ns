@@ -9,6 +9,7 @@ ENABLE_SENTRY = NO
 APP_GROUP_IDENTIFIER = group.ca.roadsense.ios
 ENABLE_POTHOLE_PHOTOS = YES
 ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH = NO
+ENABLE_LIVE_MAPBOX_MAP = NO
 
 // Create RoadSenseNS.Production.secrets.xcconfig for local overrides.
 // This file is optional and ignored by git.

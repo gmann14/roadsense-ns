@@ -12,7 +12,7 @@ trap 'rm -f "${marker_file}"' EXIT
 cd "${repo_root}/ios"
 xcodebuild test \
   -project RoadSenseNS.xcodeproj \
-  -scheme RoadSenseNSMockupRender \
+  -scheme RoadSenseNS \
   -configuration "Local Debug" \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' \
   -only-testing:RoadSenseNSTests/MockupRenderTests/testRenderMockups \

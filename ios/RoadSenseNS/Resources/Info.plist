@@ -62,6 +62,8 @@
 	<string>$(ENABLE_POTHOLE_PHOTOS)</string>
 	<key>ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH</key>
 	<string>$(ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH)</string>
+	<key>ENABLE_LIVE_MAPBOX_MAP</key>
+	<string>$(ENABLE_LIVE_MAPBOX_MAP)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

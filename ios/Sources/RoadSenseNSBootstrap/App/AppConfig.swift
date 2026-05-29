@@ -10,6 +10,7 @@ public struct AppConfig: Equatable, Sendable {
     public let appGroupIdentifier: String?
     public let enablePotholePhotos: Bool
     public let enableMapFollowPuckOnLaunch: Bool
+    public let enableLiveMapboxMap: Bool
 
     public init(
         environment: AppEnvironment,
@@ -20,7 +21,8 @@ public struct AppConfig: Equatable, Sendable {
         enableSentry: Bool = false,
         appGroupIdentifier: String? = nil,
         enablePotholePhotos: Bool = true,
-        enableMapFollowPuckOnLaunch: Bool = false
+        enableMapFollowPuckOnLaunch: Bool = false,
+        enableLiveMapboxMap: Bool = false
     ) {
         self.environment = environment
         self.apiBaseURL = apiBaseURL
@@ -31,6 +33,7 @@ public struct AppConfig: Equatable, Sendable {
         self.appGroupIdentifier = appGroupIdentifier?.nilIfEmpty
         self.enablePotholePhotos = enablePotholePhotos
         self.enableMapFollowPuckOnLaunch = enableMapFollowPuckOnLaunch
+        self.enableLiveMapboxMap = enableLiveMapboxMap
     }
 
     public var functionsBaseURL: URL {
@@ -68,7 +71,8 @@ public struct AppConfig: Equatable, Sendable {
             enableSentry: parseBool(values["ENABLE_SENTRY"], default: false),
             appGroupIdentifier: values["APP_GROUP_IDENTIFIER"],
             enablePotholePhotos: parseBool(values["ENABLE_POTHOLE_PHOTOS"], default: true),
-            enableMapFollowPuckOnLaunch: parseBool(values["ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH"], default: false)
+            enableMapFollowPuckOnLaunch: parseBool(values["ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH"], default: false),
+            enableLiveMapboxMap: parseBool(values["ENABLE_LIVE_MAPBOX_MAP"], default: false)
         )
     }
 }

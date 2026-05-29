@@ -41,13 +41,17 @@ struct RoadQualityMapView: View {
 
     var body: some View {
         Group {
-            if AppBootstrap.isRunningTests {
-                TestingRoadQualityMapView(
+            switch RoadQualityMapSurfaceMode.resolve(
+                config: config,
+                isRunningTests: AppBootstrap.isRunningTests
+            ) {
+            case .safeFallback:
+                SafeRoadQualityMapView(
                     localDriveOverlayPoints: localDriveOverlayPoints,
                     pendingPotholeCoordinates: pendingPotholeCoordinates,
                     onMapLoaded: onMapLoaded
                 )
-            } else {
+            case .liveMapbox:
                 liveMap
             }
         }
@@ -165,7 +169,20 @@ struct RoadQualityMapView: View {
     }
 }
 
-private struct TestingRoadQualityMapView: View {
+enum RoadQualityMapSurfaceMode: Equatable {
+    case safeFallback
+    case liveMapbox
+
+    static func resolve(config: AppConfig, isRunningTests: Bool) -> RoadQualityMapSurfaceMode {
+        if isRunningTests || !config.enableLiveMapboxMap {
+            return .safeFallback
+        }
+
+        return .liveMapbox
+    }
+}
+
+private struct SafeRoadQualityMapView: View {
     let localDriveOverlayPoints: [LocalDriveOverlayPoint]
     let pendingPotholeCoordinates: [CLLocationCoordinate2D]
     let onMapLoaded: () -> Void
@@ -186,14 +203,12 @@ private struct TestingRoadQualityMapView: View {
                     .font(.system(size: 42, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.92))
 
-                Text("Testing map surface")
+                Text(title)
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
 
                 Text(
-                    localDriveOverlayPoints.isEmpty && pendingPotholeCoordinates.isEmpty
-                        ? "UI tests run against a deterministic non-Mapbox map shell."
-                        : "Pending local drive or pothole overlay data is present in the test shell."
+                    statusMessage
                 )
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
@@ -208,6 +223,22 @@ private struct TestingRoadQualityMapView: View {
         .task {
             onMapLoaded()
         }
+    }
+
+    private var title: String {
+        AppBootstrap.isRunningTests ? "Testing map surface" : "RoadSense NS"
+    }
+
+    private var statusMessage: String {
+        if !localDriveOverlayPoints.isEmpty || !pendingPotholeCoordinates.isEmpty {
+            return "Collected road and pothole data is still queued for upload."
+        }
+
+        if AppBootstrap.isRunningTests {
+            return "UI tests run against a deterministic non-Mapbox map shell."
+        }
+
+        return "Map view is temporarily unavailable."
     }
 }
 

@@ -19,6 +19,7 @@ enum AppBootstrap {
             "APP_GROUP_IDENTIFIER",
             "ENABLE_POTHOLE_PHOTOS",
             "ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH",
+            "ENABLE_LIVE_MAPBOX_MAP",
         ]
 
         let values = Dictionary(uniqueKeysWithValues: keys.map { key in
