@@ -11,6 +11,7 @@ public struct AppConfig: Equatable, Sendable {
     public let enablePotholePhotos: Bool
     public let enableMapFollowPuckOnLaunch: Bool
     public let enableLiveMapboxMap: Bool
+    public let enableRoadQualityVectorOverlay: Bool
 
     public init(
         environment: AppEnvironment,
@@ -22,7 +23,8 @@ public struct AppConfig: Equatable, Sendable {
         appGroupIdentifier: String? = nil,
         enablePotholePhotos: Bool = true,
         enableMapFollowPuckOnLaunch: Bool = false,
-        enableLiveMapboxMap: Bool = false
+        enableLiveMapboxMap: Bool = false,
+        enableRoadQualityVectorOverlay: Bool = false
     ) {
         self.environment = environment
         self.apiBaseURL = apiBaseURL
@@ -34,6 +36,7 @@ public struct AppConfig: Equatable, Sendable {
         self.enablePotholePhotos = enablePotholePhotos
         self.enableMapFollowPuckOnLaunch = enableMapFollowPuckOnLaunch
         self.enableLiveMapboxMap = enableLiveMapboxMap
+        self.enableRoadQualityVectorOverlay = enableRoadQualityVectorOverlay
     }
 
     public var functionsBaseURL: URL {
@@ -72,7 +75,8 @@ public struct AppConfig: Equatable, Sendable {
             appGroupIdentifier: values["APP_GROUP_IDENTIFIER"],
             enablePotholePhotos: parseBool(values["ENABLE_POTHOLE_PHOTOS"], default: true),
             enableMapFollowPuckOnLaunch: parseBool(values["ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH"], default: false),
-            enableLiveMapboxMap: parseBool(values["ENABLE_LIVE_MAPBOX_MAP"], default: false)
+            enableLiveMapboxMap: parseBool(values["ENABLE_LIVE_MAPBOX_MAP"], default: false),
+            enableRoadQualityVectorOverlay: parseBool(values["ENABLE_ROAD_QUALITY_VECTOR_OVERLAY"], default: false)
         )
     }
 }

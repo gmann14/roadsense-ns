@@ -59,6 +59,15 @@ struct RoadQualityMapView: View {
                     pendingMapTarget: $pendingMapTarget,
                     onMapLoaded: onMapLoaded
                 )
+            case .mapboxUIKitOverlay:
+                MapboxUIKitRoadQualityMapView(
+                    config: config,
+                    localDriveOverlayPoints: localDriveOverlayPoints,
+                    pendingPotholeCoordinates: pendingPotholeCoordinates,
+                    pendingMapTarget: $pendingMapTarget,
+                    onMapLoaded: onMapLoaded,
+                    onMapLoadingError: onMapLoadingError
+                )
             case .liveMapbox:
                 liveMap
             }
@@ -180,6 +189,7 @@ struct RoadQualityMapView: View {
 enum RoadQualityMapSurfaceMode: Equatable {
     case testingShell
     case nativeMapKitFallback
+    case mapboxUIKitOverlay
     case liveMapbox
 
     static func resolve(config: AppConfig, isRunningTests: Bool) -> RoadQualityMapSurfaceMode {
@@ -187,11 +197,153 @@ enum RoadQualityMapSurfaceMode: Equatable {
             return .testingShell
         }
 
-        if !config.enableLiveMapboxMap {
-            return .nativeMapKitFallback
+        if config.enableRoadQualityVectorOverlay {
+            return .mapboxUIKitOverlay
         }
 
-        return .liveMapbox
+        if config.enableLiveMapboxMap {
+            return .liveMapbox
+        }
+
+        return .nativeMapKitFallback
+    }
+}
+
+private struct MapboxUIKitRoadQualityMapView: UIViewRepresentable {
+    let config: AppConfig
+    let localDriveOverlayPoints: [LocalDriveOverlayPoint]
+    let pendingPotholeCoordinates: [CLLocationCoordinate2D]
+    @Binding var pendingMapTarget: DriveBoundingBox?
+    let onMapLoaded: () -> Void
+    let onMapLoadingError: (String) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onMapLoaded: onMapLoaded, onMapLoadingError: onMapLoadingError)
+    }
+
+    func makeUIView(context: Context) -> MapboxMaps.MapView {
+        let policy = MapStartupViewportPolicy.initialViewport(for: config)
+        let mapView = MapboxMaps.MapView(
+            frame: .zero,
+            mapInitOptions: MapInitOptions(
+                mapStyle: .standard(theme: .default),
+                cameraOptions: Self.cameraOptions(for: policy)
+            )
+        )
+
+        mapView.ornaments.options = OrnamentOptions(
+            scaleBar: .init(visibility: .hidden),
+            compass: .init(visibility: .hidden)
+        )
+        mapView.location.options.puckType = .puck2D(Puck2DConfiguration(showsAccuracyRing: true))
+
+        context.coordinator.bind(to: mapView)
+        context.coordinator.applyStyleContent(
+            to: mapView,
+            tileTemplateURL: Endpoints(config: config).tileTemplateURLString,
+            localDriveOverlayPoints: localDriveOverlayPoints,
+            pendingPotholeCoordinates: pendingPotholeCoordinates
+        )
+        return mapView
+    }
+
+    func updateUIView(_ mapView: MapboxMaps.MapView, context: Context) {
+        context.coordinator.applyStyleContent(
+            to: mapView,
+            tileTemplateURL: Endpoints(config: config).tileTemplateURLString,
+            localDriveOverlayPoints: localDriveOverlayPoints,
+            pendingPotholeCoordinates: pendingPotholeCoordinates
+        )
+        applyPendingTarget(to: mapView)
+    }
+
+    private static func cameraOptions(for policy: MapStartupViewportPolicy) -> CameraOptions {
+        CameraOptions(
+            center: CLLocationCoordinate2D(
+                latitude: policy.centerLatitude,
+                longitude: policy.centerLongitude
+            ),
+            zoom: policy.zoom,
+            bearing: 0,
+            pitch: 0
+        )
+    }
+
+    private func applyPendingTarget(to mapView: MapboxMaps.MapView) {
+        guard let target = pendingMapTarget else { return }
+        mapView.mapboxMap.setCamera(
+            to: CameraOptions(
+                center: cameraCenter(of: target),
+                zoom: cameraZoom(for: target),
+                bearing: 0,
+                pitch: 0
+            )
+        )
+        DispatchQueue.main.async {
+            pendingMapTarget = nil
+        }
+    }
+
+    private func cameraCenter(of bbox: DriveBoundingBox) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(
+            latitude: (bbox.minLatitude + bbox.maxLatitude) / 2,
+            longitude: (bbox.minLongitude + bbox.maxLongitude) / 2
+        )
+    }
+
+    private func cameraZoom(for bbox: DriveBoundingBox) -> Double {
+        let latSpan = max(bbox.maxLatitude - bbox.minLatitude, 0.0005)
+        let lngSpan = max(bbox.maxLongitude - bbox.minLongitude, 0.0005)
+        let span = max(latSpan, lngSpan)
+
+        switch span {
+        case ..<0.005: return 15
+        case ..<0.02:  return 14
+        case ..<0.05:  return 13
+        case ..<0.15:  return 12
+        case ..<0.4:   return 11
+        case ..<1.0:   return 10
+        default:       return 9
+        }
+    }
+
+    final class Coordinator {
+        private var cancelables = Set<AnyCancelable>()
+        private let onMapLoaded: () -> Void
+        private let onMapLoadingError: (String) -> Void
+
+        init(
+            onMapLoaded: @escaping () -> Void,
+            onMapLoadingError: @escaping (String) -> Void
+        ) {
+            self.onMapLoaded = onMapLoaded
+            self.onMapLoadingError = onMapLoadingError
+        }
+
+        func bind(to mapView: MapboxMaps.MapView) {
+            mapView.mapboxMap.onMapLoaded.observeNext { [onMapLoaded] _ in
+                onMapLoaded()
+            }
+            .store(in: &cancelables)
+
+            mapView.mapboxMap.onMapLoadingError.observe { [onMapLoadingError] event in
+                onMapLoadingError(event.message)
+            }
+            .store(in: &cancelables)
+        }
+
+        func applyStyleContent(
+            to mapView: MapboxMaps.MapView,
+            tileTemplateURL: String,
+            localDriveOverlayPoints: [LocalDriveOverlayPoint],
+            pendingPotholeCoordinates: [CLLocationCoordinate2D]
+        ) {
+            mapView.mapboxMap.setMapStyleContent {
+                RoadQualityMapStyleContent(tileTemplateURL: tileTemplateURL)
+                LocalDriveOverlayStyleContent(points: localDriveOverlayPoints)
+                PendingPotholeOverlayStyleContent(coordinates: pendingPotholeCoordinates)
+            }
+        }
     }
 }
 

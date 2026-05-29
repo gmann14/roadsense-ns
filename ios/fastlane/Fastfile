@@ -75,6 +75,7 @@ def write_release_xcconfig
   enable_pothole_photos = ENV.fetch("ENABLE_POTHOLE_PHOTOS", "NO")
   enable_map_follow_puck_on_launch = ENV.fetch("ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH", "NO")
   enable_live_mapbox_map = ENV.fetch("ENABLE_LIVE_MAPBOX_MAP", "NO")
+  enable_road_quality_vector_overlay = ENV.fetch("ENABLE_ROAD_QUALITY_VECTOR_OVERLAY", "NO")
   profile_name = optional_env("ROAD_SENSE_APP_PROFILE_SPECIFIER")
   profile_uuid = optional_env("ROAD_SENSE_APP_PROFILE_UUID")
 
@@ -85,7 +86,8 @@ def write_release_xcconfig
     "MAPBOX_ACCESS_TOKEN = #{mapbox_token}",
     "ENABLE_POTHOLE_PHOTOS = #{enable_pothole_photos}",
     "ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH = #{enable_map_follow_puck_on_launch}",
-    "ENABLE_LIVE_MAPBOX_MAP = #{enable_live_mapbox_map}"
+    "ENABLE_LIVE_MAPBOX_MAP = #{enable_live_mapbox_map}",
+    "ENABLE_ROAD_QUALITY_VECTOR_OVERLAY = #{enable_road_quality_vector_overlay}"
   ]
   lines << "API_BASE_URL = #{api_base_url}" if api_base_url
   lines << "SUPABASE_ANON_KEY = #{api_key}" if api_key

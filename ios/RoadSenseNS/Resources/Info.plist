@@ -64,6 +64,8 @@
 	<string>$(ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH)</string>
 	<key>ENABLE_LIVE_MAPBOX_MAP</key>
 	<string>$(ENABLE_LIVE_MAPBOX_MAP)</string>
+	<key>ENABLE_ROAD_QUALITY_VECTOR_OVERLAY</key>
+	<string>$(ENABLE_ROAD_QUALITY_VECTOR_OVERLAY)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

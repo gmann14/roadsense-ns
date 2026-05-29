@@ -41,6 +41,33 @@ struct ReleaseConfigFilesTests {
     }
 
     @Test
+    func publicReleaseInputsEnableRoadQualityVectorOverlay() throws {
+        let iosRoot = packageRoot()
+        let repoRoot = iosRoot.deletingLastPathComponent()
+        let checkedFiles = [
+            iosRoot.appendingPathComponent("Config/RoadSenseNS.Staging.xcconfig"),
+            iosRoot.appendingPathComponent("Config/RoadSenseNS.Production.xcconfig"),
+            repoRoot.appendingPathComponent(".github/workflows/ios-testflight.yml"),
+        ]
+
+        for file in checkedFiles {
+            let contents = try String(contentsOf: file, encoding: .utf8)
+            #expect(contents.contains("ENABLE_ROAD_QUALITY_VECTOR_OVERLAY"))
+            #expect(contents.contains("ENABLE_ROAD_QUALITY_VECTOR_OVERLAY = YES")
+                || contents.contains("ENABLE_ROAD_QUALITY_VECTOR_OVERLAY: \"YES\""))
+        }
+    }
+
+    @Test
+    func localConfigKeepsRoadQualityVectorOverlayOffWithoutSecrets() throws {
+        let localConfig = packageRoot()
+            .appendingPathComponent("Config/RoadSenseNS.Local.xcconfig")
+        let contents = try String(contentsOf: localConfig, encoding: .utf8)
+
+        #expect(contents.contains("ENABLE_ROAD_QUALITY_VECTOR_OVERLAY = NO"))
+    }
+
+    @Test
     func appInfoPlistExposesRuntimeFlags() throws {
         let infoPlist = packageRoot()
             .appendingPathComponent("RoadSenseNS/Resources/Info.plist")
@@ -52,6 +79,8 @@ struct ReleaseConfigFilesTests {
         #expect(contents.contains("<string>$(ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH)</string>"))
         #expect(contents.contains("<key>ENABLE_LIVE_MAPBOX_MAP</key>"))
         #expect(contents.contains("<string>$(ENABLE_LIVE_MAPBOX_MAP)</string>"))
+        #expect(contents.contains("<key>ENABLE_ROAD_QUALITY_VECTOR_OVERLAY</key>"))
+        #expect(contents.contains("<string>$(ENABLE_ROAD_QUALITY_VECTOR_OVERLAY)</string>"))
     }
 
     @Test

@@ -10,6 +10,7 @@ APP_GROUP_IDENTIFIER = group.ca.roadsense.ios.staging
 ENABLE_POTHOLE_PHOTOS = NO
 ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH = NO
 ENABLE_LIVE_MAPBOX_MAP = NO
+ENABLE_ROAD_QUALITY_VECTOR_OVERLAY = YES
 
 // Create RoadSenseNS.Staging.secrets.xcconfig for local overrides.
 // This file is optional and ignored by git.

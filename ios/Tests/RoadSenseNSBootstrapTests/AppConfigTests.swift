@@ -26,6 +26,7 @@ struct AppConfigTests {
         #expect(config.enablePotholePhotos == true)
         #expect(config.enableMapFollowPuckOnLaunch == false)
         #expect(config.enableLiveMapboxMap == false)
+        #expect(config.enableRoadQualityVectorOverlay == false)
     }
 
     @Test
@@ -153,6 +154,36 @@ struct AppConfigTests {
             "ENABLE_LIVE_MAPBOX_MAP": "maybe"
         ])
         #expect(bogus.enableLiveMapboxMap == false)
+    }
+
+    @Test
+    func parsesRoadQualityVectorOverlayFlag() throws {
+        let disabled = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_ROAD_QUALITY_VECTOR_OVERLAY": "NO"
+        ])
+        #expect(disabled.enableRoadQualityVectorOverlay == false)
+
+        let explicitlyEnabled = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_ROAD_QUALITY_VECTOR_OVERLAY": "YES"
+        ])
+        #expect(explicitlyEnabled.enableRoadQualityVectorOverlay == true)
+
+        let bogus = try AppConfig.fromDictionary([
+            "APP_ENV": "PRODUCTION",
+            "API_BASE_URL": "https://roadsense.ca",
+            "MAPBOX_ACCESS_TOKEN": "pk.test-token",
+            "SUPABASE_ANON_KEY": "anon.test-key",
+            "ENABLE_ROAD_QUALITY_VECTOR_OVERLAY": "maybe"
+        ])
+        #expect(bogus.enableRoadQualityVectorOverlay == false)
     }
 
     @Test

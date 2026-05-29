@@ -69,7 +69,7 @@ The app uses standard Apple platform networking/HTTPS and does not include custo
 - Do not submit build `1.0 (24)`; testers saw a device-only launch crash after Sentry was enabled.
 - Do not submit build `1.0 (25)`; its device `.ips` showed a launch `SIGTRAP` while Mapbox SwiftUI was updating a `UIViewControllerRepresentable`, likely around follow-puck startup.
 - Do not submit build `1.0 (26)`; its device `.ips` kept the same SwiftUI/Mapbox representable launch trap even with follow-puck disabled.
-- Use build `1.0 (28)` or newer with `enable_sentry=false`, `ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH=NO`, and `ENABLE_LIVE_MAPBOX_MAP=NO` unless the live Mapbox launch path has been re-enabled deliberately and validated on device.
+- Use build `1.0 (29)` or newer with `enable_sentry=false`, `ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH=NO`, `ENABLE_LIVE_MAPBOX_MAP=NO`, and `ENABLE_ROAD_QUALITY_VECTOR_OVERLAY=YES`.
 - Upload/select a `1.0` build for version `1.0` in App Store Connect.
 - The GitHub workflow can create one by running `iOS TestFlight` with `Production Release`, `build_number` set to the next unused number, and `marketing_version` set to `1.0`.
 - Set pricing to Free.
@@ -88,11 +88,12 @@ If testers report crash notices, pause App Store submission until one of these s
 - Tester device: `Settings` -> `Privacy & Security` -> `Analytics & Improvements` -> `Analytics Data`, search for `RoadSense`, then share the newest `.ips` file.
 - Sentry: verify the GitHub secret `SENTRY_DSN` is set before cutting a Sentry-enabled build, then use Sentry issues/events for the crash stack.
 
-Build `1.0 (26)` changed the first map render to a fixed Nova Scotia camera instead of Mapbox follow-puck, but tester crash reports still showed the same launch path. Build `1.0 (27)` disabled the live in-app Mapbox surface for TestFlight/App Store while keeping the rest of the app available for drive collection, pothole marking, photo upload, settings, and upload recovery. Build `1.0 (28)` keeps that Mapbox launch containment but replaces the blank fallback with a native Apple map surface so testers still see a real map while the Mapbox SwiftUI trap remains disabled.
+Build `1.0 (26)` changed the first map render to a fixed Nova Scotia camera instead of Mapbox follow-puck, but tester crash reports still showed the same launch path. Build `1.0 (27)` disabled the live in-app Mapbox surface for TestFlight/App Store while keeping the rest of the app available for drive collection, pothole marking, photo upload, settings, and upload recovery. Build `1.0 (28)` kept that Mapbox launch containment but replaced the blank fallback with a native Apple map surface. Build `1.0 (29)` restores the road-quality vector tile overlay through a UIKit-backed Mapbox view while keeping the older SwiftUI `Map` wrapper disabled.
 
-## Build 28 Launch-Risk Audit
+## Build 29 Launch-Risk Audit
 
-- Main map launch: native MapKit fallback by default; `ENABLE_LIVE_MAPBOX_MAP=NO` and `ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH=NO` are asserted by package tests against release xcconfigs and the TestFlight workflow.
+- Main map launch: UIKit-backed Mapbox vector overlay by default for public builds; `ENABLE_LIVE_MAPBOX_MAP=NO`, `ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH=NO`, and `ENABLE_ROAD_QUALITY_VECTOR_OVERLAY=YES` are asserted by package/app tests against release xcconfigs and the TestFlight workflow.
+- Local debug keeps `ENABLE_ROAD_QUALITY_VECTOR_OVERLAY=NO` unless a developer explicitly adds a real Mapbox token and overrides it in local secrets.
 - Privacy Zones map: still uses Mapbox, but it is not created on app launch.
 - Pothole photos: `ENABLE_POTHOLE_PHOTOS` is now passed through `Info.plist`; production and TestFlight keep it enabled.
 - Crash symbolication: the TestFlight workflow now uploads the `.xcarchive` dSYM folder as a GitHub artifact for every run.

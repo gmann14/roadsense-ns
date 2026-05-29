@@ -55,6 +55,7 @@ jobs:
       ENABLE_SENTRY: ${{ inputs.enable_sentry && 'YES' || 'NO' }}
       ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH: "NO"
       ENABLE_LIVE_MAPBOX_MAP: "NO"
+      ENABLE_ROAD_QUALITY_VECTOR_OVERLAY: "YES"
       ENABLE_POTHOLE_PHOTOS: "YES"
       ROAD_SENSE_APP_IDENTIFIER: ca.roadsense.ios
       IOS_RELEASE_CONFIGURATION: ${{ inputs.configuration }}

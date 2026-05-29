@@ -20,6 +20,7 @@ enum AppBootstrap {
             "ENABLE_POTHOLE_PHOTOS",
             "ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH",
             "ENABLE_LIVE_MAPBOX_MAP",
+            "ENABLE_ROAD_QUALITY_VECTOR_OVERLAY",
         ]
 
         let values = Dictionary(uniqueKeysWithValues: keys.map { key in
