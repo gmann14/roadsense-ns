@@ -1,4 +1,5 @@
 import CoreLocation
+import MapKit
 import MapboxMaps
 import SwiftUI
 
@@ -45,10 +46,17 @@ struct RoadQualityMapView: View {
                 config: config,
                 isRunningTests: AppBootstrap.isRunningTests
             ) {
-            case .safeFallback:
-                SafeRoadQualityMapView(
+            case .testingShell:
+                TestingRoadQualityMapView(
                     localDriveOverlayPoints: localDriveOverlayPoints,
                     pendingPotholeCoordinates: pendingPotholeCoordinates,
+                    onMapLoaded: onMapLoaded
+                )
+            case .nativeMapKitFallback:
+                NativeRoadQualityMapFallbackView(
+                    localDriveOverlayPoints: localDriveOverlayPoints,
+                    pendingPotholeCoordinates: pendingPotholeCoordinates,
+                    pendingMapTarget: $pendingMapTarget,
                     onMapLoaded: onMapLoaded
                 )
             case .liveMapbox:
@@ -170,19 +178,24 @@ struct RoadQualityMapView: View {
 }
 
 enum RoadQualityMapSurfaceMode: Equatable {
-    case safeFallback
+    case testingShell
+    case nativeMapKitFallback
     case liveMapbox
 
     static func resolve(config: AppConfig, isRunningTests: Bool) -> RoadQualityMapSurfaceMode {
-        if isRunningTests || !config.enableLiveMapboxMap {
-            return .safeFallback
+        if isRunningTests {
+            return .testingShell
+        }
+
+        if !config.enableLiveMapboxMap {
+            return .nativeMapKitFallback
         }
 
         return .liveMapbox
     }
 }
 
-private struct SafeRoadQualityMapView: View {
+private struct TestingRoadQualityMapView: View {
     let localDriveOverlayPoints: [LocalDriveOverlayPoint]
     let pendingPotholeCoordinates: [CLLocationCoordinate2D]
     let onMapLoaded: () -> Void
@@ -226,7 +239,7 @@ private struct SafeRoadQualityMapView: View {
     }
 
     private var title: String {
-        AppBootstrap.isRunningTests ? "Testing map surface" : "RoadSense NS"
+        "Testing map surface"
     }
 
     private var statusMessage: String {
@@ -234,11 +247,110 @@ private struct SafeRoadQualityMapView: View {
             return "Collected road and pothole data is still queued for upload."
         }
 
-        if AppBootstrap.isRunningTests {
-            return "UI tests run against a deterministic non-Mapbox map shell."
-        }
+        return "UI tests run against a deterministic non-Mapbox map shell."
+    }
+}
 
-        return "Map view is temporarily unavailable."
+private struct NativeRoadQualityMapFallbackView: View {
+    private static let novaScotiaCenter = CLLocationCoordinate2D(latitude: 45.1, longitude: -63.3)
+
+    let localDriveOverlayPoints: [LocalDriveOverlayPoint]
+    let pendingPotholeCoordinates: [CLLocationCoordinate2D]
+    @Binding var pendingMapTarget: DriveBoundingBox?
+    let onMapLoaded: () -> Void
+
+    @State private var position: MapCameraPosition = .camera(
+        MapCamera(centerCoordinate: novaScotiaCenter, distance: 620_000, heading: 0, pitch: 0)
+    )
+
+    private var localSegments: [NativeFallbackRoadSegment] {
+        NativeFallbackRoadSegment.segments(from: localDriveOverlayPoints)
+    }
+
+    var body: some View {
+        MapKit.Map(position: $position) {
+            ForEach(Array(localSegments.enumerated()), id: \.offset) { _, segment in
+                MapKit.MapPolyline(coordinates: segment.coordinates)
+                    .stroke(
+                        segment.color.opacity(0.95),
+                        style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round, dash: [7, 5])
+                    )
+            }
+
+            ForEach(Array(pendingPotholeCoordinates.enumerated()), id: \.offset) { _, coordinate in
+                MapKit.Annotation("", coordinate: coordinate, anchor: .center) {
+                    Circle()
+                        .fill(DesignTokens.Palette.warning)
+                        .frame(width: 14, height: 14)
+                        .overlay {
+                            Circle()
+                                .stroke(.white, lineWidth: 2)
+                        }
+                        .shadow(color: .black.opacity(0.28), radius: 4, x: 0, y: 2)
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityIdentifier("map.native-mapkit-fallback")
+        .task {
+            onMapLoaded()
+        }
+        .onChange(of: pendingMapTarget) { _, newTarget in
+            applyPendingTarget(newTarget)
+        }
+    }
+
+    private func applyPendingTarget(_ target: DriveBoundingBox?) {
+        guard let target else { return }
+        position = .camera(
+            MapCamera(
+                centerCoordinate: cameraCenter(of: target),
+                distance: cameraDistance(for: target),
+                heading: 0,
+                pitch: 0
+            )
+        )
+        pendingMapTarget = nil
+    }
+
+    private func cameraCenter(of bbox: DriveBoundingBox) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(
+            latitude: (bbox.minLatitude + bbox.maxLatitude) / 2,
+            longitude: (bbox.minLongitude + bbox.maxLongitude) / 2
+        )
+    }
+
+    private func cameraDistance(for bbox: DriveBoundingBox) -> CLLocationDistance {
+        let latMeters = max(bbox.maxLatitude - bbox.minLatitude, 0.001) * 111_000
+        let lngMeters = max(bbox.maxLongitude - bbox.minLongitude, 0.001) * 111_000
+            * max(cos(cameraCenter(of: bbox).latitude * .pi / 180), 0.25)
+        return min(max(max(latMeters, lngMeters) * 2.8, 1_000), 700_000)
+    }
+}
+
+private struct NativeFallbackRoadSegment {
+    let coordinates: [CLLocationCoordinate2D]
+    let color: Color
+
+    static func segments(from points: [LocalDriveOverlayPoint]) -> [NativeFallbackRoadSegment] {
+        guard points.count >= 2 else { return [] }
+
+        return zip(points, points.dropFirst()).map { previous, current in
+            NativeFallbackRoadSegment(
+                coordinates: [previous.coordinate, current.coordinate],
+                color: color(for: current.roughnessCategory)
+            )
+        }
+    }
+
+    private static func color(for category: String) -> Color {
+        switch category {
+        case "smooth": return DesignTokens.Palette.smooth
+        case "fair": return DesignTokens.Palette.fair
+        case "rough": return DesignTokens.Palette.rough
+        case "very_rough": return DesignTokens.Palette.veryRough
+        default: return DesignTokens.Palette.signal
+        }
     }
 }
 

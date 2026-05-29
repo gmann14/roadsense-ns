@@ -2,21 +2,21 @@ import XCTest
 @testable import RoadSense_NS
 
 final class RoadQualityMapSurfaceModeTests: XCTestCase {
-    func testTestsAlwaysUseSafeFallbackSurface() throws {
+    func testTestsAlwaysUseDeterministicTestingSurface() throws {
         let config = makeConfig(enableLiveMapboxMap: true)
 
         XCTAssertEqual(
             RoadQualityMapSurfaceMode.resolve(config: config, isRunningTests: true),
-            .safeFallback
+            .testingShell
         )
     }
 
-    func testReleaseDefaultUsesSafeFallbackSurface() throws {
+    func testReleaseDefaultUsesNativeFallbackSurface() throws {
         let config = makeConfig(enableLiveMapboxMap: false)
 
         XCTAssertEqual(
             RoadQualityMapSurfaceMode.resolve(config: config, isRunningTests: false),
-            .safeFallback
+            .nativeMapKitFallback
         )
     }
 
