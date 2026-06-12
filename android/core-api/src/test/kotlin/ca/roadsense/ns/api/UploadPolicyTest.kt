@@ -58,20 +58,55 @@ class UploadPolicyTest {
     }
 
     @Test
-    fun `attempts above 5 fail permanently`() {
-        val disposition = UploadPolicy.evaluate(
+    fun `5xx never fails permanently and caps backoff at one hour`() {
+        val attempt6 = UploadPolicy.evaluate(
             UploadAttemptResult.Http(503, null),
             attemptNumber = 6,
         )
-        assertEquals(UploadDisposition.FailedPermanent, disposition)
+        val retry6 = assertIs<UploadDisposition.Retry>(attempt6)
+        assertEquals(32.0, retry6.afterSeconds)
+
+        val attempt40 = UploadPolicy.evaluate(
+            UploadAttemptResult.Http(503, null),
+            attemptNumber = 40,
+        )
+        val retry40 = assertIs<UploadDisposition.Retry>(attempt40)
+        assertEquals(UploadPolicy.MAX_RETRY_DELAY_SECONDS, retry40.afterSeconds)
     }
 
     @Test
-    fun `network error retries`() {
+    fun `503 honors retry-after like the photos_disabled gate sends`() {
         val disposition = UploadPolicy.evaluate(
+            UploadAttemptResult.Http(statusCode = 503, retryAfterSeconds = 21_600.0),
+            attemptNumber = 12,
+        )
+        val retry = assertIs<UploadDisposition.Retry>(disposition)
+        assertEquals(21_600.0, retry.afterSeconds)
+    }
+
+    @Test
+    fun `404 keeps retrying with capped backoff instead of failing permanently`() {
+        val disposition = UploadPolicy.evaluate(
+            UploadAttemptResult.Http(statusCode = 404, retryAfterSeconds = null),
+            attemptNumber = 10,
+        )
+        val retry = assertIs<UploadDisposition.Retry>(disposition)
+        assertEquals(512.0, retry.afterSeconds)
+    }
+
+    @Test
+    fun `network error retries and never goes permanent`() {
+        val early = UploadPolicy.evaluate(
             UploadAttemptResult.NetworkError,
             attemptNumber = 1,
         )
-        assertIs<UploadDisposition.Retry>(disposition)
+        assertIs<UploadDisposition.Retry>(early)
+
+        val late = UploadPolicy.evaluate(
+            UploadAttemptResult.NetworkError,
+            attemptNumber = 25,
+        )
+        val retry = assertIs<UploadDisposition.Retry>(late)
+        assertEquals(UploadPolicy.MAX_RETRY_DELAY_SECONDS, retry.afterSeconds)
     }
 }
