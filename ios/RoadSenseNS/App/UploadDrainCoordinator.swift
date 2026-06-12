@@ -11,6 +11,7 @@ enum UploadDrainReason: String {
     case foreground
     case backgroundTask
     case diagnosticsRetry
+    case networkRestored
 }
 
 @MainActor

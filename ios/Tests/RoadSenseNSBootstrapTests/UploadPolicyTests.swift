@@ -19,6 +19,13 @@ struct UploadPolicyTests {
         #expect(disposition == .failedPermanent)
     }
 
+    @Test("400 fails permanently regardless of attempt count")
+    func validationFailureStopsRetriesAtAnyAttempt() {
+        let disposition = UploadPolicy.evaluate(.http(statusCode: 400, retryAfterSeconds: nil), attemptNumber: 9)
+
+        #expect(disposition == .failedPermanent)
+    }
+
     @Test("404 retries for upload routes")
     func missingRouteRetries() {
         let first = UploadPolicy.evaluate(.http(statusCode: 404, retryAfterSeconds: nil), attemptNumber: 1)
@@ -60,10 +67,28 @@ struct UploadPolicyTests {
         #expect(disposition == .retry(afterSeconds: 4))
     }
 
-    @Test("failing beyond five attempts becomes permanent")
-    func maxAttemptsBecomePermanent() {
-        let disposition = UploadPolicy.evaluate(.networkError, attemptNumber: 6)
+    @Test("an offline burst never exhausts attempts into permanent failure")
+    func networkErrorsNeverBecomePermanent() {
+        let sixth = UploadPolicy.evaluate(.networkError, attemptNumber: 6)
+        let fiftieth = UploadPolicy.evaluate(.networkError, attemptNumber: 50)
 
-        #expect(disposition == .failedPermanent)
+        #expect(sixth == .retry(afterSeconds: 32))
+        #expect(fiftieth == .retry(afterSeconds: UploadPolicy.maxRetryDelaySeconds))
+    }
+
+    @Test("server errors never become permanent")
+    func serverErrorsNeverBecomePermanent() {
+        let disposition = UploadPolicy.evaluate(.http(statusCode: 503, retryAfterSeconds: nil), attemptNumber: 6)
+
+        #expect(disposition == .retry(afterSeconds: 32))
+    }
+
+    @Test("retry backoff is capped at one hour")
+    func retryBackoffIsCapped() {
+        let networkError = UploadPolicy.evaluate(.networkError, attemptNumber: 13)
+        let serverError = UploadPolicy.evaluate(.http(statusCode: 500, retryAfterSeconds: nil), attemptNumber: 40)
+
+        #expect(networkError == .retry(afterSeconds: UploadPolicy.maxRetryDelaySeconds))
+        #expect(serverError == .retry(afterSeconds: UploadPolicy.maxRetryDelaySeconds))
     }
 }

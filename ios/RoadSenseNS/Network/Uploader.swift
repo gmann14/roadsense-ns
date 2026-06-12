@@ -11,6 +11,7 @@ final class Uploader: UploadDrainPerforming {
     private let queueStore: UploadQueueStore
     private let client: APIClient
     private let logger: RoadSenseLogger
+    private let networkPath: NetworkPathProviding?
 
     init(
         container: ModelContainer,
@@ -18,7 +19,8 @@ final class Uploader: UploadDrainPerforming {
         potholePhotoStore: PotholePhotoStore,
         queueStore: UploadQueueStore,
         client: APIClient,
-        logger: RoadSenseLogger
+        logger: RoadSenseLogger,
+        networkPath: NetworkPathProviding? = nil
     ) {
         self.container = container
         self.potholeActionStore = potholeActionStore
@@ -26,11 +28,20 @@ final class Uploader: UploadDrainPerforming {
         self.queueStore = queueStore
         self.client = client
         self.logger = logger
+        self.networkPath = networkPath
     }
 
     func drainUntilBlocked(nowProvider: @escaping @Sendable () -> Date = uploaderNowProvider) async throws {
         while true {
             try Task.checkCancellation()
+
+            // Skip silently while offline so a doomed attempt does not burn
+            // retry backoff (P0-6); the connectivity restorer drains again
+            // once the path is satisfied.
+            if let networkPath, networkPath.currentSnapshot.status != .satisfied {
+                logger.info("upload drain skipped: network path unsatisfied")
+                return
+            }
 
             let now = nowProvider()
             let potholeDecision = try potholeActionStore.prepareNextAction(now: now)

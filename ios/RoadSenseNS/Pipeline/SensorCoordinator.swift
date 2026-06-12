@@ -146,26 +146,34 @@ final class SensorCoordinator {
         isMonitoring = true
         lastMonitoringStartedAt = nowProvider()
         stateDidChange?()
+
+        // Streams are single-use: cancelling a consuming task (stopMonitoring)
+        // terminates the stream for good, so each monitoring session must
+        // request fresh ones before the services start yielding.
+        let locationSamples = locationService.makeSampleStream()
+        let motionSamples = motionService.makeSampleStream()
+        let drivingEvents = drivingDetector.makeEventStream()
+
         locationService.startPassiveMonitoring()
         drivingDetector.start()
 
         locationTask = Task { [weak self] in
             guard let self else { return }
-            for await sample in locationService.samples {
+            for await sample in locationSamples {
                 await self.handleLocationSample(sample)
             }
         }
 
         motionTask = Task { [weak self] in
             guard let self else { return }
-            for await sample in motionService.samples {
+            for await sample in motionSamples {
                 await self.handleMotionSample(sample)
             }
         }
 
         drivingTask = Task { [weak self] in
             guard let self else { return }
-            for await isDriving in drivingDetector.events {
+            for await isDriving in drivingEvents {
                 self.handleDrivingEvent(isDriving)
                 if isDriving {
                     await self.cancelPendingStopCollection()

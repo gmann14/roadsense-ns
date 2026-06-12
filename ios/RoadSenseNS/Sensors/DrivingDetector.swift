@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 protocol DrivingDetecting {
-    var events: AsyncStream<Bool> { get }
+    func makeEventStream() -> AsyncStream<Bool>
     func start()
     func stop()
 }
@@ -11,16 +11,20 @@ protocol DrivingDetecting {
 @MainActor
 final class DrivingDetector: DrivingDetecting {
     private let manager: CMMotionActivityManager
-    private let continuation: AsyncStream<Bool>.Continuation
-    let events: AsyncStream<Bool>
+    private var continuation: AsyncStream<Bool>.Continuation?
 
     init(manager: CMMotionActivityManager = CMMotionActivityManager()) {
         self.manager = manager
-        var captured: AsyncStream<Bool>.Continuation?
-        self.events = AsyncStream<Bool> { continuation in
-            captured = continuation
-        }
-        self.continuation = captured!
+    }
+
+    /// Returns a fresh event stream, finishing any previously vended one.
+    /// Streams are single-use: cancelling the consuming task terminates the
+    /// stream permanently, so each monitoring session must consume its own.
+    func makeEventStream() -> AsyncStream<Bool> {
+        continuation?.finish()
+        let (stream, continuation) = AsyncStream.makeStream(of: Bool.self)
+        self.continuation = continuation
+        return stream
     }
 
     func start() {
@@ -30,7 +34,7 @@ final class DrivingDetector: DrivingDetecting {
 
         manager.startActivityUpdates(to: .main) { [continuation] activity in
             let isDriving = activity?.automotive == true && activity?.stationary != true
-            continuation.yield(isDriving)
+            continuation?.yield(isDriving)
         }
     }
 

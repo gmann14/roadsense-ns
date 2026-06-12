@@ -115,6 +115,48 @@ struct ReadingBuilderTests {
         #expect(builder.addLocationSample(sample(atMeters: 40, second: 6)) == nil)
     }
 
+    @Test("caps buffered motion samples when GPS fixes stop arriving")
+    func capsBufferedMotionSamplesWithoutLocationFixes() {
+        var builder = ReadingBuilder()
+
+        for second in 0..<5_000 {
+            builder.addMotionSample(
+                MotionSample(
+                    timestamp: TimeInterval(second),
+                    userAcceleration: MotionVector3(x: 0, y: 0, z: 0.5),
+                    gravity: MotionVector3(x: 0, y: 0, z: 1)
+                )
+            )
+        }
+
+        let snapshot = builder.snapshot()
+        #expect(snapshot.motionSamples.count == builder.maxBufferedMotionSamples)
+        #expect(snapshot.motionSamples.first?.timestamp == 3_000)
+        #expect(snapshot.motionSamples.last?.timestamp == 4_999)
+    }
+
+    @Test("trims oversized motion buffers restored from a checkpoint snapshot")
+    func trimsOversizedMotionBufferOnSnapshotRestore() {
+        let oversized = ReadingBuilder.Snapshot(
+            targetDistanceMeters: 40,
+            maxDurationSeconds: 15,
+            maxHorizontalAccuracyMeters: 20,
+            maxHeadingVarianceDegrees: 60,
+            minimumSampleCount: 30,
+            locationSamples: [],
+            motionSamples: (0..<3_000).map {
+                MotionSample(
+                    timestamp: TimeInterval($0),
+                    userAcceleration: MotionVector3(x: 0, y: 0, z: 0.5),
+                    gravity: MotionVector3(x: 0, y: 0, z: 1)
+                )
+            }
+        )
+
+        let restored = ReadingBuilder(snapshot: oversized)
+        #expect(restored.snapshot().motionSamples.count == restored.maxBufferedMotionSamples)
+    }
+
     private func sample(
         atMeters meters: Double,
         second: TimeInterval,

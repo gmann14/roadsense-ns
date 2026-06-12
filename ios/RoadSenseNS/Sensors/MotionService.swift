@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 protocol MotionServicing {
-    var samples: AsyncStream<MotionSample> { get }
+    func makeSampleStream() -> AsyncStream<MotionSample>
     func start(hz: Double) throws
     func stop()
 }
@@ -12,20 +12,23 @@ protocol MotionServicing {
 final class MotionService: MotionServicing {
     private let manager: CMMotionManager
     private let queue: OperationQueue
-    private let continuation: AsyncStream<MotionSample>.Continuation
-    let samples: AsyncStream<MotionSample>
+    private var continuation: AsyncStream<MotionSample>.Continuation?
 
     init(manager: CMMotionManager = CMMotionManager()) {
         self.manager = manager
         self.queue = OperationQueue()
         queue.name = "ca.roadsense.motion"
         queue.maxConcurrentOperationCount = 1
+    }
 
-        var captured: AsyncStream<MotionSample>.Continuation?
-        self.samples = AsyncStream<MotionSample> { continuation in
-            captured = continuation
-        }
-        self.continuation = captured!
+    /// Returns a fresh sample stream, finishing any previously vended one.
+    /// Streams are single-use: cancelling the consuming task terminates the
+    /// stream permanently, so each monitoring session must consume its own.
+    func makeSampleStream() -> AsyncStream<MotionSample> {
+        continuation?.finish()
+        let (stream, continuation) = AsyncStream.makeStream(of: MotionSample.self)
+        self.continuation = continuation
+        return stream
     }
 
     func start(hz: Double = 50) throws {
@@ -50,7 +53,7 @@ final class MotionService: MotionServicing {
                 z: motion.gravity.z
             )
 
-            continuation.yield(
+            continuation?.yield(
                 MotionSample(
                     timestamp: motion.timestamp,
                     userAcceleration: userAcceleration,

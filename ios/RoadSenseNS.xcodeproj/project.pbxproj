@@ -33,6 +33,7 @@
 		2E1B6D32ED2B5BB95BBBDC7E /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB9B9294F92A70C11D0FB1B /* APIClient.swift */; };
 		3651E2DE8B84CAC043133934 /* SegmentAPIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5510C3BC3010F7CA1DBD337A /* SegmentAPIModels.swift */; };
 		3957B51C67FCB5FF1CEC7628 /* DriveEndpointTrimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1B35DE8F53433B4BCCB9A0 /* DriveEndpointTrimmer.swift */; };
+		3CDE864AF9BB1C246248312D /* NetworkPathMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A923FF6BFB70D683240CF9B /* NetworkPathMonitor.swift */; };
 		3E1EAD8552D8141AAAF82DC8 /* PotholeActionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89EE7E2252FD9D4C1984BC93 /* PotholeActionStore.swift */; };
 		3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CE5D67A573F4B606118C23 /* SettingsView.swift */; };
 		4030CA59DBFD2BD1002A939A /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
@@ -250,6 +251,7 @@
 		851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenStore.swift; sourceTree = "<group>"; };
 		87BFF6431F5A28086CBAE761 /* RetentionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RetentionPolicy.swift; sourceTree = "<group>"; };
 		89EE7E2252FD9D4C1984BC93 /* PotholeActionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeActionStore.swift; sourceTree = "<group>"; };
+		8A923FF6BFB70D683240CF9B /* NetworkPathMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkPathMonitor.swift; sourceTree = "<group>"; };
 		8C3CC85D4B7789B2AC4C7FC7 /* PotholeDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeDetector.swift; sourceTree = "<group>"; };
 		8D13BE0C6384DA73D2912C3B /* RoadQualityMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadQualityMapView.swift; sourceTree = "<group>"; };
 		9139453217F19A1A04A4F0FF /* ReadingBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingBuilder.swift; sourceTree = "<group>"; };
@@ -447,6 +449,7 @@
 			isa = PBXGroup;
 			children = (
 				1FB9B9294F92A70C11D0FB1B /* APIClient.swift */,
+				8A923FF6BFB70D683240CF9B /* NetworkPathMonitor.swift */,
 				B41B92DA7CA8EB765BCFC11A /* Uploader.swift */,
 			);
 			path = Network;
@@ -980,6 +983,7 @@
 				1B9B8D56DFC14459AAE0D031 /* MotionMath.swift in Sources */,
 				B2D9E6BCD21611B708C78F26 /* MotionService.swift in Sources */,
 				9374B54AC33D34DBF8FB4C89 /* NeedsAttentionPill.swift in Sources */,
+				3CDE864AF9BB1C246248312D /* NetworkPathMonitor.swift in Sources */,
 				ED8DD1471CDB22C80D593E55 /* OnboardingFlowView.swift in Sources */,
 				5B011F7824CB4E482FB240B4 /* PermissionManager.swift in Sources */,
 				DB60EBD564C4FFEC0E4F4EE9 /* PotholeActionRecord.swift in Sources */,

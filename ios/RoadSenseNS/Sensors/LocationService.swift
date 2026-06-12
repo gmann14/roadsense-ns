@@ -3,10 +3,10 @@ import Foundation
 
 @MainActor
 protocol LocationServicing {
-    var samples: AsyncStream<LocationSample> { get }
     var authorizationStatus: CLAuthorizationStatus { get }
     var latestSample: LocationSample? { get }
     var recentSamples: [LocationSample] { get }
+    func makeSampleStream() -> AsyncStream<LocationSample>
     func startPassiveMonitoring()
     func stopPassiveMonitoring()
     func start() throws
@@ -19,20 +19,14 @@ final class LocationService: NSObject, LocationServicing {
     private static let bufferedSampleRetentionSeconds: TimeInterval = 30
 
     private let manager: CLLocationManager
-    private let continuation: AsyncStream<LocationSample>.Continuation
+    private var continuation: AsyncStream<LocationSample>.Continuation?
     private var bufferedSamples: [LocationSample] = []
     private var isPassiveMonitoringActive = false
     private var isCollectionActive = false
     private var isUpdatingLocation = false
-    let samples: AsyncStream<LocationSample>
 
     init(manager: CLLocationManager = CLLocationManager()) {
         self.manager = manager
-        var captured: AsyncStream<LocationSample>.Continuation?
-        self.samples = AsyncStream<LocationSample> { continuation in
-            captured = continuation
-        }
-        self.continuation = captured!
         super.init()
         manager.delegate = self
         manager.activityType = .automotiveNavigation
@@ -52,6 +46,16 @@ final class LocationService: NSObject, LocationServicing {
 
     var recentSamples: [LocationSample] {
         prunedBufferedSamples(referenceTime: Date().timeIntervalSince1970)
+    }
+
+    /// Returns a fresh sample stream, finishing any previously vended one.
+    /// Streams are single-use: cancelling the consuming task terminates the
+    /// stream permanently, so each monitoring session must consume its own.
+    func makeSampleStream() -> AsyncStream<LocationSample> {
+        continuation?.finish()
+        let (stream, continuation) = AsyncStream.makeStream(of: LocationSample.self)
+        self.continuation = continuation
+        return stream
     }
 
     func start() throws {
@@ -116,7 +120,7 @@ extension LocationService: @preconcurrency CLLocationManagerDelegate {
             )
             bufferedSamples.append(sample)
             bufferedSamples = prunedBufferedSamples(referenceTime: sample.timestamp)
-            continuation.yield(sample)
+            continuation?.yield(sample)
         }
     }
 

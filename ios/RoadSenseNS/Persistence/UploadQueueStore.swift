@@ -151,6 +151,25 @@ final class UploadQueueStore {
         )
     }
 
+    /// Clears retry backoff on pending batches so the next drain picks them
+    /// up immediately. Used when connectivity returns: backoff accumulated
+    /// from failed attempts while offline should not delay the upload.
+    func requeueEligibleBatches() throws {
+        let context = ModelContext(container)
+        let descriptor = FetchDescriptor<UploadBatch>(
+            predicate: #Predicate { $0.statusRawValue == "pending" }
+        )
+        let batches = try context.fetch(descriptor).filter { $0.nextAttemptAt != nil }
+
+        for batch in batches {
+            batch.nextAttemptAt = nil
+        }
+
+        if !batches.isEmpty {
+            try context.save()
+        }
+    }
+
     func retryFailedBatches() throws {
         let context = ModelContext(container)
         let descriptor = FetchDescriptor<UploadBatch>(

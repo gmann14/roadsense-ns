@@ -202,10 +202,10 @@ private final class PreviewPrivacyZoneStore: PrivacyZoneStoring {
 
 @MainActor
 private struct PreviewLocationService: LocationServicing {
-    var samples: AsyncStream<LocationSample> { AsyncStream { _ in } }
     var authorizationStatus: CLAuthorizationStatus { .authorizedWhenInUse }
     var latestSample: LocationSample? { nil }
     var recentSamples: [LocationSample] { [] }
+    func makeSampleStream() -> AsyncStream<LocationSample> { AsyncStream { _ in } }
     func startPassiveMonitoring() {}
     func stopPassiveMonitoring() {}
     func start() throws {}
@@ -215,14 +215,14 @@ private struct PreviewLocationService: LocationServicing {
 
 @MainActor
 private struct PreviewMotionService: MotionServicing {
-    var samples: AsyncStream<MotionSample> { AsyncStream { _ in } }
+    func makeSampleStream() -> AsyncStream<MotionSample> { AsyncStream { _ in } }
     func start(hz: Double) throws {}
     func stop() {}
 }
 
 @MainActor
 private struct PreviewDrivingDetector: DrivingDetecting {
-    var events: AsyncStream<Bool> { AsyncStream { _ in } }
+    func makeEventStream() -> AsyncStream<Bool> { AsyncStream { _ in } }
     func start() {}
     func stop() {}
 }

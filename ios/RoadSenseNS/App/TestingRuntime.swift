@@ -24,10 +24,10 @@ private struct TestingPermissionManager: PermissionManaging {
 
 @MainActor
 private struct TestingLocationService: LocationServicing {
-    var samples: AsyncStream<LocationSample> { AsyncStream { _ in } }
     var authorizationStatus: CLAuthorizationStatus { .authorizedAlways }
     var latestSample: LocationSample? { nil }
     var recentSamples: [LocationSample] { [] }
+    func makeSampleStream() -> AsyncStream<LocationSample> { AsyncStream { _ in } }
     func startPassiveMonitoring() {}
     func stopPassiveMonitoring() {}
     func start() throws {}
@@ -37,14 +37,14 @@ private struct TestingLocationService: LocationServicing {
 
 @MainActor
 private struct TestingMotionService: MotionServicing {
-    var samples: AsyncStream<MotionSample> { AsyncStream { _ in } }
+    func makeSampleStream() -> AsyncStream<MotionSample> { AsyncStream { _ in } }
     func start(hz: Double) throws {}
     func stop() {}
 }
 
 @MainActor
 private struct TestingDrivingDetector: DrivingDetecting {
-    var events: AsyncStream<Bool> { AsyncStream { _ in } }
+    func makeEventStream() -> AsyncStream<Bool> { AsyncStream { _ in } }
     func start() {}
     func stop() {}
 }

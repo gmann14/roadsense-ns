@@ -101,6 +101,14 @@ public struct ReadingBuilder: Sendable {
     public var minimumSampleCount: Int = 30
     public var roughnessScorer = RoughnessScorer()
 
+    /// Hard cap on buffered motion samples. A valid window lasts at most
+    /// `maxDurationSeconds` at 50Hz (~750 samples), so this bound never
+    /// affects a window that can still be emitted. It exists to keep memory
+    /// and checkpoint size bounded when GPS fixes stop arriving (tunnel,
+    /// revoked location permission, CoreLocation stall) while motion keeps
+    /// streaming at 50Hz.
+    public var maxBufferedMotionSamples: Int = 2_000
+
     private var locationSamples: [LocationSample] = []
     private var motionSamples: [MotionSample] = []
 
@@ -114,10 +122,19 @@ public struct ReadingBuilder: Sendable {
         self.minimumSampleCount = snapshot.minimumSampleCount
         self.locationSamples = snapshot.locationSamples
         self.motionSamples = snapshot.motionSamples
+        trimMotionSamplesIfNeeded()
     }
 
     public mutating func addMotionSample(_ sample: MotionSample) {
         motionSamples.append(sample)
+        trimMotionSamplesIfNeeded()
+    }
+
+    private mutating func trimMotionSamplesIfNeeded() {
+        let overflow = motionSamples.count - max(maxBufferedMotionSamples, 0)
+        if overflow > 0 {
+            motionSamples.removeFirst(overflow)
+        }
     }
 
     public mutating func addLocationSample(_ sample: LocationSample) -> ReadingWindow? {

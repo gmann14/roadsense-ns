@@ -752,10 +752,10 @@ private struct TestLocationService: LocationServicing {
         self.recentSamplesOverride = recentSamples
     }
 
-    var samples: AsyncStream<LocationSample> { AsyncStream { _ in } }
     var authorizationStatus: CLAuthorizationStatus { .authorizedAlways }
     var latestSample: LocationSample? { latestSampleOverride }
     var recentSamples: [LocationSample] { recentSamplesOverride }
+    func makeSampleStream() -> AsyncStream<LocationSample> { AsyncStream { _ in } }
     func startPassiveMonitoring() {}
     func stopPassiveMonitoring() {}
     func start() throws {}
@@ -765,14 +765,14 @@ private struct TestLocationService: LocationServicing {
 
 @MainActor
 private struct TestMotionService: MotionServicing {
-    var samples: AsyncStream<MotionSample> { AsyncStream { _ in } }
+    func makeSampleStream() -> AsyncStream<MotionSample> { AsyncStream { _ in } }
     func start(hz: Double) throws {}
     func stop() {}
 }
 
 @MainActor
 private struct TestDrivingDetector: DrivingDetecting {
-    var events: AsyncStream<Bool> { AsyncStream { _ in } }
+    func makeEventStream() -> AsyncStream<Bool> { AsyncStream { _ in } }
     func start() {}
     func stop() {}
 }

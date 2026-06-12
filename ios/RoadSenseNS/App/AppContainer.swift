@@ -33,6 +33,7 @@ struct AppContainer {
         }
 
         let privacyZoneStore = PrivacyZoneStore(container: modelContainer)
+        privacyZoneStore.migrateLegacyRawZoneCentersIfNeeded(logger: logger)
         let potholeActionStore = PotholeActionStore(container: modelContainer)
         let potholePhotoStore = PotholePhotoStore(container: modelContainer)
         let readingStore = ReadingStore(container: modelContainer)
@@ -44,18 +45,31 @@ struct AppContainer {
         let drivingDetector = DrivingDetector()
         let thermalMonitor = ThermalMonitor()
         let checkpointStore = SensorCheckpointStore()
+        let networkPathMonitor = NetworkPathMonitor()
         let uploader = Uploader(
             container: modelContainer,
             potholeActionStore: potholeActionStore,
             potholePhotoStore: potholePhotoStore,
             queueStore: uploadQueueStore,
             client: apiClient,
-            logger: .upload
+            logger: .upload,
+            networkPath: networkPathMonitor
         )
         let uploadDrainCoordinator = UploadDrainCoordinator(
             uploader: uploader,
             logger: .upload
         )
+        let connectivityRestorer = UploadConnectivityRestorer(
+            queueStore: uploadQueueStore,
+            drainCoordinator: uploadDrainCoordinator,
+            logger: .upload
+        )
+        networkPathMonitor.onPathBecameSatisfied = {
+            Task { @MainActor in
+                await connectivityRestorer.handleNetworkRestored()
+            }
+        }
+        networkPathMonitor.start()
         return AppContainer(
             config: config,
             permissions: SystemPermissionManager(),

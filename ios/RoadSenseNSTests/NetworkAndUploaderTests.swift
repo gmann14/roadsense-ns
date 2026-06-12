@@ -606,6 +606,192 @@ final class NetworkAndUploaderTests: XCTestCase {
         XCTAssertEqual(batches.first?.nextAttemptAt, now.addingTimeInterval(1))
     }
 
+    // Regression tests for P0-6 (docs/reviews/2026-06-11-ios-prelaunch-review.md):
+    // offline drains used to burn retry attempts until the batch permanently
+    // failed behind a manual retry button.
+    @MainActor
+    func testUploaderSkipsDrainWithoutCountingAttemptsWhileOffline() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        _ = try DeviceTokenStore.currentToken(
+            in: context,
+            now: Date(timeIntervalSince1970: 1_713_000_000),
+            makeUUID: { "device-token" }
+        )
+
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6488,
+                longitude: -63.5752,
+                roughnessRMS: 1.1,
+                speedKMH: 50,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_010)
+            )
+        )
+        try context.save()
+
+        let session = makeMockSession()
+        MockURLProtocol.requestHandler = { _ in
+            XCTFail("No request expected while the network path is unsatisfied")
+            throw URLError(.notConnectedToInternet)
+        }
+
+        let endpoints = Endpoints(
+            config: AppConfig(
+                environment: .local,
+                apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
+                mapboxAccessToken: "pk.test",
+                supabaseAnonKey: "anon.test"
+            )
+        )
+        let uploader = Uploader(
+            container: container,
+            potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
+            queueStore: UploadQueueStore(container: container),
+            client: APIClient(endpoints: endpoints, session: session),
+            logger: .upload,
+            networkPath: StubNetworkPath(
+                snapshot: NetworkPathSnapshot(status: .unsatisfied, isExpensive: false)
+            )
+        )
+
+        // Five offline drains used to be enough to permanently fail a batch.
+        for offset in 0..<5 {
+            await uploader.drainOnce(now: Date(timeIntervalSince1970: 1_713_000_100 + Double(offset) * 60))
+        }
+
+        let updatedContext = ModelContext(container)
+        let readings = try updatedContext.fetch(FetchDescriptor<ReadingRecord>())
+        let batches = try updatedContext.fetch(FetchDescriptor<UploadBatch>())
+
+        XCTAssertTrue(batches.isEmpty, "offline drains must not create or fail batches")
+        XCTAssertNil(readings.first?.uploadBatchID)
+        XCTAssertNil(readings.first?.uploadedAt)
+    }
+
+    @MainActor
+    func testUploaderDrainOnceMarksBatchFailedPermanentOnValidationError() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        _ = try DeviceTokenStore.currentToken(
+            in: context,
+            now: Date(timeIntervalSince1970: 1_713_000_000),
+            makeUUID: { "device-token" }
+        )
+
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6488,
+                longitude: -63.5752,
+                roughnessRMS: 1.1,
+                speedKMH: 50,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_010)
+            )
+        )
+        try context.save()
+
+        let session = makeMockSession()
+        MockURLProtocol.requestHandler = { request in
+            let encoder = UploadCodec.makeEncoder()
+            let data = try encoder.encode(
+                UploadErrorEnvelope(error: "validation_failed", details: nil)
+            )
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 400,
+                    httpVersion: nil,
+                    headerFields: [:]
+                )!,
+                data
+            )
+        }
+
+        let endpoints = Endpoints(
+            config: AppConfig(
+                environment: .local,
+                apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
+                mapboxAccessToken: "pk.test",
+                supabaseAnonKey: "anon.test"
+            )
+        )
+        let uploader = Uploader(
+            container: container,
+            potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
+            queueStore: UploadQueueStore(container: container),
+            client: APIClient(endpoints: endpoints, session: session),
+            logger: .upload
+        )
+
+        await uploader.drainOnce(now: Date(timeIntervalSince1970: 1_713_000_100))
+
+        let updatedContext = ModelContext(container)
+        let batches = try updatedContext.fetch(FetchDescriptor<UploadBatch>())
+
+        XCTAssertEqual(batches.count, 1)
+        XCTAssertEqual(batches.first?.status, .failedPermanent)
+        XCTAssertEqual(batches.first?.firstErrorMessage, "validation_failed")
+    }
+
+    @MainActor
+    func testNetworkRestoreRequeuesBatchesAndRequestsDrain() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        context.insert(
+            UploadBatch(
+                createdAt: Date(timeIntervalSince1970: 1_713_000_000),
+                attemptCount: 4,
+                lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_060),
+                nextAttemptAt: Date(timeIntervalSince1970: 1_713_003_600),
+                status: .pending,
+                readingCount: 10,
+                firstErrorMessage: "network_error"
+            )
+        )
+        context.insert(
+            UploadBatch(
+                createdAt: Date(timeIntervalSince1970: 1_713_000_000),
+                attemptCount: 1,
+                lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030),
+                nextAttemptAt: nil,
+                status: .failedPermanent,
+                readingCount: 5,
+                firstErrorMessage: "validation_failed"
+            )
+        )
+        try context.save()
+
+        let queueStore = UploadQueueStore(container: container)
+        let drainCoordinator = RecordingDrainCoordinator()
+        let restorer = UploadConnectivityRestorer(
+            queueStore: queueStore,
+            drainCoordinator: drainCoordinator,
+            logger: .upload
+        )
+
+        await restorer.handleNetworkRestored()
+
+        let updatedContext = ModelContext(container)
+        let batches = try updatedContext.fetch(FetchDescriptor<UploadBatch>())
+        let pending = try XCTUnwrap(batches.first(where: { $0.status == .pending }))
+        let failed = try XCTUnwrap(batches.first(where: { $0.status == .failedPermanent }))
+
+        XCTAssertNil(pending.nextAttemptAt, "backoff accumulated offline must be cleared on restore")
+        XCTAssertEqual(pending.attemptCount, 4)
+        XCTAssertEqual(failed.status, .failedPermanent, "server-rejected batches stay behind the manual retry button")
+        XCTAssertEqual(drainCoordinator.requestedReasons, [.networkRestored])
+    }
+
     @MainActor
     func testUploaderDrainUntilBlockedProcessesMultipleBatchesUntilBackoff() async throws {
         let container = try makeInMemoryContainer()
@@ -1546,6 +1732,84 @@ final class NetworkAndUploaderTests: XCTestCase {
         try? checkpointStore.clear()
     }
 
+    // Regression test for P0-2 (docs/reviews/2026-06-11-ios-prelaunch-review.md):
+    // pausing monitoring used to cancel the consumer tasks of init-created
+    // single-use AsyncStreams, so a resume never received samples again.
+    @MainActor
+    func testSensorCoordinatorResumesSampleDeliveryAfterMonitoringRestart() async throws {
+        let container = try makeInMemoryContainer()
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let drivingDetector = StreamDrivingDetector()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            scheduleUploadDrain: { _ in }
+        )
+
+        // First session: samples flow and collection starts.
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertTrue(coordinator.monitoringState.isCollecting)
+
+        // Pause (Settings toggle path) tears the consumer tasks down.
+        coordinator.stopMonitoring()
+        XCTAssertFalse(coordinator.monitoringState.isMonitoring)
+        XCTAssertFalse(coordinator.monitoringState.isCollecting)
+
+        // Resume: all three streams must deliver again.
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertTrue(coordinator.monitoringState.isCollecting)
+        XCTAssertEqual(locationService.startCount, 2)
+        XCTAssertEqual(motionService.startCount, 2)
+
+        let location = LocationSample(
+            timestamp: 1_713_000_000,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 8,
+            speedKmh: 35,
+            headingDegrees: 180
+        )
+        locationService.send(location)
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(
+            coordinator.diagnostics.lastLocationSampleAt,
+            Date(timeIntervalSince1970: location.timestamp)
+        )
+
+        motionService.sendVerticalAcceleration(-0.8, timestamp: 1_713_000_000.1)
+        motionService.sendVerticalAcceleration(2.6, timestamp: 1_713_000_000.2)
+
+        var matched: PotholeCandidate?
+        for _ in 0..<20 {
+            matched = coordinator.strongestRecentPotholeCandidate(
+                near: location,
+                now: Date(timeIntervalSince1970: 1_713_000_005)
+            )
+            if matched != nil { break }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(matched?.magnitudeG, 2.6)
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
     @MainActor
     func testUploaderDrainOnceUploadsQueuedPotholeAction() async throws {
         let container = try makeInMemoryContainer()
@@ -1752,6 +2016,106 @@ final class NetworkAndUploaderTests: XCTestCase {
         XCTAssertTrue(try store.hasConfiguredZones())
     }
 
+    // Regression test for P0-4 (docs/reviews/2026-06-11-ios-prelaunch-review.md):
+    // saved zones used to store the raw map-reticle coordinate — the user's
+    // exact home — instead of the documented snapped + randomized-offset center.
+    @MainActor
+    func testPrivacyZoneStoreAppliesRandomizedOffsetOnSave() throws {
+        let container = try makeInMemoryContainer()
+        let store = PrivacyZoneStore(
+            container: container,
+            makeRandomAngleRadians: { .pi / 2 },
+            makeRandomDistanceMeters: { 80 }
+        )
+
+        let rawLatitude = 44.64881
+        let rawLongitude = -63.57523
+        try store.save(
+            label: "Home",
+            latitude: rawLatitude,
+            longitude: rawLongitude,
+            radiusM: 300
+        )
+
+        let expected = PrivacyZoneFactory.makeZone(
+            tappedLatitude: rawLatitude,
+            tappedLongitude: rawLongitude,
+            requestedRadiusMeters: 300,
+            randomAngleRadians: .pi / 2,
+            randomDistanceMeters: 80
+        )
+        let zone = try XCTUnwrap(store.fetchAll().first)
+        XCTAssertEqual(zone.latitude, expected.latitude)
+        XCTAssertEqual(zone.longitude, expected.longitude)
+        XCTAssertEqual(zone.radiusM, expected.radiusMeters)
+
+        let storedOffsetMeters = PrivacyZoneFactory.distanceMeters(
+            fromLatitude: rawLatitude,
+            fromLongitude: rawLongitude,
+            toLatitude: zone.latitude,
+            toLongitude: zone.longitude
+        )
+        XCTAssertGreaterThan(storedOffsetMeters, 0)
+        XCTAssertLessThan(storedOffsetMeters, zone.radiusM, "home must stay inside its own zone")
+    }
+
+    @MainActor
+    func testPrivacyZoneStoreMigratesLegacyRawZoneCentersExactlyOnce() throws {
+        let container = try makeInMemoryContainer()
+        let suiteName = "PrivacyZoneMigrationTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        // Simulate a zone saved before the offset fix: raw center on disk.
+        let rawLatitude = 44.64881
+        let rawLongitude = -63.57523
+        let context = ModelContext(container)
+        context.insert(
+            PrivacyZoneRecord(
+                label: "Home",
+                latitude: rawLatitude,
+                longitude: rawLongitude,
+                radiusM: 300,
+                createdAt: Date(timeIntervalSince1970: 1_713_000_000)
+            )
+        )
+        try context.save()
+
+        let store = PrivacyZoneStore(
+            container: container,
+            makeRandomAngleRadians: { .pi / 4 },
+            makeRandomDistanceMeters: { 60 }
+        )
+        store.migrateLegacyRawZoneCentersIfNeeded(defaults: defaults, logger: .app)
+
+        let expected = PrivacyZoneFactory.makeZone(
+            tappedLatitude: rawLatitude,
+            tappedLongitude: rawLongitude,
+            requestedRadiusMeters: 300,
+            randomAngleRadians: .pi / 4,
+            randomDistanceMeters: 60
+        )
+        let migrated = try XCTUnwrap(store.fetchAll().first)
+        XCTAssertEqual(migrated.latitude, expected.latitude)
+        XCTAssertEqual(migrated.longitude, expected.longitude)
+        XCTAssertTrue(defaults.bool(forKey: PrivacyZoneStore.legacyCenterMigrationKey))
+
+        // Re-running (e.g. next launch) must not offset the center again — a
+        // double offset could push the zone off the user's home entirely.
+        let secondStore = PrivacyZoneStore(
+            container: container,
+            makeRandomAngleRadians: { .pi },
+            makeRandomDistanceMeters: { 100 }
+        )
+        secondStore.migrateLegacyRawZoneCentersIfNeeded(defaults: defaults, logger: .app)
+
+        let unchanged = try XCTUnwrap(secondStore.fetchAll().first)
+        XCTAssertEqual(unchanged.latitude, expected.latitude)
+        XCTAssertEqual(unchanged.longitude, expected.longitude)
+    }
+
     @MainActor
     private func makeInMemoryContainer() throws -> ModelContainer {
         try ModelContainerProvider.makeInMemory()
@@ -1867,28 +2231,26 @@ private func requestBody(for request: URLRequest) throws -> Data {
 
 @MainActor
 private final class StreamDrivingDetector: DrivingDetecting {
-    private let continuation: AsyncStream<Bool>.Continuation
-    let events: AsyncStream<Bool>
+    private var continuation: AsyncStream<Bool>.Continuation?
 
-    init() {
-        var captured: AsyncStream<Bool>.Continuation?
-        self.events = AsyncStream<Bool> { continuation in
-            captured = continuation
-        }
-        self.continuation = captured!
+    func makeEventStream() -> AsyncStream<Bool> {
+        continuation?.finish()
+        let (stream, continuation) = AsyncStream.makeStream(of: Bool.self)
+        self.continuation = continuation
+        return stream
     }
 
     func start() {}
     func stop() {}
 
     func send(_ isDriving: Bool) {
-        continuation.yield(isDriving)
+        continuation?.yield(isDriving)
     }
 }
 
 @MainActor
 private final class CountingLocationService: LocationServicing {
-    private let continuation: AsyncStream<LocationSample>.Continuation
+    private var continuation: AsyncStream<LocationSample>.Continuation?
 
     private(set) var startCount = 0
     private(set) var stopCount = 0
@@ -1896,17 +2258,15 @@ private final class CountingLocationService: LocationServicing {
     private(set) var passiveStopCount = 0
     private var bufferedSamples: [LocationSample] = []
 
-    let samples: AsyncStream<LocationSample>
     var authorizationStatus: CLAuthorizationStatus { .authorizedAlways }
     var latestSample: LocationSample? { bufferedSamples.last }
     var recentSamples: [LocationSample] { bufferedSamples }
 
-    init() {
-        var captured: AsyncStream<LocationSample>.Continuation?
-        self.samples = AsyncStream<LocationSample> { continuation in
-            captured = continuation
-        }
-        self.continuation = captured!
+    func makeSampleStream() -> AsyncStream<LocationSample> {
+        continuation?.finish()
+        let (stream, continuation) = AsyncStream.makeStream(of: LocationSample.self)
+        self.continuation = continuation
+        return stream
     }
 
     func startPassiveMonitoring() {
@@ -1929,25 +2289,22 @@ private final class CountingLocationService: LocationServicing {
 
     func send(_ sample: LocationSample) {
         bufferedSamples.append(sample)
-        continuation.yield(sample)
+        continuation?.yield(sample)
     }
 }
 
 @MainActor
 private final class CountingMotionService: MotionServicing {
-    private let continuation: AsyncStream<MotionSample>.Continuation
+    private var continuation: AsyncStream<MotionSample>.Continuation?
 
     private(set) var startCount = 0
     private(set) var stopCount = 0
 
-    let samples: AsyncStream<MotionSample>
-
-    init() {
-        var captured: AsyncStream<MotionSample>.Continuation?
-        self.samples = AsyncStream<MotionSample> { continuation in
-            captured = continuation
-        }
-        self.continuation = captured!
+    func makeSampleStream() -> AsyncStream<MotionSample> {
+        continuation?.finish()
+        let (stream, continuation) = AsyncStream.makeStream(of: MotionSample.self)
+        self.continuation = continuation
+        return stream
     }
 
     func start(hz: Double) throws {
@@ -1959,7 +2316,7 @@ private final class CountingMotionService: MotionServicing {
     }
 
     func sendVerticalAcceleration(_ value: Double, timestamp: TimeInterval) {
-        continuation.yield(
+        continuation?.yield(
             MotionSample(
                 timestamp: timestamp,
                 userAcceleration: MotionVector3(x: 0, y: 0, z: value),
@@ -1972,4 +2329,25 @@ private final class CountingMotionService: MotionServicing {
 @MainActor
 private struct StubThermalMonitor: ThermalMonitoring {
     var currentState: ProcessInfo.ThermalState { .nominal }
+}
+
+@MainActor
+private final class StubNetworkPath: NetworkPathProviding {
+    var currentSnapshot: NetworkPathSnapshot
+
+    init(snapshot: NetworkPathSnapshot) {
+        self.currentSnapshot = snapshot
+    }
+}
+
+@MainActor
+private final class RecordingDrainCoordinator: UploadDrainCoordinating {
+    private(set) var requestedReasons: [UploadDrainReason] = []
+
+    func requestDrain(reason: UploadDrainReason) async -> Bool {
+        requestedReasons.append(reason)
+        return true
+    }
+
+    func cancelActiveDrain() {}
 }
