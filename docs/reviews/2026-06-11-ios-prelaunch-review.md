@@ -94,6 +94,8 @@ For the record, since the stale review claimed the opposite — the full flow on
 ### P0 — fix before wider TestFlight distribution
 
 ### P0-2. Pause→resume permanently kills all sensor streams (single-use `AsyncStream`) — STILL-VALID
+
+> **Fixed 2026-06-12 (commit ef0ce7f):** services now vend a fresh stream per consumer via `makeSampleStream()`; start→stop→start regression test added.
 - `ios/RoadSenseNS/Sensors/LocationService.swift:29-35`,
   `ios/RoadSenseNS/Sensors/MotionService.swift:24-28`,
   `ios/RoadSenseNS/Sensors/DrivingDetector.swift:17-23` — each service still creates its
@@ -121,6 +123,8 @@ behind `func makeSamples() -> AsyncStream<...>`), or never cancel the consumer t
 gate with `isMonitoring`.
 
 ### P0-4. Privacy-zone randomized offset is never applied — zone center is the user's exact home — STILL-VALID
+
+> **Fixed 2026-06-12 (commit ef0ce7f):** offset applied in `PrivacyZoneStore.save` via `PrivacyZoneFactory.makeZone`, plus a guarded one-time migration re-offsetting legacy raw zone centers on launch.
 - `ios/RoadSenseNS/Features/PrivacyZones/PrivacyZonesView.swift:402-410` — `saveZone()`
   stores the raw map-reticle coordinate (`draftCenter`) directly via
   `PrivacyZoneStore.save(...)` (`ios/RoadSenseNS/Persistence/PrivacyZoneStore.swift:32-43`).
@@ -148,6 +152,8 @@ within ~170m (matches "neighborhood-level" intent — soften any "defeats triang
 claim).
 
 ### P0-6. Upload retry policy permanently fails batches after ~31s of cumulative backoff; offline drains burn attempts — STILL-VALID
+
+> **Fixed 2026-06-12 (commit ef0ce7f):** transport/5xx/404 failures retry with capped backoff (max 1h) instead of `failedPermanent`; only 4xx rejection strands. Drains gated on new `NetworkPathMonitor`, with requeue on connectivity restore.
 - `ios/Sources/RoadSenseNSBootstrap/Network/UploadPolicy.swift:35-51` — unchanged: 5xx,
   404 and network errors get `retry(2^(n-1) s)` for attempts 1–5 (1,2,4,8,16s), then
   `failedPermanent` at attempt 6. No jitter, no long backoff.
