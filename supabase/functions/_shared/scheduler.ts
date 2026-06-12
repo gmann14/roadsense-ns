@@ -11,8 +11,8 @@
 //     from a hard outage at the next month boundary if it falls between
 //     manual checks)
 //   - drop_old_readings_partitions / nightly_recompute_aggregates /
-//     expire_unconfirmed_potholes / rate-limit GC: daily, at startup-aligned
-//     intervals.
+//     expire_unconfirmed_potholes / rate-limit GC / contributor-marks GC:
+//     daily, at startup-aligned intervals.
 //
 // Best-effort: errors are logged, never thrown — a transient query failure
 // must not crash the request loop. Multiple replicas all run their own
@@ -38,6 +38,10 @@ const JOBS: Job[] = [
     { name: "nightly-aggregate-recompute",      intervalMs: DAY,         sql: "SELECT nightly_recompute_aggregates()" },
     { name: "pothole-expiry",                   intervalMs: DAY,         sql: "SELECT expire_unconfirmed_potholes()" },
     { name: "rate-limit-gc",                    intervalMs: DAY,         sql: "DELETE FROM rate_limits WHERE bucket_start < now() - INTERVAL '7 days'" },
+    // B166: marks sweep matching the 6-month reading-retention window
+    // (20260612180000_exact_contributor_dedupe.sql; the nightly recompute
+    // re-seeds marks for any device whose readings are still retained).
+    { name: "segment-contributor-marks-gc",     intervalMs: DAY,         sql: "DELETE FROM segment_contributor_marks WHERE first_seen_at < now() - INTERVAL '6 months'" },
     // drop_old_readings_partitions runs monthly in pg_cron; daily here is
     // wasteful but safe — the function is a no-op when there's nothing to drop.
     { name: "drop-old-readings-partitions",     intervalMs: DAY,         sql: "SELECT drop_old_readings_partitions()" },
