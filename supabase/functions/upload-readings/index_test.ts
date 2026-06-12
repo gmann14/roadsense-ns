@@ -1,5 +1,10 @@
 import { assertEquals, assertMatch, assertObjectMatch } from "jsr:@std/assert";
-import { createUploadReadingsHandler, extractClientIp, validateUploadPayload } from "./handler.ts";
+import {
+    createUploadReadingsHandler,
+    extractClientIp,
+    maxPotholeReadingsForBatch,
+    validateUploadPayload,
+} from "./handler.ts";
 import { createRateLimitChecker, type RpcResponse } from "./runtime.ts";
 
 const validPayload = {
@@ -60,6 +65,151 @@ Deno.test("validateUploadPayload rejects malformed payloads", () => {
             "readings[0].roughness_rms": "must be numeric",
         });
     }
+});
+
+Deno.test("validateUploadPayload rejects forged out-of-range pothole_magnitude", () => {
+    const result = validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 50 },
+            { ...validPayload.readings[0], is_pothole: false, pothole_magnitude: -0.5 },
+        ],
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok && result.error === "validation_failed") {
+        assertObjectMatch(result.fieldErrors ?? {}, {
+            "readings[0].pothole_magnitude": "must be between 0 and 8",
+            "readings[1].pothole_magnitude": "must be between 0 and 8",
+        });
+    }
+});
+
+Deno.test("validateUploadPayload rejects physically impossible speeds", () => {
+    const result = validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], speed_kmh: 300 },
+            { ...validPayload.readings[0], speed_kmh: -5 },
+        ],
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok && result.error === "validation_failed") {
+        assertObjectMatch(result.fieldErrors ?? {}, {
+            "readings[0].speed_kmh": "must be between 0 and 220",
+            "readings[1].speed_kmh": "must be between 0 and 220",
+        });
+    }
+});
+
+Deno.test("validateUploadPayload rejects is_pothole=true below the detector spike threshold", () => {
+    const belowThreshold = validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 0.4 },
+        ],
+    });
+
+    assertEquals(belowThreshold.ok, false);
+    if (!belowThreshold.ok && belowThreshold.error === "validation_failed") {
+        assertObjectMatch(belowThreshold.fieldErrors ?? {}, {
+            "readings[0].pothole_magnitude": "must be at least 1 when is_pothole is true",
+        });
+    }
+
+    const missingMagnitude = validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: null },
+        ],
+    });
+
+    assertEquals(missingMagnitude.ok, false);
+    if (!missingMagnitude.ok && missingMagnitude.error === "validation_failed") {
+        assertObjectMatch(missingMagnitude.fieldErrors ?? {}, {
+            "readings[0].pothole_magnitude": "must be numeric when is_pothole is true",
+        });
+    }
+});
+
+Deno.test("validateUploadPayload rejects an all-pothole batch", () => {
+    const result = validateUploadPayload({
+        ...validPayload,
+        readings: Array.from({ length: 40 }, () => ({
+            ...validPayload.readings[0],
+            is_pothole: true,
+            pothole_magnitude: 2.4,
+        })),
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok && result.error === "validation_failed") {
+        assertObjectMatch(result.fieldErrors ?? {}, {
+            readings: "too many pothole-flagged readings (40 of 40; max 10)",
+        });
+    }
+});
+
+Deno.test("validateUploadPayload accepts realistic pothole readings and boundary values", () => {
+    const flagged = {
+        ...validPayload.readings[0],
+        is_pothole: true,
+        pothole_magnitude: 1.0,
+    };
+    const result = validateUploadPayload({
+        ...validPayload,
+        readings: [
+            ...Array.from({ length: 17 }, () => validPayload.readings[0]),
+            { ...flagged, pothole_magnitude: 8 },
+            { ...flagged, speed_kmh: 220 },
+            { ...flagged, speed_kmh: 0, is_pothole: false, pothole_magnitude: null },
+        ],
+    });
+
+    assertEquals(result.ok, true);
+});
+
+Deno.test("maxPotholeReadingsForBatch keeps a flat floor for small batches", () => {
+    assertEquals(maxPotholeReadingsForBatch(4), 5);
+    assertEquals(maxPotholeReadingsForBatch(20), 5);
+    assertEquals(maxPotholeReadingsForBatch(40), 10);
+    assertEquals(maxPotholeReadingsForBatch(1000), 250);
+});
+
+Deno.test("upload handler rejects a forged max-severity batch end to end", async () => {
+    let ingestCalled = false;
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        ingestBatch: async () => {
+            ingestCalled = true;
+            return { accepted: 1, rejected: 0, duplicate: false, rejected_reasons: {} };
+        },
+    });
+
+    const response = await handler(
+        new Request("http://localhost/functions/v1/upload-readings", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                ...validPayload,
+                readings: Array.from({ length: 100 }, () => ({
+                    ...validPayload.readings[0],
+                    speed_kmh: 50,
+                    is_pothole: true,
+                    pothole_magnitude: 99.99,
+                })),
+            }),
+        }),
+    );
+
+    assertEquals(response.status, 400);
+    const body = await response.json();
+    assertEquals(body.error, "validation_failed");
+    assertMatch(body.field_errors["readings[0].pothole_magnitude"], /between 0 and 8/);
+    assertMatch(body.field_errors.readings, /too many pothole-flagged readings/);
+    assertEquals(ingestCalled, false);
 });
 
 Deno.test("validateUploadPayload returns batch_too_large for >1000 readings", () => {

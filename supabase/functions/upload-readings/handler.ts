@@ -6,6 +6,44 @@ export { extractClientIp };
 const UUID_V4_REGEX =
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// Anti-forgery bounds (P0-1). Sourced from the rest of the pipeline rather than invented:
+//
+// - SPEED: physically implausible speeds are rejected outright. The SQL ingest path
+//   (ingest_reading_batch) already soft-rejects anything outside 15-160 km/h as
+//   `low_quality`; the gateway bound is deliberately looser (0-220) so the DB stays the
+//   quality gate while obviously forged values never reach hashing/rate-limit/DB work.
+// - MAGNITUDE: the manual report path clamps sensor-backed magnitude to (0, 8] G
+//   (`apply_pothole_action`, migration 20260425221500). The on-device PotholeDetector
+//   documents moderate strikes at ~0.8-1.6 G and deep ones 2 G+
+//   (ios/Sources/RoadSenseNSBootstrap/Pipeline/PotholeDetector.swift); 8 G is far beyond
+//   any real suspension event, so the bulk-ingest path now uses the same 0-8 ceiling.
+// - FLAG CONSISTENCY: an honest client only sets is_pothole=true when the detector saw a
+//   spike above its 1.0 G threshold (PotholeDetector.spikeThresholdG), and it always
+//   attaches that spike's magnitude. A flagged reading without a magnitude of at least
+//   1.0 G cannot come from the shipped detector and is rejected.
+export const SPEED_KMH_MIN = 0;
+export const SPEED_KMH_MAX = 220;
+export const POTHOLE_MAGNITUDE_MIN_G = 0;
+export const POTHOLE_MAGNITUDE_MAX_G = 8;
+export const POTHOLE_FLAG_MIN_MAGNITUDE_G = 1.0;
+
+// Per-batch pothole-flag sanity cap (P0-1). Each reading window covers >= 40 m of travel
+// (ReadingBuilder.targetDistanceMeters) and is only flagged when the detector saw a
+// dip-then-spike above 1.0 G inside that window. Even on the roughest scored NS roads
+// that fires in a small minority of windows; a batch where more than a quarter of all
+// readings are pothole-flagged would mean a sustained >= 1 G strike every ~160 m for the
+// entire drive, which is forged data, not a road. The flat allowance keeps small honest
+// batches (e.g. 4 readings with 2 hits on one bad street) clear of the cap.
+export const MAX_POTHOLE_READING_FRACTION = 0.25;
+export const MIN_POTHOLE_READING_ALLOWANCE = 5;
+
+export function maxPotholeReadingsForBatch(readingCount: number): number {
+    return Math.max(
+        MIN_POTHOLE_READING_ALLOWANCE,
+        Math.ceil(readingCount * MAX_POTHOLE_READING_FRACTION),
+    );
+}
+
 export type UploadReading = {
     lat: number;
     lng: number;
@@ -98,6 +136,8 @@ export function validateUploadPayload(payload: unknown): ValidationResult {
             return { ok: false, error: "batch_too_large" };
         }
 
+        let potholeFlaggedCount = 0;
+
         input.readings.forEach((reading, index) => {
             if (typeof reading !== "object" || reading === null || Array.isArray(reading)) {
                 fieldErrors[`readings[${index}]`] = "must be an object";
@@ -117,6 +157,9 @@ export function validateUploadPayload(payload: unknown): ValidationResult {
             }
             if (!isFiniteNumber(row.speed_kmh)) {
                 fieldErrors[`readings[${index}].speed_kmh`] = "must be numeric";
+            } else if (row.speed_kmh < SPEED_KMH_MIN || row.speed_kmh > SPEED_KMH_MAX) {
+                fieldErrors[`readings[${index}].speed_kmh`] =
+                    `must be between ${SPEED_KMH_MIN} and ${SPEED_KMH_MAX}`;
             }
             if (!(row.heading === null || isFiniteNumber(row.heading))) {
                 fieldErrors[`readings[${index}].heading`] = "must be numeric or null";
@@ -130,10 +173,36 @@ export function validateUploadPayload(payload: unknown): ValidationResult {
             if (!(row.is_pothole === undefined || typeof row.is_pothole === "boolean")) {
                 fieldErrors[`readings[${index}].is_pothole`] = "must be boolean when present";
             }
-            if (!(row.pothole_magnitude === undefined || row.pothole_magnitude === null || isFiniteNumber(row.pothole_magnitude))) {
+
+            if (row.is_pothole === true) {
+                potholeFlaggedCount += 1;
+            }
+
+            const magnitude = row.pothole_magnitude;
+            if (!(magnitude === undefined || magnitude === null || isFiniteNumber(magnitude))) {
                 fieldErrors[`readings[${index}].pothole_magnitude`] = "must be numeric or null";
+            } else if (
+                isFiniteNumber(magnitude) &&
+                (magnitude < POTHOLE_MAGNITUDE_MIN_G || magnitude > POTHOLE_MAGNITUDE_MAX_G)
+            ) {
+                fieldErrors[`readings[${index}].pothole_magnitude`] =
+                    `must be between ${POTHOLE_MAGNITUDE_MIN_G} and ${POTHOLE_MAGNITUDE_MAX_G}`;
+            } else if (row.is_pothole === true) {
+                if (!isFiniteNumber(magnitude)) {
+                    fieldErrors[`readings[${index}].pothole_magnitude`] =
+                        "must be numeric when is_pothole is true";
+                } else if (magnitude < POTHOLE_FLAG_MIN_MAGNITUDE_G) {
+                    fieldErrors[`readings[${index}].pothole_magnitude`] =
+                        `must be at least ${POTHOLE_FLAG_MIN_MAGNITUDE_G} when is_pothole is true`;
+                }
             }
         });
+
+        const maxPotholeReadings = maxPotholeReadingsForBatch(input.readings.length);
+        if (potholeFlaggedCount > maxPotholeReadings) {
+            fieldErrors.readings =
+                `too many pothole-flagged readings (${potholeFlaggedCount} of ${input.readings.length}; max ${maxPotholeReadings})`;
+        }
     }
 
     if (Object.keys(fieldErrors).length > 0) {
