@@ -43,12 +43,13 @@ request() {
     -H "x-request-id: $(request_id)"
   )
 
-  if [[ "${url}" != */health ]]; then
-    curl_args+=(
-      -H "Authorization: Bearer ${API_KEY}"
-      -H "apikey: ${API_KEY}"
-    )
-  fi
+  # The production gateway requires the apikey on every route, including
+  # /health; sending it unconditionally also works against local stacks
+  # where /health is open.
+  curl_args+=(
+    -H "Authorization: Bearer ${API_KEY}"
+    -H "apikey: ${API_KEY}"
+  )
 
   if [[ -n "${body_file}" ]]; then
     curl_args+=(
