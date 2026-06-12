@@ -529,6 +529,20 @@ Pothole actions have a dedicated bucket: 60 / 24h per device token hash, 120 / 1
 
 Two-step signed-URL upload for pothole photos. Matches [01-ios-implementation.md §Pothole Photo Capture](01-ios-implementation.md) and [02-backend-implementation.md §Pothole Photo Moderation](02-backend-implementation.md).
 
+**Current production state (2026-06-12): disabled pending R2.** The Railway gateway mounts this route (plus `pothole-photo-moderation` and `pothole-photo-image`) but answers every request with `503` and the stable error code `photos_disabled` until the R2 bucket is provisioned and the handlers are ported off Supabase Storage (see `supabase/functions/_shared/photoUploads.ts`, backlog B130):
+
+```json
+{
+    "error": "photos_disabled",
+    "message": "Photo uploads are temporarily disabled.",
+    "endpoint": "pothole-photos",
+    "retry_after_s": 21600,
+    "request_id": "01H9Z..."
+}
+```
+
+The response carries `Retry-After: 21600`. Clients must treat `photos_disabled` as a temporary, non-permanent condition: keep the photo queued, honor the pause, and never count it toward a permanent-failure path. The contract below describes the behavior once the flow is enabled.
+
 **Request**
 
 ```json

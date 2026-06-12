@@ -23,6 +23,7 @@ Source of truth for RoadSense NS project work. Keep this public-safe: no secrets
 
 ## Done
 
+- [x] Fixed live-beta pothole-photo 404s (pre-launch review NEW-2): gateway now mounts the photo routes as `503 photos_disabled` pending the R2 bucket (`supabase/functions/_shared/photoUploads.ts`), iOS production disables photo capture with a "Photos coming soon" notice and honors the 503 Retry-After for already-queued photos. Commits `ed4890d`, `d4d0090`. Owner follow-up: provision R2 + set `R2_*` env vars + port the photo handlers (fix latent P1-7/P2-8 first) to enable for real.
 - [x] Created project task source of truth.
 - [x] Path C migration shipped to staging: Railway PostGIS + Deno service + Vercel web. See `docs/implementation/13-railway-deno-migration.md`. Commits `5887962`, `e32eacb`.
 - [x] First two stress-test passes (P14 + P15) — fixed silent partition-rollover outage, /health DoS surface, tile-zoom 500, SSL hostname spoof, pgRpc SQL-injection footgun. Process documented in `docs/implementation/14-stress-test-runbook.md`.
