@@ -76,17 +76,23 @@ Fixed 2026-06-12 (commit 8e0c381) — NOTE: requires migration deploy + Railway 
 
 **Fix sketch:** unchanged — App Attest/DeviceCheck-bound, server-issued device tokens at the public-launch milestone; until then treat `unique_contributors` as untrusted and keep public thresholds conservative.
 
+Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-trust.md` (B160–B164: App Attest / Play Integrity-bound server-issued tokens, enforcement modes, beta-token grandfathering; B167 trust tiers).
+
 ### P1-2 — Potholes have no corroboration gate before going public — STILL-VALID
 
 **Where (latest):** `get_tile` potholes branch (`20260506193000:176-177`, `status='active' AND z>=8`); `get_potholes_in_bbox` (`20260418193015:51`); `get_top_potholes` (`20260425004500`, status-only); manual creation still inserts `active` with `confirmation_count=1, unique_reporters=1` (`20260425221500_sensor_backed_pothole_actions.sql:126-150`). Segment heatmap still requires `unique_contributors>=3 AND confidence!='low'`; potholes require one report from one device. The new `speed_kmh >= 45` requirement for sensor potholes and the one-off bike-data cleanup (`20260506193000` DO block) are honest-mistake filters, not abuse resistance — both rely on client-supplied fields.
 
 **Fix sketch:** unchanged — require ≥2 distinct devices for public visibility; keep single-report potholes in a candidate state.
 
+Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-trust.md` (B165: `candidate` status + distinct-device promotion to `active`; tightens to attested-only devices once B164 enforces).
+
 ### P1-3 — Intra-day `unique_contributors` inflation by a single device — STILL-VALID
 
 **Where (latest):** `update_segment_aggregates_from_batch`, current definition `supabase/migrations/20260425001500_roughness_calibration.sql:54` — `unique_contributors = segment_aggregates.unique_contributors + EXCLUDED.unique_contributors`, where `EXCLUDED.unique_contributors` is per-batch `COUNT(DISTINCT device_token_hash)` (line 35, = 1 for one device). Confidence flips to `medium` at ≥3 in the same statement (lines 59-73). One device sending 3 batches still fabricates a "medium-confidence" tile-visible segment until the nightly recompute corrects it; tiles cache for 1h (`supabase/functions/tiles/handler.ts:2`, `max-age=3600`). Note the in-process scheduler runs `nightly_recompute_aggregates()` on a `DAY` interval anchored to process start (`supabase/functions/_shared/scheduler.ts:36-44`), so the correction window can be nearly a full day.
 
 **Fix sketch:** unchanged — don't let the incremental path raise confidence/visibility, or recompute true `COUNT(DISTINCT)` for touched segments.
+
+Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-trust.md` (B166: exact dedupe via `segment_contributor_marks`; the incremental path can no longer raise confidence on one device's batches).
 
 ### P2-1 — `ON CONFLICT` deadlock risk in incremental aggregate UPSERT — STILL-VALID
 
