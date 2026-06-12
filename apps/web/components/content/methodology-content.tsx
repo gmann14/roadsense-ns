@@ -89,7 +89,8 @@ export function MethodologyContent() {
           <span className="eyebrow">What gets published</span>
           <strong>Only segment-level results appear on the public site.</strong>
           <span className="lede">
-            Individual traces and contributor histories are not exposed through the map.
+            Individual traces and contributor histories are not exposed through the map. New
+            pothole markers appear only after at least two different devices report the same spot.
           </span>
         </div>
       </article>

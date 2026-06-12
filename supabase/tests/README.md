@@ -21,3 +21,5 @@ Current pgTAP suites:
 - `008_get_tile.sql` — MVT tile function existence, low-confidence suppression, zoom-floor behavior, and execute permissions
 - `009_public_read_models.sql` — stats MV, pothole bbox RPC, healthcheck function, and stats-refresh cron registration
 - `011_pothole_actions.sql` — manual/follow-up pothole canonicalization, 24h same-device dedupe, stale-target rejection, and resolved-pothole reactivation
+- `017_segment_contributor_marks.sql` — B166 exact contributor dedupe: the P1-3 single-device inflation reproduction, nightly-recompute mark seeding, and the 6-month GC sweep
+- `018_pothole_corroboration_gate.sql` — B165 candidate status and distinct-device promotion across the sensor and manual paths, public-surface invisibility of candidates, reporter-mark exactness, grandfathering, and candidate expiry
