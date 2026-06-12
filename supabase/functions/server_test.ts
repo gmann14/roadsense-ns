@@ -2,6 +2,13 @@ import { assertEquals } from "jsr:@std/assert";
 import { dispatch, route } from "./_shared/routes.ts";
 import { verifyApiKey } from "./_shared/apikey.ts";
 import { createPgRpc } from "./_shared/pgRpc.ts";
+import {
+    PHOTOS_DISABLED_ERROR_CODE,
+    PHOTOS_DISABLED_RETRY_AFTER_SECONDS,
+    photoStorageConfigured,
+    photoUploadsGate,
+    R2_REQUIRED_ENV_VARS,
+} from "./_shared/photoUploads.ts";
 import { isRailwayInternalUrl } from "./db.ts";
 import { isValidTileCoord, MAX_TILE_ZOOM, parseTilePath } from "./tiles/handler.ts";
 import { parseCoverageTilePath } from "./tiles-coverage/handler.ts";
@@ -224,6 +231,122 @@ Deno.test("handleRequest accepts requests with a matching apikey when PUBLIC_API
         else Deno.env.set("PUBLIC_API_KEY", previous);
     }
 });
+
+// ── Photo routes: mounted but disabled pending R2 (NEW-2 / B130) ──
+
+function withEnv(
+    overrides: Record<string, string | undefined>,
+    body: () => Promise<void>,
+): Promise<void> {
+    const previous = new Map<string, string | undefined>();
+    for (const [key, value] of Object.entries(overrides)) {
+        previous.set(key, Deno.env.get(key));
+        if (value === undefined) Deno.env.delete(key);
+        else Deno.env.set(key, value);
+    }
+    return body().finally(() => {
+        for (const [key, value] of previous) {
+            if (value === undefined) Deno.env.delete(key);
+            else Deno.env.set(key, value);
+        }
+    });
+}
+
+const NO_R2_ENV: Record<string, string | undefined> = Object.fromEntries(
+    R2_REQUIRED_ENV_VARS.map((name) => [name, undefined]),
+);
+
+const FAKE_R2_ENV: Record<string, string | undefined> = Object.fromEntries(
+    R2_REQUIRED_ENV_VARS.map((name) => [name, `test-${name.toLowerCase()}`]),
+);
+
+Deno.test("POST /pothole-photos returns a structured 503 photos_disabled, not a 404", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, ...NO_R2_ENV }, async () => {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/pothole-photos", {
+                method: "POST",
+                headers: { "content-type": "application/json", "x-request-id": "req-test-1" },
+                body: JSON.stringify({}),
+            }),
+        );
+        assertEquals(res.status, 503);
+        assertEquals(res.headers.get("Retry-After"), String(PHOTOS_DISABLED_RETRY_AFTER_SECONDS));
+        assertEquals(res.headers.get("x-request-id"), "req-test-1");
+        // CORS still applied by handleRequest's wrapper.
+        assertEquals(res.headers.get("access-control-allow-origin"), "*");
+        const body = await res.json();
+        assertEquals(body.error, PHOTOS_DISABLED_ERROR_CODE);
+        assertEquals(body.retry_after_s, PHOTOS_DISABLED_RETRY_AFTER_SECONDS);
+        assertEquals(body.request_id, "req-test-1");
+        assertEquals(typeof body.message, "string");
+    }));
+
+Deno.test("moderation and image photo routes are also mounted with the disabled response", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, ...NO_R2_ENV }, async () => {
+        for (
+            const [path, method] of [
+                ["/functions/v1/pothole-photo-moderation", "POST"],
+                ["/functions/v1/pothole-photo-image?report_id=abc", "GET"],
+            ] as const
+        ) {
+            const res = await handleRequest(new Request(`http://localhost${path}`, { method }));
+            assertEquals(res.status, 503, `${path} should be mounted-but-disabled`);
+            assertEquals((await res.json()).error, PHOTOS_DISABLED_ERROR_CODE);
+        }
+    }));
+
+Deno.test("photo routes still require the apikey when PUBLIC_API_KEY is set", () =>
+    withEnv({ PUBLIC_API_KEY: "test-secret-token-1234", ...NO_R2_ENV }, async () => {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/pothole-photos", { method: "POST" }),
+        );
+        assertEquals(res.status, 401);
+    }));
+
+Deno.test("photoStorageConfigured requires every R2 env var to be non-blank", () =>
+    withEnv(FAKE_R2_ENV, async () => {
+        assertEquals(photoStorageConfigured(), true);
+        Deno.env.set("R2_BUCKET", "   ");
+        assertEquals(photoStorageConfigured(), false);
+        Deno.env.delete("R2_BUCKET");
+        assertEquals(photoStorageConfigured(), false);
+        await Promise.resolve();
+    }));
+
+Deno.test("photoUploadsGate dispatches to the real handler once R2 is configured and a factory is wired", () =>
+    withEnv(FAKE_R2_ENV, async () => {
+        let factoryBuilds = 0;
+        const gate = photoUploadsGate("pothole-photos", () => {
+            factoryBuilds += 1;
+            return async () => new Response("real-handler", { status: 200 });
+        });
+
+        const first = await gate(new Request("http://localhost/functions/v1/pothole-photos", { method: "POST" }), {});
+        const second = await gate(new Request("http://localhost/functions/v1/pothole-photos", { method: "POST" }), {});
+        assertEquals(first.status, 200);
+        assertEquals(await first.text(), "real-handler");
+        assertEquals(second.status, 200);
+        assertEquals(factoryBuilds, 1, "enabled handler should be built lazily once");
+    }));
+
+Deno.test("photoUploadsGate stays disabled without R2 config even when a factory is wired", () =>
+    withEnv(NO_R2_ENV, async () => {
+        const gate = photoUploadsGate(
+            "pothole-photos",
+            () => async () => new Response("real-handler", { status: 200 }),
+        );
+        const res = await gate(new Request("http://localhost/functions/v1/pothole-photos", { method: "POST" }), {});
+        assertEquals(res.status, 503);
+        assertEquals((await res.json()).error, PHOTOS_DISABLED_ERROR_CODE);
+    }));
+
+Deno.test("photoUploadsGate keeps serving 503 when R2 is configured but no handler is ported yet", () =>
+    withEnv(FAKE_R2_ENV, async () => {
+        const gate = photoUploadsGate("pothole-photos", null);
+        const res = await gate(new Request("http://localhost/functions/v1/pothole-photos", { method: "POST" }), {});
+        assertEquals(res.status, 503);
+        assertEquals((await res.json()).error, PHOTOS_DISABLED_ERROR_CODE);
+    }));
 
 // ── isRailwayInternalUrl: anchored hostname check ──
 

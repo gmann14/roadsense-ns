@@ -8,6 +8,7 @@ import { dispatch, route, type RouteHandler } from "./_shared/routes.ts";
 import { verifyApiKey } from "./_shared/apikey.ts";
 import { createPgRpc } from "./_shared/pgRpc.ts";
 import { startScheduler } from "./_shared/scheduler.ts";
+import { photoUploadsGate } from "./_shared/photoUploads.ts";
 
 import { createDeepHealthHandler, createHealthHandler } from "./health/handler.ts";
 import { createPgDbCheck } from "./health/pgRuntime.ts";
@@ -125,6 +126,17 @@ export const ROUTES = [
     route("/functions/v1/top-potholes", lazy(() => createTopPotholesHandler({ fetchTopPotholes: createPgFetchTopPotholes() }))),
     route("/functions/v1/tiles/coverage/:z/:x/:y.mvt", lazy(() => createCoverageTileHandler({ rpcGetCoverageTile: createPgCoverageTileRpc() }))),
     route("/functions/v1/tiles/:z/:x/:y.mvt", lazy(() => createTileHandler({ rpcGetTile: createPgTileRpc() }))),
+
+    // Photo flow: deliberately deferred until the R2 bucket exists (backlog
+    // B130; review finding NEW-2). Mounted so clients get a stable
+    // 503 photos_disabled instead of a raw 404 the retry policy treats as
+    // transient. To enable for real: provision R2, set the R2_* env vars
+    // (see _shared/photoUploads.ts), port these handlers off supabase-js
+    // Storage to an R2 S3 client (fix latent P1-7/P2-8 first), then pass the
+    // real handler factories below in place of `null`.
+    route("/functions/v1/pothole-photos", photoUploadsGate("pothole-photos", null)),
+    route("/functions/v1/pothole-photo-moderation", photoUploadsGate("pothole-photo-moderation", null)),
+    route("/functions/v1/pothole-photo-image", photoUploadsGate("pothole-photo-image", null)),
 ] as const;
 
 // /health stays unauthenticated so uptime probes work without a key. Every
