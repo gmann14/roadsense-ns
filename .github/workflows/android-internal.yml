@@ -1,0 +1,109 @@
+name: Android internal track (manual)
+
+# Twin of `ios-testflight.yml`: builds a signed AAB for the
+# `production` flavor and (when ANDROID_PUBLISH_ENABLED=true) uploads it to
+# Google Play Console's Internal Testing track.
+#
+# This workflow only runs on `workflow_dispatch` so accidental pushes never
+# burn an AAB version. Promoting from Internal → Closed Testing → Production
+# is still manual via the Play Console (per docs/implementation/15-google-play-readiness.md).
+#
+# Required GitHub secrets (none of these are set yet — populate before first run):
+#   ANDROID_UPLOAD_KEYSTORE          base64-encoded contents of the .jks
+#   ANDROID_UPLOAD_KEYSTORE_PASSWORD store password
+#   ANDROID_UPLOAD_KEY_ALIAS         key alias inside the store
+#   ANDROID_UPLOAD_KEY_PASSWORD      key password
+#   GOOGLE_PLAY_JSON_KEY             Play Developer API service-account JSON
+#   MAPBOX_ACCESS_TOKEN              public mapbox pk.* token
+#   SUPABASE_ANON_KEY_PRODUCTION     production anon key for the production flavor
+#
+# Optional repo variables:
+#   ANDROID_PUBLISH_ENABLED          set to "true" to actually upload the AAB
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: "Release notes for this Internal Testing release"
+        required: false
+        default: "Internal testing build"
+
+concurrency:
+  group: android-internal-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Decode upload keystore
+        if: ${{ secrets.ANDROID_UPLOAD_KEYSTORE != '' }}
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/keystores"
+          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/keystores/upload-key.jks"
+          echo "ANDROID_UPLOAD_KEYSTORE_PATH=$RUNNER_TEMP/keystores/upload-key.jks" >> "$GITHUB_ENV"
+
+      - name: Write production secrets
+        if: ${{ secrets.SUPABASE_ANON_KEY_PRODUCTION != '' || secrets.MAPBOX_ACCESS_TOKEN != '' }}
+        env:
+          MAPBOX_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY_PRODUCTION }}
+        run: |
+          set -euo pipefail
+          {
+            [ -n "$MAPBOX_TOKEN" ] && echo "MAPBOX_ACCESS_TOKEN=$MAPBOX_TOKEN"
+            [ -n "$SUPABASE_KEY" ] && echo "SUPABASE_ANON_KEY=$SUPABASE_KEY"
+          } > android/config/production.env.secrets.properties || true
+
+      - name: Run Android JVM tests
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew test
+
+      - name: Bundle production release AAB
+        env:
+          ANDROID_UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew :app:bundleProductionRelease
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roadsense-production-release-aab
+          path: android/app/build/outputs/bundle/productionRelease/*.aab
+          if-no-files-found: error
+
+      - name: Upload to Google Play Internal Testing
+        if: ${{ vars.ANDROID_PUBLISH_ENABLED == 'true' && secrets.GOOGLE_PLAY_JSON_KEY != '' }}
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+          packageName: ca.roadsense.android
+          releaseFiles: android/app/build/outputs/bundle/productionRelease/*.aab
+          track: internal
+          status: completed
+          whatsNewDirectory: android/distribution/whatsnew

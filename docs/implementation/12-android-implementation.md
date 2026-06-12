@@ -1,10 +1,30 @@
 # 12 — Android Implementation Plan
 
-*Last updated: 2026-04-27*
+*Last updated: 2026-05-08*
 
 Covers: Kotlin/Compose project layout, sensor pipeline port, foreground-service collection, Room persistence, upload pipeline, privacy zones, Mapbox Android, permissions/onboarding, shared-fixture testing, distribution.
 
 This doc plans the Android client described as backlog item B120 in [08-implementation-backlog.md](08-implementation-backlog.md). Android is explicitly post-iOS-MVP: do not start coding it until iOS has at least one stable calibration dataset and a clean run of the upload pipeline against staging Supabase.
+
+## Current implementation status
+
+The repo now contains an `android/` project with:
+
+- pure Kotlin `core-sensor` fixture replay against the same CSV corpus used by iOS
+- pure Kotlin `core-api` upload DTOs, endpoint helpers, retention, eligibility, retry policy, plus the `pothole-actions` and `feedback` request/response shapes with iOS JSON parity tests
+- Android `:app` module with Room persistence (9 entities), Retrofit/OkHttp `BackendClient` covering `upload-readings` + `pothole-actions` + `feedback`, foreground collection service, **production Compose Material 3 shell** (Map / Stats / Settings tabs, drive controls, manual pothole flow with 8s undo, in-app feedback queue, Settings → Delete local data, permissions ladder), unified `UploadDrainWorker` that drains readings + pothole actions + feedback on the same heartbeat, and backup disabled for local data
+- production permission ladder via `PermissionState` (fine location → activity recognition → notifications → background location), with API 30+ background routed to system Settings (Play Store policy)
+- optional release signing wired from `ANDROID_UPLOAD_*` env vars so a release machine can produce a Play-acceptable signed AAB without committing a keystore; CI keeps building without the env vars
+- CI entrypoint at `.github/workflows/android-ci.yml` (now also runs `:app:bundleStagingRelease` to catch signing-config + minification regressions) plus `scripts/check-android-fixture-parity.sh`
+- manual Play Internal Testing publish workflow at `.github/workflows/android-internal.yml` (gated on the `ANDROID_PUBLISH_ENABLED` repo variable so it never auto-uploads)
+- Play release checklist in [15-google-play-readiness.md](15-google-play-readiness.md)
+
+The implementation is ready for **internal Android collection beta validation**, not broad Play production. Remaining production-facing work is tracked in `.claude/tasks.md`:
+
+- real-device Pixel/Samsung drives, battery evidence, foreground-service survivability evidence, plus exercising the new manual pothole + feedback + delete-local-data flows. Concrete step-by-step checklist now lives in [15-google-play-readiness.md](15-google-play-readiness.md) → "Real-device validation checklist"
+- native Mapbox vector-tile + pothole overlay rendering. The Compose `MapHost` delegates to `MapboxBridge` (`android/app/src/mapboxMain/kotlin/MapboxBridge.kt`), which is compiled in automatically when `MAPBOX_DOWNLOADS_TOKEN` is provisioned at sync time. That bridge registers the same `segment_aggregates` + `potholes` source-layers iOS uses, points at the configured `tiles/{z}/{x}/{y}.mvt?apikey=…` endpoint, and applies the road-quality ramp from `RoadQualityStyle` (hex bodies pinned to `DesignTokens.Palette` via a JVM parity test). Until the token is provisioned the host falls back to a WebView pointing at the public web map so CI builds keep working without a private Maven credential
+- pothole *photo* CameraX capture UI. Backend half landed: wire DTOs match iOS (`PotholePhotoUploadRequest`/`Response`, parity test `PotholePhotoRequestJsonTest`), `BackendClient.beginPotholePhotoUpload` + signed-URL PUT, and `PotholePhotoCoordinator` is wired into the unified `UploadDrainWorker` heartbeat. Photos that land in `pothole_photos` with state `pending_metadata` will drain on the next heartbeat. The remaining piece is the Compose CameraX capture flow that produces those rows — sequence behind first Pixel/Samsung field cycle
+- Play Console developer account + upload keystore offline-generated; the build wiring is done, only the operational steps remain
 
 ## Goals
 

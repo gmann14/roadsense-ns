@@ -1,0 +1,15 @@
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.cxx/
+.kotlin/
+
+# Signing keystore (A12-6 — keep out of git always)
+keystores/
+
+# Per-environment secret overrides — same posture as iOS
+# RoadSenseNS.*.secrets.xcconfig (real Mapbox tokens, real Sentry DSN, etc).
+config/*.env.secrets.properties

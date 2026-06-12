@@ -1005,7 +1005,7 @@ Android is explicitly post-iOS MVP. Do not start this until the iOS app has prov
 
 - **Spec refs:** [00](00-execution-plan.md#android-follow-on-weeks-13-18), [01](01-ios-implementation.md), [03](03-api-contracts.md), [06](06-security-and-privacy.md), [12](12-android-implementation.md)
 - **Depends on:** B050, B060, Phase 11a B070-B072 upload execution, Phase 8 App Store/TestFlight readiness outcome, and at least one stable iOS calibration dataset
-- **Status:** plan written, code not started. See [12-android-implementation.md](12-android-implementation.md) for the full architecture, sensor-pipeline port strategy, foreground-service model, distribution path, and per-phase RED/GREEN test plan. Sideload-via-APK distribution lets us start the moment iOS calibration is locked, without waiting on Google Play's 12-tester-for-14-days requirement.
+- **Status:** internal collection beta implementation landed in `android/`: core-sensor fixture parity, core-api upload contracts, Room queue, foreground collection service, launcher beta control shell, WorkManager upload drain, fixture-parity script, and Android CI workflow. Full production polish remains open: real-device Pixel/Samsung validation, battery/foreground-service evidence, native Mapbox map shell, manual pothole/photo flow, feedback queue, signed AAB, and Play Console submission. See [12-android-implementation.md](12-android-implementation.md) and [15-google-play-readiness.md](15-google-play-readiness.md).
 - **RED**
   - JVM/Kotlin tests for the ported roughness scorer and pothole detector using shared CSV fixtures also used by the iOS harness
   - Android instrumentation tests for permission onboarding, foreground-service recording state, local queue persistence, and retry/backoff behavior
