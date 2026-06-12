@@ -1,6 +1,6 @@
 # 15 — Device Attestation & Trust (Anti-Sybil)
 
-*Last updated: 2026-06-12 — **Status: plan written, code not started***
+*Last updated: 2026-06-12 — **Status: SQL gates shipped (B165 ✅ commit `cc9bcbe`, B166 ✅ commit `fca1dc2`); attestation chain B160–B164 and tiers B167 not started***
 
 Covers: hardware-backed device attestation (App Attest on iOS, Play Integrity on Android), server-issued device tokens, corroboration gating for potholes, exact unique-contributor accounting, and a minimal trust-tier model. This is the work that closes findings **P1-1 / P1-2 / P1-3** in [docs/reviews/2026-06-11-backend-prelaunch-review.md](../reviews/2026-06-11-backend-prelaunch-review.md) before the public marketing push (local media + Facebook groups) puts the data's trustworthiness in front of adversarial strangers.
 
@@ -224,7 +224,9 @@ Simulator and dev builds: `DCAppAttestService.isSupported == false` on simulator
   - in `enforce`, a forged-UUID upload succeeds (200) yet provably moves no public surface: no contributor mark, no confidence change, no pothole candidate, no score input
   - beta testers on the previous build keep uploading without errors through the whole rollout
 
-### B165 — Pothole corroboration gate: candidate status and distinct-device promotion
+### B165 — Pothole corroboration gate: candidate status and distinct-device promotion ✅
+
+**Shipped 2026-06-12 (commit `cc9bcbe`)** — stage 1 (distinct token hashes) as specified: migrations `20260612181000_pothole_status_candidate_value.sql` + `20260612182000_pothole_corroboration_gate.sql`, pgTAP suite `supabase/tests/018_pothole_corroboration_gate.sql`, contract note in [03](03-api-contracts.md), methodology-page sentence. Grandfathering applied as decided (existing actives kept; demotion SQL recorded in the migration comment). Bonus: the sensor-path `unique_reporters` blind increment is fixed via `pothole_reporter_marks` per the RED note below. Stage 2 (attested-only marks) lands with B164.
 
 - **Spec refs:** [02](02-backend-implementation.md) pothole folding, [03](03-api-contracts.md), review findings P1-2/P0-1
 - **Depends on:** none for stage 1 (distinct token hashes); B164 for stage 2 (distinct *attested* devices) — ship stage 1 immediately, the predicate tightens automatically when `attestation_enforced` flips
@@ -245,7 +247,9 @@ Simulator and dev builds: `DCAppAttestService.isSupported == false` on simulator
   - `unique_reporters` is exact (re-running the same device's batches N times changes nothing)
   - the pre-push map keeps its grandfathered markers; every post-migration marker is corroborated or invisible
 
-### B166 — Exact unique-contributor accounting for the incremental path
+### B166 — Exact unique-contributor accounting for the incremental path ✅
+
+**Shipped 2026-06-12 (commit `fca1dc2`)** — migration `20260612180000_exact_contributor_dedupe.sql` (marks table + backfill, `update_segment_aggregates_from_batch` counts only newly-inserted marks, `nightly_recompute_aggregates` seeds marks for everything it counts, GC cron registration), Deno scheduler sweep in `_shared/scheduler.ts`, pgTAP suite `supabase/tests/017_segment_contributor_marks.sql` (P1-3 reproduction green by construction; pgTAP not executed in this pass — Docker unavailable — verified by manual diff against the last-write-wins bodies).
 
 - **Spec refs:** [02](02-backend-implementation.md) aggregates, review finding P1-3
 - **Depends on:** none (parallelizable with everything; smallest ticket, biggest honesty-per-day)

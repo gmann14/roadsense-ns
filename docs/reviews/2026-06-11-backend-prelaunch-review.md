@@ -86,6 +86,8 @@ Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-t
 
 Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-trust.md` (B165: `candidate` status + distinct-device promotion to `active`; tightens to attested-only devices once B164 enforces).
 
+Fixed 2026-06-12 (commit cc9bcbe) — NOTE: requires migration deploy + Railway redeploy to take effect. Migrations `20260612181000` + `20260612182000` add the non-public `candidate` status and `pothole_reporter_marks`: `fold_pothole_candidates` and `apply_pothole_action` now insert new potholes as `candidate` and promote to `active` only at ≥ 2 distinct device-token hashes within 15 m / 90 days (sensor and manual paths corroborate each other). `status='active'` stays the single public gate in `get_tile`/`get_potholes_in_bbox`/`get_top_potholes`/`public_stats_mv`/anon RLS, so candidates are invisible with no Deno changes. Existing single-reporter actives grandfathered per doc 15's decision; pgTAP suite `018_pothole_corroboration_gate.sql`. Distinct *physical* devices still wait on B164 attestation (P1-1).
+
 ### P1-3 — Intra-day `unique_contributors` inflation by a single device — STILL-VALID
 
 **Where (latest):** `update_segment_aggregates_from_batch`, current definition `supabase/migrations/20260425001500_roughness_calibration.sql:54` — `unique_contributors = segment_aggregates.unique_contributors + EXCLUDED.unique_contributors`, where `EXCLUDED.unique_contributors` is per-batch `COUNT(DISTINCT device_token_hash)` (line 35, = 1 for one device). Confidence flips to `medium` at ≥3 in the same statement (lines 59-73). One device sending 3 batches still fabricates a "medium-confidence" tile-visible segment until the nightly recompute corrects it; tiles cache for 1h (`supabase/functions/tiles/handler.ts:2`, `max-age=3600`). Note the in-process scheduler runs `nightly_recompute_aggregates()` on a `DAY` interval anchored to process start (`supabase/functions/_shared/scheduler.ts:36-44`), so the correction window can be nearly a full day.
@@ -93,6 +95,8 @@ Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-t
 **Fix sketch:** unchanged — don't let the incremental path raise confidence/visibility, or recompute true `COUNT(DISTINCT)` for touched segments.
 
 Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-trust.md` (B166: exact dedupe via `segment_contributor_marks`; the incremental path can no longer raise confidence on one device's batches).
+
+Fixed 2026-06-12 (commit fca1dc2) — NOTE: requires migration deploy + Railway redeploy to take effect. Migration `20260612180000` adds `segment_contributor_marks` (backfilled from the 6-month readings window): `update_segment_aggregates_from_batch` increments `unique_contributors` only by marks actually inserted and derives confidence from the corrected value, so one device's N batches stay 1/`low` through the incremental path; `nightly_recompute_aggregates` seeds marks for every device it counts; daily GC sweep matches reading retention (cron registration + `_shared/scheduler.ts` job). pgTAP suite `017_segment_contributor_marks.sql` reproduces P1-3. Many-device Sybil forgery remains P1-1 (B160–B164).
 
 ### P2-1 — `ON CONFLICT` deadlock risk in incremental aggregate UPSERT — STILL-VALID
 
