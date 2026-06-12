@@ -39,6 +39,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # The `secrets` context is not allowed in step-level `if:` expressions
+    # (GitHub rejects the whole workflow file), so presence checks are hoisted
+    # into job env flags here and the steps test `env.*` instead.
+    env:
+      HAS_UPLOAD_KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE != '' }}
+      HAS_RUNTIME_SECRETS: ${{ secrets.SUPABASE_ANON_KEY_PRODUCTION != '' || secrets.MAPBOX_ACCESS_TOKEN != '' }}
+      HAS_PLAY_JSON_KEY: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,7 +60,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Decode upload keystore
-        if: ${{ secrets.ANDROID_UPLOAD_KEYSTORE != '' }}
+        if: ${{ env.HAS_UPLOAD_KEYSTORE == 'true' }}
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE }}
         run: |
@@ -63,7 +70,7 @@ jobs:
           echo "ANDROID_UPLOAD_KEYSTORE_PATH=$RUNNER_TEMP/keystores/upload-key.jks" >> "$GITHUB_ENV"
 
       - name: Write production secrets
-        if: ${{ secrets.SUPABASE_ANON_KEY_PRODUCTION != '' || secrets.MAPBOX_ACCESS_TOKEN != '' }}
+        if: ${{ env.HAS_RUNTIME_SECRETS == 'true' }}
         env:
           MAPBOX_TOKEN: ${{ secrets.MAPBOX_ACCESS_TOKEN }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY_PRODUCTION }}
@@ -98,7 +105,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload to Google Play Internal Testing
-        if: ${{ vars.ANDROID_PUBLISH_ENABLED == 'true' && secrets.GOOGLE_PLAY_JSON_KEY != '' }}
+        if: ${{ vars.ANDROID_PUBLISH_ENABLED == 'true' && env.HAS_PLAY_JSON_KEY == 'true' }}
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
