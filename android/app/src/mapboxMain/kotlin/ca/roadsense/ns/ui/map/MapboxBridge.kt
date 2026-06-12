@@ -45,7 +45,7 @@ object MapboxBridge {
         )
 
         mapView.mapboxMap.loadStyle(
-            style(styleUri = Style.STANDARD) {
+            style(style = Style.STANDARD) {
                 // Segment-aggregate vector source — same MVT endpoint iOS hits.
                 +vectorSource(id = RoadQualityStyle.SEGMENT_SOURCE_ID) {
                     tiles(listOf(config.tileTemplateURL))

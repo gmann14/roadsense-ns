@@ -9,3 +9,6 @@ node_modules
 *.md
 .env*
 .railway-secrets.local
+apps
+config
+test-results
