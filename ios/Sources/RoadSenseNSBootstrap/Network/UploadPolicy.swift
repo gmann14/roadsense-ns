@@ -36,6 +36,14 @@ public enum UploadPolicy {
         case let .http(statusCode, retryAfterSeconds) where statusCode == 429:
             return .retry(afterSeconds: retryAfterSeconds ?? 60)
 
+        // 503 honors a server-provided Retry-After so deliberately disabled
+        // features (e.g. the gateway's `photos_disabled` response while photo
+        // uploads await their R2 bucket) can quiet client retries to a few
+        // probes per day instead of the capped hourly backoff. Still never
+        // `failedPermanent` — the queue self-heals once the feature ships.
+        case let .http(statusCode, retryAfterSeconds) where statusCode == 503:
+            return .retry(afterSeconds: retryAfterSeconds ?? backoffDelay(attemptNumber: attemptNumber))
+
         case let .http(statusCode, _) where (500...599).contains(statusCode):
             return .retry(afterSeconds: backoffDelay(attemptNumber: attemptNumber))
 

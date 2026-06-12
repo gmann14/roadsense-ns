@@ -49,6 +49,22 @@ struct UploadPolicyTests {
         #expect(disposition == .retry(afterSeconds: 60))
     }
 
+    @Test("503 respects Retry-After when present (feature-disabled pause)")
+    func serviceUnavailableUsesRetryAfter() {
+        // The gateway's photos_disabled response sends Retry-After: 21600 so
+        // queued photos probe a few times a day instead of hourly.
+        let disposition = UploadPolicy.evaluate(.http(statusCode: 503, retryAfterSeconds: 21_600), attemptNumber: 3)
+
+        #expect(disposition == .retry(afterSeconds: 21_600))
+    }
+
+    @Test("503 with Retry-After never becomes permanent")
+    func serviceUnavailableWithRetryAfterNeverBecomesPermanent() {
+        let disposition = UploadPolicy.evaluate(.http(statusCode: 503, retryAfterSeconds: 21_600), attemptNumber: 50)
+
+        #expect(disposition == .retry(afterSeconds: 21_600))
+    }
+
     @Test("5xx uses exponential backoff")
     func serverErrorsUseExponentialBackoff() {
         let first = UploadPolicy.evaluate(.http(statusCode: 503, retryAfterSeconds: nil), attemptNumber: 1)

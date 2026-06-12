@@ -832,6 +832,22 @@ struct MapScreen: View {
     }
 
     private func handleTakePhotoTap(segmentID: UUID? = nil) {
+        // Photo uploads are deferred until the backend photo flow ships
+        // (review NEW-2 / backlog B130). Say so before opening the camera
+        // instead of letting the user capture a photo that can't upload.
+        guard model.config.enablePotholePhotos else {
+            withAnimation(DesignTokens.Motion.enter) {
+                potholeFeedback = PotholeFeedback(
+                    title: BrandVoice.Failures.photosComingSoonTitle,
+                    message: BrandVoice.Failures.photosComingSoonBody,
+                    iconName: "camera.fill",
+                    tint: DesignTokens.Palette.warning,
+                    dismissDelay: .seconds(3)
+                )
+            }
+            return
+        }
+
         guard let context = model.potholePhotoCaptureContext() else {
             withAnimation(DesignTokens.Motion.enter) {
                 potholeFeedback = PotholeFeedback(

@@ -7,7 +7,11 @@ SUPABASE_ANON_KEY = anon.placeholder.production
 SENTRY_DSN =
 ENABLE_SENTRY = NO
 APP_GROUP_IDENTIFIER = group.ca.roadsense.ios
-ENABLE_POTHOLE_PHOTOS = YES
+// Photo uploads stay off until the backend photo flow ships (R2 bucket +
+// gateway handlers; see docs/reviews/2026-06-11-backend-prelaunch-review.md
+// NEW-2 and backlog B130). The production gateway answers the photo routes
+// with 503 photos_disabled until then. Flip to YES together with the server.
+ENABLE_POTHOLE_PHOTOS = NO
 ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH = NO
 ENABLE_LIVE_MAPBOX_MAP = NO
 ENABLE_ROAD_QUALITY_VECTOR_OVERLAY = YES

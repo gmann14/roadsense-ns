@@ -311,7 +311,14 @@ final class Uploader: UploadDrainPerforming {
                 requestID: metadataSummary.requestID,
                 now: nowProvider()
             )
-            logger.error("pothole_photo_failed id=\(report.id.uuidString) result=\(String(describing: attemptResult)) message=\(errorEnvelope?.error ?? "unknown")")
+            if errorEnvelope?.error == "photos_disabled" {
+                // Expected while the server-side photo flow is disabled
+                // pending its R2 bucket (review NEW-2) — the photo stays
+                // queued and re-probes on the server's Retry-After cadence.
+                logger.info("pothole_photo_deferred id=\(report.id.uuidString) photos_disabled retry_after=\(metadataSummary.retryAfterSeconds.map(String.init(describing:)) ?? "none")")
+            } else {
+                logger.error("pothole_photo_failed id=\(report.id.uuidString) result=\(String(describing: attemptResult)) message=\(errorEnvelope?.error ?? "unknown")")
+            }
             return false
         }
     }

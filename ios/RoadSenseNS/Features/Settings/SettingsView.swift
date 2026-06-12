@@ -236,6 +236,18 @@ struct SettingsView: View {
             }
             .background(DesignTokens.Palette.canvasSunken, in: RoundedRectangle(cornerRadius: DesignTokens.Radius.sm, style: .continuous))
 
+            // Quiet "photos coming soon" note for photos queued by an older
+            // build while the server-side photo flow is disabled pending its
+            // R2 bucket (review NEW-2 / backlog B130).
+            if !model.config.enablePotholePhotos,
+               model.potholePhotoStatusSummary.pendingUploadCount > 0 {
+                Text("Photo uploads are coming soon. Saved photos stay on this device and upload automatically once the feature is live.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(DesignTokens.Palette.inkMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings.photos-coming-soon-note")
+            }
+
             if model.uploadStatusSummary.failedPermanentBatchCount > 0 {
                 Button {
                     retryFailedUploads()

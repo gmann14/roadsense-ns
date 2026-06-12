@@ -83,8 +83,14 @@ struct ReleaseConfigFilesTests {
         #expect(contents.contains("<string>$(ENABLE_ROAD_QUALITY_VECTOR_OVERLAY)</string>"))
     }
 
+    // Photo uploads are deferred until the backend photo flow exists: the
+    // production gateway answers /pothole-photos with 503 photos_disabled
+    // until the R2 bucket + ported handlers ship (backend pre-launch review
+    // NEW-2, backlog B130). Shipping a build with photos enabled would queue
+    // photos against a disabled endpoint. Flip these assertions back to YES
+    // in the same change that enables the server-side flow.
     @Test
-    func productionKeepsPotholePhotosEnabled() throws {
+    func productionKeepsPotholePhotosDisabledPendingPhotoBackend() throws {
         let productionConfig = packageRoot()
             .appendingPathComponent("Config/RoadSenseNS.Production.xcconfig")
         let workflow = packageRoot()
@@ -92,9 +98,9 @@ struct ReleaseConfigFilesTests {
             .appendingPathComponent(".github/workflows/ios-testflight.yml")
 
         #expect(try String(contentsOf: productionConfig, encoding: .utf8)
-            .contains("ENABLE_POTHOLE_PHOTOS = YES"))
+            .contains("ENABLE_POTHOLE_PHOTOS = NO"))
         #expect(try String(contentsOf: workflow, encoding: .utf8)
-            .contains("ENABLE_POTHOLE_PHOTOS: \"YES\""))
+            .contains("ENABLE_POTHOLE_PHOTOS: \"NO\""))
     }
 
     private func packageRoot() -> URL {

@@ -56,7 +56,7 @@ jobs:
       ENABLE_MAP_FOLLOW_PUCK_ON_LAUNCH: "NO"
       ENABLE_LIVE_MAPBOX_MAP: "NO"
       ENABLE_ROAD_QUALITY_VECTOR_OVERLAY: "YES"
-      ENABLE_POTHOLE_PHOTOS: "YES"
+      ENABLE_POTHOLE_PHOTOS: "NO" # off until R2 photo backend ships (review NEW-2 / B130)
       ROAD_SENSE_APP_IDENTIFIER: ca.roadsense.ios
       IOS_RELEASE_CONFIGURATION: ${{ inputs.configuration }}
       IOS_BUILD_NUMBER: ${{ inputs.build_number || github.run_number }}

@@ -1997,6 +1997,95 @@ final class NetworkAndUploaderTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
     }
 
+    // Regression test for NEW-2 (docs/reviews/2026-06-11-backend-prelaunch-review.md):
+    // while the server's photo flow is disabled pending its R2 bucket, the
+    // gateway answers /pothole-photos with 503 photos_disabled + Retry-After.
+    // The queued photo must stay retryable (never failedPermanent), honor the
+    // server's pause, and keep its bytes on disk for the eventual upload.
+    @MainActor
+    func testUploaderDefersQueuedPhotoOnPhotosDisabledResponse() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        _ = try DeviceTokenStore.currentToken(
+            in: context,
+            now: Date(timeIntervalSince1970: 1_713_000_000),
+            makeUUID: { "device-token" }
+        )
+
+        let tempDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDirectory) }
+        let fileURL = tempDirectory.appendingPathComponent("photo.jpg")
+        try Data([0x01, 0x02, 0x03, 0x04]).write(to: fileURL)
+
+        let reportID = UUID()
+        context.insert(
+            PotholeReportRecord(
+                id: reportID,
+                photoFilePath: fileURL.path,
+                latitude: 44.6488,
+                longitude: -63.5752,
+                accuracyM: 5,
+                capturedAt: Date(timeIntervalSince1970: 1_713_000_010),
+                uploadState: .pendingMetadata,
+                byteSize: 4,
+                sha256Hex: String(repeating: "a", count: 64)
+            )
+        )
+        try context.save()
+
+        let session = makeMockSession()
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/functions/v1/pothole-photos")
+            let body = try JSONSerialization.data(withJSONObject: [
+                "error": "photos_disabled",
+                "message": "Photo uploads are temporarily disabled.",
+                "request_id": "req-photo-disabled-1",
+                "retry_after_s": 21_600,
+            ])
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 503,
+                    httpVersion: nil,
+                    headerFields: [
+                        "Retry-After": "21600",
+                        "x-request-id": "req-photo-disabled-1",
+                    ]
+                )!,
+                body
+            )
+        }
+
+        let endpoints = Endpoints(
+            config: AppConfig(
+                environment: .local,
+                apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
+                mapboxAccessToken: "pk.test",
+                supabaseAnonKey: "anon.test"
+            )
+        )
+        let uploader = Uploader(
+            container: container,
+            potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
+            queueStore: UploadQueueStore(container: container),
+            client: APIClient(endpoints: endpoints, session: session),
+            logger: .upload
+        )
+
+        let now = Date(timeIntervalSince1970: 1_713_000_100)
+        await uploader.drainOnce(now: now)
+
+        let updatedContext = ModelContext(container)
+        let report = try XCTUnwrap(updatedContext.fetch(FetchDescriptor<PotholeReportRecord>()).first)
+        XCTAssertEqual(report.uploadState, .pendingMetadata, "photos_disabled must not strand the photo permanently")
+        XCTAssertEqual(report.lastHTTPStatusCode, 503)
+        XCTAssertEqual(report.lastRequestID, "req-photo-disabled-1")
+        XCTAssertEqual(report.nextAttemptAt, now.addingTimeInterval(21_600), "server Retry-After pause should be honored")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path), "photo bytes stay on-device for the eventual upload")
+    }
+
     @MainActor
     func testPrivacyZoneStorePersistsAndClampsMinimumRadius() throws {
         let container = try makeInMemoryContainer()

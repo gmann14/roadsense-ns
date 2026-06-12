@@ -652,6 +652,18 @@ enum BrandVoice {
             value: "We'll upload it and send it to moderation automatically.",
             comment: "Success body after a photo is queued for upload."
         )
+
+        static let photosComingSoonTitle = NSLocalizedString(
+            "failure.photosComingSoon.title",
+            value: "Photos coming soon",
+            comment: "Title shown when pothole photo uploads are not enabled in this build."
+        )
+
+        static let photosComingSoonBody = NSLocalizedString(
+            "failure.photosComingSoon.body",
+            value: "Pothole photos aren't live in this beta yet. Your pothole marks still count.",
+            comment: "Body shown when pothole photo uploads are not enabled in this build."
+        )
     }
 
     // MARK: - Notifications (local notification copy)
