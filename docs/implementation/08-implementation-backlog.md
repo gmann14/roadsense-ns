@@ -54,7 +54,7 @@ Post-MVP phases:
 10. Web dashboard frontend
 11. Quarterly operational procedures (OSM refresh rematch, etc.) — runs on a calendar, not a release
 12. Android follow-on once iOS collection/scoring is stable
-13. Device attestation and anti-Sybil trust hardening before the public marketing push — plan in [15-device-attestation-and-trust.md](15-device-attestation-and-trust.md) (B160–B167)
+13. Device attestation and anti-Sybil trust hardening before the public marketing push — plan in [17-device-attestation-and-trust.md](17-device-attestation-and-trust.md) (B160–B167)
 
 ## Phase 1 — Project And Environment Setup
 

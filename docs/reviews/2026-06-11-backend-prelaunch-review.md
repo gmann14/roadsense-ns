@@ -76,7 +76,7 @@ Fixed 2026-06-12 (commit 8e0c381) — NOTE: requires migration deploy + Railway 
 
 **Fix sketch:** unchanged — App Attest/DeviceCheck-bound, server-issued device tokens at the public-launch milestone; until then treat `unique_contributors` as untrusted and keep public thresholds conservative.
 
-Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-trust.md` (B160–B164: App Attest / Play Integrity-bound server-issued tokens, enforcement modes, beta-token grandfathering; B167 trust tiers).
+Plan written 2026-06-12 — see `docs/implementation/17-device-attestation-and-trust.md` (B160–B164: App Attest / Play Integrity-bound server-issued tokens, enforcement modes, beta-token grandfathering; B167 trust tiers).
 
 ### P1-2 — Potholes have no corroboration gate before going public — STILL-VALID
 
@@ -84,7 +84,7 @@ Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-t
 
 **Fix sketch:** unchanged — require ≥2 distinct devices for public visibility; keep single-report potholes in a candidate state.
 
-Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-trust.md` (B165: `candidate` status + distinct-device promotion to `active`; tightens to attested-only devices once B164 enforces).
+Plan written 2026-06-12 — see `docs/implementation/17-device-attestation-and-trust.md` (B165: `candidate` status + distinct-device promotion to `active`; tightens to attested-only devices once B164 enforces).
 
 Fixed 2026-06-12 (commit cc9bcbe) — NOTE: requires migration deploy + Railway redeploy to take effect. Migrations `20260612181000` + `20260612182000` add the non-public `candidate` status and `pothole_reporter_marks`: `fold_pothole_candidates` and `apply_pothole_action` now insert new potholes as `candidate` and promote to `active` only at ≥ 2 distinct device-token hashes within 15 m / 90 days (sensor and manual paths corroborate each other). `status='active'` stays the single public gate in `get_tile`/`get_potholes_in_bbox`/`get_top_potholes`/`public_stats_mv`/anon RLS, so candidates are invisible with no Deno changes. Existing single-reporter actives grandfathered per doc 15's decision; pgTAP suite `018_pothole_corroboration_gate.sql`. Distinct *physical* devices still wait on B164 attestation (P1-1).
 
@@ -94,7 +94,7 @@ Fixed 2026-06-12 (commit cc9bcbe) — NOTE: requires migration deploy + Railway 
 
 **Fix sketch:** unchanged — don't let the incremental path raise confidence/visibility, or recompute true `COUNT(DISTINCT)` for touched segments.
 
-Plan written 2026-06-12 — see `docs/implementation/15-device-attestation-and-trust.md` (B166: exact dedupe via `segment_contributor_marks`; the incremental path can no longer raise confidence on one device's batches).
+Plan written 2026-06-12 — see `docs/implementation/17-device-attestation-and-trust.md` (B166: exact dedupe via `segment_contributor_marks`; the incremental path can no longer raise confidence on one device's batches).
 
 Fixed 2026-06-12 (commit fca1dc2) — NOTE: requires migration deploy + Railway redeploy to take effect. Migration `20260612180000` adds `segment_contributor_marks` (backfilled from the 6-month readings window): `update_segment_aggregates_from_batch` increments `unique_contributors` only by marks actually inserted and derives confidence from the corrected value, so one device's N batches stay 1/`low` through the incremental path; `nightly_recompute_aggregates` seeds marks for every device it counts; daily GC sweep matches reading retention (cron registration + `_shared/scheduler.ts` job). pgTAP suite `017_segment_contributor_marks.sql` reproduces P1-3. Many-device Sybil forgery remains P1-1 (B160–B164).
 

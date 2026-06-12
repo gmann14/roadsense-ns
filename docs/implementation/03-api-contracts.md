@@ -509,7 +509,7 @@ One-tap pothole report endpoint plus follow-up actions against existing pothole 
 }
 ```
 
-`status` is the canonical pothole status after the action is applied. Since B165 (corroboration gating, [15-device-attestation-and-trust.md](15-device-attestation-and-trust.md)), a `manual_report` that does not corroborate an existing report from a *different* device returns `candidate` — a non-public holding state invisible on tiles, bbox listings, and top-potholes until a second distinct device reports within 15 m / 90 days. `manual_report` and `confirm_present` return `active` once that two-device threshold is met (or when the target was already active); `confirm_fixed` may return either `active` or `resolved` depending on quorum. Clients should treat `status` as an open string set (`candidate`, `active`, `resolved`, `expired`).
+`status` is the canonical pothole status after the action is applied. Since B165 (corroboration gating, [17-device-attestation-and-trust.md](17-device-attestation-and-trust.md)), a `manual_report` that does not corroborate an existing report from a *different* device returns `candidate` — a non-public holding state invisible on tiles, bbox listings, and top-potholes until a second distinct device reports within 15 m / 90 days. `manual_report` and `confirm_present` return `active` once that two-device threshold is met (or when the target was already active); `confirm_fixed` may return either `active` or `resolved` depending on quorum. Clients should treat `status` as an open string set (`candidate`, `active`, `resolved`, `expired`).
 
 **Response — 409 stale_target**
 

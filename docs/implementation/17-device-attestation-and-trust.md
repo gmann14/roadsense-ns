@@ -1,10 +1,10 @@
-# 15 — Device Attestation & Trust (Anti-Sybil)
+# 17 — Device Attestation & Trust (Anti-Sybil)
 
 *Last updated: 2026-06-12 — **Status: SQL gates shipped (B165 ✅ commit `cc9bcbe`, B166 ✅ commit `fca1dc2`); attestation chain B160–B164 and tiers B167 not started***
 
 Covers: hardware-backed device attestation (App Attest on iOS, Play Integrity on Android), server-issued device tokens, corroboration gating for potholes, exact unique-contributor accounting, and a minimal trust-tier model. This is the work that closes findings **P1-1 / P1-2 / P1-3** in [docs/reviews/2026-06-11-backend-prelaunch-review.md](../reviews/2026-06-11-backend-prelaunch-review.md) before the public marketing push (local media + Facebook groups) puts the data's trustworthiness in front of adversarial strangers.
 
-Numbering continues the B-series at **B160** (B154–B159 intentionally skipped, same range-gap convention [11](11-post-launch-roadmap.md) used at B120). Tickets claimed here: **B160–B167**.
+Numbering continues the B-series at **B160** (B154–B159 intentionally skipped, same range-gap convention [11](16-post-launch-roadmap.md) used at B120). Tickets claimed here: **B160–B167**.
 
 [06-security-and-privacy.md](06-security-and-privacy.md) deferred attestation with "observed abuse, not anticipated abuse." That trigger has been re-evaluated: the marketing plan *invites* abuse on a known date, and the prelaunch review proved the current trust signals are forgeable with a bash loop. We are shipping ahead of the push, not after the first incident.
 
@@ -190,7 +190,7 @@ Simulator and dev builds: `DCAppAttestService.isSupported == false` on simulator
 
 ### B163 — Play Integrity verification (Android sibling)
 
-- **Spec refs:** [12](12-android-implementation.md), [06](06-security-and-privacy.md), [11](11-post-launch-roadmap.md) Phase 12
+- **Spec refs:** [12](12-android-implementation.md), [06](06-security-and-privacy.md), [11](16-post-launch-roadmap.md) Phase 12
 - **Depends on:** B160 (server), B161 (shared issuance plumbing); the Android client work rides the `gmann14/android-beta-test-fixes` merge (B120-range) — server side does not wait for it
 - **Effort:** 2–3 days (server) + 1–2 days client wiring inside the Android branch
 - **RED**
