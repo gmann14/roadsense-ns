@@ -40,7 +40,7 @@ struct ContentView: View {
                 handleScenePhaseChange(newPhase)
                 updateIdleTimer()
             }
-            .onChange(of: model.isPassiveMonitoringEnabled) { _, _ in
+            .onChange(of: model.isActivelyCollecting) { _, _ in
                 updateIdleTimer()
             }
             .sheet(isPresented: $isShowingPrivacyZones, onDismiss: {
@@ -107,6 +107,7 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            model.setForegroundActive(scenePhase == .active)
             updateIdleTimer()
         }
         .onDisappear {
@@ -117,6 +118,10 @@ struct ContentView: View {
     private func handleScenePhaseChange(_ newPhase: ScenePhase) {
         switch newPhase {
         case .active:
+            // Set foreground first, and unconditionally — the upload-drain below is
+            // throttled, but power management must always reflect the current phase.
+            model.setForegroundActive(true)
+
             let now = Date()
             if let lastForegroundDrainAt,
                now.timeIntervalSince(lastForegroundDrainAt) < 30 {
@@ -134,6 +139,7 @@ struct ContentView: View {
                 }
             }
         case .background:
+            model.setForegroundActive(false)
             model.handleAppDidEnterBackground()
         default:
             break
@@ -141,10 +147,12 @@ struct ContentView: View {
     }
 
     private func updateIdleTimer() {
+        // Keep the screen awake only while actively recording a drive (map visible on
+        // a mount), not for the whole time passive standby is enabled.
         UIApplication.shared.isIdleTimerDisabled =
             scenePhase == .active
             && model.readiness.stage == .ready
-            && model.isPassiveMonitoringEnabled
+            && model.isActivelyCollecting
     }
 
     @ViewBuilder

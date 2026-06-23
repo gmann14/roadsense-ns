@@ -35,6 +35,7 @@
 		3957B51C67FCB5FF1CEC7628 /* DriveEndpointTrimmer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D1B35DE8F53433B4BCCB9A0 /* DriveEndpointTrimmer.swift */; };
 		3CDE864AF9BB1C246248312D /* NetworkPathMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A923FF6BFB70D683240CF9B /* NetworkPathMonitor.swift */; };
 		3E1EAD8552D8141AAAF82DC8 /* PotholeActionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89EE7E2252FD9D4C1984BC93 /* PotholeActionStore.swift */; };
+		3EC4C33A4CFD9F4B8E4599DE /* StatsRefreshThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0226772479C821AE79CFA9DE /* StatsRefreshThrottle.swift */; };
 		3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CE5D67A573F4B606118C23 /* SettingsView.swift */; };
 		4030CA59DBFD2BD1002A939A /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 94AD22E714178BC9763D1344 /* Sentry */; };
 		415EED346262E91866151E11 /* UploadResponseParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = D447BEA44ED8E5AA5033B84E /* UploadResponseParser.swift */; };
@@ -92,12 +93,15 @@
 		982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */ = {isa = PBXBuildFile; fileRef = F70A04456020333C21483C47 /* HighPassBiquad.swift */; };
 		9C664A3BEE040E0064BA96BA /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEC86C13C16A0385D36E47FD /* AppContainer.swift */; };
 		9C76D445B3A6A352A2B066D3 /* PotholeCameraFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4FAA04CA9D8B3BCE9A9CC19 /* PotholeCameraFlowView.swift */; };
+		9CCFD9E4E2C98C328975AC45 /* LocationActivationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 513B978AE8BD312245A5CDF7 /* LocationActivationPolicy.swift */; };
 		9CD4809B0812EECC08018D96 /* BackgroundCollectionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */; };
+		9D1E729E7A510B5DC94DFDD8 /* LocationActivationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 513B978AE8BD312245A5CDF7 /* LocationActivationPolicy.swift */; };
 		9D359A286A549E79A62BC47B /* SensorFixtureRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD48E01F41552DAB66909C1 /* SensorFixtureRunner.swift */; };
 		9EABEA30417F41AE694F52D1 /* ManualPotholeLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F57C6D76B7E595FE412BC87 /* ManualPotholeLocator.swift */; };
 		9FCD5095F22EFBE9D9811061 /* DeviceTokenManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53EC0C104BF5658C06ACCBB1 /* DeviceTokenManager.swift */; };
 		A1474D058AA8DD8A7886BF8B /* DeviceTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 851410FEF57FD6E61D6A6F44 /* DeviceTokenStore.swift */; };
 		A460A833459B34A6941B6DE9 /* UserStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDAC070ACEE2F122C555B0ED /* UserStats.swift */; };
+		A4A21A705B616387A417CF25 /* StatsRefreshThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0226772479C821AE79CFA9DE /* StatsRefreshThrottle.swift */; };
 		A4F89ADA5E7D463589AF391D /* SegmentDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA6257F1C7E68CE62C4CCF25 /* SegmentDetailSheet.swift */; };
 		A5B705950EDE96594CF43CAF /* RoadSenseNSSimHarnessApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31BB9FA2F39D47DBE85F983C /* RoadSenseNSSimHarnessApp.swift */; };
 		ACDDE4CCC072420ECC01CCED /* HarnessFixtureCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9E2C334C77577FC08622EF8 /* HarnessFixtureCatalog.swift */; };
@@ -184,6 +188,7 @@
 /* Begin PBXFileReference section */
 		006FA6E12647281144C3D972 /* PotholePhotoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholePhotoStore.swift; sourceTree = "<group>"; };
 		01098BACC15F81E04B4BAAB8 /* LicensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensesView.swift; sourceTree = "<group>"; };
+		0226772479C821AE79CFA9DE /* StatsRefreshThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsRefreshThrottle.swift; sourceTree = "<group>"; };
 		023DE992C5BA96EAB05EF99A /* pothole-hit.csv */ = {isa = PBXFileReference; path = "pothole-hit.csv"; sourceTree = "<group>"; };
 		026DC5F95328D7091BC8482E /* SensorFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorFixture.swift; sourceTree = "<group>"; };
 		029336ECC82481F844689FD4 /* PotholeReportRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PotholeReportRecord.swift; sourceTree = "<group>"; };
@@ -226,6 +231,7 @@
 		48A050A1F2F270139D92540F /* RoadSenseNS.Production.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = RoadSenseNS.Production.xcconfig; sourceTree = "<group>"; };
 		4B2199FED8B8DBD6F6FD265B /* BackgroundTaskRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTaskRegistrar.swift; sourceTree = "<group>"; };
 		4B4E2F0BBA75CCC42516100B /* RoadSenseSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoadSenseSchema.swift; sourceTree = "<group>"; };
+		513B978AE8BD312245A5CDF7 /* LocationActivationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationActivationPolicy.swift; sourceTree = "<group>"; };
 		53EC0C104BF5658C06ACCBB1 /* DeviceTokenManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceTokenManager.swift; sourceTree = "<group>"; };
 		5510C3BC3010F7CA1DBD337A /* SegmentAPIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SegmentAPIModels.swift; sourceTree = "<group>"; };
 		569CF57A88BC988A02FEFEB7 /* QualityFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QualityFilter.swift; sourceTree = "<group>"; };
@@ -595,6 +601,7 @@
 			children = (
 				46E77758971EB7F44643652E /* DrivingHeuristic.swift */,
 				F70A04456020333C21483C47 /* HighPassBiquad.swift */,
+				513B978AE8BD312245A5CDF7 /* LocationActivationPolicy.swift */,
 				31E39073C99FB20D024E79D0 /* MotionMath.swift */,
 			);
 			path = Sensors;
@@ -664,6 +671,7 @@
 				B0C209D91B4FE4596C651B49 /* BackgroundCollectionPolicy.swift */,
 				D5B5A1B95BF7D4367ED53F67 /* CollectionReadiness.swift */,
 				B5A2E875A207882167B58870 /* MapStartupViewportPolicy.swift */,
+				0226772479C821AE79CFA9DE /* StatsRefreshThrottle.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -909,6 +917,7 @@
 				ACDDE4CCC072420ECC01CCED /* HarnessFixtureCatalog.swift in Sources */,
 				EB26C71EB8CF4A2C2C9247A0 /* HighPassBiquad.swift in Sources */,
 				F005FBB0C3E992990AEBC2D6 /* IngestHealthEvaluator.swift in Sources */,
+				9CCFD9E4E2C98C328975AC45 /* LocationActivationPolicy.swift in Sources */,
 				5B14B353CE10A9385D30B606 /* MapStartupViewportPolicy.swift in Sources */,
 				F3BBDEDC49BACD9ADAFD2A5D /* MotionMath.swift in Sources */,
 				F3CF0CDC2F7A60CCD3B7CC90 /* PotholeDetector.swift in Sources */,
@@ -926,6 +935,7 @@
 				CB7414748B2E9DE849EBFE9C /* SensorFixture.swift in Sources */,
 				9D359A286A549E79A62BC47B /* SensorFixtureRunner.swift in Sources */,
 				5A661F0F9DCBC5633EDDF277 /* SimHarnessView.swift in Sources */,
+				A4A21A705B616387A417CF25 /* StatsRefreshThrottle.swift in Sources */,
 				81986E2AB5F2C3C7258A6A66 /* UploadAPIModels.swift in Sources */,
 				ADA01A3CE40ED182AAA833A5 /* UploadEligibilityPolicy.swift in Sources */,
 				24EAE00CAF67007A446D2F50 /* UploadPolicy.swift in Sources */,
@@ -973,6 +983,7 @@
 				982F60A97C38F459074E9E34 /* HighPassBiquad.swift in Sources */,
 				AFEE1434CB9A30B9D66A33DC /* IngestHealthEvaluator.swift in Sources */,
 				D0C3611AF14948EFC40D3F11 /* LicensesView.swift in Sources */,
+				9D1E729E7A510B5DC94DFDD8 /* LocationActivationPolicy.swift in Sources */,
 				D936E8CAA7F8D74C012BB1D8 /* LocationService.swift in Sources */,
 				9EABEA30417F41AE694F52D1 /* ManualPotholeLocator.swift in Sources */,
 				D3654C639B341A125F6F764E /* MapScreen.swift in Sources */,
@@ -1020,6 +1031,7 @@
 				FA4334D50A1F3340EDF35A2A /* SensorFixtureRunner.swift in Sources */,
 				825EF8A058DF7DA06B8A89CE /* SentryBootstrapper.swift in Sources */,
 				3F7785BB801AD0282C070EEC /* SettingsView.swift in Sources */,
+				3EC4C33A4CFD9F4B8E4599DE /* StatsRefreshThrottle.swift in Sources */,
 				6CB12F83F061BDDB1FAD352A /* StatsView.swift in Sources */,
 				269DDA3BBA30325BA96F619C /* TestingRuntime.swift in Sources */,
 				0005F6455CB1194DA77528C2 /* ThermalMonitor.swift in Sources */,
