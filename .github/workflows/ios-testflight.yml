@@ -28,7 +28,7 @@ on:
         description: Enable Sentry crash reporting in the app binary
         required: true
         type: boolean
-        default: false
+        default: true
 
 concurrency:
   group: ios-testflight-${{ github.ref }}
