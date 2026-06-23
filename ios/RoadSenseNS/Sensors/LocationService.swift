@@ -12,6 +12,18 @@ protocol LocationServicing {
     func start() throws
     func stop()
     func requestAlwaysUpgrade()
+    /// Tracks whether the app is in the foreground. While backgrounded and not
+    /// recording a drive, the location manager drops to low-power monitoring.
+    func setForegroundActive(_ isActive: Bool)
+    /// Applies the background-location capability per the user's authorization tier.
+    func applyBackgroundCollectionDecision(_ decision: BackgroundCollectionDecision)
+}
+
+extension LocationServicing {
+    // Default no-ops so lightweight test doubles, previews, and the sim harness
+    // don't have to care about power management.
+    func setForegroundActive(_ isActive: Bool) {}
+    func applyBackgroundCollectionDecision(_ decision: BackgroundCollectionDecision) {}
 }
 
 @MainActor
@@ -23,6 +35,7 @@ final class LocationService: NSObject, LocationServicing {
     private var bufferedSamples: [LocationSample] = []
     private var isPassiveMonitoringActive = false
     private var isCollectionActive = false
+    private var isForegroundActive = false
     private var isUpdatingLocation = false
 
     init(manager: CLLocationManager = CLLocationManager()) {
@@ -30,7 +43,10 @@ final class LocationService: NSObject, LocationServicing {
         super.init()
         manager.delegate = self
         manager.activityType = .automotiveNavigation
-        manager.allowsBackgroundLocationUpdates = true
+        // Background updates are opt-in per authorization tier (see
+        // applyBackgroundCollectionDecision); enabling them unconditionally here is
+        // what let "passive" GPS run at full power 24/7.
+        manager.allowsBackgroundLocationUpdates = false
         manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
         manager.distanceFilter = 5
         manager.pausesLocationUpdatesAutomatically = false
@@ -90,18 +106,35 @@ final class LocationService: NSObject, LocationServicing {
         manager.requestAlwaysAuthorization()
     }
 
+    func setForegroundActive(_ isActive: Bool) {
+        guard isForegroundActive != isActive else {
+            return
+        }
+        isForegroundActive = isActive
+        applyLocationUpdateState()
+    }
+
+    func applyBackgroundCollectionDecision(_ decision: BackgroundCollectionDecision) {
+        manager.allowsBackgroundLocationUpdates = decision.shouldEnableBackgroundLocation
+    }
+
     private func applyLocationUpdateState() {
-        let shouldUpdateLocation = isPassiveMonitoringActive || isCollectionActive
-        guard shouldUpdateLocation != isUpdatingLocation else {
+        let decision = LocationActivationPolicy.decide(
+            isPassiveMonitoring: isPassiveMonitoringActive,
+            isCollecting: isCollectionActive,
+            isForeground: isForegroundActive
+        )
+
+        guard decision.usesContinuousUpdates != isUpdatingLocation else {
             return
         }
 
-        if shouldUpdateLocation {
+        if decision.usesContinuousUpdates {
             manager.startUpdatingLocation()
         } else {
             manager.stopUpdatingLocation()
         }
-        isUpdatingLocation = shouldUpdateLocation
+        isUpdatingLocation = decision.usesContinuousUpdates
     }
 }
 

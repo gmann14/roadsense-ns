@@ -140,6 +140,34 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.isCollectionPausedByUser)
     }
 
+    func testInitAppliesBackgroundCollectionDecisionForAlwaysAuthorization() throws {
+        let defaults = try makeDefaults()
+        let recording = RecordingLocationService()
+        _ = AppModel(
+            container: try makeContainer(locationService: recording),
+            defaults: defaults
+        )
+
+        // TestPermissionManager grants Always, so background updates should be enabled
+        // (instead of the previous unconditional allowsBackgroundLocationUpdates = true).
+        let decision = try XCTUnwrap(recording.backgroundDecisions.last)
+        XCTAssertTrue(decision.shouldEnableBackgroundLocation)
+    }
+
+    func testForegroundTransitionsForwardToLocationService() throws {
+        let defaults = try makeDefaults()
+        let recording = RecordingLocationService()
+        let model = AppModel(
+            container: try makeContainer(locationService: recording),
+            defaults: defaults
+        )
+
+        model.setForegroundActive(true)
+        model.setForegroundActive(false)
+
+        XCTAssertEqual(recording.foregroundStates, [true, false])
+    }
+
     func testMarkPotholeQueuesUndoableActionWhenLocationIsUsable() throws {
         let defaults = try makeDefaults()
         let now = Date(timeIntervalSince1970: 1_713_000_000)
@@ -633,7 +661,7 @@ final class AppModelTests: XCTestCase {
     }
 
     private func makeContainer(
-        locationService: TestLocationService? = nil,
+        locationService: (any LocationServicing)? = nil,
         uploadDrainer: (any UploadDrainPerforming)? = nil,
         seedPrivacyZone: Bool = false
     ) throws -> AppContainer {
@@ -761,6 +789,26 @@ private struct TestLocationService: LocationServicing {
     func start() throws {}
     func stop() {}
     func requestAlwaysUpgrade() {}
+}
+
+@MainActor
+private final class RecordingLocationService: LocationServicing {
+    private(set) var foregroundStates: [Bool] = []
+    private(set) var backgroundDecisions: [BackgroundCollectionDecision] = []
+
+    var authorizationStatus: CLAuthorizationStatus { .authorizedAlways }
+    var latestSample: LocationSample? { nil }
+    var recentSamples: [LocationSample] { [] }
+    func makeSampleStream() -> AsyncStream<LocationSample> { AsyncStream { _ in } }
+    func startPassiveMonitoring() {}
+    func stopPassiveMonitoring() {}
+    func start() throws {}
+    func stop() {}
+    func requestAlwaysUpgrade() {}
+    func setForegroundActive(_ isActive: Bool) { foregroundStates.append(isActive) }
+    func applyBackgroundCollectionDecision(_ decision: BackgroundCollectionDecision) {
+        backgroundDecisions.append(decision)
+    }
 }
 
 @MainActor

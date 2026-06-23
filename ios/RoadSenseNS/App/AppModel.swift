@@ -68,6 +68,9 @@ final class AppModel {
     private let haptics: HapticsServicing
     private let logger: RoadSenseLogger
     private let potholeLocator = ManualPotholeLocator()
+    // Collapses the high-frequency sensor-driven stats refresh (a fix per second
+    // during a drive) down to one heavy SwiftData pass every couple of seconds.
+    private var statsRefreshThrottle = StatsRefreshThrottle(minimumInterval: 2)
 
     private(set) var snapshot: PermissionSnapshot
     private(set) var isRequestingPermissions = false
@@ -131,7 +134,7 @@ final class AppModel {
         self.userStatsSummary = (try? container.userStatsStore.summary()) ?? .zero
         self.isCollectionPausedByUser = defaults.bool(forKey: collectionPausedKey)
         self.sensorCoordinator.stateDidChange = { [weak self] in
-            self?.refreshCollectionStats()
+            self?.handleSensorStateChanged()
         }
         syncPassiveMonitoringState()
         refreshCollectionStats()
@@ -267,6 +270,12 @@ final class AppModel {
         isCollectionPausedByUser = true
         sensorCoordinator.stopMonitoring()
         refreshCollectionStats()
+    }
+
+    /// Forwarded from the scene phase. While backgrounded and not recording a drive,
+    /// the location manager drops to low-power significant-change monitoring.
+    func setForegroundActive(_ isActive: Bool) {
+        locationService.setForegroundActive(isActive)
     }
 
     func requestAlwaysLocationUpgrade() {
@@ -497,6 +506,13 @@ final class AppModel {
         pendingPotholeCoordinates = (try? potholeActionStore.pendingManualReportCoordinates()) ?? []
         userStatsSummary = (try? userStatsStore.summary()) ?? .zero
         isCollectionPausedByUser = defaults.bool(forKey: collectionPausedKey)
+        refreshLiveCollectionState()
+        statsRefreshThrottle.markRefreshed(now: Date())
+    }
+
+    /// Cheap, in-memory collection state read directly from the sensor coordinator —
+    /// no SwiftData access. Safe to run on every sensor `stateDidChange` event.
+    private func refreshLiveCollectionState() {
         isPassiveMonitoringEnabled = sensorCoordinator.monitoringState.isMonitoring
         isActivelyCollecting = sensorCoordinator.monitoringState.isCollecting
         let diagnostics = sensorCoordinator.diagnostics
@@ -511,6 +527,19 @@ final class AppModel {
             lastDrivingEventWasDriving: diagnostics.lastDrivingEventWasDriving,
             lastPotholeCandidateAt: diagnostics.lastPotholeCandidateAt
         )
+    }
+
+    /// Sensor `stateDidChange` fires on every GPS fix. Always refresh the cheap live
+    /// state, but only run the expensive SwiftData stats pass on a collection
+    /// start/stop transition or once the throttle window elapses.
+    private func handleSensorStateChanged() {
+        let wasCollecting = isActivelyCollecting
+        refreshLiveCollectionState()
+
+        let collectionStateChanged = wasCollecting != isActivelyCollecting
+        if collectionStateChanged || statsRefreshThrottle.shouldRefresh(now: Date()) {
+            refreshCollectionStats()
+        }
     }
 
     private func hasUsableLocation(_ sample: LocationSample, now: Date) -> Bool {
@@ -607,6 +636,12 @@ final class AppModel {
     }
 
     private func syncPassiveMonitoringState() {
+        // Gate the background-location capability on the authorization tier (only
+        // "Always" gets continuous background updates) instead of forcing it on.
+        locationService.applyBackgroundCollectionDecision(
+            BackgroundCollectionPolicy.evaluate(snapshot)
+        )
+
         if readiness.canStartPassiveCollection {
             guard !defaults.bool(forKey: collectionPausedKey) else {
                 return
