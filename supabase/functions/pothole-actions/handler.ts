@@ -10,6 +10,20 @@ const UUID_REGEX =
 
 const ACTION_TYPES = new Set(["manual_report", "confirm_present", "confirm_fixed"]);
 
+// Body-size cap (P0-2). A single pothole action is a tiny fixed-shape object;
+// 256KB is a generous ceiling that still blocks oversized/junk payloads
+// before parsing, mirroring feedback/handler.ts and upload-readings/handler.ts.
+export const MAX_PAYLOAD_BYTES = 262_144;
+
+// Freeform client metadata bounds (P0-2), matching upload-readings/handler.ts.
+export const MAX_VERSION_STRING_LENGTH = 100;
+
+// World-bounds validation (P1-7), matching upload-readings/handler.ts.
+export const LAT_MIN = -90;
+export const LAT_MAX = 90;
+export const LNG_MIN = -180;
+export const LNG_MAX = 180;
+
 export type PotholeActionPayload = {
     action_id: string;
     device_token: string;
@@ -79,12 +93,22 @@ export function validatePotholeActionPayload(payload: unknown): ValidationResult
         fieldErrors.client_sent_at = "must be an RFC3339 timestamp";
     }
 
-    if (typeof input.client_app_version !== "string" || input.client_app_version.trim().length === 0) {
+    if (
+        typeof input.client_app_version !== "string" ||
+        input.client_app_version.trim().length === 0
+    ) {
         fieldErrors.client_app_version = "must be a non-empty string";
+    } else if (input.client_app_version.length > MAX_VERSION_STRING_LENGTH) {
+        fieldErrors.client_app_version = `must be at most ${MAX_VERSION_STRING_LENGTH} characters`;
     }
 
-    if (typeof input.client_os_version !== "string" || input.client_os_version.trim().length === 0) {
+    if (
+        typeof input.client_os_version !== "string" ||
+        input.client_os_version.trim().length === 0
+    ) {
         fieldErrors.client_os_version = "must be a non-empty string";
+    } else if (input.client_os_version.length > MAX_VERSION_STRING_LENGTH) {
+        fieldErrors.client_os_version = `must be at most ${MAX_VERSION_STRING_LENGTH} characters`;
     }
 
     if (!ACTION_TYPES.has(actionType)) {
@@ -93,10 +117,14 @@ export function validatePotholeActionPayload(payload: unknown): ValidationResult
 
     if (!isFiniteNumber(input.lat)) {
         fieldErrors.lat = "must be numeric";
+    } else if (input.lat < LAT_MIN || input.lat > LAT_MAX) {
+        fieldErrors.lat = `must be between ${LAT_MIN} and ${LAT_MAX}`;
     }
 
     if (!isFiniteNumber(input.lng)) {
         fieldErrors.lng = "must be numeric";
+    } else if (input.lng < LNG_MIN || input.lng > LNG_MAX) {
+        fieldErrors.lng = `must be between ${LNG_MIN} and ${LNG_MAX}`;
     }
 
     if (!(input.accuracy_m === null || input.accuracy_m === undefined || isFiniteNumber(input.accuracy_m))) {
@@ -176,9 +204,44 @@ export function createPotholeActionsHandler(deps: PotholeActionHandlerDeps) {
             });
         }
 
+        const contentLengthHeader = req.headers.get("content-length");
+        if (contentLengthHeader) {
+            const declaredLength = Number(contentLengthHeader);
+            if (Number.isFinite(declaredLength) && declaredLength > MAX_PAYLOAD_BYTES) {
+                return errorResponse(
+                    "payload_too_large",
+                    "Pothole action payload is too large.",
+                    413,
+                    requestId,
+                );
+            }
+        }
+
+        let rawText: string;
+        try {
+            rawText = await req.text();
+        } catch {
+            return errorResponse(
+                "validation_failed",
+                "Payload is malformed.",
+                400,
+                requestId,
+                { field_errors: { payload: "must be readable" } },
+            );
+        }
+
+        if (rawText.length > MAX_PAYLOAD_BYTES) {
+            return errorResponse(
+                "payload_too_large",
+                "Pothole action payload is too large.",
+                413,
+                requestId,
+            );
+        }
+
         let rawPayload: unknown;
         try {
-            rawPayload = await req.json();
+            rawPayload = JSON.parse(rawText);
         } catch {
             return errorResponse(
                 "validation_failed",

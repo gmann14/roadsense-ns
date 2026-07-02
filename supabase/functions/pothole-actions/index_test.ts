@@ -1,5 +1,10 @@
 import { assertEquals, assertObjectMatch } from "jsr:@std/assert";
-import { createPotholeActionsHandler, extractClientIp, validatePotholeActionPayload } from "./handler.ts";
+import {
+    createPotholeActionsHandler,
+    extractClientIp,
+    MAX_PAYLOAD_BYTES,
+    validatePotholeActionPayload,
+} from "./handler.ts";
 import { createPotholeActionRateLimitChecker } from "./runtime.ts";
 import type { RpcResponse } from "../upload-readings/runtime.ts";
 
@@ -33,6 +38,14 @@ Deno.test("extractClientIp uses the last public forwarded hop before fallback he
         "x-real-ip": "198.51.100.10",
     });
     assertEquals(extractClientIp(realIpHeaders), "198.51.100.10");
+});
+
+Deno.test("extractClientIp prefers the worker-trusted x-client-ip over x-forwarded-for", () => {
+    const headers = new Headers({
+        "x-client-ip": "1.2.3.4",
+        "x-forwarded-for": "203.0.113.7, 198.51.100.99",
+    });
+    assertEquals(extractClientIp(headers), "1.2.3.4");
 });
 
 Deno.test("validatePotholeActionPayload rejects malformed payloads", () => {
@@ -154,7 +167,7 @@ Deno.test("pothole action handler returns 429 with Retry-After for rate limits",
     assertEquals(response.headers.get("x-request-id"), "req-pothole-limit");
 });
 
-Deno.test("createPotholeActionRateLimitChecker uses pothole-action prefixes and limits", async () => {
+Deno.test("createPotholeActionRateLimitChecker uses pothole-action prefixes and limits, checking IP before device", async () => {
     const calls: Array<Record<string, unknown>> = [];
     const checker = createPotholeActionRateLimitChecker(
         async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
@@ -167,10 +180,28 @@ Deno.test("createPotholeActionRateLimitChecker uses pothole-action prefixes and 
     const result = await checker("deadbeef", "203.0.113.10");
 
     assertEquals(result, { ok: true, retryAfterSeconds: 0 });
-    assertEquals(calls[0].p_key, "pothole-action-device:deadbeef");
-    assertEquals(calls[0].p_limit, 60);
-    assertEquals(calls[1].p_key, "pothole-action-ip:203.0.113.10");
-    assertEquals(calls[1].p_limit, 120);
+    // P1-4: IP check must run (and be bumped) first.
+    assertEquals(calls[0].p_key, "pothole-action-ip:203.0.113.10");
+    assertEquals(calls[0].p_limit, 120);
+    assertEquals(calls[1].p_key, "pothole-action-device:deadbeef");
+    assertEquals(calls[1].p_limit, 60);
+});
+
+Deno.test("createPotholeActionRateLimitChecker short-circuits on IP limit without bumping device bucket", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const checker = createPotholeActionRateLimitChecker(
+        async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
+            calls.push(params);
+            return { data: false as T, error: null };
+        },
+        () => new Date("2026-04-21T18:22:00Z"),
+    );
+
+    const result = await checker("deadbeef", "203.0.113.10");
+
+    assertEquals(calls.length, 1, "device bucket must not be bumped when the IP check already failed");
+    assertEquals(calls[0].p_key, "pothole-action-ip:203.0.113.10");
+    assertEquals(result.ok, false);
 });
 
 Deno.test("pothole action handler returns 200 on success", async () => {
@@ -292,4 +323,139 @@ Deno.test("pothole action handler maps stale_target to 409", async () => {
 
     assertEquals(response.status, 409);
     assertEquals((await response.json()).error, "stale_target");
+});
+
+// ── P0-2: body-size cap + field whitelisting ──
+
+Deno.test("pothole action handler rejects a payload with declared content-length over the limit before reading body", async () => {
+    let applyCalled = false;
+    const handler = createPotholeActionsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        applyAction: async () => {
+            applyCalled = true;
+            return {
+                action_id: validPayload.action_id,
+                pothole_report_id: "00000000-0000-0000-0000-000000001234",
+                status: "active",
+            };
+        },
+    });
+
+    const response = await handler(
+        new Request("http://localhost/functions/v1/pothole-actions", {
+            method: "POST",
+            headers: {
+                "content-type": "application/json",
+                "content-length": String(MAX_PAYLOAD_BYTES + 1),
+            },
+            body: JSON.stringify(validPayload),
+        }),
+    );
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+    assertEquals(applyCalled, false);
+});
+
+Deno.test("pothole action handler rejects an actual body larger than the cap even without a content-length header", async () => {
+    const handler = createPotholeActionsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        applyAction: async () => ({
+            action_id: validPayload.action_id,
+            pothole_report_id: "00000000-0000-0000-0000-000000001234",
+            status: "active",
+        }),
+    });
+
+    const response = await handler(
+        new Request("http://localhost/functions/v1/pothole-actions", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                ...validPayload,
+                junk_padding: "x".repeat(MAX_PAYLOAD_BYTES + 1000),
+            }),
+        }),
+    );
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+});
+
+Deno.test("pothole action handler strips unexpected extra fields before they reach applyAction", async () => {
+    let seenPayload: unknown;
+    const handler = createPotholeActionsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        applyAction: async ({ payload }) => {
+            seenPayload = payload;
+            return {
+                action_id: payload.action_id,
+                pothole_report_id: "00000000-0000-0000-0000-000000001234",
+                status: "active",
+            };
+        },
+    });
+
+    const response = await handler(
+        new Request("http://localhost/functions/v1/pothole-actions", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                ...validPayload,
+                malicious_field: "should be stripped",
+                nested_junk: { a: 1, b: [1, 2, 3] },
+            }),
+        }),
+    );
+
+    assertEquals(response.status, 200);
+    assertEquals("malicious_field" in (seenPayload as Record<string, unknown>), false);
+    assertEquals("nested_junk" in (seenPayload as Record<string, unknown>), false);
+});
+
+Deno.test("validatePotholeActionPayload rejects overlong client_app_version/client_os_version", () => {
+    const result = validatePotholeActionPayload({
+        ...validPayload,
+        client_app_version: "x".repeat(101),
+        client_os_version: "y".repeat(200),
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+        assertObjectMatch(result.fieldErrors, {
+            client_app_version: "must be at most 100 characters",
+            client_os_version: "must be at most 100 characters",
+        });
+    }
+});
+
+// ── P1-7: world-bounds validation ──
+
+Deno.test("validatePotholeActionPayload rejects out-of-range lat/lng", () => {
+    const result = validatePotholeActionPayload({
+        ...validPayload,
+        lat: 91,
+        lng: 181,
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+        assertObjectMatch(result.fieldErrors, {
+            lat: "must be between -90 and 90",
+            lng: "must be between -180 and 180",
+        });
+    }
+});
+
+Deno.test("validatePotholeActionPayload accepts boundary lat/lng values", () => {
+    const result = validatePotholeActionPayload({
+        ...validPayload,
+        lat: -90,
+        lng: -180,
+    });
+
+    assertEquals(result.ok, true);
 });

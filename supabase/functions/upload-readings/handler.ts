@@ -6,6 +6,17 @@ export { extractClientIp };
 const UUID_V4_REGEX =
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// Body-size cap (P0-2). Mirrors feedback/handler.ts's MAX_PAYLOAD_BYTES pattern.
+// 256KB comfortably covers a full 1000-reading batch of legitimate JSON
+// (~250 bytes/reading) while blocking oversized/junk payloads before they're
+// even parsed.
+export const MAX_PAYLOAD_BYTES = 262_144;
+
+// Freeform client metadata bounds (P0-2). These are short human-readable
+// version strings (e.g. "0.1.3 (42)", "iOS 17.4.1"); 100 chars is generous
+// headroom without letting a client attach an unbounded string.
+export const MAX_VERSION_STRING_LENGTH = 100;
+
 // Anti-forgery bounds (P0-1). Sourced from the rest of the pipeline rather than invented:
 //
 // - SPEED: physically implausible speeds are rejected outright. The SQL ingest path
@@ -26,6 +37,13 @@ export const SPEED_KMH_MAX = 220;
 export const POTHOLE_MAGNITUDE_MIN_G = 0;
 export const POTHOLE_MAGNITUDE_MAX_G = 8;
 export const POTHOLE_FLAG_MIN_MAGNITUDE_G = 1.0;
+
+// World-bounds validation (P1-7). Coordinates outside these ranges are not
+// physically valid lat/lng values regardless of anything else in the batch.
+export const LAT_MIN = -90;
+export const LAT_MAX = 90;
+export const LNG_MIN = -180;
+export const LNG_MAX = 180;
 
 // Per-batch pothole-flag sanity cap (P0-1). Each reading window covers >= 40 m of travel
 // (ReadingBuilder.targetDistanceMeters) and is only flagged when the detector saw a
@@ -121,12 +139,22 @@ export function validateUploadPayload(payload: unknown): ValidationResult {
         fieldErrors.client_sent_at = "must be an RFC3339 timestamp";
     }
 
-    if (typeof input.client_app_version !== "string" || input.client_app_version.trim().length === 0) {
+    if (
+        typeof input.client_app_version !== "string" ||
+        input.client_app_version.trim().length === 0
+    ) {
         fieldErrors.client_app_version = "must be a non-empty string";
+    } else if (input.client_app_version.length > MAX_VERSION_STRING_LENGTH) {
+        fieldErrors.client_app_version = `must be at most ${MAX_VERSION_STRING_LENGTH} characters`;
     }
 
-    if (typeof input.client_os_version !== "string" || input.client_os_version.trim().length === 0) {
+    if (
+        typeof input.client_os_version !== "string" ||
+        input.client_os_version.trim().length === 0
+    ) {
         fieldErrors.client_os_version = "must be a non-empty string";
+    } else if (input.client_os_version.length > MAX_VERSION_STRING_LENGTH) {
+        fieldErrors.client_os_version = `must be at most ${MAX_VERSION_STRING_LENGTH} characters`;
     }
 
     if (!Array.isArray(input.readings)) {
@@ -148,9 +176,13 @@ export function validateUploadPayload(payload: unknown): ValidationResult {
 
             if (!isFiniteNumber(row.lat)) {
                 fieldErrors[`readings[${index}].lat`] = "must be numeric";
+            } else if (row.lat < LAT_MIN || row.lat > LAT_MAX) {
+                fieldErrors[`readings[${index}].lat`] = `must be between ${LAT_MIN} and ${LAT_MAX}`;
             }
             if (!isFiniteNumber(row.lng)) {
                 fieldErrors[`readings[${index}].lng`] = "must be numeric";
+            } else if (row.lng < LNG_MIN || row.lng > LNG_MAX) {
+                fieldErrors[`readings[${index}].lng`] = `must be between ${LNG_MIN} and ${LNG_MAX}`;
             }
             if (!isFiniteNumber(row.roughness_rms)) {
                 fieldErrors[`readings[${index}].roughness_rms`] = "must be numeric";
@@ -213,9 +245,36 @@ export function validateUploadPayload(payload: unknown): ValidationResult {
         };
     }
 
+    // Rebuild from an explicit whitelist of known fields (P0-2) rather than
+    // passing the input object through verbatim. Without this, arbitrary
+    // extra fields on the top-level payload or on each reading survive
+    // validation and get serialized straight into jsonb by pgRuntime.ts.
+    const readings = input.readings as Array<Record<string, unknown>>;
+    const sanitizedReadings: UploadReading[] = readings.map((row) => ({
+        lat: Number(row.lat),
+        lng: Number(row.lng),
+        roughness_rms: Number(row.roughness_rms),
+        speed_kmh: Number(row.speed_kmh),
+        heading: row.heading === null || row.heading === undefined ? null : Number(row.heading),
+        gps_accuracy_m: Number(row.gps_accuracy_m),
+        recorded_at: String(row.recorded_at),
+        is_pothole: row.is_pothole === true,
+        pothole_magnitude:
+            row.pothole_magnitude === null || row.pothole_magnitude === undefined
+                ? null
+                : Number(row.pothole_magnitude),
+    }));
+
     return {
         ok: true,
-        payload: input as unknown as UploadPayload,
+        payload: {
+            batch_id: String(input.batch_id),
+            device_token: String(input.device_token),
+            client_sent_at: String(input.client_sent_at),
+            client_app_version: String(input.client_app_version),
+            client_os_version: String(input.client_os_version),
+            readings: sanitizedReadings,
+        },
     };
 }
 
@@ -230,9 +289,44 @@ export function createUploadReadingsHandler(deps: UploadHandlerDeps) {
             });
         }
 
+        const contentLengthHeader = req.headers.get("content-length");
+        if (contentLengthHeader) {
+            const declaredLength = Number(contentLengthHeader);
+            if (Number.isFinite(declaredLength) && declaredLength > MAX_PAYLOAD_BYTES) {
+                return errorResponse(
+                    "payload_too_large",
+                    "Upload payload is too large.",
+                    413,
+                    requestId,
+                );
+            }
+        }
+
+        let rawText: string;
+        try {
+            rawText = await req.text();
+        } catch {
+            return errorResponse(
+                "validation_failed",
+                "Payload is malformed.",
+                400,
+                requestId,
+                { field_errors: { payload: "must be readable" } },
+            );
+        }
+
+        if (rawText.length > MAX_PAYLOAD_BYTES) {
+            return errorResponse(
+                "payload_too_large",
+                "Upload payload is too large.",
+                413,
+                requestId,
+            );
+        }
+
         let rawPayload: unknown;
         try {
-            rawPayload = await req.json();
+            rawPayload = JSON.parse(rawText);
         } catch {
             return errorResponse(
                 "validation_failed",
