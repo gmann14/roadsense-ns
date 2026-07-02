@@ -23,3 +23,4 @@ Current pgTAP suites:
 - `011_pothole_actions.sql` — manual/follow-up pothole canonicalization, 24h same-device dedupe, stale-target rejection, and resolved-pothole reactivation
 - `017_segment_contributor_marks.sql` — B166 exact contributor dedupe: the P1-3 single-device inflation reproduction, nightly-recompute mark seeding, and the 6-month GC sweep
 - `018_pothole_corroboration_gate.sql` — B165 candidate status and distinct-device promotion across the sensor and manual paths, public-surface invisibility of candidates, reporter-mark exactness, grandfathering, and candidate expiry
+- `019_unified_segment_matching.sql` — cross-checks that `match_reading_to_segment` and its three callers (`ingest_reading_batch`, `rematch_readings_after_segment_refresh`, `replay_unmatched_readings`) accept/reject the same tiered-radius and surface-type fixtures identically

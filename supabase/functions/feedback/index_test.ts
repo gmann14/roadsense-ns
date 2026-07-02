@@ -75,6 +75,14 @@ Deno.test("extractClientIp uses the last public forwarded hop before fallback he
     assertEquals(extractClientIp(new Headers()), "unknown");
 });
 
+Deno.test("extractClientIp prefers the worker-trusted x-client-ip over x-forwarded-for", () => {
+    const headers = new Headers({
+        "x-client-ip": "1.2.3.4",
+        "x-forwarded-for": "203.0.113.7, 198.51.100.99",
+    });
+    assertEquals(extractClientIp(headers), "1.2.3.4");
+});
+
 Deno.test("validateFeedbackPayload rejects unknown source/category and short message", () => {
     const result = validateFeedbackPayload({
         ...validPayload,
