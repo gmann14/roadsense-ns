@@ -4,23 +4,28 @@ type MapStatStripProps = {
   stats: PublicStats | null;
 };
 
+const PLACEHOLDER = "—";
+
+function formatStat(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return PLACEHOLDER;
+  }
+  return value.toLocaleString();
+}
+
+function formatRoundedStat(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return PLACEHOLDER;
+  }
+  return Math.round(value).toLocaleString();
+}
+
 export function MapStatStrip({ stats }: MapStatStripProps) {
   return (
     <div className="map-overlay stat-strip" aria-label="Province-wide stats">
-      <StatCard
-        label="Roads mapped"
-        value={stats ? Math.round(stats.total_km_mapped).toLocaleString() : "—"}
-        unit="km"
-      />
-      <StatCard
-        label="Municipalities covered"
-        value={stats ? stats.municipalities_covered.toLocaleString() : "—"}
-      />
-      <StatCard
-        label="Pothole reports"
-        value={stats ? stats.active_potholes.toLocaleString() : "—"}
-        unit="active"
-      />
+      <StatCard label="Roads mapped" value={formatRoundedStat(stats?.total_km_mapped)} unit="km" />
+      <StatCard label="Municipalities covered" value={formatStat(stats?.municipalities_covered)} />
+      <StatCard label="Pothole reports" value={formatStat(stats?.active_potholes)} unit="active" />
     </div>
   );
 }

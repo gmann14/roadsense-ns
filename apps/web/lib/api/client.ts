@@ -1,9 +1,11 @@
 export type PublicStats = {
-  total_km_mapped: number;
-  total_readings: number;
-  segments_scored: number;
-  active_potholes: number;
-  municipalities_covered: number;
+  // Numeric fields are nullable post-normalization: the API can omit or send
+  // malformed values, and we'd rather render a placeholder than "NaN".
+  total_km_mapped: number | null;
+  total_readings: number | null;
+  segments_scored: number | null;
+  active_potholes: number | null;
+  municipalities_covered: number | null;
   map_bounds: Bbox | null;
   focus_bounds: Bbox | null;
   pothole_bounds: Bbox | null;
@@ -232,6 +234,11 @@ export async function getTopPotholes(limit = 20): Promise<PotholeResponse | null
   });
 }
 
+function normalizeNumber(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function normalizePublicStats(stats: PublicStats | null): PublicStats | null {
   if (!stats) {
     return null;
@@ -239,11 +246,11 @@ export function normalizePublicStats(stats: PublicStats | null): PublicStats | n
 
   return {
     ...stats,
-    total_km_mapped: Number(stats.total_km_mapped),
-    total_readings: Number(stats.total_readings),
-    segments_scored: Number(stats.segments_scored),
-    active_potholes: Number(stats.active_potholes),
-    municipalities_covered: Number(stats.municipalities_covered),
+    total_km_mapped: normalizeNumber(stats.total_km_mapped),
+    total_readings: normalizeNumber(stats.total_readings),
+    segments_scored: normalizeNumber(stats.segments_scored),
+    active_potholes: normalizeNumber(stats.active_potholes),
+    municipalities_covered: normalizeNumber(stats.municipalities_covered),
     map_bounds: normalizeBbox(stats.map_bounds),
     focus_bounds: normalizeBbox(stats.focus_bounds),
     pothole_bounds: normalizeBbox(stats.pothole_bounds),
