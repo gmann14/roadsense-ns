@@ -89,7 +89,7 @@ ogr2ogr \
     -nlt PROMOTE_TO_MULTI \
     -t_srs EPSG:4326
 
-psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 <<SQL
+psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 --single-transaction <<SQL
 DROP TABLE IF EXISTS ref.municipalities;
 CREATE TABLE ref.municipalities AS
 SELECT

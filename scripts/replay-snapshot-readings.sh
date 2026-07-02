@@ -14,9 +14,14 @@ set -euo pipefail
 
 SNAPSHOT="${1:-.context/device-live-latest/Library/Application Support/default.store}"
 FUNCTIONS_BASE_URL="${FUNCTIONS_BASE_URL:-http://127.0.0.1:54321/functions/v1}"
-ANON_KEY="${SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY:-sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH}}"
+ANON_KEY="${SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}}"
 BATCH_SIZE="${BATCH_SIZE:-500}"
 DRY_RUN="${DRY_RUN:-0}"
+
+if [[ -z "$ANON_KEY" ]]; then
+  echo "SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY) must be set." >&2
+  exit 1
+fi
 
 if [[ ! -f "$SNAPSHOT" ]]; then
   echo "snapshot not found: $SNAPSHOT" >&2
@@ -61,8 +66,20 @@ if [[ "$TOTAL_READINGS" -eq 0 ]]; then
   exit 0
 fi
 
+# device_token is stored server-side only as a peppered+hashed value; avoid
+# ever printing it in the clear, even locally (terminal scrollback, CI logs).
+redact_token() {
+  local token="$1"
+  local len="${#token}"
+  if (( len <= 8 )); then
+    printf '%s\n' "****"
+  else
+    printf '%s...%s\n' "${token:0:4}" "${token: -4}"
+  fi
+}
+
 echo "snapshot:      $SNAPSHOT"
-echo "device token:  $DEVICE_TOKEN"
+echo "device token:  $(redact_token "$DEVICE_TOKEN")"
 echo "endpoint:      $FUNCTIONS_BASE_URL/upload-readings"
 echo "readings:      $TOTAL_READINGS"
 echo "batch size:    $BATCH_SIZE"
