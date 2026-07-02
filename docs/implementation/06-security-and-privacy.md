@@ -1,6 +1,6 @@
 # 06 — Security & Privacy
 
-*Last updated: 2026-04-21*
+*Last updated: 2026-07-02 (B160 device attestation: threat-model rows, PIPEDA table, deletion policy, and privacy-policy outline updated per [17-device-attestation-and-trust.md](17-device-attestation-and-trust.md))*
 
 Covers: PIPEDA compliance checklist, threat model, abuse mitigation, App Store privacy labels, and incident response for privacy-impacting issues.
 
@@ -10,7 +10,7 @@ Privacy isn't a feature; it's the foundation. A data leak in a civic-tech app tr
 
 1. **Collect only what's needed.** No email, no phone, no name. No account system in MVP.
 2. **Never see raw tracks server-side.** Client strips privacy-zone readings; server only ingests individual windows with midpoint coordinates.
-3. **Never store the raw device token.** The client sends the token UUID over TLS; the Edge Function hashes it with a server-side pepper on receipt and discards the cleartext in the same request. The raw token is never persisted, never logged, never returned. (It *is* in server memory for the duration of the request — that's a necessary trust boundary, not a marketing claim to obscure.) Rotate monthly.
+3. **Never store the raw device token.** The client sends the token UUID over TLS; the Edge Function hashes it with a server-side pepper on receipt and discards the cleartext in the same request. The raw token is never persisted, never logged, never returned. (It *is* in server memory for the duration of the request — that's a necessary trust boundary, not a marketing claim to obscure.) Rotate monthly. As of B160 ([17-device-attestation-and-trust.md](17-device-attestation-and-trust.md)), the same rule extends to the attestation key id and challenge that back token issuance: `attested_devices.key_id_hash` and `token_challenges.challenge_hash` are peppered hashes, the raw values are never persisted or logged, and `attested_devices` holds only the *current* token hash, overwritten in place at each rotation — there is no history table and no code path that joins a device across rotations.
 4. **No third-party analytics or ad SDKs.** Sentry for crashes and limited performance diagnostics only, with PII scrubbing, and nothing else.
 5. **Anonymized from the outside in.** Privacy policy, App Store labels, user-facing copy all say the same thing the code enforces.
 
@@ -25,19 +25,19 @@ PIPEDA's 10 Principles, mapped to our implementation:
 | 1. Accountability | Single data controller: Graham Mann. Privacy policy names a contact. |
 | 2. Identifying purposes | App onboarding + privacy policy explicitly state: collect accelerometer + GPS to map road quality; aggregate publicly. |
 | 3. Consent | Opt-in via iOS permission prompts, explicit onboarding screen. Uploads happen automatically on any available network because data volume is small and this is stated up front. |
-| 4. Limiting collection | No PII fields collected. Default endpoint trimming suppresses likely private trip endpoints; GPS inside optional privacy zones is discarded even for explicit pothole actions and photos; device token is pseudonymous and rotated monthly. |
+| 4. Limiting collection | No PII fields collected. Default endpoint trimming suppresses likely private trip endpoints; GPS inside optional privacy zones is discarded even for explicit pothole actions and photos; device token is pseudonymous and rotated monthly. As of B160, the current token is bound to an anonymous hardware-attested key; past tokens are not linkable — attestation proves "this is a real, undamaged device" once per rotation, not device or user identity, and `attested_devices` never accumulates a rotation history. |
 | 5. Limiting use, disclosure, retention | Raw readings kept 6 months, then deleted (partition drop). Aggregates kept indefinitely. No data sold to third parties at MVP. |
 | 6. Accuracy | Quality filters reject bad GPS; crowdsourced averaging improves over time. "Report repair" path (post-MVP) lets users correct stale data. |
 | 7. Safeguards | TLS for all API calls. Server-side hashing with pepper. Supabase-managed DB with RLS. No service-role keys on client. |
 | 8. Openness | Privacy policy at public URL; open-source repo after launch. |
-| 9. Individual access | User can delete all LOCAL data via Settings. Server-side data is anonymous (device token is not knowable to us) — cannot be attributed back. This is the correct PIPEDA stance when data is truly de-identified. |
+| 9. Individual access | User can delete all LOCAL data via Settings. Server-side data is anonymous — the current token is bound to an anonymous hardware-attested key; past tokens are not linkable — cannot be attributed back. This is the correct PIPEDA stance when data is truly de-identified. |
 | 10. Challenging compliance | Contact email in privacy policy; acknowledge within 30 days. |
 
 ### Deletion Policy (subtle but important)
 
 **Local:** User can tap "Delete all local data" in Settings → clears SwiftData store. Takes effect immediately.
 
-**Server:** We cannot delete individual users' server-side readings on request because readings are stored only as aggregated, pseudonymous data points — we have no user identifier, email, or account tying any reading to a specific person. The device token hash is one-way and rotates monthly.
+**Server:** We cannot delete individual users' server-side readings on request because readings are stored only as aggregated, pseudonymous data points — we have no user identifier, email, or account tying any reading to a specific person. The device token hash is one-way and rotates monthly. Since B160, the current token is bound to an anonymous hardware-attested key; past tokens are not linkable — `attested_devices` holds only the live token hash for a device, overwritten in place at each rotation, so there is no rotation history to retroactively join a month's readings back to a device that later re-attested.
 
 What we *can* do if a user asks:
 - Provide a snapshot of what a device-token-hash has contributed during the user's known active window, if they give us their hash (surfaced as an optional developer-only diagnostic in Settings)
@@ -58,8 +58,8 @@ Publish at `https://nsroadsense.ca/privacy` before TestFlight external review.
 
 Sections:
 
-1. **What we collect** — accelerometer, GPS, speed, timestamps, IP (for rate limiting, not logged), and crash / performance diagnostics from Sentry with PII scrubbing
-2. **What we don't collect** — no name, no email, no phone, no account, no raw GPS tracks
+1. **What we collect** — accelerometer, GPS, speed, timestamps, IP (for rate limiting, not logged), and crash / performance diagnostics from Sentry with PII scrubbing. Since B160, we also perform a one-time hardware attestation check (Apple App Attest / Google Play Integrity) per device rotation to prove the app is running on genuine, unmodified hardware — this proves device integrity, not identity: the current token is bound to an anonymous hardware-attested key, and past tokens are not linkable.
+2. **What we don't collect** — no name, no email, no phone, no account, no raw GPS tracks, no rotation history of your device's past tokens
 3. **How we use it** — aggregate road quality scores shown on a public map
 4. **How long we keep it** — raw readings 6 months, aggregates indefinitely
 5. **Who we share it with** — nobody, except the public aggregate map
@@ -145,14 +145,14 @@ Apple's policy: diagnostics ARE "collected" data under their framework, even if 
 |---|---|
 | Reverse triangulation of home/work from repeated trip endpoints | Default endpoint trimming (first/last 60s and 300m), plus optional privacy zones with randomized stored centers. Explicit pothole actions and photos are also blocked inside privacy zones by default. |
 | Tracking individual drives | Exact point readings are uploaded only after endpoint trimming and outside optional privacy zones, at roughly 50m sampling cadence; no public raw-trace views; 6-month raw retention; per-device weekly reading cap of 3 per segment |
-| Long-term device identification | Monthly device token rotation; SHA-256 server hash with secret pepper |
+| Long-term device identification | Monthly device token rotation; SHA-256 server hash with secret pepper. Since B160, rotation is server-issued and attestation-bound: `attested_devices` stores only the current token hash, overwritten in place — no rotation-history table exists anywhere, so the server cannot join a device across rotations even with full DB access ([17](17-device-attestation-and-trust.md) privacy posture). |
 | Explicit report abuse or vandalism | No free-text pothole reports, rate limits on pothole actions/photos, follow-up actions tied to existing marker IDs, and quorum required before a `looks_fixed` action resolves a public marker |
 | Uploaded data intercepted | TLS 1.3 only; certificate pinning (nice-to-have — evaluate week 6) |
-| MITM rewriting traffic | TLS; no signed batch in MVP. If abuse emerges, add request signing / attestation in Phase 2 rather than claiming it now. |
+| MITM rewriting traffic | TLS; no signed batch in MVP. B160 closes the specific replay sub-case of "captured attestation exchange mints a second token": challenge issuance is one-time, TTL-bounded (5 min), and single-use (delete-on-redeem), so a captured attestation/assertion cannot be replayed into a second token. Per-batch upload signing remains out of scope — see [17](17-device-attestation-and-trust.md) non-goals. |
 | Stolen phone | iOS device lock is the primary defense. App contains no credentials to steal; SwiftData store contains only local readings (already "my drives") |
-| Supabase DB breach | No PII in DB; device tokens are hashed; raw readings are 6-month rolling; aggregates contain nothing identifying |
+| Supabase DB breach | No PII in DB; device tokens are hashed; raw readings are 6-month rolling; aggregates contain nothing identifying. Since B160, `attested_devices.key_id_hash` and `token_challenges.challenge_hash` are peppered hashes too — a DB breach yields no raw attestation key id or challenge, and no rotation history to correlate. |
 | Bogus data / trolls | Rate limits (50 batches/device/24h, 10/IP/hr); plausibility checks (NS bbox, speed range, acceleration range); per-device reading cap; statistical outlier trimming in nightly recompute |
-| Automated abuse (scripted uploads) | DeviceCheck attestation (Phase 2, when signal is clear); meanwhile per-device + per-IP limits |
+| Automated abuse (scripted uploads) | Hardware attestation (App Attest / Play Integrity) is the real fix — landing across B160-B164 ([17](17-device-attestation-and-trust.md)). B160 (this ticket) ships the schema, challenge issuance, and token redemption endpoints with attestation *verification* stubbed; a forged UUID token is not yet rejected until B161/B163 supply real verifiers and B164 flips enforcement. Meanwhile per-device + per-IP limits are the active mitigation. |
 
 ## Abuse Mitigation (Data Integrity)
 

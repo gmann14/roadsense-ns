@@ -1,6 +1,6 @@
 # 03 — API Contracts
 
-*Last updated: 2026-05-05*
+*Last updated: 2026-07-02 (B160: added `POST /device-tokens/challenge` and `POST /device-tokens`)*
 
 Authoritative request/response shapes for all endpoints. **Lock this doc by end of week 2** so iOS and backend can work in parallel without churn.
 
@@ -148,6 +148,119 @@ Batch upload of processed point readings.
 ```
 
 Also sets `Retry-After: 3600` header.
+
+---
+
+### `POST /device-tokens/challenge`
+
+Issues a one-time attestation challenge. First step of the server-issued device token exchange (B160, [17-device-attestation-and-trust.md](17-device-attestation-and-trust.md)). No request body. Rate-limited per IP using the same `check_and_bump_rate_limit` pattern as every other bucketed endpoint (30 requests / IP / hour).
+
+**Request**
+
+No body required.
+
+**Response — 200 OK**
+
+```json
+{
+    "challenge": "3q2-7_JZmQtAj1cQslsm7RXHQIbmQ3JcE_kJgVFbHQU",
+    "expires_at": "2026-07-02T18:05:00Z"
+}
+```
+
+- `challenge` is 32 random bytes, base64url-encoded (no padding).
+- `expires_at` is 5 minutes from issuance. The challenge is single-use: exactly one `POST /device-tokens` redemption call may consume it, first writer wins.
+- Only a salted hash of the challenge is ever persisted server-side (`token_challenges.challenge_hash`); the raw value is never written to a table or a log line.
+
+**Response — 429 rate_limited**
+
+```json
+{
+    "error": "rate_limited",
+    "message": "Too many challenge requests from this IP.",
+    "retry_after_s": 3600,
+    "request_id": "01H9Z..."
+}
+```
+
+---
+
+### `POST /device-tokens`
+
+Redeems a challenge plus a platform attestation payload for a server-issued device token. Second step of the B160 exchange; also the path used for the monthly token rotation (same request shape, keyed by the same `key_id`, so `attested_devices` is upserted in place rather than getting a new row — see [17-device-attestation-and-trust.md](17-device-attestation-and-trust.md) for the "no rotation history" privacy rule).
+
+**Request**
+
+```json
+{
+    "platform": "ios",
+    "key_id": "NGY4ZjM5ZjItY2Q3ZC00ZmYy...",
+    "attestation_object": "o2NmbXRvYXBwbGUtYXBwYXR0ZXN0Z2F0dFN0bXQ...",
+    "challenge": "3q2-7_JZmQtAj1cQslsm7RXHQIbmQ3JcE_kJgVFbHQU",
+    "client_app_version": "0.3.0 (12)",
+    "client_os_version": "iOS 17.4.1"
+}
+```
+
+**Notes**
+
+- `platform` must be `ios` or `android`. Any other value is a `validation_failed` 400, not a distinct code — the platform enum is closed and doesn't warrant its own error family.
+- `key_id` is the raw, client-generated attestation key identifier (App Attest key id / Play Integrity equivalent). The server hashes it with the same pepper used for device tokens before persisting; the raw value is never stored or logged. See `attested_devices.key_id_hash`.
+- `attestation_object` is the platform-native attestation payload (CBOR for App Attest, an integrity token for Play Integrity), base64-encoded. **B160 does not verify this payload cryptographically** — verification is a stubbed dependency (`verifyAttestation`) that B161 (App Attest) and B163 (Play Integrity) implement for real. Until then, only a fake/test verifier is wired in.
+- `challenge` is the exact value returned by `POST /device-tokens/challenge`, unmodified.
+- On success, the server upserts the device's row in `attested_devices` (overwriting `public_key`, `sign_count`, `current_token_hash`, `last_rotated_at` in place — no history is kept across rotations, by design) and returns a fresh device token.
+
+**Response — 200 OK**
+
+```json
+{
+    "device_token": "a78f9e2b-4c6d-11ec-81d3-0242ac130003",
+    "expires_at": "2026-08-01T18:05:00Z"
+}
+```
+
+`device_token` slots into the existing `device_token` field on `/upload-readings` and `/pothole-actions` — no client-side contract change to the upload path. `expires_at` is 30 days out, matching the existing monthly rotation cadence.
+
+**Response — 400 validation_failed**
+
+Malformed payload or an unrecognized `platform` value (`field_errors.platform`).
+
+**Response — 400 challenge_expired**
+
+```json
+{
+    "error": "challenge_expired",
+    "message": "This challenge has expired. Request a new one.",
+    "request_id": "01H9Z..."
+}
+```
+
+The challenge existed but its 5-minute TTL had already passed.
+
+**Response — 400 challenge_invalid**
+
+```json
+{
+    "error": "challenge_invalid",
+    "message": "This challenge is missing or has already been used.",
+    "request_id": "01H9Z..."
+}
+```
+
+Distinct from `challenge_expired`: covers both "never issued" and "already redeemed" (a reused challenge). These collapse into one code because the underlying single-use redemption is one atomic `DELETE ... RETURNING` — by the time the row is gone, the server cannot tell "never existed" from "already consumed," and conflating them is also the safer failure mode (it doesn't confirm to a caller whether a given challenge value was ever valid).
+
+**Response — 400 attestation_failed**
+
+```json
+{
+    "error": "attestation_failed",
+    "message": "Device attestation could not be verified.",
+    "reason": "bad_nonce",
+    "request_id": "01H9Z..."
+}
+```
+
+Returned when `verifyAttestation` rejects the payload. `reason` is a short machine string from the verifier (stub-only in B160; real reasons land with B161/B163).
 
 ---
 
