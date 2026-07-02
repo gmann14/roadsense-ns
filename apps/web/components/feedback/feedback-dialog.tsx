@@ -106,7 +106,12 @@ export function FeedbackDialog({
         type="button"
         className={triggerClassName ?? "top-nav-link"}
         onClick={() => {
-          reset();
+          // Only clear the draft once a submission has actually completed —
+          // reopening after an accidental Escape (or any other close) should
+          // restore the in-progress draft, not wipe it.
+          if (status.kind === "submitted") {
+            reset();
+          }
           setIsOpen(true);
         }}
         data-testid="open-feedback"
@@ -114,107 +119,114 @@ export function FeedbackDialog({
         {triggerLabel}
       </button>
 
-      {isOpen ? (
-        <dialog
-          ref={dialogRef}
-          className="feedback-dialog"
-          aria-labelledby="feedback-dialog-title"
-          onClose={() => setIsOpen(false)}
-        >
-          <form method="dialog" onSubmit={handleSubmit} className="feedback-form">
-            <header className="feedback-form-header">
-              <h2 id="feedback-dialog-title">Send feedback</h2>
-              <button
-                type="button"
-                onClick={close}
-                className="feedback-close"
-                aria-label="Close feedback form"
-              >
-                ×
-              </button>
-            </header>
+      {/*
+        Always mounted (never conditionally rendered on `isOpen`) so that
+        native Escape-triggered close — which fires the dialog's `close`
+        event before React re-renders — doesn't unmount this subtree and
+        destroy the in-progress draft. Visibility is driven imperatively via
+        showModal()/close() in the effect above; the `open` attribute below
+        just keeps the DOM state and React's view consistent.
+      */}
+      <dialog
+        ref={dialogRef}
+        open={isOpen}
+        className="feedback-dialog"
+        aria-labelledby="feedback-dialog-title"
+        onClose={() => setIsOpen(false)}
+      >
+        <form method="dialog" onSubmit={handleSubmit} className="feedback-form">
+          <header className="feedback-form-header">
+            <h2 id="feedback-dialog-title">Send feedback</h2>
+            <button
+              type="button"
+              onClick={close}
+              className="feedback-close"
+              aria-label="Close feedback form"
+            >
+              ×
+            </button>
+          </header>
 
-            <p className="feedback-privacy-note">
-              We don&apos;t include your location, drive data, or device ID. We do
-              attach your browser version and the page you came from so a tester
-              report is reproducible.
+          <p className="feedback-privacy-note">
+            We don&apos;t include your location, drive data, or device ID. We do
+            attach your browser version and the page you came from so a tester
+            report is reproducible.
+          </p>
+
+          <fieldset className="feedback-field-set">
+            <legend>What&apos;s it about?</legend>
+            <div className="feedback-categories">
+              {CATEGORY_OPTIONS.map((option) => (
+                <label key={option.value} className="feedback-category-option">
+                  <input
+                    type="radio"
+                    name="feedback-category"
+                    value={option.value}
+                    checked={category === option.value}
+                    onChange={() => setCategory(option.value)}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          <div className="feedback-field">
+            <label htmlFor={messageId}>What happened?</label>
+            <textarea
+              id={messageId}
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              minLength={MESSAGE_MIN}
+              maxLength={MESSAGE_MAX}
+              rows={6}
+              required
+              data-testid="feedback-message"
+            />
+            <p className="feedback-helper">
+              At least {MESSAGE_MIN} characters. {trimmedMessage.length}/{MESSAGE_MAX}
             </p>
+          </div>
 
-            <fieldset className="feedback-field-set">
-              <legend>What&apos;s it about?</legend>
-              <div className="feedback-categories">
-                {CATEGORY_OPTIONS.map((option) => (
-                  <label key={option.value} className="feedback-category-option">
-                    <input
-                      type="radio"
-                      name="feedback-category"
-                      value={option.value}
-                      checked={category === option.value}
-                      onChange={() => setCategory(option.value)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <div className="feedback-field">
-              <label htmlFor={messageId}>What happened?</label>
-              <textarea
-                id={messageId}
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                minLength={MESSAGE_MIN}
-                maxLength={MESSAGE_MAX}
-                rows={6}
-                required
-                data-testid="feedback-message"
-              />
-              <p className="feedback-helper">
-                At least {MESSAGE_MIN} characters. {trimmedMessage.length}/{MESSAGE_MAX}
-              </p>
-            </div>
-
-            <div className="feedback-field">
-              <label htmlFor={emailId}>Reply email (optional)</label>
+          <div className="feedback-field">
+            <label htmlFor={emailId}>Reply email (optional)</label>
+            <input
+              id={emailId}
+              type="email"
+              value={replyEmail}
+              onChange={(event) => setReplyEmail(event.target.value)}
+              autoComplete="email"
+              data-testid="feedback-email"
+            />
+            <label htmlFor={consentId} className="feedback-consent">
               <input
-                id={emailId}
-                type="email"
-                value={replyEmail}
-                onChange={(event) => setReplyEmail(event.target.value)}
-                autoComplete="email"
-                data-testid="feedback-email"
+                id={consentId}
+                type="checkbox"
+                checked={contactConsent}
+                onChange={(event) => setContactConsent(event.target.checked)}
+                data-testid="feedback-consent"
               />
-              <label htmlFor={consentId} className="feedback-consent">
-                <input
-                  id={consentId}
-                  type="checkbox"
-                  checked={contactConsent}
-                  onChange={(event) => setContactConsent(event.target.checked)}
-                  data-testid="feedback-consent"
-                />
-                <span>OK to email me about this report</span>
-              </label>
-            </div>
+              <span>OK to email me about this report</span>
+            </label>
+          </div>
 
-            {renderStatusBanner(status)}
+          {renderStatusBanner(status)}
 
-            <div className="feedback-actions">
-              <button type="button" onClick={close} className="feedback-secondary">
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className="feedback-primary"
-                data-testid="feedback-submit"
-              >
-                {status.kind === "submitting" ? "Sending…" : "Send"}
-              </button>
-            </div>
-          </form>
-        </dialog>
-      ) : null}
+          <div className="feedback-actions">
+            <button type="button" onClick={close} className="feedback-secondary">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="feedback-primary"
+              data-testid="feedback-submit"
+            >
+              {status.kind === "submitting" ? "Sending…" : "Send"}
+            </button>
+          </div>
+        </form>
+      </dialog>
     </>
   );
 }

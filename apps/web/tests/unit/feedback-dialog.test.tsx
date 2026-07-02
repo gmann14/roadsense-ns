@@ -134,6 +134,31 @@ describe("FeedbackDialog", () => {
     });
   });
 
+  it("keeps the draft message after a native Escape-triggered close", async () => {
+    render(<FeedbackDialog />);
+
+    fireEvent.click(screen.getByTestId("open-feedback"));
+    fireEvent.change(screen.getByTestId("feedback-message"), {
+      target: { value: "Draft that should survive Escape." },
+    });
+
+    // Simulate the browser's native Escape-to-close behavior: the <dialog>
+    // fires its own `close` event (jsdom doesn't do this automatically for
+    // Escape, so we dispatch it directly, same as our showModal/close shim).
+    const dialog = document.querySelector("dialog") as HTMLDialogElement;
+    dialog.close();
+
+    await waitFor(() => {
+      expect(dialog).not.toHaveAttribute("open");
+    });
+
+    fireEvent.click(screen.getByTestId("open-feedback"));
+
+    expect((screen.getByTestId("feedback-message") as HTMLTextAreaElement).value).toBe(
+      "Draft that should survive Escape.",
+    );
+  });
+
   it("keeps form state when the network call fails", async () => {
     submitFeedbackMock.mockResolvedValueOnce({
       kind: "network_error",
