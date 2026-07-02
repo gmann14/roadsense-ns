@@ -1,6 +1,6 @@
 # 17 — Device Attestation & Trust (Anti-Sybil)
 
-*Last updated: 2026-06-12 — **Status: SQL gates shipped (B165 ✅ commit `cc9bcbe`, B166 ✅ commit `fca1dc2`); attestation chain B160–B164 and tiers B167 not started***
+*Last updated: 2026-07-02 — **Status: SQL gates shipped (B165 ✅ commit `cc9bcbe`, B166 ✅ commit `fca1dc2`); B160 ✅ commits `8a03f96`, `e2a6a1e`, `2dbe21c` (schema/challenge/issuance, attestation verification stubbed); B161–B164 and tiers B167 not started***
 
 Covers: hardware-backed device attestation (App Attest on iOS, Play Integrity on Android), server-issued device tokens, corroboration gating for potholes, exact unique-contributor accounting, and a minimal trust-tier model. This is the work that closes findings **P1-1 / P1-2 / P1-3** in [docs/reviews/2026-06-11-backend-prelaunch-review.md](../reviews/2026-06-11-backend-prelaunch-review.md) before the public marketing push (local media + Facebook groups) puts the data's trustworthiness in front of adversarial strangers.
 
@@ -129,7 +129,9 @@ Simulator and dev builds: `DCAppAttestService.isSupported == false` on simulator
 
 ## Tickets
 
-### B160 — Server-issued device tokens: schema, challenge, and issuance endpoint
+### B160 — Server-issued device tokens: schema, challenge, and issuance endpoint ✅
+
+**Shipped 2026-07-02 (commits `8a03f96` schema/pgTAP, `e2a6a1e` endpoints/Deno tests, `2dbe21c` docs)** — `device_trust_tier` enum, `attested_devices` (overwrite-in-place on rotation, no history table), `token_challenges` (hashed, TTL 5m, single-use delete-on-redeem); `POST /functions/v1/device-tokens/challenge` and `POST /functions/v1/device-tokens` mounted on `server.ts` ROUTES; `verifyAttestation` stubbed via `device-tokens/fakeVerifier.ts` pending B161/B163. pgTAP suite `supabase/tests/020_device_attestation_tokens.sql` (39 assertions, executed and green against local Postgres) plus 27 new Deno tests (`device-tokens/index_test.ts` + two `server_test.ts` route-mounting cases), including the guard tests proving no raw `key_id`/`challenge`/`attestation_object` is ever logged or interpolated unhashed into SQL. Full Deno suite: 215 passed, 0 failed, 1 ignored. Acceptance criteria verified: SQL-layer challenge→redeem round trip against local Postgres; reused/expired challenges rejected with distinct codes; concurrent redeems of one challenge proven to yield exactly one success via two genuinely parallel Postgres connections (5/5 runs); `attested_devices` holds exactly one row per device after 3 rotations. **Owner follow-up:** a true HTTP-level end-to-end smoke test against `server.ts` was blocked by a pre-existing `db.ts` limitation -- `ssl: "require"` fails immediately ("TCP stream is currently in use") against local `supabase start` Postgres for every endpoint (reproduced identically on `/stats` and `/health/deep`, not specific to this ticket); this is a known local-dev gap doc 13 already routes around by recommending `supabase functions serve` for local dev instead of running `server.ts` directly. Runs cleanly once deployed to Railway (`postgis.railway.internal` takes the `ssl: false` branch) or once that gap is fixed separately.
 
 - **Spec refs:** [06](06-security-and-privacy.md), [03](03-api-contracts.md), [13](13-railway-deno-migration.md)
 - **Depends on:** none (parallelizable with B165/B166)
