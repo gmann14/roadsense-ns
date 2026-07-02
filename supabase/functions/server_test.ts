@@ -1,6 +1,6 @@
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals, assertThrows } from "jsr:@std/assert";
 import { dispatch, route } from "./_shared/routes.ts";
-import { verifyApiKey } from "./_shared/apikey.ts";
+import { assertApiKeyConfiguredForEnvironment, verifyApiKey } from "./_shared/apikey.ts";
 import { createPgRpc } from "./_shared/pgRpc.ts";
 import {
     PHOTOS_DISABLED_ERROR_CODE,
@@ -125,6 +125,76 @@ Deno.test("verifyApiKey passes everything through when no key is configured (dev
     assertEquals(verifyApiKey(req, "").ok, true);
 });
 
+// ── P1-5: fail closed when PUBLIC_API_KEY is unset on Railway ──
+
+Deno.test("assertApiKeyConfiguredForEnvironment throws when on Railway with an empty key", () => {
+    assertThrows(
+        () => assertApiKeyConfiguredForEnvironment("", true),
+        Error,
+        "PUBLIC_API_KEY is not set",
+    );
+    assertThrows(
+        () => assertApiKeyConfiguredForEnvironment("   ", true),
+        Error,
+        "PUBLIC_API_KEY is not set",
+    );
+});
+
+Deno.test("assertApiKeyConfiguredForEnvironment does not throw when on Railway with a key configured", () => {
+    assertApiKeyConfiguredForEnvironment("a-real-secret", true);
+});
+
+Deno.test("assertApiKeyConfiguredForEnvironment does not throw off Railway even with an empty key (local dev)", () => {
+    assertApiKeyConfiguredForEnvironment("", false);
+});
+
+Deno.test("assertApiKeyConfiguredForEnvironment defaults its Railway check to RAILWAY_ENVIRONMENT", () => {
+    const previous = Deno.env.get("RAILWAY_ENVIRONMENT");
+    try {
+        Deno.env.set("RAILWAY_ENVIRONMENT", "production");
+        assertThrows(() => assertApiKeyConfiguredForEnvironment(""), Error, "PUBLIC_API_KEY is not set");
+
+        Deno.env.delete("RAILWAY_ENVIRONMENT");
+        assertApiKeyConfiguredForEnvironment(""); // no throw off Railway
+    } finally {
+        if (previous === undefined) Deno.env.delete("RAILWAY_ENVIRONMENT");
+        else Deno.env.set("RAILWAY_ENVIRONMENT", previous);
+    }
+});
+
+Deno.test("handleRequest fails closed with 401 when RAILWAY_ENVIRONMENT is set but PUBLIC_API_KEY is empty", async () => {
+    const previousKey = Deno.env.get("PUBLIC_API_KEY");
+    const previousRailway = Deno.env.get("RAILWAY_ENVIRONMENT");
+    Deno.env.delete("PUBLIC_API_KEY");
+    Deno.env.set("RAILWAY_ENVIRONMENT", "production");
+    try {
+        const res = await handleRequest(new Request("http://localhost/functions/v1/stats"));
+        assertEquals(res.status, 401);
+        assertEquals((await res.json()).error, "service_misconfigured");
+    } finally {
+        if (previousKey === undefined) Deno.env.delete("PUBLIC_API_KEY");
+        else Deno.env.set("PUBLIC_API_KEY", previousKey);
+        if (previousRailway === undefined) Deno.env.delete("RAILWAY_ENVIRONMENT");
+        else Deno.env.set("RAILWAY_ENVIRONMENT", previousRailway);
+    }
+});
+
+Deno.test("handleRequest still exempts /health from the Railway fail-closed guard", async () => {
+    const previousKey = Deno.env.get("PUBLIC_API_KEY");
+    const previousRailway = Deno.env.get("RAILWAY_ENVIRONMENT");
+    Deno.env.delete("PUBLIC_API_KEY");
+    Deno.env.set("RAILWAY_ENVIRONMENT", "production");
+    try {
+        const res = await handleRequest(new Request("http://localhost/functions/v1/health"));
+        assertEquals(res.status, 200);
+    } finally {
+        if (previousKey === undefined) Deno.env.delete("PUBLIC_API_KEY");
+        else Deno.env.set("PUBLIC_API_KEY", previousKey);
+        if (previousRailway === undefined) Deno.env.delete("RAILWAY_ENVIRONMENT");
+        else Deno.env.set("RAILWAY_ENVIRONMENT", previousRailway);
+    }
+});
+
 Deno.test("handleRequest returns 204 for OPTIONS preflight with CORS headers", async () => {
     const req = new Request("http://localhost/functions/v1/health", { method: "OPTIONS" });
     const res = await handleRequest(req);
@@ -158,6 +228,62 @@ Deno.test("handleRequest routes top-potholes through the Deno API surface", asyn
         const res = await handleRequest(
             new Request("http://localhost/functions/v1/top-potholes?limit=1"),
         );
+        assertEquals(res.status, 503);
+        assertEquals((await res.json()).error, "service_unavailable");
+    } finally {
+        if (previousKey === undefined) Deno.env.delete("PUBLIC_API_KEY");
+        else Deno.env.set("PUBLIC_API_KEY", previousKey);
+        if (previousDatabaseUrl === undefined) Deno.env.delete("DATABASE_URL");
+        else Deno.env.set("DATABASE_URL", previousDatabaseUrl);
+    }
+});
+
+Deno.test("handleRequest routes device-tokens/challenge through the Deno API surface", async () => {
+    const previousKey = Deno.env.get("PUBLIC_API_KEY");
+    const previousDatabaseUrl = Deno.env.get("DATABASE_URL");
+    Deno.env.delete("PUBLIC_API_KEY");
+    Deno.env.delete("DATABASE_URL");
+    try {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/device-tokens/challenge", { method: "POST" }),
+        );
+        // No DATABASE_URL configured: the lazily-built handler's rate-limit
+        // RPC fails, which the handler maps to 503 service_unavailable --
+        // proving the route is actually mounted and dispatching to the real
+        // device-tokens handler, not a 404.
+        assertEquals(res.status, 503);
+        assertEquals((await res.json()).error, "service_unavailable");
+    } finally {
+        if (previousKey === undefined) Deno.env.delete("PUBLIC_API_KEY");
+        else Deno.env.set("PUBLIC_API_KEY", previousKey);
+        if (previousDatabaseUrl === undefined) Deno.env.delete("DATABASE_URL");
+        else Deno.env.set("DATABASE_URL", previousDatabaseUrl);
+    }
+});
+
+Deno.test("handleRequest routes device-tokens (redeem) through the Deno API surface", async () => {
+    const previousKey = Deno.env.get("PUBLIC_API_KEY");
+    const previousDatabaseUrl = Deno.env.get("DATABASE_URL");
+    Deno.env.delete("PUBLIC_API_KEY");
+    Deno.env.delete("DATABASE_URL");
+    try {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/device-tokens", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({
+                    platform: "ios",
+                    key_id: "a2V5",
+                    attestation_object: "YXR0ZXN0",
+                    challenge: "Y2hhbGxlbmdl",
+                    client_app_version: "0.3.0 (12)",
+                    client_os_version: "iOS 17.4.1",
+                }),
+            }),
+        );
+        // No DATABASE_URL configured: redeemChallenge's RPC call fails, which
+        // the handler maps to 503 service_unavailable -- proving the route is
+        // mounted and dispatching to the real handler, not a 404.
         assertEquals(res.status, 503);
         assertEquals((await res.json()).error, "service_unavailable");
     } finally {

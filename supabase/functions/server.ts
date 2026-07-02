@@ -5,7 +5,7 @@
 // built-in URLPattern API; no router library needed.
 
 import { dispatch, route, type RouteHandler } from "./_shared/routes.ts";
-import { verifyApiKey } from "./_shared/apikey.ts";
+import { assertApiKeyConfiguredForEnvironment, isRunningOnRailway, verifyApiKey } from "./_shared/apikey.ts";
 import { createPgRpc } from "./_shared/pgRpc.ts";
 import { startScheduler } from "./_shared/scheduler.ts";
 import { photoUploadsGate } from "./_shared/photoUploads.ts";
@@ -48,6 +48,19 @@ import {
     createPgFetchKnownMunicipalities,
     createPgFetchWorstSegments,
 } from "./segments-worst/pgRuntime.ts";
+
+import {
+    createDeviceTokenChallengeHandler,
+    createDeviceTokenRedeemHandler,
+    type RateLimitResult as DeviceTokenChallengeRateLimitResult,
+} from "./device-tokens/handler.ts";
+import { createChallengeRateLimitChecker } from "./device-tokens/runtime.ts";
+import {
+    createPgIssueChallenge,
+    createPgIssueDeviceToken,
+    createPgRedeemChallenge,
+} from "./device-tokens/pgRuntime.ts";
+import { createFakeVerifyAttestation } from "./device-tokens/fakeVerifier.ts";
 
 const CORS_HEADERS: Record<string, string> = {
     "access-control-allow-origin": "*",
@@ -113,6 +126,33 @@ export const ROUTES = [
             });
         }),
     ),
+    // Device attestation (B160): challenge issuance + token redemption. Real
+    // attestation verification is stubbed (createFakeVerifyAttestation) until
+    // B161 (App Attest) / B163 (Play Integrity) supply real implementations
+    // -- see docs/implementation/17-device-attestation-and-trust.md.
+    // More specific path first per the routing convention documented in
+    // _shared/routes.ts (matters for URLPattern ordering elsewhere; harmless
+    // here since these are disjoint literal paths, but kept consistent).
+    route(
+        "/functions/v1/device-tokens/challenge",
+        lazy(() => {
+            const rpc = createPgRpc();
+            return createDeviceTokenChallengeHandler({
+                checkRateLimit: createChallengeRateLimitChecker(rpc) as (ip: string) => Promise<DeviceTokenChallengeRateLimitResult>,
+                issueChallenge: createPgIssueChallenge(),
+            });
+        }),
+    ),
+    route(
+        "/functions/v1/device-tokens",
+        lazy(() =>
+            createDeviceTokenRedeemHandler({
+                verifyAttestation: createFakeVerifyAttestation(),
+                redeemChallenge: createPgRedeemChallenge(),
+                issueDeviceToken: createPgIssueDeviceToken(),
+            })
+        ),
+    ),
     route("/functions/v1/stats", lazy(() => createStatsHandler({ fetchStats: createPgFetchStats() }))),
     route(
         "/functions/v1/segments-worst",
@@ -150,6 +190,24 @@ export async function handleRequest(req: Request): Promise<Response> {
 
     const url = new URL(req.url);
     if (!PUBLIC_PATHS.has(url.pathname)) {
+        // Defense-in-depth (P1-5): the startup check below is the primary
+        // guard, but re-check here too so a Railway deploy that somehow
+        // reached request handling with an unset key still fails closed
+        // (401) instead of the old fail-open behavior, even if the process
+        // wasn't restarted after a config change wiped the env var.
+        if (isRunningOnRailway() && configuredApiKey().trim().length === 0) {
+            return new Response(
+                JSON.stringify({ error: "service_misconfigured" }),
+                {
+                    status: 401,
+                    headers: {
+                        "content-type": "application/json; charset=utf-8",
+                        ...CORS_HEADERS,
+                    },
+                },
+            );
+        }
+
         const auth = verifyApiKey(req, configuredApiKey());
         if (!auth.ok) {
             return new Response(
@@ -179,6 +237,9 @@ export async function handleRequest(req: Request): Promise<Response> {
 
 // Boot only when run as the main module (not when imported by tests).
 if (import.meta.main) {
+    // Fail closed (P1-5): refuse to start on Railway with auth disabled.
+    assertApiKeyConfiguredForEnvironment(configuredApiKey());
+
     const port = Number(Deno.env.get("PORT") ?? "8000");
     console.log(`server starting on :${port}`);
 
