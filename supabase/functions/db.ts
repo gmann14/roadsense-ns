@@ -27,6 +27,15 @@ export function db(): DB {
         // Internal Railway traffic is on a private network; no TLS overhead.
         // Public connections (anything else) require TLS.
         ssl: isRailwayInternal ? false : "require",
+        // Statement-level timeout (P1-3): sent as a Postgres startup/session
+        // parameter on every pooled connection. Without this, one wedged
+        // query (bad plan, lock wait, runaway RPC) can hold a connection
+        // indefinitely and starve the whole `max`-sized pool. Comfortably
+        // above any real query here (tile/segment/stats reads and the
+        // ingest/action RPCs) but well below "stuck forever".
+        connection: {
+            statement_timeout: Number(Deno.env.get("PG_STATEMENT_TIMEOUT_MS") ?? "8000"),
+        },
     });
 
     return _pool;
