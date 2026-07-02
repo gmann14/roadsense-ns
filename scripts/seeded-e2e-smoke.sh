@@ -33,7 +33,28 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+
+# Delete the synthetic segment and everything derived from it. Runs both as
+# a defensive pre-clean (in case a previous run died before its own EXIT
+# trap fired) and, via the trap below, at the end of every run — success or
+# failure — so this script never leaves fake data sitting in prod.
+cleanup_synthetic_segment() {
+  "${PSQL_BIN}" "${DATABASE_URL}" -v ON_ERROR_STOP=1 <<SQL
+DELETE FROM readings WHERE segment_id = '${SEGMENT_ID}';
+DELETE FROM segment_aggregates WHERE segment_id = '${SEGMENT_ID}';
+DELETE FROM pothole_reports WHERE segment_id = '${SEGMENT_ID}';
+DELETE FROM road_segments WHERE id = '${SEGMENT_ID}' OR osm_way_id = ${OSM_WAY_ID};
+SQL
+}
+
+cleanup() {
+  local exit_code=$?
+  rm -rf "${tmpdir}"
+  echo "→ Cleaning up synthetic road segment and associated data"
+  cleanup_synthetic_segment || echo "  warning: cleanup query failed; synthetic segment may still be present" >&2
+  exit "${exit_code}"
+}
+trap cleanup EXIT
 
 request_id() {
   python3 - <<'PY'
@@ -75,12 +96,8 @@ db() {
 }
 
 echo "→ Seeding synthetic road segment"
+cleanup_synthetic_segment
 db <<SQL
-DELETE FROM readings WHERE segment_id = '${SEGMENT_ID}';
-DELETE FROM segment_aggregates WHERE segment_id = '${SEGMENT_ID}';
-DELETE FROM pothole_reports WHERE segment_id = '${SEGMENT_ID}';
-DELETE FROM road_segments WHERE id = '${SEGMENT_ID}' OR osm_way_id = ${OSM_WAY_ID};
-
 INSERT INTO road_segments (
     id,
     osm_way_id,
@@ -175,7 +192,7 @@ PY
 done
 
 echo "→ Refreshing public stats materialized view"
-db -c "REFRESH MATERIALIZED VIEW public_stats_mv;"
+db -c "REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv;"
 
 echo "→ Verifying DB state"
 readings_count="$(db -At -c "SELECT COUNT(*) FROM readings WHERE segment_id = '${SEGMENT_ID}';")"

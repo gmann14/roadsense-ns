@@ -6,6 +6,14 @@ SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
 PUBLIC_API_KEY="${PUBLIC_API_KEY:-}"
 API_KEY="${PUBLIC_API_KEY:-$SUPABASE_ANON_KEY}"
 
+# Stable, clearly-synthetic device token reused by every smoke run. Using a
+# fresh random token per run would register a brand new "unique contributor"
+# on the matched segment every single time this script executes, permanently
+# inflating public contributor counts. Reusing this fixed value means repeat
+# runs are treated as the same (synthetic) contributor. Must be a valid
+# UUIDv4 (server-side validation requires it).
+SMOKE_DEVICE_TOKEN="${SMOKE_DEVICE_TOKEN:-00000000-0000-4000-8000-000000000000}"
+
 if [[ -z "${API_KEY}" ]]; then
   echo "PUBLIC_API_KEY or SUPABASE_ANON_KEY is required." >&2
   echo "Example:" >&2
@@ -20,7 +28,37 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+
+# Best-effort cleanup of the synthetic reading this script uploads below
+# (P1-o2). DATABASE_URL is optional here — local/dev invocations without it
+# just skip the DB cleanup and rely on SMOKE_DEVICE_TOKEN's stable value to
+# avoid unbounded contributor-count inflation, but a real reading row is
+# still left behind in that case. When DATABASE_URL is set (as it is in the
+# deploy workflows, which already export it for the smoke-check step),
+# delete the uploaded reading row and its processed_batches record so this
+# script leaves no reading behind, matching seeded-e2e-smoke.sh's
+# cleanup-trap pattern.
+#
+# Known residual gap: this does NOT re-fold segment_aggregates, so the
+# matched segment's roughness average/contributor count briefly includes
+# this reading's contribution until the next real upload or nightly
+# recompute touches that segment (update_segment_aggregates_from_batch has
+# no inverse/"unfold" operation). Given SMOKE_DEVICE_TOKEN is stable, this is
+# a one-time, self-correcting skew per segment rather than an unbounded one.
+PSQL_BIN="${PSQL_BIN:-psql}"
+cleanup() {
+  local exit_code=$?
+  if [[ -n "${DATABASE_URL:-}" && -n "${SMOKE_BATCH_ID:-}" ]] && command -v "${PSQL_BIN}" >/dev/null 2>&1; then
+    echo "→ Cleaning up synthetic smoke reading (batch ${SMOKE_BATCH_ID})"
+    "${PSQL_BIN}" "${DATABASE_URL}" -v ON_ERROR_STOP=1 -v batch_id="${SMOKE_BATCH_ID}" <<'SQL' || echo "  warning: cleanup query failed; synthetic reading may still be present" >&2
+DELETE FROM readings WHERE batch_id = :'batch_id'::UUID;
+DELETE FROM processed_batches WHERE batch_id = :'batch_id'::UUID;
+SQL
+  fi
+  rm -rf "${tmpdir}"
+  exit "${exit_code}"
+}
+trap cleanup EXIT
 
 request_id() {
   python3 - <<'PY'
@@ -61,14 +99,16 @@ request() {
   curl "${curl_args[@]}" "${url}"
 }
 
-python3 - <<'PY' > "${tmpdir}/upload.json"
+SMOKE_BATCH_ID="$(request_id | sed 's/^smoke-//')"
+
+python3 - "${SMOKE_DEVICE_TOKEN}" "${SMOKE_BATCH_ID}" <<'PY' > "${tmpdir}/upload.json"
 import json
-import uuid
+import sys
 from datetime import datetime, timezone
 
 payload = {
-    "batch_id": str(uuid.uuid4()),
-    "device_token": str(uuid.uuid4()),
+    "batch_id": sys.argv[2],
+    "device_token": sys.argv[1],
     "client_sent_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "client_app_version": "smoke-script (local)",
     "client_os_version": "macOS",
