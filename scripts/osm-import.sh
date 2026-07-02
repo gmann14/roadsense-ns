@@ -26,18 +26,52 @@ require_cmd curl
 require_cmd osm2pgsql
 require_cmd psql
 
+CONFIRM=0
+for arg in "$@"; do
+    case "$arg" in
+        --confirm|--yes)
+            CONFIRM=1
+            ;;
+    esac
+done
+
 mkdir -p "${WORKDIR}"
 
 echo "→ Import region: ${ROAD_SENSE_REGION_NAME}"
 
-if ! psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('ref.municipalities') IS NOT NULL"; then
-    echo "Unable to verify ref.municipalities" >&2
+municipalities_exist="$(psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('ref.municipalities') IS NOT NULL")"
+if [[ "${municipalities_exist}" != "t" ]]; then
+    echo "Unable to verify ref.municipalities (query returned '${municipalities_exist}')" >&2
     exit 1
 fi
 
-if [[ "$(psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM ref.municipalities")" == "0" ]]; then
+municipality_count="$(psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -Atqc "SELECT count(*) FROM ref.municipalities")"
+if [[ -z "${municipality_count}" || ! "${municipality_count}" =~ ^[0-9]+$ ]]; then
+    echo "Unable to determine ref.municipalities row count (query returned '${municipality_count}')" >&2
+    exit 1
+fi
+if [[ "${municipality_count}" == "0" ]]; then
     echo "ref.municipalities is empty; import StatCan municipality boundaries before running osm-import.sh" >&2
     exit 1
+fi
+
+if [[ "${CONFIRM}" -ne 1 ]]; then
+    echo "" >&2
+    echo "############################################################" >&2
+    echo "# WARNING: this script ends by calling apply_road_segment_refresh(),  #" >&2
+    echo "# which replaces the LIVE production road network from staged data.  #" >&2
+    echo "############################################################" >&2
+    echo "" >&2
+    if [[ -t 0 ]]; then
+        read -r -p "Type 'yes' to continue: " reply
+        if [[ "${reply}" != "yes" ]]; then
+            echo "Aborted." >&2
+            exit 1
+        fi
+    else
+        echo "Refusing to run non-interactively without --confirm (or --yes)." >&2
+        exit 1
+    fi
 fi
 
 echo "→ Downloading OSM snapshot"
