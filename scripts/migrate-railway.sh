@@ -262,6 +262,19 @@ CREATE TABLE IF NOT EXISTS storage.objects (
 );
 SQL
 
+# 3b. Pre-flight: create a simple ledger table so future readers can see
+# what's been applied and when. The script still re-applies every migration
+# on every run (relying on each migration's own idempotency, per the header
+# comment above) — this table is purely informational, not a skip-list.
+echo ""
+echo "→ Ensuring applied_migrations ledger table exists"
+psql_db -v ON_ERROR_STOP=1 -c "
+CREATE TABLE IF NOT EXISTS applied_migrations (
+    filename TEXT PRIMARY KEY,
+    applied_at TIMESTAMPTZ DEFAULT now()
+);
+"
+
 # 4. Apply each migration in chronological filename order.
 echo ""
 echo "→ Applying migrations"
@@ -278,10 +291,19 @@ while read -r migration; do
 
     if psql_db -v ON_ERROR_STOP=1 -f "$migration" >/dev/null 2>&1; then
         echo "       OK"
+        psql_db -v ON_ERROR_STOP=1 -v name="$name" -c \
+            "INSERT INTO applied_migrations (filename) VALUES (:'name') ON CONFLICT DO NOTHING;" \
+            >/dev/null 2>&1 || true
     else
-        # Re-run with output so we can see the error
+        # Re-run with output so we can see the error. This replay is expected
+        # to fail with the same error — under `set -e`, letting that failure
+        # propagate would kill the whole script via errexit and skip every
+        # later migration. Disable errexit for just this call so the script
+        # can record the failure and continue.
         echo "       FAILED — replaying with full output:"
+        set +e
         psql_db -v ON_ERROR_STOP=1 -f "$migration" 2>&1 | head -20 | sed 's/^/         /'
+        set -e
         fail_count=$((fail_count + 1))
         fail_files+=("$name")
     fi
