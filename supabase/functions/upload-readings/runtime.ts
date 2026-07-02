@@ -91,21 +91,13 @@ export function createRateLimitChecker(
         const dayBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
         const hourBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
 
-        const deviceResult = await rpc<boolean>("check_and_bump_rate_limit", {
-            p_key: `dev:${tokenHashHex}`,
-            p_bucket_start: dayBucket.toISOString(),
-            p_limit: 50,
-        });
-        if (deviceResult.error) {
-            throw new Error(deviceResult.error.message ?? "device rate limit RPC failed");
-        }
-        if (!deviceResult.data) {
-            return {
-                ok: false as const,
-                retryAfterSeconds: secondsUntilNextUtcDay(now),
-            };
-        }
-
+        // IP check runs first and short-circuits before the device check/bump
+        // (P1-4). device_token is client-chosen (any UUID the client wants),
+        // so if the device check ran first and bumped its own bucket before
+        // the IP check could reject, an attacker already over the IP limit
+        // could keep inserting a fresh rate_limits row per request just by
+        // rotating device tokens. Checking IP first means a client that's
+        // already IP-limited never reaches the device bump at all.
         const ipResult = await rpc<boolean>("check_and_bump_rate_limit", {
             p_key: `ip:${ip}`,
             p_bucket_start: hourBucket.toISOString(),
@@ -118,6 +110,21 @@ export function createRateLimitChecker(
             return {
                 ok: false as const,
                 retryAfterSeconds: secondsUntilNextUtcHour(now),
+            };
+        }
+
+        const deviceResult = await rpc<boolean>("check_and_bump_rate_limit", {
+            p_key: `dev:${tokenHashHex}`,
+            p_bucket_start: dayBucket.toISOString(),
+            p_limit: 50,
+        });
+        if (deviceResult.error) {
+            throw new Error(deviceResult.error.message ?? "device rate limit RPC failed");
+        }
+        if (!deviceResult.data) {
+            return {
+                ok: false as const,
+                retryAfterSeconds: secondsUntilNextUtcDay(now),
             };
         }
 

@@ -9,21 +9,11 @@ export function createPotholeActionRateLimitChecker(
         const dayBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
         const hourBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
 
-        const deviceResult = await rpc<boolean>("check_and_bump_rate_limit", {
-            p_key: `pothole-action-device:${tokenHashHex}`,
-            p_bucket_start: dayBucket.toISOString(),
-            p_limit: 60,
-        });
-        if (deviceResult.error) {
-            throw new Error(deviceResult.error.message ?? "pothole action device rate limit RPC failed");
-        }
-        if (!deviceResult.data) {
-            return {
-                ok: false as const,
-                retryAfterSeconds: secondsUntilNextUtcDay(now),
-            };
-        }
-
+        // IP check runs first and short-circuits before the device check/bump
+        // (P1-4) — see upload-readings/runtime.ts for the full rationale:
+        // device_token is client-chosen, so checking it first would let an
+        // IP-limited attacker keep writing rate_limits rows by rotating
+        // tokens.
         const ipResult = await rpc<boolean>("check_and_bump_rate_limit", {
             p_key: `pothole-action-ip:${ip}`,
             p_bucket_start: hourBucket.toISOString(),
@@ -36,6 +26,21 @@ export function createPotholeActionRateLimitChecker(
             return {
                 ok: false as const,
                 retryAfterSeconds: secondsUntilNextUtcHour(now),
+            };
+        }
+
+        const deviceResult = await rpc<boolean>("check_and_bump_rate_limit", {
+            p_key: `pothole-action-device:${tokenHashHex}`,
+            p_bucket_start: dayBucket.toISOString(),
+            p_limit: 60,
+        });
+        if (deviceResult.error) {
+            throw new Error(deviceResult.error.message ?? "pothole action device rate limit RPC failed");
+        }
+        if (!deviceResult.data) {
+            return {
+                ok: false as const,
+                retryAfterSeconds: secondsUntilNextUtcDay(now),
             };
         }
 

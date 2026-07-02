@@ -1,3 +1,5 @@
+import { constantTimeEquals } from "./apikey.ts";
+
 export function isAuthorizedInternalRequest(headers: Headers, expectedSecret: string): boolean {
     if (!expectedSecret) {
         return false;
@@ -9,5 +11,8 @@ export function isAuthorizedInternalRequest(headers: Headers, expectedSecret: st
         : "";
     const apiKey = headers.get("apikey")?.trim() ?? "";
 
-    return bearerToken === expectedSecret || apiKey === expectedSecret;
+    // Constant-time comparison (P1-6) — matches the guard already used for
+    // the public apikey check (_shared/apikey.ts) instead of a `===` that
+    // can leak timing information about the service-role secret.
+    return constantTimeEquals(bearerToken, expectedSecret) || constantTimeEquals(apiKey, expectedSecret);
 }
