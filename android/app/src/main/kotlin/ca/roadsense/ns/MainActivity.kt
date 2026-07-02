@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
                     onSubmitFeedback = viewModel::submitFeedback,
                     onDeleteLocalData = viewModel::deleteAllLocalData,
                     onClearError = viewModel::clearError,
+                    onAddPrivacyZoneAtCurrentLocation = { viewModel.addPrivacyZoneAtCurrentLocation() },
                 )
             }
         }

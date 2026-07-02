@@ -176,6 +176,50 @@ class RoadSenseDatabaseTest {
     }
 
     @Test
+    fun `zone created via PrivacyZoneFactory (the AppViewModel addPrivacyZone path) persists and blocks nearby samples`() = runTest {
+        // Mirrors AppViewModel.addPrivacyZone: never store the raw tapped
+        // coordinate — offset it via PrivacyZoneFactory first.
+        val tappedLatitude = 44.6488
+        val tappedLongitude = -63.5752
+        val zone = ca.roadsense.ns.sensor.PrivacyZoneFactory.makeZone(
+            tappedLatitude = tappedLatitude,
+            tappedLongitude = tappedLongitude,
+            requestedRadiusMeters = 250.0,
+            randomAngleRadians = 1.2,
+            randomDistanceMeters = 75.0,
+        )
+        val entity = PrivacyZoneEntity(
+            id = UUID.randomUUID(),
+            label = "Custom zone",
+            latitude = zone.latitude,
+            longitude = zone.longitude,
+            radiusM = zone.radiusMeters,
+            createdAt = now,
+        )
+        db.privacyZoneDao().upsert(entity)
+
+        val stored = db.privacyZoneDao().list()
+        assertEquals(1, stored.size)
+        // The stored zone must not be the exact tapped coordinate.
+        assertTrue(stored.first().latitude != tappedLatitude || stored.first().longitude != tappedLongitude)
+
+        // The original tapped point must still fall inside the stored zone
+        // (offset + radius floor guarantee it always contains the tap).
+        val storedZones = stored.map {
+            ca.roadsense.ns.sensor.PrivacyZone(it.latitude, it.longitude, it.radiusM)
+        }
+        val sampleAtTapLocation = ca.roadsense.ns.sensor.LocationSample(
+            timestamp = 0.0,
+            latitude = tappedLatitude,
+            longitude = tappedLongitude,
+            horizontalAccuracyMeters = 5.0,
+            speedKmh = 0.0,
+            headingDegrees = 0.0,
+        )
+        assertTrue(ca.roadsense.ns.sensor.PrivacyZoneFilter.shouldDrop(sampleAtTapLocation, storedZones))
+    }
+
+    @Test
     fun `drive session seal sets ended fields and is_sealed`() = runTest {
         val session = DriveSessionEntity(
             id = UUID.randomUUID(),

@@ -77,6 +77,7 @@ fun AppShell(
     onSubmitFeedback: (category: String, message: String, replyEmail: String?, contactConsent: Boolean) -> Unit,
     onDeleteLocalData: () -> Unit,
     onClearError: () -> Unit,
+    onAddPrivacyZoneAtCurrentLocation: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -120,6 +121,7 @@ fun AppShell(
                 onRequestBackgroundPermission = onRequestBackgroundPermission,
                 onSubmitFeedback = onSubmitFeedback,
                 onDeleteLocalData = onDeleteLocalData,
+                onAddPrivacyZoneAtCurrentLocation = onAddPrivacyZoneAtCurrentLocation,
                 contentPadding = padding,
             )
         }
@@ -488,6 +490,7 @@ private fun SettingsScreen(
     onRequestBackgroundPermission: () -> Unit,
     onSubmitFeedback: (String, String, String?, Boolean) -> Unit,
     onDeleteLocalData: () -> Unit,
+    onAddPrivacyZoneAtCurrentLocation: () -> Unit,
     contentPadding: PaddingValues,
 ) {
     val context = LocalContext.current
@@ -542,6 +545,20 @@ private fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = onAddPrivacyZoneAtCurrentLocation,
+                    enabled = state.lastLocation != null,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        if (state.lastLocation == null) {
+                            "Waiting for GPS"
+                        } else {
+                            "Add privacy zone at current location"
+                        },
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 OutlinedButton(
                     onClick = {
                         context.startActivity(

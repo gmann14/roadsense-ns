@@ -57,6 +57,7 @@ class AppShellSmokeTest {
                 onSubmitFeedback = { _, _, _, _ -> },
                 onDeleteLocalData = {},
                 onClearError = {},
+                onAddPrivacyZoneAtCurrentLocation = {},
             )
         }
 
@@ -87,6 +88,7 @@ class AppShellSmokeTest {
                 onSubmitFeedback = { _, _, _, _ -> },
                 onDeleteLocalData = {},
                 onClearError = {},
+                onAddPrivacyZoneAtCurrentLocation = {},
             )
         }
 
