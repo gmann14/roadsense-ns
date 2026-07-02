@@ -2,6 +2,7 @@ import { assertEquals, assertMatch, assertObjectMatch } from "jsr:@std/assert";
 import {
     createUploadReadingsHandler,
     extractClientIp,
+    MAX_PAYLOAD_BYTES,
     maxPotholeReadingsForBatch,
     validateUploadPayload,
 } from "./handler.ts";
@@ -44,6 +45,32 @@ Deno.test("extractClientIp uses the last public forwarded hop before fallback he
         "x-real-ip": "198.51.100.10",
     });
     assertEquals(extractClientIp(realIpHeaders), "198.51.100.10");
+});
+
+Deno.test("extractClientIp prefers the worker-trusted x-client-ip over x-forwarded-for", () => {
+    // Regression for the shared-egress-IP bug: through the Cloudflare worker,
+    // the rightmost public entry in x-forwarded-for is Cloudflare's own egress
+    // IP, not the real client. x-client-ip is set by our worker from its own
+    // cf-connecting-ip and must win.
+    const headers = new Headers({
+        "x-client-ip": "1.2.3.4",
+        "x-forwarded-for": "203.0.113.7, 198.51.100.99",
+    });
+    assertEquals(extractClientIp(headers), "1.2.3.4");
+});
+
+Deno.test("extractClientIp ignores a private/malformed x-client-ip and falls back", () => {
+    const privateIp = new Headers({
+        "x-client-ip": "10.0.0.5",
+        "x-forwarded-for": "203.0.113.7, 10.0.0.1",
+    });
+    assertEquals(extractClientIp(privateIp), "203.0.113.7");
+
+    const malformed = new Headers({
+        "x-client-ip": "not-an-ip",
+        "x-real-ip": "198.51.100.10",
+    });
+    assertEquals(extractClientIp(malformed), "198.51.100.10");
 });
 
 Deno.test("validateUploadPayload rejects malformed payloads", () => {
@@ -285,7 +312,11 @@ Deno.test("upload handler returns 429 with Retry-After for device rate limits", 
     assertEquals((await response.json()).retry_after_s, 3600);
 });
 
-Deno.test("createRateLimitChecker returns day-boundary retry for device caps", async () => {
+// P1-4: IP check runs first and short-circuits before the device check/bump,
+// so a client already over the IP limit can't keep inserting rate_limits
+// rows by rotating device tokens.
+
+Deno.test("createRateLimitChecker checks IP before device and short-circuits on IP limit", async () => {
     const calls: Array<Record<string, unknown>> = [];
     const checker = createRateLimitChecker(
         async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
@@ -297,22 +328,22 @@ Deno.test("createRateLimitChecker returns day-boundary retry for device caps", a
 
     const result = await checker("deadbeef", "203.0.113.10");
 
-    assertEquals(calls.length, 1);
-    assertEquals(calls[0].p_key, "dev:deadbeef");
-    assertEquals(result, { ok: false, retryAfterSeconds: 30600 });
+    assertEquals(calls.length, 1, "device bucket must not be bumped when the IP check already failed");
+    assertEquals(calls[0].p_key, "ip:203.0.113.10");
+    assertEquals(result, { ok: false, retryAfterSeconds: 1800 });
 });
 
-Deno.test("createRateLimitChecker returns hour-boundary retry for IP caps", async () => {
+Deno.test("createRateLimitChecker returns day-boundary retry for device caps once IP passes", async () => {
     let call = 0;
     const checker = createRateLimitChecker(
         async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
             call += 1;
             if (call === 1) {
-                assertEquals(params.p_key, "dev:deadbeef");
+                assertEquals(params.p_key, "ip:203.0.113.10");
                 return { data: true as T, error: null };
             }
 
-            assertEquals(params.p_key, "ip:203.0.113.10");
+            assertEquals(params.p_key, "dev:deadbeef");
             return { data: false as T, error: null };
         },
         () => new Date("2026-04-18T15:30:00Z"),
@@ -320,7 +351,24 @@ Deno.test("createRateLimitChecker returns hour-boundary retry for IP caps", asyn
 
     const result = await checker("deadbeef", "203.0.113.10");
 
-    assertEquals(result, { ok: false, retryAfterSeconds: 1800 });
+    assertEquals(call, 2);
+    assertEquals(result, { ok: false, retryAfterSeconds: 30600 });
+});
+
+Deno.test("createRateLimitChecker allows the request through once both IP and device checks pass", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const checker = createRateLimitChecker(
+        async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
+            calls.push(params);
+            return { data: true as T, error: null };
+        },
+        () => new Date("2026-04-18T15:30:00Z"),
+    );
+
+    const result = await checker("deadbeef", "203.0.113.10");
+
+    assertEquals(calls.map((c) => c.p_key), ["ip:203.0.113.10", "dev:deadbeef"]);
+    assertEquals(result, { ok: true, retryAfterSeconds: 0 });
 });
 
 Deno.test("upload handler passes x-forwarded-for into the limiter and returns 200", async () => {
@@ -481,4 +529,151 @@ Deno.test("validation_failed includes field errors and request id", async () => 
     const body = await response.json();
     assertEquals(body.error, "validation_failed");
     assertMatch(body.field_errors.device_token, /UUIDv4/);
+});
+
+// ── P0-2: body-size cap + field whitelisting ──
+
+Deno.test("upload handler rejects a payload with declared content-length over the limit before reading body", async () => {
+    let ingestCalled = false;
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        ingestBatch: async () => {
+            ingestCalled = true;
+            return { accepted: 1, rejected: 0, duplicate: false, rejected_reasons: {} };
+        },
+    });
+
+    const response = await handler(
+        new Request("http://localhost/functions/v1/upload-readings", {
+            method: "POST",
+            headers: {
+                "content-type": "application/json",
+                "content-length": String(MAX_PAYLOAD_BYTES + 1),
+            },
+            body: JSON.stringify(validPayload),
+        }),
+    );
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+    assertEquals(ingestCalled, false);
+});
+
+Deno.test("upload handler rejects an actual body larger than the cap even without a content-length header", async () => {
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        ingestBatch: async () => ({ accepted: 1, rejected: 0, duplicate: false, rejected_reasons: {} }),
+    });
+
+    const oversizedReadings = Array.from({ length: 900 }, () => ({
+        ...validPayload.readings[0],
+        junk_padding: "x".repeat(400),
+    }));
+
+    const response = await handler(
+        new Request("http://localhost/functions/v1/upload-readings", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...validPayload, readings: oversizedReadings }),
+        }),
+    );
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+});
+
+Deno.test("upload handler strips unexpected extra fields from readings before they reach ingestBatch", async () => {
+    let seenPayload: unknown;
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        ingestBatch: async ({ payload }) => {
+            seenPayload = payload;
+            return { accepted: 1, rejected: 0, duplicate: false, rejected_reasons: {} };
+        },
+    });
+
+    const response = await handler(
+        new Request("http://localhost/functions/v1/upload-readings", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                ...validPayload,
+                unexpected_top_level: "should be stripped",
+                readings: [
+                    {
+                        ...validPayload.readings[0],
+                        malicious_field: "x".repeat(1000),
+                        nested_junk: { a: 1, b: [1, 2, 3] },
+                    },
+                ],
+            }),
+        }),
+    );
+
+    assertEquals(response.status, 200);
+    const readings = (seenPayload as { readings: Array<Record<string, unknown>> }).readings;
+    assertEquals(readings.length, 1);
+    assertEquals("malicious_field" in readings[0], false);
+    assertEquals("nested_junk" in readings[0], false);
+    assertEquals("unexpected_top_level" in (seenPayload as Record<string, unknown>), false);
+    assertObjectMatch(readings[0], {
+        lat: validPayload.readings[0].lat,
+        lng: validPayload.readings[0].lng,
+        roughness_rms: validPayload.readings[0].roughness_rms,
+        speed_kmh: validPayload.readings[0].speed_kmh,
+    });
+});
+
+Deno.test("validateUploadPayload rejects overlong client_app_version/client_os_version", () => {
+    const result = validateUploadPayload({
+        ...validPayload,
+        client_app_version: "x".repeat(101),
+        client_os_version: "y".repeat(200),
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok && result.error === "validation_failed") {
+        assertObjectMatch(result.fieldErrors ?? {}, {
+            client_app_version: "must be at most 100 characters",
+            client_os_version: "must be at most 100 characters",
+        });
+    }
+});
+
+// ── P1-7: world-bounds validation ──
+
+Deno.test("validateUploadPayload rejects out-of-range lat/lng", () => {
+    const result = validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], lat: 91, lng: -63.5752 },
+            { ...validPayload.readings[0], lat: 44.6488, lng: 181 },
+            { ...validPayload.readings[0], lat: -91, lng: -181 },
+        ],
+    });
+
+    assertEquals(result.ok, false);
+    if (!result.ok && result.error === "validation_failed") {
+        assertObjectMatch(result.fieldErrors ?? {}, {
+            "readings[0].lat": "must be between -90 and 90",
+            "readings[1].lng": "must be between -180 and 180",
+            "readings[2].lat": "must be between -90 and 90",
+            "readings[2].lng": "must be between -180 and 180",
+        });
+    }
+});
+
+Deno.test("validateUploadPayload accepts boundary lat/lng values", () => {
+    const result = validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], lat: 90, lng: 180 },
+            { ...validPayload.readings[0], lat: -90, lng: -180 },
+        ],
+    });
+
+    assertEquals(result.ok, true);
 });

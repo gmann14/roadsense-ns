@@ -17,6 +17,22 @@
 //                                     -> ORIGIN_BASE/functions/v1/tiles/{z}/{x}/{y}.mvt
 
 const TILE_PATH_RE = /^\/(\d+)\/(\d+)\/(\d+)\.mvt$/;
+const TILE_EDGE_CACHE_TTL_SECONDS = 3600;
+
+// True only for the public read-only tile routes: either the tiles.* subdomain
+// serving /{z}/{x}/{y}.mvt, or api.* proxying the same path shape under
+// /functions/v1/tiles/... (and the coverage-tile variant). Deliberately
+// narrow — routes like upload-readings/pothole-actions/feedback must never be
+// edge-cached, so this only matches paths that look like tile fetches.
+function isCacheableTileRequest(request, url) {
+    if (request.method !== "GET") return false;
+
+    if (url.hostname === "tiles.nsroadsense.ca" && TILE_PATH_RE.test(url.pathname)) {
+        return true;
+    }
+
+    return /\/functions\/v1\/tiles(\/coverage)?\/\d+\/\d+\/\d+\.mvt$/.test(url.pathname);
+}
 
 function buildOriginURL(env, requestURL) {
     const url = new URL(requestURL);
@@ -62,6 +78,10 @@ function corsHeaders() {
     };
 }
 
+// Exported for tests only (see worker_test.ts) — Cloudflare's runtime just
+// uses the default export below.
+export { buildOriginURL, isCacheableTileRequest, pickApiKey };
+
 export default {
     async fetch(request, env, _ctx) {
         if (request.method === "OPTIONS") {
@@ -81,6 +101,22 @@ export default {
         const forwardHeaders = new Headers(request.headers);
         forwardHeaders.set("apikey", apiKey);
         forwardHeaders.set("authorization", `Bearer ${apiKey}`);
+
+        // Preserve the real client IP under a header only we can set. Cloudflare
+        // rewrites `cf-connecting-ip` on every hop, so by the time this worker's
+        // *own* outbound fetch reaches Railway, a naive "trust cf-connecting-ip"
+        // read there would actually see our worker's egress IP, not the client's.
+        // `x-client-ip` is a name the public internet has no reason to send us
+        // and Cloudflare doesn't special-case, so anything a client sets on the
+        // inbound request is overwritten here before we forward — the gateway
+        // only ever sees the value we assign.
+        const realClientIp = request.headers.get("cf-connecting-ip");
+        if (realClientIp) {
+            forwardHeaders.set("x-client-ip", realClientIp);
+        } else {
+            forwardHeaders.delete("x-client-ip");
+        }
+
         // Strip headers that don't make sense to forward to a different host.
         forwardHeaders.delete("host");
         forwardHeaders.delete("cf-connecting-ip");
@@ -93,6 +129,21 @@ export default {
             headers: forwardHeaders,
             body: ["GET", "HEAD"].includes(request.method) ? null : request.body,
         };
+
+        // Tile responses are the only routes we advertise as edge-cached (see
+        // module comment above). Cloudflare's default cache only keys off
+        // well-known extensions, and `.mvt` isn't one of them, so without this
+        // explicit `cf` directive every tile request was silently passing
+        // through to origin on every request despite the "cache at the edge
+        // for 1 hour" comment. Scope this narrowly to GET tile requests so
+        // routes like upload-readings/pothole-actions/feedback are never
+        // cached.
+        if (isCacheableTileRequest(request, new URL(request.url))) {
+            init.cf = {
+                cacheEverything: true,
+                cacheTtl: TILE_EDGE_CACHE_TTL_SECONDS,
+            };
+        }
 
         const upstream = await fetch(originURL.toString(), init);
 

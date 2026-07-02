@@ -58,7 +58,30 @@ function publicForwardedIp(headers: Headers): string | null {
     return [...candidates].reverse().find((candidate) => !isPrivateOrLocalIp(candidate)) ?? null;
 }
 
+// Set exclusively by the Cloudflare worker (cloudflare/api-proxy/src/worker.js)
+// from its own `cf-connecting-ip`, which Cloudflare rewrites on every hop and a
+// client cannot spoof past Cloudflare's edge. Note: this only distinguishes
+// "the worker's own edge saw this IP" — it does NOT prove the request came
+// through the worker at all, since nothing today stops a caller from hitting
+// the Railway gateway directly and setting this header themselves. The worker
+// does not currently authenticate itself to the gateway (no shared secret /
+// internal-auth check comparable to _shared/internalAuth.ts is applied to
+// public routes), so a direct-to-Railway caller could still spoof
+// `x-client-ip`. Closing that gap means adding worker->gateway auth, which is
+// out of scope here; direct-to-gateway access should be treated as an
+// internal/rare path in the meantime.
+function trustedWorkerClientIp(headers: Headers): string | null {
+    const candidate = normalizeCandidate(headers.get("x-client-ip"));
+    if (candidate && !isPrivateOrLocalIp(candidate)) {
+        return candidate;
+    }
+    return null;
+}
+
 export function extractClientIp(headers: Headers): string {
+    const fromWorker = trustedWorkerClientIp(headers);
+    if (fromWorker) return fromWorker;
+
     const forwarded = publicForwardedIp(headers);
     if (forwarded) return forwarded;
 
