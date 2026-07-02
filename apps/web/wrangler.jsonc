@@ -14,7 +14,24 @@
   ],
   "vars": {
     "NEXT_PUBLIC_API_BASE_URL": "https://api.nsroadsense.ca/functions/v1"
-  }
+  },
+  // KV namespace backing the Next.js ISR/data cache (see open-next.config.ts's
+  // `incrementalCache: kvIncrementalCache` wiring). This binding is a
+  // PLACEHOLDER — "id" below is not a real namespace yet.
+  //
+  // TODO(infra): someone with Cloudflare dashboard/API access needs to run
+  //   `wrangler kv namespace create NEXT_INC_CACHE_KV`
+  // (or create it in the dashboard) and replace "id" with the real namespace
+  // id before this cache path is live. Until then OpenNext will fail to
+  // resolve the binding at runtime / fall back to no caching, so `next:
+  // { revalidate }` hints in lib/api/client.ts still don't do anything on
+  // Cloudflare — same as before this file was touched.
+  "kv_namespaces": [
+    {
+      "binding": "NEXT_INC_CACHE_KV",
+      "id": "REPLACE_WITH_REAL_KV_NAMESPACE_ID"
+    }
+  ]
   // NEXT_PUBLIC_MAPBOX_TOKEN and NEXT_PUBLIC_SUPABASE_ANON_KEY are baked into the client
   // bundle at build time from apps/web/.env.production.local (gitignored). They are also
   // public-by-design (Mapbox publishable token + read-only anon key) so they're safe to

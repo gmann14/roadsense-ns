@@ -116,7 +116,7 @@ export function WorstRoadsShell({ municipalityName, limit, result }: WorstRoadsS
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
                         <strong style={{ fontSize: "1.05rem" }}>{row.road_name ?? "Unnamed road"}</strong>
                         <span style={{ fontFamily: "var(--rs-font-mono)", fontSize: "0.95rem", color: "var(--rs-ink)" }}>
-                          {row.avg_roughness_score.toFixed(2)}
+                          {formatFixed(row.avg_roughness_score, 2)}
                         </span>
                       </div>
                       <span style={{ color: "var(--rs-text-muted)", fontSize: "0.9rem" }}>
@@ -156,7 +156,8 @@ export function WorstRoadsShell({ municipalityName, limit, result }: WorstRoadsS
             <span className="eyebrow">Freshness</span>
             <strong>{result?.generated_at ? formatDate(result.generated_at) : "Awaiting published snapshot"}</strong>
             <span className="lede">
-              Rankings refresh from the published aggregate views on a 15-minute cache and nightly recompute cadence.
+              Rankings are generated from published aggregate views, targeting a roughly 15-minute refresh plus a
+              nightly recompute — some views may take longer to update while caching is being finalized.
             </span>
           </div>
         </aside>
@@ -183,6 +184,13 @@ const selectStyle = {
   border: "1px solid var(--rs-border)",
   background: "var(--rs-surface-strong)",
 };
+
+function formatFixed(value: number | null | undefined, digits: number): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "—";
+  }
+  return value.toFixed(digits);
+}
 
 function formatDate(value: string): string {
   const date = new Date(value);
