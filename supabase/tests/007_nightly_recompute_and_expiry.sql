@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(19);
+SELECT plan(24);
 
 DO $$
 DECLARE
@@ -280,6 +280,58 @@ SELECT ok(
         SELECT 1 FROM cron.job WHERE jobname = 'rate-limit-gc'
     ),
     'cron registration exists for rate-limit-gc'
+);
+
+SELECT ok(
+    EXISTS (
+        SELECT 1 FROM cron.job WHERE jobname = 'drop-old-readings-partitions'
+    ),
+    'cron registration exists for drop-old-readings-partitions'
+);
+
+-- P1: drop_old_readings_partitions() parsed pg_get_expr's deparsed bound
+-- string with a plain-date regex (`TO \('(\d{4}-\d{2}-\d{2})'\)`), but
+-- readings is partitioned on a TIMESTAMPTZ column, so the deparsed bound
+-- always carries a time-of-day and UTC offset
+-- (`FOR VALUES FROM ('2026-04-01 00:00:00+00') TO (...)`). The regex never
+-- matched, substring() returned NULL, and the function silently dropped
+-- nothing, ever — this reproduces that with an old, out-of-retention
+-- partition and asserts it is actually gone afterward.
+DO $$
+BEGIN
+    EXECUTE 'DROP TABLE IF EXISTS readings_2020_01';
+    EXECUTE format(
+        'CREATE TABLE IF NOT EXISTS readings_2020_01 PARTITION OF readings FOR VALUES FROM (%L) TO (%L)',
+        '2020-01-01'::DATE,
+        '2020-02-01'::DATE
+    );
+END;
+$$;
+
+SELECT ok(
+    EXISTS (SELECT 1 FROM pg_class WHERE relname = 'readings_2020_01'),
+    'fixture old partition exists before drop_old_readings_partitions runs'
+);
+
+SELECT lives_ok(
+    $$SELECT drop_old_readings_partitions()$$,
+    'drop_old_readings_partitions runs without error'
+);
+
+SELECT ok(
+    NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'readings_2020_01'),
+    'a partition more than 6 months out of retention is actually dropped, not silently skipped'
+);
+
+SELECT ok(
+    EXISTS (
+        SELECT 1
+        FROM pg_inherits
+        JOIN pg_class ON pg_class.oid = inhrelid
+        WHERE inhparent = 'readings'::regclass
+          AND pg_class.relname = format('readings_%s', to_char(now(), 'YYYY_MM'))
+    ),
+    'the current month partition is NOT dropped (still within retention)'
 );
 
 SELECT * FROM finish();
