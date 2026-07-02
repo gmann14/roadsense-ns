@@ -18,19 +18,40 @@ export function parseMapMode(raw: string | null | undefined): MapMode {
   return "quality";
 }
 
+// Mapbox GL throws if constructed with coordinates/zoom outside these ranges.
+// See https://docs.mapbox.com/mapbox-gl-js/api/map/ (LngLat, valid zoom range).
+export const MIN_LAT = -90;
+export const MAX_LAT = 90;
+export const MIN_LNG = -180;
+export const MAX_LNG = 180;
+export const MIN_ZOOM = 0;
+export const MAX_ZOOM = 22;
+
+function parseBoundedFloatOrNull(value: string | null, min: number, max: number): number | null {
+  if (!value) return null;
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed < min || parsed > max) return null;
+  return parsed;
+}
+
 export function parseViewportState(input: URLSearchParams): UrlViewportState {
-  const parseFloatOrNull = (value: string | null): number | null => {
-    if (!value) return null;
-    const parsed = Number.parseFloat(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
+  const lat = parseBoundedFloatOrNull(input.get("lat"), MIN_LAT, MAX_LAT);
+  const lng = parseBoundedFloatOrNull(input.get("lng"), MIN_LNG, MAX_LNG);
+  const z = parseBoundedFloatOrNull(input.get("z"), MIN_ZOOM, MAX_ZOOM);
+
+  // Viewport is only meaningful as a full triple — if any one of lat/lng/z is
+  // missing or invalid, fall back to the app's default viewport resolution
+  // (see resolveInitialViewport in road-quality-map-view.tsx) instead of
+  // passing a partial/garbage viewport into Mapbox.
+  const hasCompleteViewport = lat !== null && lng !== null && z !== null;
 
   return {
     mode: parseMapMode(input.get("mode")),
     segment: input.get("segment"),
-    lat: parseFloatOrNull(input.get("lat")),
-    lng: parseFloatOrNull(input.get("lng")),
-    z: parseFloatOrNull(input.get("z")),
+    lat: hasCompleteViewport ? lat : null,
+    lng: hasCompleteViewport ? lng : null,
+    z: hasCompleteViewport ? z : null,
     q: input.get("q"),
   };
 }
