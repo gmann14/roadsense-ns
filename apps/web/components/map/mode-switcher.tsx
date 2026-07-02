@@ -20,8 +20,9 @@ export function ModeSwitcher({ activeMode, onSelect }: ModeSwitcherProps) {
         <button
           type="button"
           key={mode}
+          role="tab"
           className={`mode-switcher-button${activeMode === mode ? " active" : ""}`}
-          aria-pressed={activeMode === mode}
+          aria-selected={activeMode === mode}
           onClick={() => onSelect(mode)}
         >
           <span className={`mode-dot ${mode}`} />

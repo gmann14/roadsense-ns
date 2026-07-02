@@ -60,9 +60,17 @@ describe("map mode switcher", () => {
 
     render(<ModeSwitcher activeMode="quality" onSelect={onSelect} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /coverage/i }));
+    fireEvent.click(screen.getByRole("tab", { name: /coverage/i }));
     expect(onSelect).toHaveBeenCalledWith("coverage");
-    expect(screen.getByRole("button", { name: /quality/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("tab", { name: /quality/i })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("uses the tablist/tab pattern instead of aria-pressed buttons", () => {
+    render(<ModeSwitcher activeMode="potholes" onSelect={vi.fn()} />);
+
+    expect(screen.getByRole("tablist", { name: /map mode/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /potholes/i })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /quality/i })).toHaveAttribute("aria-selected", "false");
   });
 });
 
@@ -107,11 +115,21 @@ describe("municipality search", () => {
     expect(screen.getByDisplayValue("Halifax")).toBeInTheDocument();
   });
 
+  it("exposes the search input as a combobox wired to the suggestions listbox", () => {
+    render(<MunicipalitySearch activeMode="quality" currentQuery="Cape" />);
+
+    const combobox = screen.getByRole("combobox", { name: /search municipalities or places/i });
+    const listbox = screen.getByRole("listbox", { name: /search suggestions/i });
+
+    expect(combobox).toHaveAttribute("aria-expanded", "true");
+    expect(combobox).toHaveAttribute("aria-controls", listbox.id);
+  });
+
   it("renders ranked municipality suggestions for partial matches", () => {
     render(<MunicipalitySearch activeMode="quality" currentQuery="Cape" />);
 
     expect(screen.getByRole("listbox", { name: /search suggestions/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /cape breton regional municipality/i })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /cape breton regional municipality/i })).toBeInTheDocument();
   });
 
   it("shows a recoverable no-results state when neither municipalities nor places match", async () => {
@@ -121,6 +139,32 @@ describe("municipality search", () => {
 
     expect(await screen.findByText(/no municipality or place match/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /clear/i })).toBeInTheDocument();
+  });
+
+  it("debounces geocoding requests instead of firing on every keystroke", async () => {
+    vi.useFakeTimers();
+    searchPlacesMock.mockClear();
+    searchPlacesMock.mockResolvedValue([]);
+
+    try {
+      render(<MunicipalitySearch activeMode="quality" currentQuery="" />);
+      const input = screen.getByRole("combobox", { name: /search municipalities or places/i });
+
+      fireEvent.change(input, { target: { value: "zzzz" } });
+      fireEvent.change(input, { target: { value: "zzzzz" } });
+      fireEvent.change(input, { target: { value: "zzzzzz" } });
+
+      // Still within the debounce window — no network call yet.
+      await vi.advanceTimersByTimeAsync(100);
+      expect(searchPlacesMock).not.toHaveBeenCalled();
+
+      // Past the debounce window — exactly one call for the settled value.
+      await vi.advanceTimersByTimeAsync(200);
+      expect(searchPlacesMock).toHaveBeenCalledTimes(1);
+      expect(searchPlacesMock).toHaveBeenCalledWith("zzzzzz", expect.anything());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

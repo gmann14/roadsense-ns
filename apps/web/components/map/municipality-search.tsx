@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { startTransition, useDeferredValue, useEffect, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useId, useState } from "react";
 
 import { getMunicipalityByName, municipalityManifest, searchMunicipalities } from "@/lib/municipality-manifest";
 import { searchPlaces, type PlaceSearchResult } from "@/lib/search/mapbox-geocoding";
@@ -31,6 +31,7 @@ type SearchSuggestion =
 export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySearchProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const listboxId = useId();
   const [value, setValue] = useState(currentQuery ?? "");
   const [placeResults, setPlaceResults] = useState<PlaceSearchResult[]>([]);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
@@ -44,27 +45,33 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
       return;
     }
 
-    const controller = new AbortController();
+    // useDeferredValue only defers React's own re-render — it does not
+    // debounce the effect, so without this timer we'd fire one geocoding
+    // request per keystroke once the query is 3+ chars with no municipality
+    // match. Wait for typing to pause before hitting the network.
     setIsLoadingPlaces(true);
-
-    void searchPlaces(deferredValue, controller.signal)
-      .then((results) => {
-        if (!controller.signal.aborted) {
-          setPlaceResults(results);
-        }
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          setPlaceResults([]);
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setIsLoadingPlaces(false);
-        }
-      });
+    const controller = new AbortController();
+    const debounceTimer = setTimeout(() => {
+      void searchPlaces(deferredValue, controller.signal)
+        .then((results) => {
+          if (!controller.signal.aborted) {
+            setPlaceResults(results);
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setPlaceResults([]);
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setIsLoadingPlaces(false);
+          }
+        });
+    }, 250);
 
     return () => {
+      clearTimeout(debounceTimer);
       controller.abort();
     };
   }, [deferredValue, municipalityResults.length]);
@@ -135,6 +142,7 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
   ].slice(0, 6);
   const trimmedValue = value.trim();
   const showNoResults = trimmedValue.length >= 3 && !isLoadingPlaces && suggestions.length === 0;
+  const isExpanded = suggestions.length > 0;
 
   return (
     <form
@@ -152,6 +160,10 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
             list="municipality-options"
             placeholder="Halifax, Truro, Lunenburg…"
             aria-label="Search municipalities or places"
+            role="combobox"
+            aria-expanded={isExpanded}
+            aria-controls={listboxId}
+            aria-autocomplete="list"
             value={value}
             onChange={(event) => setValue(event.target.value)}
           />
@@ -174,11 +186,13 @@ export function MunicipalitySearch({ activeMode, currentQuery }: MunicipalitySea
         </div>
       </label>
       {suggestions.length > 0 ? (
-        <div className="search-results" role="listbox" aria-label="Search suggestions">
+        <div id={listboxId} className="search-results" role="listbox" aria-label="Search suggestions">
           {suggestions.map((suggestion) => (
             <button
               key={suggestion.id}
               type="button"
+              role="option"
+              aria-selected={false}
               className="search-result-button"
               onClick={() => navigate(suggestion.target)}
             >
