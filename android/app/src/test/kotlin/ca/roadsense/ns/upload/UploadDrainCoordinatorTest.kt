@@ -8,7 +8,11 @@ import ca.roadsense.ns.api.UploadReadingsRequest
 import ca.roadsense.ns.api.UploadReadingsResponse
 import ca.roadsense.ns.data.room.ReadingEntity
 import ca.roadsense.ns.data.room.RoadSenseDatabase
+import ca.roadsense.ns.data.room.UploadBatchEntity
 import ca.roadsense.ns.data.room.UploadBatchState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
@@ -23,9 +27,11 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import retrofit2.Response
 import java.io.IOException
+import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -70,6 +76,7 @@ class UploadDrainCoordinatorTest {
     )
 
     private fun coordinator(rpc: UploadReadingsRpc) = UploadDrainCoordinator(
+        database = db,
         readingDao = db.readingDao(),
         batchDao = db.uploadBatchDao(),
         uploadReadingsRpc = rpc,
@@ -192,5 +199,142 @@ class UploadDrainCoordinatorTest {
         db.readingDao().insert(r)
         val outcome = coordinator { throw IOException("connection reset") }.drainOnce(online)
         assertTrue(outcome is UploadDrainCoordinator.Outcome.BatchRetry)
+    }
+
+    @Test
+    fun `non-IOException during upload retries instead of stranding the batch IN_FLIGHT`() = runTest {
+        val r = reading()
+        db.readingDao().insert(r)
+
+        // Before the fix, only IOException was caught — a serialization
+        // error or any other RuntimeException would propagate uncaught,
+        // leaving markAttempt(IN_FLIGHT) as the last write Room ever saw for
+        // this batch. Assert it's retryable, not stuck.
+        val outcome = coordinator {
+            throw IllegalStateException("unexpected serialization failure")
+        }.drainOnce(online)
+
+        assertTrue(outcome is UploadDrainCoordinator.Outcome.BatchRetry, "non-IO exception should be treated as retryable")
+        val outcomeT = outcome as UploadDrainCoordinator.Outcome.BatchRetry
+        val batch = db.uploadBatchDao().findById(outcomeT.batchId)!!
+        assertEquals(UploadBatchState.PENDING, batch.state, "batch must not be left IN_FLIGHT")
+    }
+
+    @Test
+    fun `CancellationException during upload is rethrown, not swallowed`() = runTest {
+        val r = reading()
+        db.readingDao().insert(r)
+
+        assertFailsWith<CancellationException> {
+            coordinator { throw CancellationException("worker cancelled") }.drainOnce(online)
+        }
+    }
+
+    @Test
+    fun `a batch stranded IN_FLIGHT past the staleness threshold is reclaimed and retried`() = runTest {
+        val r = reading()
+        db.readingDao().insert(r)
+
+        val batchId = UUID.randomUUID()
+        db.uploadBatchDao().insert(
+            UploadBatchEntity(
+                id = batchId,
+                state = UploadBatchState.IN_FLIGHT,
+                createdAt = now.minus(Duration.ofMinutes(10)),
+                lastAttemptAt = now.minus(Duration.ofMinutes(10)),
+                attemptCount = 1,
+                readingCount = 1,
+            ),
+        )
+        db.readingDao().assignBatch(listOf(r.id), batchId)
+
+        var uploaded = false
+        val outcome = coordinator {
+            uploaded = true
+            successResponse()
+        }.drainOnce(online)
+
+        assertTrue(uploaded, "reclaimed batch should be retried, not left stranded")
+        assertTrue(outcome is UploadDrainCoordinator.Outcome.BatchSucceeded)
+        assertEquals(batchId, (outcome as UploadDrainCoordinator.Outcome.BatchSucceeded).batchId)
+    }
+
+    @Test
+    fun `two concurrent drains never assign the same reading to two different batches`() = runTest {
+        val readings = (1..5).map { reading() }
+        db.readingDao().insertAll(readings)
+
+        // Two coordinators sharing the same underlying database, racing to
+        // drain the same pending readings — this is the shape of two
+        // WorkManager workers running concurrently before enqueueUniqueWork
+        // was wired up. Without the @Transaction-equivalent
+        // (database.withTransaction) around select+insert+assign, both could
+        // read the same pending rows before either assigns a batch.
+        val firstStarted = CompletableDeferred<Unit>()
+        val releaseFirst = CompletableDeferred<Unit>()
+
+        val first = async {
+            coordinator {
+                firstStarted.complete(Unit)
+                releaseFirst.await()
+                successResponse()
+            }.drainOnce(online)
+        }
+        firstStarted.await()
+
+        val second = async {
+            coordinator { successResponse() }.drainOnce(online)
+        }
+
+        releaseFirst.complete(Unit)
+        val firstOutcome = first.await()
+        val secondOutcome = second.await()
+
+        val batchIds = listOfNotNull(
+            (firstOutcome as? UploadDrainCoordinator.Outcome.BatchSucceeded)?.batchId,
+            (secondOutcome as? UploadDrainCoordinator.Outcome.BatchSucceeded)?.batchId,
+        )
+
+        // Whichever readings each batch picked up, no reading may ever be
+        // assigned to more than one upload_batches row.
+        val assignedBatchIdsPerReading = readings.map { db.readingDao().findById(it.id)!!.uploadBatchId }
+        assertTrue(assignedBatchIdsPerReading.all { it != null }, "every reading should end up assigned to exactly one batch")
+
+        // No reading appears in more than one batch's reading set.
+        val allBatchReadingIds = batchIds.flatMap { db.readingDao().byBatch(it).map(ReadingEntity::id) }
+        assertEquals(allBatchReadingIds.size, allBatchReadingIds.distinct().size, "a reading must not appear in two batches")
+        assertEquals(readings.size, allBatchReadingIds.size, "every reading must be picked up by exactly one of the two drains")
+    }
+
+    @Test
+    fun `a batch IN_FLIGHT for less than the staleness threshold is left alone`() = runTest {
+        val r = reading()
+        db.readingDao().insert(r)
+
+        val batchId = UUID.randomUUID()
+        db.uploadBatchDao().insert(
+            UploadBatchEntity(
+                id = batchId,
+                state = UploadBatchState.IN_FLIGHT,
+                createdAt = now.minus(Duration.ofSeconds(30)),
+                lastAttemptAt = now.minus(Duration.ofSeconds(30)),
+                attemptCount = 1,
+                readingCount = 1,
+            ),
+        )
+        db.readingDao().assignBatch(listOf(r.id), batchId)
+
+        var uploaded = false
+        val outcome = coordinator {
+            uploaded = true
+            successResponse()
+        }.drainOnce(online)
+
+        // The recent IN_FLIGHT batch isn't reclaimed, and its reading is
+        // assigned so it won't show up as a fresh pending batch either.
+        assertTrue(!uploaded, "recently-attempted IN_FLIGHT batch should not be re-uploaded concurrently")
+        assertTrue(outcome is UploadDrainCoordinator.Outcome.NothingToDo)
+        val batch = db.uploadBatchDao().findById(batchId)!!
+        assertEquals(UploadBatchState.IN_FLIGHT, batch.state)
     }
 }

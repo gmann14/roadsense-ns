@@ -1,5 +1,7 @@
 package ca.roadsense.ns.upload
 
+import androidx.room.RoomDatabase
+import androidx.room.withTransaction
 import ca.roadsense.ns.api.NetworkPathSnapshot
 import ca.roadsense.ns.api.NetworkPathStatus
 import ca.roadsense.ns.api.UploadAttemptResult
@@ -16,6 +18,7 @@ import ca.roadsense.ns.data.room.ReadingEntity
 import ca.roadsense.ns.data.room.UploadBatchDao
 import ca.roadsense.ns.data.room.UploadBatchEntity
 import ca.roadsense.ns.data.room.UploadBatchState
+import kotlinx.coroutines.CancellationException
 import retrofit2.Response
 import java.io.IOException
 import java.time.Duration
@@ -42,6 +45,7 @@ fun interface UploadReadingsRpc {
 }
 
 class UploadDrainCoordinator(
+    private val database: RoomDatabase,
     private val readingDao: ReadingDao,
     private val batchDao: UploadBatchDao,
     private val uploadReadingsRpc: UploadReadingsRpc,
@@ -69,37 +73,56 @@ class UploadDrainCoordinator(
             return Outcome.Offline
         }
 
-        val dueBatch = batchDao.nextDrainable(UploadBatchState.PENDING, clock.now(), limit = 1).firstOrNull()
-        val batchId: UUID
-        val readings: List<ReadingEntity>
+        // Reclaim batches stranded IN_FLIGHT by a prior worker cancellation,
+        // process death, or an exception that wasn't caught below (before
+        // this fix, only IOException was handled — anything else left the
+        // row IN_FLIGHT forever since `nextDrainable` only ever queries
+        // PENDING). Age-gated so we don't race an upload that's still
+        // genuinely in progress in another coroutine.
+        batchDao.reclaimStaleInFlight(
+            inFlightState = UploadBatchState.IN_FLIGHT,
+            pendingState = UploadBatchState.PENDING,
+            cutoff = clock.now().minus(STALE_IN_FLIGHT_THRESHOLD),
+        )
 
-        if (dueBatch != null) {
-            batchId = dueBatch.id
-            readings = readingDao.byBatch(batchId)
-            if (readings.isEmpty()) {
-                batchDao.markAttempt(batchId, UploadBatchState.FAILED_PERMANENT, clock.now())
-                return Outcome.BatchFailedPermanent(batchId, null)
-            }
-        } else {
-            val pendingCount = readingDao.pendingCount()
-            if (!UploadEligibilityPolicy.shouldUpload(pendingCount, network, now = clock.now())) {
-                return Outcome.NothingToDo
-            }
+        // The select-then-insert-then-assign sequence must be atomic: without
+        // a transaction, two concurrent drain workers can both select the
+        // same pending readings before either assigns them to a batch,
+        // producing two batches (and a double upload) for the same rows.
+        // Wrapping it in a Room transaction serializes the critical section.
+        val (batchId, readings) = database.withTransaction {
+            val dueBatch = batchDao.nextDrainable(UploadBatchState.PENDING, clock.now(), limit = 1).firstOrNull()
 
-            readings = readingDao.pendingForUpload(limit = maxBatchSize)
-            if (readings.isEmpty()) return Outcome.NothingToDo
+            if (dueBatch != null) {
+                val existingReadings = readingDao.byBatch(dueBatch.id)
+                dueBatch.id to existingReadings
+            } else {
+                val pendingCount = readingDao.pendingCount()
+                if (!UploadEligibilityPolicy.shouldUpload(pendingCount, network, now = clock.now())) {
+                    return@withTransaction null
+                }
 
-            batchId = UUID.randomUUID()
-            batchDao.insert(
-                UploadBatchEntity(
-                    id = batchId,
-                    state = UploadBatchState.PENDING,
-                    createdAt = clock.now(),
-                    attemptCount = 0,
-                    readingCount = readings.size,
+                val pending = readingDao.pendingForUpload(limit = maxBatchSize)
+                if (pending.isEmpty()) return@withTransaction null
+
+                val newBatchId = UUID.randomUUID()
+                batchDao.insert(
+                    UploadBatchEntity(
+                        id = newBatchId,
+                        state = UploadBatchState.PENDING,
+                        createdAt = clock.now(),
+                        attemptCount = 0,
+                        readingCount = pending.size,
+                    )
                 )
-            )
-            readingDao.assignBatch(readings.map { it.id }, batchId)
+                readingDao.assignBatch(pending.map { it.id }, newBatchId)
+                newBatchId to pending
+            }
+        } ?: return Outcome.NothingToDo
+
+        if (readings.isEmpty()) {
+            batchDao.markAttempt(batchId, UploadBatchState.FAILED_PERMANENT, clock.now())
+            return Outcome.BatchFailedPermanent(batchId, null)
         }
 
         val token = deviceTokenProvider()
@@ -116,7 +139,21 @@ class UploadDrainCoordinator(
 
         val response: Response<UploadReadingsResponse> = try {
             uploadReadingsRpc.upload(request)
+        } catch (e: CancellationException) {
+            // Never swallow cancellation — rethrow so structured concurrency
+            // still works. The batch is left IN_FLIGHT; `reclaimStaleInFlight`
+            // at the top of the next `drainOnce` call resets it to PENDING
+            // once it's old enough to safely assume the cancelled attempt
+            // isn't still in flight.
+            throw e
         } catch (e: IOException) {
+            val attemptNumber = batchDao.findById(batchId)?.attemptCount ?: 1
+            return handleNetworkFailure(batchId, attemptNumber = attemptNumber)
+        } catch (e: Exception) {
+            // Non-IO failures (serialization errors, unexpected runtime
+            // exceptions, etc.) used to propagate uncaught, leaving the batch
+            // stuck IN_FLIGHT forever since nothing else ever retried it.
+            // Treat them the same as a network failure: retry with backoff.
             val attemptNumber = batchDao.findById(batchId)?.attemptCount ?: 1
             return handleNetworkFailure(batchId, attemptNumber = attemptNumber)
         }
@@ -206,4 +243,11 @@ class UploadDrainCoordinator(
     /** Convenience for tests that want to read an error envelope from a 4xx body. */
     fun parseErrorEnvelope(body: String): UploadErrorEnvelope =
         UploadCodec.json.decodeFromString(UploadErrorEnvelope.serializer(), body)
+
+    companion object {
+        /** How long a batch can sit IN_FLIGHT before we assume the attempt
+         *  that set it there is gone (cancelled worker, dead process, etc.)
+         *  and it's safe to reclaim back to PENDING. */
+        val STALE_IN_FLIGHT_THRESHOLD: Duration = Duration.ofMinutes(5)
+    }
 }

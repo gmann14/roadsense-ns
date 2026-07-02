@@ -29,6 +29,7 @@ class UploadDrainWorker(
         val container = RoadSenseContainer.from(applicationContext)
 
         val readingCoordinator = UploadDrainCoordinator(
+            database = container.database,
             readingDao = container.database.readingDao(),
             batchDao = container.database.uploadBatchDao(),
             uploadReadingsRpc = UploadReadingsRpc { request ->
@@ -108,5 +109,11 @@ class UploadDrainWorker(
     companion object {
         const val TAG = "upload-drain"
         const val PERIODIC_WORK_NAME = "upload-drain-periodic"
+
+        /** Unique-work name for one-shot drain requests (`AppViewModel.enqueueDrain`).
+         *  Distinct from [PERIODIC_WORK_NAME] — enqueued with `KEEP` so a
+         *  drive-end drain and a manual "upload now" tap can't both queue a
+         *  concurrent worker that races the periodic heartbeat's DB reads. */
+        const val ONE_SHOT_WORK_NAME = "upload-drain-one-shot"
     }
 }
