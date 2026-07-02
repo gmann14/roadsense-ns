@@ -462,6 +462,13 @@ export function RoadQualityMapView({
           handleMapErrorChange("Road data is temporarily unavailable. Try again shortly.");
         }
       });
+
+      // A single failed tile/sprite/glyph fetch shouldn't leave the banner up
+      // forever — clear it the next time the map settles after successfully
+      // finishing all pending render/data operations.
+      map.on("idle", () => {
+        handleMapErrorChange(null);
+      });
     });
 
     return () => {
