@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(16);
+SELECT plan(18);
 
 TRUNCATE road_segments_staging;
 
@@ -32,12 +32,21 @@ CREATE TABLE ref.municipalities (
     geom GEOMETRY(MULTIPOLYGON, 4326) NOT NULL
 );
 
+-- Way geometries are built with ST_Project on geography (true geodesic
+-- distance + azimuth from the origin point), NOT by translating in EPSG:3857
+-- meters. At this fixture's ~44.65 degN latitude, Web Mercator overstates
+-- distance by roughly 1/cos(latitude) (~1.40x), so a naive 3857 translation
+-- of "120 meters" is only ~85.4 true ground meters — exactly the P1 bug this
+-- suite now guards against (20260702130000_stage_osm_segments_geography_length.sql).
+-- ST_Project gives an exact, latitude-correct ground distance, so the
+-- resulting ways are genuinely 120m/70m long and the segment-count/length
+-- assertions below are unambiguous.
 WITH
 halifax_base AS (
-    SELECT ST_Transform(ST_SetSRID(ST_MakePoint(-63.575, 44.648), 4326), 3857) AS p
+    SELECT ST_SetSRID(ST_MakePoint(-63.575, 44.648), 4326) AS p
 ),
 dartmouth_base AS (
-    SELECT ST_Transform(ST_SetSRID(ST_MakePoint(-63.565, 44.650), 4326), 3857) AS p
+    SELECT ST_SetSRID(ST_MakePoint(-63.565, 44.650), 4326) AS p
 )
 INSERT INTO osm.osm_ways (
     osm_id,
@@ -59,7 +68,10 @@ SELECT
     NULL,
     NULL,
     NULL,
-    ST_Transform(ST_MakeLine(p, ST_Translate(p, 120, 0)), 4326)
+    ST_MakeLine(
+        p,
+        ST_SetSRID(ST_Project(p::geography, 120, radians(90))::geometry, 4326)
+    )
 FROM halifax_base
 UNION ALL
 SELECT
@@ -71,7 +83,10 @@ SELECT
     NULL,
     NULL,
     NULL,
-    ST_Transform(ST_MakeLine(p, ST_Translate(p, 70, 0)), 4326)
+    ST_MakeLine(
+        p,
+        ST_SetSRID(ST_Project(p::geography, 70, radians(90))::geometry, 4326)
+    )
 FROM dartmouth_base;
 
 WITH
@@ -219,6 +234,25 @@ SELECT ok(
 SELECT ok(
     has_function_privilege('service_role', 'public.tag_staged_features()', 'EXECUTE'),
     'service_role can execute tag_staged_features'
+);
+
+-- P1: Web-Mercator segment lengths overstate ~40% at Nova Scotia latitude.
+-- stage_osm_segments() used to measure length with
+-- ST_Length(ST_Transform(geom, 3857)), which inflates true ground distance by
+-- roughly 1/cos(latitude) — about 1.40x (a ~40% overstatement) at 44.65 degN.
+-- The 120m/70m fixture ways above are built with ST_Project (true geodesic
+-- distance), so their aggregate staged length_m should sum back to ~120/~70
+-- true meters, not ~168/~98 (what the old Mercator-based code would have
+-- reported). A generous 2% tolerance absorbs float/geodesic-vs-line-segment
+-- rounding while still failing hard on a ~40% latitude-inflation regression.
+SELECT ok(
+    abs((SELECT SUM(length_m) FROM road_segments_staging WHERE osm_way_id = 910001) - 120.0) < 2.4,
+    'primary way staged length_m sums to true ~120m, not the ~40% Web-Mercator-inflated ~168m'
+);
+
+SELECT ok(
+    abs((SELECT SUM(length_m) FROM road_segments_staging WHERE osm_way_id = 910002) - 70.0) < 1.4,
+    'parking-aisle way staged length_m sums to true ~70m, not the ~40% Web-Mercator-inflated ~98m'
 );
 
 SELECT * FROM finish();
