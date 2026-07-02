@@ -32,56 +32,83 @@ jobs:
         shell: bash
         run: |
           if [[ -z "${DATABASE_URL}" && -z "${RAILWAY_DATABASE_URL}" ]]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "Production database deploy is not configured yet; set DATABASE_URL or RAILWAY_DATABASE_URL."
-            exit 0
+            echo "::error::Production database deploy is not configured; set DATABASE_URL or RAILWAY_DATABASE_URL."
+            exit 1
           fi
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Install postgres client
-        if: steps.precheck.outputs.ready == 'true'
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Set up Supabase CLI
-        if: steps.precheck.outputs.ready == 'true'
         uses: supabase/setup-cli@v1
         with:
           version: 2.95.4
 
       - name: Set up Deno
-        if: steps.precheck.outputs.ready == 'true'
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
 
       - name: Push database migrations
-        if: steps.precheck.outputs.ready == 'true'
         shell: bash
         run: |
           db_url="${DATABASE_URL:-${RAILWAY_DATABASE_URL}}"
           supabase db push --db-url "${db_url}"
 
-      - name: Trigger Railway API deploy
-        if: steps.precheck.outputs.ready == 'true' && env.RAILWAY_DEPLOY_HOOK_URL != ''
+      - name: Trigger Railway API deploy and wait for readiness
         shell: bash
-        run: curl -fsS -X POST "${RAILWAY_DEPLOY_HOOK_URL}"
+        run: |
+          if [[ -z "${RAILWAY_DEPLOY_HOOK_URL}" ]]; then
+            echo "::error::RAILWAY_DEPLOY_HOOK_URL is not set; cannot deploy or verify the API."
+            exit 1
+          fi
 
-      - name: Warn if Railway deploy hook is missing
-        if: steps.precheck.outputs.ready == 'true' && env.RAILWAY_DEPLOY_HOOK_URL == ''
-        run: echo "::warning::RAILWAY_DEPLOY_HOOK_URL is not set; database migrations ran but API deploy was skipped."
+          export FUNCTIONS_BASE_URL="${FUNCTIONS_BASE_URL:-${FUNCTIONS_BASE_URL_SECRET}}"
+          export SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${PUBLIC_API_KEY}}"
+          if [[ -z "${FUNCTIONS_BASE_URL}" || -z "${SUPABASE_ANON_KEY}" ]]; then
+            echo "::error::Cannot verify deploy readiness; set FUNCTIONS_BASE_URL and PUBLIC_API_KEY or SUPABASE_ANON_KEY."
+            exit 1
+          fi
+
+          echo "→ Triggering Railway deploy hook (enqueues a build; does not wait for it)"
+          curl -fsS -X POST "${RAILWAY_DEPLOY_HOOK_URL}"
+
+          echo "→ Polling ${FUNCTIONS_BASE_URL}/health for readiness (up to 5 minutes)"
+          # NOTE: /health only confirms *a* deployment is serving traffic, not
+          # specifically the new one — Railway's deploy hook has no built-in
+          # "wait until live" signal and /health doesn't expose the deployed
+          # git SHA yet. A fixed grace-period sleep is layered on top so the
+          # new revision has time to actually take over from the old one.
+          # Follow-up: expose the git SHA in /health and poll for that value
+          # instead of a blind sleep.
+          deadline=$((SECONDS + 300))
+          until curl -fsS -o /dev/null \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            "${FUNCTIONS_BASE_URL}/health"; do
+            if (( SECONDS > deadline )); then
+              echo "::error::Timed out waiting for ${FUNCTIONS_BASE_URL}/health to respond after deploy."
+              exit 1
+            fi
+            echo "  ...not ready yet, retrying in 10s"
+            sleep 10
+          done
+
+          echo "→ /health is responding; giving the new deployment a grace period to fully roll out"
+          sleep 60
 
       - name: Run production smoke checks
-        if: steps.precheck.outputs.ready == 'true'
         shell: bash
         run: |
           export DATABASE_URL="${DATABASE_URL:-${RAILWAY_DATABASE_URL}}"
           export FUNCTIONS_BASE_URL="${FUNCTIONS_BASE_URL:-${FUNCTIONS_BASE_URL_SECRET}}"
           export SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${PUBLIC_API_KEY}}"
           if [[ -z "${FUNCTIONS_BASE_URL}" || -z "${SUPABASE_ANON_KEY}" ]]; then
-            echo "::warning::Smoke checks skipped; set FUNCTIONS_BASE_URL and PUBLIC_API_KEY or SUPABASE_ANON_KEY."
-            exit 0
+            echo "::error::Cannot run smoke checks; set FUNCTIONS_BASE_URL and PUBLIC_API_KEY or SUPABASE_ANON_KEY."
+            exit 1
           fi
           bash -n ./scripts/api-smoke.sh
           bash -n ./scripts/seeded-e2e-smoke.sh
-          ./scripts/api-smoke.sh
-          ./scripts/seeded-e2e-smoke.sh
+          bash ./scripts/api-smoke.sh
+          bash ./scripts/seeded-e2e-smoke.sh
