@@ -17,7 +17,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -78,6 +80,42 @@ class CollectionPipelineTest {
         val rows = db.readingDao().pendingForUpload(limit = 100)
         assertEquals(1, rows.size)
         assertTrue(!rows.first().isPothole)
+    }
+
+    @Test
+    fun `readings persisted with a drive session id stay pending-for-upload false until sealed`() = runTest {
+        val csv = readResource("/pothole-hit.csv")
+        val fixture = SensorFixtureParser.parse(csv)
+        val sessionId = UUID.randomUUID()
+        val pipeline = CollectionPipeline(readingDao = db.readingDao(), driveSessionId = sessionId)
+
+        replay(pipeline, fixture)
+
+        val stored = db.readingDao().byDriveSession(sessionId)
+        assertTrue(stored.isNotEmpty(), "readings should be tagged with the drive session id")
+        assertTrue(stored.all { it.driveSessionId == sessionId })
+
+        // Endpoint trimming/session-sealing hasn't run yet — these readings
+        // must not be upload-eligible even though nothing is privacy-zone-
+        // dropped or already uploaded.
+        val pending = db.readingDao().pendingForUpload(limit = 100)
+        assertTrue(pending.none { it.driveSessionId == sessionId }, "unsealed drive-session readings must not upload")
+    }
+
+    @Test
+    fun `setDriveSession tags subsequently persisted readings with the new session id`() = runTest {
+        val csv = readResource("/pothole-hit.csv")
+        val fixture = SensorFixtureParser.parse(csv)
+        val pipeline = CollectionPipeline(readingDao = db.readingDao())
+        val sessionId = UUID.randomUUID()
+        pipeline.setDriveSession(sessionId)
+        assertEquals(sessionId, pipeline.currentDriveSession())
+
+        replay(pipeline, fixture)
+
+        val stored = db.readingDao().byDriveSession(sessionId)
+        assertTrue(stored.isNotEmpty())
+        assertNotNull(stored.first().driveSessionId)
     }
 
     private suspend fun replay(pipeline: CollectionPipeline, fixture: SensorFixture) {

@@ -22,6 +22,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import ca.roadsense.ns.MainActivity
 import ca.roadsense.ns.RoadSenseContainer
+import ca.roadsense.ns.data.room.DriveSessionEntity
+import ca.roadsense.ns.sensor.LocationSample
 import ca.roadsense.ns.sensor.MotionVector3
 import ca.roadsense.ns.sensor.PrivacyZone
 import ca.roadsense.ns.sensor.ThermalCollectionState
@@ -31,6 +33,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.Executors
 
 /**
@@ -47,9 +53,11 @@ class CollectionService : Service(), SensorEventListener, LocationListener {
     private lateinit var pipelineDispatcher: ExecutorCoroutineDispatcher
     private lateinit var pipelineScope: CoroutineScope
     private var pipeline: CollectionPipeline? = null
+    private var sessionSealer: DriveSessionSealer? = null
     private val sensorBridge = SensorBridge()
     private var isCollecting = false
     private var hasLinearAcceleration = false
+    private var creatingDriveSession = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -65,20 +73,31 @@ class CollectionService : Service(), SensorEventListener, LocationListener {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            // If this instance was launched fresh via startForegroundService
+            // just to deliver ACTION_STOP (e.g. the previous instance died),
+            // the platform requires startForeground() to be called before we
+            // can stop — otherwise API 26+ throws
+            // ForegroundServiceDidNotStartInTimeException. A no-op
+            // notification satisfies that contract; stopSelf() immediately
+            // after tears it back down.
+            if (!isCollecting) {
+                startForegroundSafely()
+            }
             stopSelf()
             return START_NOT_STICKY
         }
 
-        val notification = buildNotification(this)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        // Location permission is required for FOREGROUND_SERVICE_TYPE_LOCATION
+        // on API 34+; starting a location-typed foreground service without it
+        // throws SecurityException and crash-loops the service (it gets
+        // relaunched by START_STICKY, fails again, repeat). Check first and
+        // bail out cleanly instead.
+        if (!hasFineLocationPermission()) {
+            stopSelf()
+            return START_NOT_STICKY
         }
+
+        startForegroundSafely()
 
         if (!isCollecting) {
             isCollecting = true
@@ -89,10 +108,30 @@ class CollectionService : Service(), SensorEventListener, LocationListener {
         return START_STICKY
     }
 
+    private fun hasFineLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun startForegroundSafely() {
+        val notification = buildNotification(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
     override fun onDestroy() {
         sensorManager.unregisterListener(this)
         locationManager.removeUpdates(this)
         setRunning(false)
+        sealActiveDriveSessionBlocking()
         pipelineScope.cancel()
         pipelineDispatcher.close()
         super.onDestroy()
@@ -125,10 +164,69 @@ class CollectionService : Service(), SensorEventListener, LocationListener {
             speedMetersPerSecond = if (location.hasSpeed()) location.speed.toDouble() else 0.0,
             bearingDegrees = if (location.hasBearing()) location.bearing.toDouble() else 0.0,
         )
-        pipelineScope.launch { pipeline?.ingestLocation(sample) }
+        pipelineScope.launch {
+            ensureDriveSession(sample)
+            pipeline?.ingestLocation(sample)
+        }
+    }
+
+    /**
+     * Lazily creates the `DriveSessionEntity` for this drive on the first GPS
+     * fix (mirrors iOS `ensureActiveDriveSession`) and tags the pipeline with
+     * it so every reading persisted from here on carries `drive_session_id`.
+     * Readings stay invisible to upload (`ReadingEntity.isReadyForUpload`)
+     * until [DriveSessionSealer] seals the session at drive-end and applies
+     * endpoint trimming — this is what actually keeps home/destination
+     * coordinates off the wire.
+     */
+    private suspend fun ensureDriveSession(sample: LocationSample) {
+        val current = pipeline ?: return
+        if (current.currentDriveSession() != null || creatingDriveSession) return
+        creatingDriveSession = true
+        try {
+            val sessionId = UUID.randomUUID()
+            container.database.driveSessionDao().insert(
+                DriveSessionEntity(
+                    id = sessionId,
+                    startedAt = Instant.ofEpochMilli((sample.timestamp * 1000).toLong()),
+                    startLatitude = sample.latitude,
+                    startLongitude = sample.longitude,
+                ),
+            )
+            current.setDriveSession(sessionId)
+        } finally {
+            creatingDriveSession = false
+        }
+    }
+
+    /**
+     * Seals the active drive session and applies endpoint trimming before the
+     * service tears down. Runs synchronously (bounded by a timeout) so the
+     * seal completes before `onDestroy` returns — otherwise a fast
+     * stop-then-relaunch could race the pipeline scope cancellation and skip
+     * trimming entirely, which would be a privacy regression.
+     */
+    private fun sealActiveDriveSessionBlocking() {
+        val current = pipeline ?: return
+        val sessionId = current.currentDriveSession() ?: return
+        val sealer = sessionSealer ?: return
+        val endLocation = current.currentLocation()
+        runBlocking {
+            withTimeoutOrNull(5_000L) {
+                sealer.sealAndTrim(
+                    driveSessionId = sessionId,
+                    endLatitude = endLocation?.latitude,
+                    endLongitude = endLocation?.longitude,
+                )
+            }
+        }
     }
 
     private fun startCollection() {
+        sessionSealer = DriveSessionSealer(
+            driveSessionDao = container.database.driveSessionDao(),
+            readingDao = container.database.readingDao(),
+        )
         pipelineScope.launch {
             val zones = container.database.privacyZoneDao().list().map {
                 PrivacyZone(
@@ -165,11 +263,10 @@ class CollectionService : Service(), SensorEventListener, LocationListener {
     }
 
     private fun registerLocation() {
-        if (ContextCompat.checkSelfPermission(
-                this,
-                android.Manifest.permission.ACCESS_FINE_LOCATION,
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) {
+        // Belt-and-suspenders: onStartCommand already bails out before
+        // startForeground() if permission is missing, but startCollection()
+        // is also reachable indirectly, so keep this guard too.
+        if (!hasFineLocationPermission()) {
             stopSelf()
             return
         }
@@ -235,8 +332,32 @@ class CollectionService : Service(), SensorEventListener, LocationListener {
             }
         }
 
+        /**
+         * Stops collection. Uses `startService`/`startForegroundService`
+         * (not `stopService`) so `ACTION_STOP` is actually delivered to
+         * `onStartCommand` — `stopService()` tears the service down directly
+         * and never invokes `onStartCommand`, which made the ACTION_STOP
+         * branch there dead code and left `stopSelf()` (and the drive-session
+         * seal it triggers via `onDestroy`) never called from this path.
+         *
+         * Also clears `PREF_IS_RUNNING` immediately, synchronously: if the
+         * service already died (crash/force-stop), there's nothing alive to
+         * deliver the intent to, and the flag would otherwise strand the UI
+         * showing "Recording active" forever with no way to clear it short of
+         * reinstalling. `onDestroy` clearing it again when the service *is*
+         * alive is a harmless redundant write.
+         */
         fun stop(context: Context) {
-            context.stopService(Intent(context, CollectionService::class.java).setAction(ACTION_STOP))
+            val stopIntent = Intent(context, CollectionService::class.java).setAction(ACTION_STOP)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(stopIntent)
+            } else {
+                context.startService(stopIntent)
+            }
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(PREF_IS_RUNNING, false)
+                .apply()
         }
 
         private fun ensureChannel(context: Context) {

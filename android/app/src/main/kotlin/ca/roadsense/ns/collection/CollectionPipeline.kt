@@ -50,6 +50,14 @@ class CollectionPipeline(
         driveSessionId = id
     }
 
+    /** Current drive session, if any. Used by the caller to seal + trim the
+     *  session's readings once collection stops. */
+    fun currentDriveSession(): UUID? = driveSessionId
+
+    /** Most recent GPS fix ingested — used as the drive-end coordinate when
+     *  sealing a session (mirrors iOS's fallback-end-sample resolution). */
+    fun currentLocation(): LocationSample? = latestLocation
+
     fun ingestMotion(sample: MotionSample) {
         readingBuilder.addMotionSample(sample)
         val location = latestLocation ?: return

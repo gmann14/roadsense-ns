@@ -25,6 +25,20 @@ interface ReadingDao {
     @Query("SELECT * FROM readings WHERE upload_batch_id = :batchId ORDER BY recorded_at ASC")
     suspend fun byBatch(batchId: UUID): List<ReadingEntity>
 
+    @Query("SELECT * FROM readings WHERE drive_session_id = :driveSessionId ORDER BY recorded_at ASC")
+    suspend fun byDriveSession(driveSessionId: UUID): List<ReadingEntity>
+
+    /** Endpoint-trimming: hides a reading from upload forever (mirrors iOS —
+     *  trimmed readings are never sent, matching `isReadyForUpload`). */
+    @Query("UPDATE readings SET endpoint_trimmed_at = :trimmedAt WHERE id IN (:ids)")
+    suspend fun markEndpointTrimmed(ids: List<UUID>, trimmedAt: Instant)
+
+    /** Seals the drive-session gate — readings attached to a session are
+     *  invisible to `pendingForUpload` until this runs (see
+     *  `ReadingEntity.isReadyForUpload`). */
+    @Query("UPDATE readings SET upload_ready_at = :readyAt WHERE id IN (:ids)")
+    suspend fun markUploadReady(ids: List<UUID>, readyAt: Instant)
+
     /**
      * Mirrors iOS upload-drain: pull a bounded slice of readings ready to
      * ship. Excludes privacy-zone-dropped, endpoint-trimmed, already-uploaded,
