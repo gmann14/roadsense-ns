@@ -79,7 +79,7 @@ class PotholePhotoCoordinator(
         val payload = PotholePhotoUploadRequest(
             reportId = photo.id,
             segmentId = photo.segmentId,
-            deviceToken = java.util.UUID.fromString(deviceToken),
+            deviceToken = deviceToken,
             clientSentAt = clock(),
             clientAppVersion = clientAppVersion,
             clientOSVersion = clientOSVersion,

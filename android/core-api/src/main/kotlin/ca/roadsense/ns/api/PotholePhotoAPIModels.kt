@@ -22,9 +22,12 @@ data class PotholePhotoUploadRequest(
     @SerialName("segment_id")
     @Serializable(with = UuidLowercaseSerializer::class)
     val segmentId: UUID? = null,
-    @SerialName("device_token")
-    @Serializable(with = UuidLowercaseSerializer::class)
-    val deviceToken: UUID,
+    // Device tokens are 43-char base64url strings (see
+    // `DeviceTokenStore.currentToken`), not UUIDs — matches iOS
+    // `UploadAPIModels.swift`, where `deviceToken` is `String`, and matches
+    // how UploadReadingsRequest/PotholeActionUploadRequest already model
+    // this field in this codebase.
+    @SerialName("device_token") val deviceToken: String,
     @SerialName("client_sent_at")
     @Serializable(with = InstantIso8601Serializer::class)
     val clientSentAt: Instant,

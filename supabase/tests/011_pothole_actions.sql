@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(22);
+SELECT plan(25);
 
 DELETE FROM pothole_actions
 WHERE action_id IN (
@@ -346,6 +346,33 @@ SELECT has_function(
     'apply_pothole_action',
     ARRAY['uuid', 'bytea', 'pothole_action_type', 'double precision', 'double precision', 'numeric', 'timestamp with time zone', 'uuid'],
     'apply_pothole_action exists with the expected signature'
+);
+
+-- P0: pothole_actions was created (20260421164516_pothole_actions.sql)
+-- without RLS or an anon revoke, unlike every other sensitive table
+-- (readings, processed_batches, unmatched_readings, segment_contributor_marks,
+-- pothole_reporter_marks, pothole_photos, feedback_submissions). It holds
+-- device_token_hash + geom + recorded_at — precise user locations joined to a
+-- device identifier — so anon readability here is a real privacy leak, not
+-- just hygiene. Fixed in 20260702120000_pothole_actions_rls.sql.
+SELECT ok(
+    (
+        SELECT relrowsecurity
+        FROM pg_class
+        WHERE relnamespace = 'public'::regnamespace
+          AND relname = 'pothole_actions'
+    ),
+    'pothole_actions has row level security enabled'
+);
+
+SELECT ok(
+    NOT has_table_privilege('anon', 'public.pothole_actions', 'SELECT'),
+    'anon cannot read pothole_actions'
+);
+
+SELECT ok(
+    NOT has_table_privilege('anon', 'public.pothole_actions', 'INSERT'),
+    'anon cannot write pothole_actions'
 );
 
 SELECT * FROM finish();

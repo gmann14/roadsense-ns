@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(15);
+SELECT plan(22);
 
 TRUNCATE road_segments_staging;
 DELETE FROM road_segments
@@ -195,6 +195,103 @@ SELECT ok(
     has_function_privilege('service_role', 'public.apply_road_segment_refresh()', 'EXECUTE'),
     'service_role can execute apply_road_segment_refresh'
 );
+
+-- P0 (lower severity): road_segments_staging held no sensitive data but was
+-- also missing RLS/anon-revoke like every other operational table. Fixed in
+-- 20260702120000_pothole_actions_rls.sql.
+SELECT ok(
+    (
+        SELECT relrowsecurity
+        FROM pg_class
+        WHERE relnamespace = 'public'::regnamespace
+          AND relname = 'road_segments_staging'
+    ),
+    'road_segments_staging has row level security enabled'
+);
+
+SELECT ok(
+    NOT has_table_privilege('anon', 'public.road_segments_staging', 'SELECT'),
+    'anon cannot read road_segments_staging'
+);
+
+SELECT ok(
+    NOT has_table_privilege('anon', 'public.road_segments_staging', 'INSERT'),
+    'anon cannot write road_segments_staging'
+);
+
+-- P0: apply_road_segment_refresh() used to DELETE FROM road_segments WHERE
+-- NOT EXISTS (... staging ...) unconditionally. An empty or drastically
+-- truncated road_segments_staging (failed import, script run out of order)
+-- would therefore wipe the whole road network. At this point in the test
+-- file, road_segments holds exactly the two rows left by the merge test
+-- above (900001, 900003) — populate a road_segments row count comparable to
+-- a "real" network relative to that, so the >50% drop threshold is exercised
+-- meaningfully.
+DELETE FROM road_segments WHERE osm_way_id BETWEEN 900010 AND 900019;
+INSERT INTO road_segments (
+    osm_way_id, segment_index, geom, length_m, road_name, road_type,
+    surface_type, municipality, has_speed_bump, has_rail_crossing,
+    is_parking_aisle, bearing_degrees
+)
+SELECT
+    900010 + gs,
+    0,
+    ST_GeomFromText('LINESTRING(-63.60 44.60,-63.599 44.601)', 4326),
+    50.0,
+    'Guard Fixture Road ' || gs,
+    'residential',
+    'asphalt',
+    'Halifax',
+    FALSE,
+    FALSE,
+    FALSE,
+    45.00
+FROM generate_series(0, 7) AS gs;
+
+-- Case 1: staging is completely empty → must raise, must not delete anything.
+TRUNCATE road_segments_staging;
+
+SELECT throws_ok(
+    $$SELECT apply_road_segment_refresh()$$,
+    'P0001',
+    NULL,
+    'apply_road_segment_refresh raises when road_segments_staging is empty'
+);
+
+SELECT ok(
+    (SELECT COUNT(*) FROM road_segments WHERE osm_way_id BETWEEN 900010 AND 900019) = 8,
+    'road_segments is untouched after the empty-staging guard fires'
+);
+
+-- Case 2: staging has far fewer rows than road_segments (a truncated/corrupt
+-- import) → must also raise rather than deleting the difference.
+INSERT INTO road_segments_staging (
+    osm_way_id, segment_index, geom, length_m, road_name, road_type,
+    surface_type, municipality, has_speed_bump, has_rail_crossing,
+    is_parking_aisle, bearing_degrees
+) VALUES (
+    900010, 0,
+    ST_GeomFromText('LINESTRING(-63.60 44.60,-63.598 44.602)', 4326),
+    50.0, 'Guard Fixture Road 0', 'residential', 'asphalt', 'Halifax',
+    FALSE, FALSE, FALSE, 45.00
+);
+
+SELECT throws_ok(
+    $$SELECT apply_road_segment_refresh()$$,
+    'P0001',
+    NULL,
+    'apply_road_segment_refresh raises when staging has collapsed to well under half of road_segments'
+);
+
+SELECT ok(
+    (SELECT COUNT(*) FROM road_segments WHERE osm_way_id BETWEEN 900010 AND 900019) = 8,
+    'road_segments is untouched after the truncated-import guard fires'
+);
+
+-- Cleanup the guard fixtures so they do not leak into later assertions in
+-- this file (none currently follow, but keep the file self-contained).
+DELETE FROM road_segments WHERE osm_way_id BETWEEN 900010 AND 900019;
+TRUNCATE road_segments_staging;
 
 SELECT * FROM finish();
 

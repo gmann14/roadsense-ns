@@ -31,7 +31,13 @@ class PotholePhotoCoordinatorTest {
     private lateinit var tempDir: File
     private val now = Instant.parse("2026-05-01T00:00:00Z")
     private val clock = { now }
-    private val deviceToken = UUID.fromString("a78f9e2b-4c6d-11ec-81d3-0242ac130003")
+
+    // Realistic device token shape: `DeviceTokenStore.currentToken` issues
+    // 43-char base64url strings (32 random bytes, no padding) — NOT UUIDs.
+    // A UUID-shaped fixture here previously masked a bug where
+    // PotholePhotoCoordinator did `UUID.fromString(deviceToken)`, which
+    // crashes (IllegalArgumentException) on a real token.
+    private val deviceToken = "z0sY9SBhve3koJ5J4wq7P9evV2IlWf3xcKCy-s5cW9Y"
 
     @Before
     fun setUp() {
@@ -77,7 +83,7 @@ class PotholePhotoCoordinatorTest {
         dao = db.potholePhotoDao(),
         metadataRpc = metadata,
         bytesRpc = bytes,
-        deviceTokenProvider = { deviceToken.toString() },
+        deviceTokenProvider = { deviceToken },
         clientAppVersion = "0.1.0 (1)",
         clientOSVersion = "Android 14",
         clock = clock,

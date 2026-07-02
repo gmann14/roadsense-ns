@@ -34,7 +34,7 @@ class PotholePhotoRequestJsonTest {
         val payload = PotholePhotoUploadRequest(
             reportId = UUID.fromString("c2f1a4b3-1234-4c5d-8e9f-112233445566"),
             segmentId = null,
-            deviceToken = UUID.fromString("a78f9e2b-4c6d-11ec-81d3-0242ac130003"),
+            deviceToken = "a78f9e2b-4c6d-11ec-81d3-0242ac130003",
             clientSentAt = Instant.parse("2026-04-21T18:22:05Z"),
             clientAppVersion = "0.2.0 (78)",
             clientOSVersion = "Android 14",
@@ -72,7 +72,7 @@ class PotholePhotoRequestJsonTest {
         val payload = PotholePhotoUploadRequest(
             reportId = UUID.fromString("c2f1a4b3-1234-4c5d-8e9f-112233445566"),
             segmentId = UUID.fromString("92ABED15-D273-4BD3-92EC-D4F0C8B82F99"),
-            deviceToken = UUID.fromString("a78f9e2b-4c6d-11ec-81d3-0242ac130003"),
+            deviceToken = "a78f9e2b-4c6d-11ec-81d3-0242ac130003",
             clientSentAt = Instant.parse("2026-04-21T18:22:05Z"),
             clientAppVersion = "0.2.0 (78)",
             clientOSVersion = "Android 14",
