@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   getPotholes,
@@ -215,6 +215,30 @@ export function SegmentDrawerPanel({
   onClose,
 }: SegmentDrawerPanelProps) {
   const handleClose = onClose ?? onClearSelection;
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Move focus into the drawer when it opens, and let Escape close it —
+  // matches the WAI-ARIA dialog/complementary-panel pattern users expect
+  // from a slide-in panel with a backdrop.
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    closeButtonRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        handleClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, handleClose]);
+
   const renderPotholeRows = (rows: PotholeRow[], label: string) => (
     <div className="pothole-list" aria-label={label}>
       {rows.map((pothole, index) => (
@@ -223,11 +247,11 @@ export function SegmentDrawerPanel({
           <div className="pothole-row__meta">
             <strong>
               {pothole.confirmation_count} confirmation{pothole.confirmation_count === 1 ? "" : "s"} · magnitude{" "}
-              {pothole.magnitude.toFixed(1)}
+              {formatFixed(pothole.magnitude, 1)}
             </strong>
             <span>
-              Last seen {formatRelativeDate(pothole.last_confirmed_at)} · {pothole.lat.toFixed(4)}°N,{" "}
-              {Math.abs(pothole.lng).toFixed(4)}°W
+              Last seen {formatRelativeDate(pothole.last_confirmed_at)} · {formatFixed(pothole.lat, 4)}°N,{" "}
+              {formatFixed(absOrNull(pothole.lng), 4)}°W
             </span>
           </div>
           <button
@@ -372,7 +396,7 @@ export function SegmentDrawerPanel({
         </div>
 
         <div className="drawer-grid" aria-label="Road detail stats">
-          <Metric label="Roughness score" value={detail.aggregate.avg_roughness_score.toFixed(2)} />
+          <Metric label="Roughness score" value={formatFixed(detail.aggregate.avg_roughness_score, 2)} />
           <Metric label="Drive samples" value={String(detail.aggregate.total_readings)} />
           <Metric label="Drivers" value={String(detail.aggregate.unique_contributors)} />
           <Metric label="Potholes" value={String(detail.aggregate.pothole_count)} />
@@ -406,6 +430,7 @@ export function SegmentDrawerPanel({
           className="drawer-backdrop"
           data-open={isOpen}
           aria-hidden={!isOpen}
+          inert={!isOpen ? true : undefined}
           onClick={onClose}
         />
       )}
@@ -414,6 +439,7 @@ export function SegmentDrawerPanel({
         data-variant={drawerVariant}
         data-open={isOpen}
         aria-hidden={!isOpen}
+        inert={!isOpen ? true : undefined}
         aria-live="polite"
         aria-busy={isLoading}
         role="complementary"
@@ -426,6 +452,7 @@ export function SegmentDrawerPanel({
             <strong style={{ fontSize: "1.05rem", lineHeight: 1.2 }}>{headingLabel}</strong>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             className="drawer-close"
             onClick={handleClose}
@@ -467,4 +494,18 @@ function formatRelativeDate(value: string): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function formatFixed(value: number | null | undefined, digits: number): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return "—";
+  }
+  return value.toFixed(digits);
+}
+
+function absOrNull(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return null;
+  }
+  return Math.abs(value);
 }
