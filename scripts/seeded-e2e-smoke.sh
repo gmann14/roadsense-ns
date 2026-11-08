@@ -11,7 +11,7 @@
 #
 # Usage:
 #   DATABASE_URL=postgres://...@127.0.0.1:54322/postgres \
-#   SUPABASE_ANON_KEY=... FUNCTIONS_BASE_URL=http://127.0.0.1:54321/functions/v1 \
+#   SUPABASE_ANON_KEY=... (or PUBLIC_API_KEY=...) FUNCTIONS_BASE_URL=http://127.0.0.1:54321/functions/v1 \
 #   scripts/seeded-e2e-smoke.sh [--allow-remote-non-production]
 
 set -euo pipefail
@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/pg-env.sh"
 
 FUNCTIONS_BASE_URL="${FUNCTIONS_BASE_URL:-http://127.0.0.1:54321/functions/v1}"
-SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
+SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${PUBLIC_API_KEY:-}}"
 PSQL_BIN="${PSQL_BIN:-psql}"
 
 SEGMENT_ID="11111111-2222-4333-8444-555555555555"
@@ -47,7 +47,7 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
 fi
 
 if [[ -z "${SUPABASE_ANON_KEY}" ]]; then
-  echo "SUPABASE_ANON_KEY is required." >&2
+  echo "SUPABASE_ANON_KEY or PUBLIC_API_KEY is required." >&2
   exit 1
 fi
 
