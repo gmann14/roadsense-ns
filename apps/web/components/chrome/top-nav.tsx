@@ -6,20 +6,21 @@ import { usePathname } from "next/navigation";
 import { FeedbackDialog } from "@/components/feedback/feedback-dialog";
 import { GetTheAppLinks } from "@/components/chrome/get-the-app-links";
 import { FreshnessPill } from "@/components/chrome/freshness-pill";
-import type { FreshnessState } from "@/lib/format";
+import type { FreshnessResult } from "@/lib/format";
 
 const links: Array<{ href: string; label: string }> = [
   { href: "/", label: "Map" },
   { href: "/methodology", label: "Methodology" },
   { href: "/privacy", label: "Privacy" },
+  { href: "/support", label: "Support" },
 ];
 
 type TopNavProps = {
-  freshnessLabel: string;
-  freshnessState: FreshnessState;
+  /** Null hides the pill: no claim is better than a wrong one. */
+  freshness: FreshnessResult | null;
 };
 
-export function TopNav({ freshnessLabel, freshnessState }: TopNavProps) {
+export function TopNav({ freshness }: TopNavProps) {
   const pathname = usePathname();
 
   return (
@@ -65,7 +66,7 @@ export function TopNav({ freshnessLabel, freshnessState }: TopNavProps) {
         </nav>
 
         <div className="top-nav-actions">
-          <FreshnessPill label={freshnessLabel} state={freshnessState} />
+          {freshness ? <FreshnessPill label={freshness.label} state={freshness.state} /> : null}
           <GetTheAppLinks className="top-nav-app-links" />
         </div>
       </header>

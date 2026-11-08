@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { MIN_CONTRIBUTORS_HIGH_CONFIDENCE, MIN_CONTRIBUTORS_PUBLIC } from "@/lib/site";
 import type { MapMode } from "@/lib/url-state";
 
 type MapLegendProps = {
@@ -21,6 +22,16 @@ const qualityItems: LegendItem[] = [
   { swatchClass: "fair", label: "Fair", description: "Noticeable roughness, but not among the harshest mapped roads." },
   { swatchClass: "rough", label: "Rough", description: "Consistently rough enough to stand out in the public signal." },
   { swatchClass: "very-rough", label: "Very rough", description: "Among the harshest mapped roads." },
+  {
+    swatchClass: "unpaved",
+    label: "Unpaved",
+    description: "Gravel or dirt, per OpenStreetMap. Not scored against paved roads.",
+  },
+  {
+    swatchClass: "uncategorized",
+    label: "No category yet",
+    description: "Published, but without enough clean readings for a roughness category.",
+  },
 ];
 
 const potholeItems: LegendItem[] = [
@@ -29,9 +40,22 @@ const potholeItems: LegendItem[] = [
 ];
 
 const coverageItems: LegendItem[] = [
-  { swatchClass: "coverage-strong", label: "High confidence", description: "Many drivers, many trips. Stable enough to cite." },
-  { swatchClass: "coverage-published", label: "Medium", description: "Pattern is real but the pill might shift as more data lands." },
-  { swatchClass: "coverage-emerging", label: "Emerging", description: "A hint, not a claim. Treat the colour as provisional." },
+  {
+    swatchClass: "coverage-strong",
+    label: "High confidence",
+    description: `${MIN_CONTRIBUTORS_HIGH_CONFIDENCE}+ different drivers. Stable enough to cite.`,
+  },
+  {
+    swatchClass: "coverage-published",
+    label: "Medium",
+    description: `${MIN_CONTRIBUTORS_PUBLIC}–${MIN_CONTRIBUTORS_HIGH_CONFIDENCE - 1} drivers. The pattern is real but may shift as more data lands.`,
+  },
+  {
+    swatchClass: "coverage-emerging",
+    label: "Emerging",
+    description: `Fewer than ${MIN_CONTRIBUTORS_PUBLIC} drivers so far, so no score is published yet.`,
+  },
+  { swatchClass: "coverage-none", label: "None", description: "No usable drives on this road yet." },
 ];
 
 const titles: Record<MapMode, string> = {

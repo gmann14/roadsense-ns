@@ -2,11 +2,14 @@ import { vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { AppShell } from "@/components/chrome/app-shell";
 import HomePage from "@/app/page";
 import MethodologyPage from "@/app/methodology/page";
 import MunicipalityPage, { generateMetadata } from "@/app/municipality/[slug]/page";
 import PrivacyPage from "@/app/privacy/page";
 import PrivacyAndCountsPage from "@/app/privacy-and-counts/page";
+import SupportPage from "@/app/support/page";
+import TermsPage from "@/app/terms/page";
 import MostReportedPotholesPage from "@/app/reports/potholes/page";
 import WorstRoadsPage from "@/app/reports/worst-roads/page";
 import {
@@ -35,13 +38,26 @@ describe("web route shells", () => {
     expect(markup).toContain('aria-current="page"');
   });
 
-  it("renders a plain-English freshness pill in the topbar", async () => {
+  it("hides the freshness pill when the API gives no data_updated_at", async () => {
+    // No live API in tests → stats unavailable → no freshness claim at all.
     const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).not.toContain('class="freshness-pill"');
+    expect(markup).not.toContain("Updated today");
+  });
+
+  it("renders a plain-English freshness pill from data_updated_at", () => {
+    const markup = renderToStaticMarkup(
+      <AppShell dataUpdatedAt={new Date().toISOString()}>
+        <p>content</p>
+      </AppShell>,
+    );
     expect(markup).toContain('class="freshness-pill"');
-    expect(markup).toContain('role="status"');
-    // No live API in tests → null generated_at → pending state.
-    expect(markup).toContain("Awaiting first publish");
-    expect(markup).toContain('data-state="pending"');
+    expect(markup).toContain("Updated today");
+  });
+
+  it("tells visitors when live stats are unavailable instead of showing zeros", async () => {
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).toContain("Live stats are unavailable right now.");
   });
 
   it("groups primary nav links in the top navigation", async () => {
@@ -73,6 +89,25 @@ describe("web route shells", () => {
   it("renders methodology and privacy pages", async () => {
     expect(renderToStaticMarkup(await MethodologyPage())).toContain("How RoadSense builds the public map");
     expect(renderToStaticMarkup(await PrivacyPage())).toContain("Public map, private contributors");
+  });
+
+  it("renders static terms and support pages with the site footer", () => {
+    const terms = renderToStaticMarkup(TermsPage());
+    const support = renderToStaticMarkup(SupportPage());
+
+    expect(terms).toContain("Never handle your phone while driving");
+    expect(support).toContain("Frequently asked questions");
+    for (const markup of [terms, support]) {
+      expect(markup).toContain('class="site-footer"');
+      expect(markup).toContain('href="/terms"');
+      expect(markup).toContain('href="/support"');
+      expect(markup).toContain('href="/privacy"');
+    }
+  });
+
+  it("links support from the primary navigation", async () => {
+    const markup = renderToStaticMarkup(await HomePage());
+    expect(markup).toContain('href="/support"');
   });
 
   it("redirects the legacy privacy & counts route to privacy", () => {

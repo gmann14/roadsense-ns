@@ -44,13 +44,20 @@ type RoadQualityMapViewProps = {
 
 const QUALITY_SOURCE_ID = "roadsense-quality";
 const COVERAGE_SOURCE_ID = "roadsense-coverage";
-const QUALITY_CORRIDOR_LAYER_ID = "roadsense-quality-corridors";
 const SEGMENT_LAYER_ID = "roadsense-segments";
 const SELECTED_SEGMENT_LAYER_ID = "roadsense-segments-selected";
 const POTHOLE_LAYER_ID = "roadsense-potholes";
 const TOP_POTHOLES_SOURCE_ID = "roadsense-top-potholes";
 const TOP_POTHOLES_LAYER_ID = "roadsense-top-potholes-points";
 const COVERAGE_LAYER_ID = "roadsense-coverage-segments";
+/**
+ * Credit line for the RoadSense overlays (Mapbox's own style attribution stays
+ * on). Segments are OpenStreetMap ways, so the ODbL requires this credit.
+ */
+export const OVERLAY_ATTRIBUTION =
+  '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a> · <a href="/methodology#data-licence">RoadSense NS data: ODbL</a>';
+export const MAP_UNAVAILABLE_TITLE = "The map can't load right now.";
+export const MAP_UNAVAILABLE_BODY = "Please try again in a little while.";
 const DATA_BOUNDS_MAX_ZOOM = 13.1;
 const POTHOLE_MARKER_MIN_ZOOM = 8.8;
 const POTHOLE_MARKER_FOCUS_ZOOM = 10.8;
@@ -144,7 +151,7 @@ export function RoadQualityMapView({
     if (!mapboxToken) {
       setMapSupported(false);
       handleMapReadyChange(false);
-      handleMapErrorChange("Mapbox is not configured yet for this environment.");
+      handleMapErrorChange(null);
       return;
     }
 
@@ -217,6 +224,7 @@ export function RoadQualityMapView({
             tiles: [getQualityTileUrlTemplate()],
             minzoom: 5,
             maxzoom: 15,
+            attribution: OVERLAY_ATTRIBUTION,
           });
         }
 
@@ -226,25 +234,7 @@ export function RoadQualityMapView({
             tiles: [getCoverageTileUrlTemplate()],
             minzoom: 5,
             maxzoom: 15,
-          });
-        }
-
-        if (!map.getLayer(QUALITY_CORRIDOR_LAYER_ID)) {
-          map.addLayer({
-            id: QUALITY_CORRIDOR_LAYER_ID,
-            type: "line",
-            source: QUALITY_SOURCE_ID,
-            "source-layer": "quality_corridors",
-            layout: {
-              "line-cap": "round",
-              "line-join": "round",
-            },
-            paint: {
-              "line-color": "#c89a50",
-              "line-width": ["interpolate", ["linear"], ["zoom"], 6, 4, 10, 6.4, 14, 9.4],
-              "line-opacity": ["interpolate", ["linear"], ["zoom"], 6, 0.22, 10, 0.34, 14, 0.42],
-              "line-blur": ["interpolate", ["linear"], ["zoom"], 6, 0.6, 14, 1],
-            },
+            attribution: OVERLAY_ATTRIBUTION,
           });
         }
 
@@ -555,9 +545,13 @@ export function RoadQualityMapView({
     <div className="map-canvas-shell">
       <div ref={mapContainerRef} className="map-canvas" />
       {!mapSupported ? (
-        <div className="map-overlay-banner">
-          <strong>Mapbox token missing.</strong>
-          Add <code>NEXT_PUBLIC_MAPBOX_TOKEN</code> to render the live public map.
+        <div className="map-overlay-banner" role="status">
+          <strong>{MAP_UNAVAILABLE_TITLE}</strong> {MAP_UNAVAILABLE_BODY}
+          {process.env.NODE_ENV === "development" ? (
+            <span className="map-overlay-banner__dev">
+              Developer note: set <code>NEXT_PUBLIC_MAPBOX_TOKEN</code> to render the map.
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -573,7 +567,6 @@ function hasExplicitRouteViewport(
 function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
   const visibleLayerIds = new Set<string>();
   if (mode === "quality") {
-    visibleLayerIds.add(QUALITY_CORRIDOR_LAYER_ID);
     visibleLayerIds.add(SEGMENT_LAYER_ID);
     visibleLayerIds.add(SELECTED_SEGMENT_LAYER_ID);
     visibleLayerIds.add(POTHOLE_LAYER_ID);
@@ -586,7 +579,6 @@ function applyLayerVisibility(map: mapboxgl.Map, mode: MapMode) {
   }
 
   for (const layerId of [
-    QUALITY_CORRIDOR_LAYER_ID,
     SEGMENT_LAYER_ID,
     SELECTED_SEGMENT_LAYER_ID,
     POTHOLE_LAYER_ID,

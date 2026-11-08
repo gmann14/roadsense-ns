@@ -1,0 +1,11 @@
+# Cloudflare Workers Static Assets header rules. OpenNext copies public/ into
+# .open-next/assets, and Cloudflare applies these to asset responses only;
+# Worker-rendered pages get their headers from next.config.ts headers().
+
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin

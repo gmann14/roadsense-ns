@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, IBM_Plex_Mono, Manrope } from "next/font/google";
 
+import { siteDefaultMetadata } from "@/lib/seo";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
+
 import "mapbox-gl/dist/mapbox-gl.css";
 import "./globals.css";
 
@@ -24,9 +27,9 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RoadSense NS — community road quality for Nova Scotia",
-  description:
-    "A public, crowdsourced map of Nova Scotia road roughness, potholes, and coverage. Built by drivers, refreshed nightly.",
+  ...siteDefaultMetadata(),
+  metadataBase: new URL(SITE_URL),
+  applicationName: SITE_NAME,
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     shortcut: [{ url: "/icon.svg", type: "image/svg+xml" }],

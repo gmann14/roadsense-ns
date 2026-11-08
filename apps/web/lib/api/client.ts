@@ -9,7 +9,35 @@ export type PublicStats = {
   map_bounds: Bbox | null;
   focus_bounds: Bbox | null;
   pothole_bounds: Bbox | null;
-  generated_at: string;
+  /** When the stats materialized view was refreshed. Not a data-freshness signal. */
+  generated_at: string | null;
+  /**
+   * When road aggregates last actually changed (day-rounded). Optional: older
+   * API builds don't send it, and then the UI shows no freshness claim at all.
+   */
+  data_updated_at: string | null;
+};
+
+export type ApiFailureReason =
+  | "disabled"
+  | "invalid_request"
+  | "aborted"
+  | "timeout"
+  | "network"
+  | "http"
+  | "invalid_response";
+
+/**
+ * Every read helper returns this instead of `null`, so callers can tell
+ * "the API said there is nothing here" apart from "we couldn't reach the API".
+ */
+export type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; reason: ApiFailureReason; status: number | null };
+
+export type ReadOptions = {
+  signal?: AbortSignal;
+  timeoutMs?: number;
 };
 
 export type SegmentDetail = {
@@ -36,30 +64,6 @@ export type SegmentDetail = {
   };
   history: unknown[];
   neighbors: unknown | null;
-};
-
-export type WorstSegmentRow = {
-  rank: number;
-  segment_id: string;
-  road_name: string | null;
-  municipality: string | null;
-  road_type: string;
-  category: "smooth" | "fair" | "rough" | "very_rough" | "unpaved";
-  confidence: "low" | "medium" | "high";
-  avg_roughness_score: number;
-  score_last_30d: number | null;
-  score_30_60d: number | null;
-  trend: "improving" | "stable" | "worsening";
-  total_readings: number;
-  unique_contributors: number;
-  pothole_count: number;
-  last_reading_at: string | null;
-};
-
-export type WorstSegmentsResponse = {
-  generated_at: string | null;
-  municipality: string | null;
-  rows: WorstSegmentRow[];
 };
 
 export type Bbox = {
@@ -136,49 +140,110 @@ function apiFetchesDisabledInTests(): boolean {
     process.env.ROADSENSE_ALLOW_API_FETCHES_IN_TEST !== "true";
 }
 
-async function fetchJson<T>(
+const DEFAULT_TIMEOUT_MS = 3_000;
+
+function failure(reason: ApiFailureReason, status: number | null = null): { ok: false; reason: ApiFailureReason; status: number | null } {
+  return { ok: false, reason, status };
+}
+
+export async function fetchJson(
   path: string,
-  nextOptions?: RequestInit & { next?: { revalidate: number }; timeoutMs?: number },
-): Promise<T | null> {
+  options: ReadOptions & { revalidate?: number } = {},
+): Promise<ApiResult<unknown>> {
   if (apiFetchesDisabledInTests()) {
-    return null;
+    return failure("disabled");
   }
 
-  const { timeoutMs, ...requestInit } = nextOptions ?? {};
+  const { signal, timeoutMs = DEFAULT_TIMEOUT_MS, revalidate } = options;
+  if (signal?.aborted) {
+    return failure("aborted");
+  }
+
+  // One controller aborts on either the caller's signal or our timeout, so a
+  // caller-supplied signal never disables the timeout.
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs ?? 3_000);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const forwardAbort = () => controller.abort();
+  signal?.addEventListener("abort", forwardAbort, { once: true });
 
   try {
     const response = await fetch(buildEndpointUrl(path), {
-      ...requestInit,
-      signal: requestInit.signal ?? controller.signal,
-      headers: {
-        ...getPublicReadHeaders(),
-        ...(requestInit.headers ?? {}),
-      },
-    });
+      signal: controller.signal,
+      headers: getPublicReadHeaders(),
+      ...(revalidate !== undefined ? { next: { revalidate } } : {}),
+    } as RequestInit);
 
-    if (!response.ok || response.status === 204) {
-      return null;
+    if (!response.ok) {
+      return failure("http", response.status);
     }
 
-    return (await response.json()) as T;
+    if (response.status === 204) {
+      return failure("invalid_response", response.status);
+    }
+
+    try {
+      return { ok: true, data: (await response.json()) as unknown };
+    } catch {
+      return failure("invalid_response", response.status);
+    }
   } catch {
-    return null;
+    if (signal?.aborted) {
+      return failure("aborted");
+    }
+    return failure(timedOut ? "timeout" : "network");
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener("abort", forwardAbort);
   }
 }
 
-export async function getPublicStats(): Promise<PublicStats | null> {
-  const stats = await fetchJson<PublicStats>("/stats", {
-    next: { revalidate: 300 },
-  });
-  return normalizePublicStats(stats);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export async function getSegmentDetail(segmentId: string): Promise<SegmentDetail | null> {
-  return await fetchJson<SegmentDetail>(`/segments/${segmentId}`);
+/** Returns null when the stats could not be loaded (outage, timeout, bad payload). */
+export async function getPublicStats(options: ReadOptions = {}): Promise<PublicStats | null> {
+  const result = await fetchJson("/stats", { ...options, revalidate: 300 });
+  if (!result.ok || !isRecord(result.data)) {
+    return null;
+  }
+  return normalizePublicStats(result.data as Partial<PublicStats>);
+}
+
+export async function getSegmentDetail(
+  segmentId: string,
+  options: ReadOptions = {},
+): Promise<ApiResult<SegmentDetail>> {
+  if (segmentId.trim().length === 0) {
+    return failure("invalid_request");
+  }
+
+  const result = await fetchJson(`/segments/${encodeURIComponent(segmentId)}`, options);
+  if (!result.ok) {
+    return result;
+  }
+
+  const body = result.data;
+  if (!isRecord(body) || !isRecord(body.aggregate) || typeof body.id !== "string") {
+    return failure("invalid_response");
+  }
+
+  return { ok: true, data: body as unknown as SegmentDetail };
+}
+
+function toPotholeResponse(result: ApiResult<unknown>): ApiResult<PotholeResponse> {
+  if (!result.ok) {
+    return result;
+  }
+  const potholes = isRecord(result.data) ? result.data.potholes : undefined;
+  if (!Array.isArray(potholes)) {
+    return failure("invalid_response");
+  }
+  return { ok: true, data: { potholes: potholes as PotholeRow[] } };
 }
 
 export function getQualityTileUrlTemplate(): string {
@@ -189,36 +254,16 @@ export function getCoverageTileUrlTemplate(): string {
   return buildEndpointUrl("/tiles/coverage/{z}/{x}/{y}.mvt");
 }
 
-export async function getWorstSegments({
-  municipality,
-  limit,
-}: {
-  municipality: string | null;
-  limit: number;
-}): Promise<WorstSegmentsResponse | null> {
-  const query = new URLSearchParams({
-    limit: String(limit),
-  });
-
-  if (municipality) {
-    query.set("municipality", municipality);
-  }
-
-  return await fetchJson<WorstSegmentsResponse>(`/segments-worst?${query.toString()}`, {
-    next: { revalidate: 900 },
-  });
-}
-
-export async function getPotholes(bbox: Bbox): Promise<PotholeResponse | null> {
+export async function getPotholes(bbox: Bbox, options: ReadOptions = {}): Promise<ApiResult<PotholeResponse>> {
   if (!isPotholeBboxWithinLookupCap(bbox)) {
-    return null;
+    return failure("invalid_request");
   }
 
   const query = new URLSearchParams({
     bbox: [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat].map((value) => value.toFixed(5)).join(","),
   });
 
-  return await fetchJson<PotholeResponse>(`/potholes?${query.toString()}`);
+  return toPotholeResponse(await fetchJson(`/potholes?${query.toString()}`, options));
 }
 
 export function isPotholeBboxWithinLookupCap(bbox: Bbox): boolean {
@@ -226,26 +271,35 @@ export function isPotholeBboxWithinLookupCap(bbox: Bbox): boolean {
     bbox.maxLat - bbox.minLat <= POTHOLE_BBOX_MAX_LAT_SPAN;
 }
 
-export async function getTopPotholes(limit = 20): Promise<PotholeResponse | null> {
+export async function getTopPotholes(limit = 20, options: ReadOptions = {}): Promise<ApiResult<PotholeResponse>> {
   const query = new URLSearchParams({ limit: String(limit) });
-  return await fetchJson<PotholeResponse>(`/top-potholes?${query.toString()}`, {
-    next: { revalidate: 300 },
-    timeoutMs: 1_500,
-  });
+  return toPotholeResponse(
+    await fetchJson(`/top-potholes?${query.toString()}`, {
+      timeoutMs: 1_500,
+      ...options,
+      revalidate: 300,
+    }),
+  );
 }
 
 function normalizeNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function normalizePublicStats(stats: PublicStats | null): PublicStats | null {
+function normalizeTimestamp(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+export function normalizePublicStats(stats: Partial<PublicStats> | null | undefined): PublicStats | null {
   if (!stats) {
     return null;
   }
 
   return {
-    ...stats,
     total_km_mapped: normalizeNumber(stats.total_km_mapped),
     total_readings: normalizeNumber(stats.total_readings),
     segments_scored: normalizeNumber(stats.segments_scored),
@@ -254,6 +308,8 @@ export function normalizePublicStats(stats: PublicStats | null): PublicStats | n
     map_bounds: normalizeBbox(stats.map_bounds),
     focus_bounds: normalizeBbox(stats.focus_bounds),
     pothole_bounds: normalizeBbox(stats.pothole_bounds),
+    generated_at: normalizeTimestamp(stats.generated_at),
+    data_updated_at: normalizeTimestamp(stats.data_updated_at),
   };
 }
 
