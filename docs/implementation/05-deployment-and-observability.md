@@ -217,11 +217,15 @@ Railway's stock PostGIS image doesn't include pg_cron. The `migrate-railway.sh` 
 |---|---|---|
 | `refresh-public-stats-mv` | every 5 min | Refreshes `public_stats_mv` so `/stats` isn't stale |
 | `refresh-public-worst-segments-mv` | every 15 min | Refreshes the worst-segments materialised view |
-| `create-next-readings-partition` | every 24h | Pre-creates next month's `readings_YYYY_MM` partition before the calendar rolls over (otherwise inserts would fail with "no partition of relation found for row") |
-| `nightly-aggregate-recompute` | every 24h | Full aggregate recompute |
-| `pothole-expiry` | every 24h | Marks unconfirmed potholes as expired |
-| `rate-limit-gc` | every 24h | Trims old rate-limit rows |
-| `drop-old-readings-partitions` | every 24h | Drops partitions older than 6 months (irreversible; see step 2 of the deploy order) |
+| `create-next-readings-partition` | daily | Pre-creates next month's `readings_YYYY_MM` partition (otherwise inserts fail with "no partition of relation found for row") |
+| `purge-expired-readings` | daily | Deletes readings older than 6 months from the partition that straddles the cutoff, then recomputes the touched segments |
+| `drop-old-readings-partitions` | daily | Drops partitions older than 6 months (irreversible; see step 2 of the deploy order) |
+| `replay-unmatched-readings` | daily | Re-matches readings that had no segment |
+| `nightly-aggregate-recompute` | daily | Aggregate recompute from a watermark |
+| `pothole-expiry` | daily | Marks unconfirmed potholes as expired |
+| `retention-sweeps` | daily | `run_retention_sweeps()`: rate limits, token challenges, feedback IPs, processed batches, pothole actions, reporter and contributor marks, unmatched readings |
+
+The daily jobs are staggered by a few minutes each. The scheduler has its own connection pool without the request pool's 8 s `statement_timeout`, takes a per-job advisory lock so replicas don't double-run, and records each run; `/health/deep` reports a job as `stale` or `failing` from those records. Details: [02-backend-implementation.md → Scheduler (Railway)](02-backend-implementation.md#scheduler-railway).
 
 The scheduler activates when `RAILWAY_ENVIRONMENT` env var is set (i.e. running on Railway), or when `ENABLE_SCHEDULER=true` is set explicitly. It stays off during local dev and tests so the logs are quiet.
 
