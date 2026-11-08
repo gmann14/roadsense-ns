@@ -1,6 +1,22 @@
 name: Backend CI
 
 on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "scripts/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - "scripts/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/backend-ci.yml"
   workflow_dispatch:
 
 concurrency:
@@ -10,31 +26,138 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # Keep DENO_VERSION equal to the denoland/deno tag in Dockerfile and
+  # SUPABASE_CLI_VERSION equal to the deploy workflows.
+  DENO_VERSION: "2.6.6"
+  SUPABASE_CLI_VERSION: "2.95.4"
+
 jobs:
-  backend-check:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 20
+  deno:
+    name: Deno check + test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Verify backend scaffold exists
-        run: |
-          test -d supabase/migrations
-          test -d supabase/functions
-          test -d supabase/tests
-          test -d scripts
-          test -f supabase/README.md
-
-      - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          version: 2.78.1
+          persist-credentials: false
 
       - name: Set up Deno
-        uses: denoland/setup-deno@v2
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
-          deno-version: v2.x
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - name: Type-check the gateway
+        run: deno check supabase/functions/server.ts
+
+      - name: Run Deno tests
+        shell: bash
+        run: |
+          mapfile -t test_files < <(find supabase/functions -type f -name '*_test.ts' | sort)
+          if [ "${#test_files[@]}" -eq 0 ]; then
+            echo "::error::No Deno tests found under supabase/functions."
+            exit 1
+          fi
+          deno test -A "${test_files[@]}"
+
+      - name: Build the API image
+        run: docker build --tag roadsense-api:ci .
+
+  scripts:
+    name: Ops scripts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Syntax-check every shell script
+        shell: bash
+        run: |
+          status=0
+          while IFS= read -r script; do
+            bash -n "$script" || status=1
+          done < <(find scripts -type f -name '*.sh' | sort; echo scripts/tests/fakes/psql)
+          exit "$status"
+
+      - name: ShellCheck (errors only)
+        shell: bash
+        run: |
+          find scripts -type f -name '*.sh' -print0 | xargs -0 shellcheck --severity=error --external-sources
+          shellcheck --severity=error scripts/tests/fakes/psql
+
+      - name: Script behaviour tests
+        run: scripts/tests/run.sh
+
+  railway-migrations:
+    name: Migrations on plain PostGIS (Railway parity)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgis:
+        image: postgis/postgis:16-3.7
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:ci-only-password@127.0.0.1:5432/postgres?sslmode=disable
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Ensure psql is available
+        shell: bash
+        run: command -v psql || { sudo apt-get update && sudo apt-get install -y postgresql-client; }
+
+      - name: Apply every migration with migrate-railway.sh
+        run: scripts/migrate-railway.sh
+
+      - name: Re-run applies nothing
+        shell: bash
+        run: |
+          output="$(scripts/migrate-railway.sh)"
+          echo "$output"
+          grep -q "Nothing to apply" <<< "$output"
+
+      - name: supabase db push agrees with the ledger
+        shell: bash
+        env:
+          PGSSLMODE: disable
+        run: |
+          output="$(supabase db push --db-url "$DATABASE_URL" --dry-run 2>&1)"
+          echo "$output"
+          grep -q "Remote database is up to date" <<< "$output"
+
+  database:
+    name: pgTAP + API smoke (local Supabase)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
 
       - name: Write local Edge Function secrets
         run: |
@@ -51,15 +174,6 @@ jobs:
       - name: Run database tests
         run: supabase test db
 
-      - name: Run Edge Function tests
-        run: |
-          mapfile -t test_files < <(find supabase/functions -type f -name '*_test.ts' | sort)
-          if [ "${#test_files[@]}" -eq 0 ]; then
-            echo "No Deno tests found."
-            exit 0
-          fi
-          deno test -A "${test_files[@]}"
-
       - name: Run API smoke scripts
         shell: bash
         run: |
@@ -67,14 +181,5 @@ jobs:
           export FUNCTIONS_BASE_URL="${API_URL}/functions/v1"
           export SUPABASE_ANON_KEY="${ANON_KEY}"
           export DATABASE_URL="${DB_URL}"
-          bash -n ./scripts/api-smoke.sh
-          bash -n ./scripts/seeded-e2e-smoke.sh
-          bash ./scripts/api-smoke.sh
-          bash ./scripts/seeded-e2e-smoke.sh
-
-      - name: Report scaffold status
-        run: |
-          migration_count="$(find supabase/migrations -maxdepth 1 -type f ! -name 'README.md' | wc -l | tr -d ' ')"
-          function_count="$(find supabase/functions -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
-          echo "Migrations: ${migration_count}"
-          echo "Function directories: ${function_count}"
+          scripts/api-smoke.sh
+          scripts/seeded-e2e-smoke.sh
