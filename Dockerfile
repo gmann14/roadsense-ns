@@ -1,8 +1,14 @@
-FROM denoland/deno:2.1.4
+# Keep this version in step with DENO_VERSION in .github/workflows/backend-ci.yml
+# so CI tests the runtime that ships.
+FROM denoland/deno:2.6.6
 
 WORKDIR /app
 
 COPY supabase/functions ./supabase/functions
+
+# Run as the image's unprivileged `deno` user. DENO_DIR (/deno-dir) is owned
+# by it, so the dependency cache below is writable without root.
+USER deno
 
 # Warm Deno's dep cache so cold start doesn't pay the download cost.
 RUN deno cache --no-check supabase/functions/server.ts

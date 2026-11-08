@@ -11,8 +11,18 @@
 .cloudflare-token*
 .cloudflare-config*
 .railway-secrets*
+*.p8
 *.p12
 *.mobileprovision
+*.keystore
+*.jks
+**/secrets/**
+
+# Local device stores (GPS traces) and browser-automation captures. Until now
+# .context/ was ignored only through .git/info/exclude, which fresh clones
+# and worktrees do not share.
+.context/
+.playwright-mcp/
 
 # Xcode
 DerivedData/
