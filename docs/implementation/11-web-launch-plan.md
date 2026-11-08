@@ -269,7 +269,10 @@ Daily storage growth (one snapshot per day, 30 retained): ~900MB. Pruning: cron 
 
 - `apps/web/lib/api/client.ts`: API/tile URL templates point at `NEXT_PUBLIC_API_BASE_URL`
 - Mapbox style: vector sources point at `https://api.nsroadsense.ca/functions/v1/tiles/...` and coverage equivalents
-- Pages: index (map), `/methodology`, `/privacy`, `/municipality/[slug]`, `/reports` — already scaffolded
+- Pages: index (map), `/methodology`, `/privacy`, `/terms`, `/support`, `/municipality/[slug]`, plus `/sitemap.xml` and `/robots.txt`. `/reports/*` and `/privacy-and-counts` are redirects only.
+- Headers: `next.config.ts` sets HSTS, a minimal enforced CSP and the full Mapbox-compatible CSP as Report-Only on Worker responses; `public/_headers` makes `/_next/static/*` immutable on Workers Static Assets. See doc 07 "Security Headers" for how to promote the CSP to enforced.
+- `www.nsroadsense.ca` answers with a 301 to `https://nsroadsense.ca` (`lib/redirects.ts`), so the `www` Worker route above must stay.
+- No OpenNext incremental cache is configured, so no KV or queue binding is needed to deploy. Doc 07 "Enabling the OpenNext incremental cache" has the owner steps if one is wanted later.
 
 ### Note on Next.js on Pages
 
@@ -282,7 +285,7 @@ Once Pages and R2 are working with their default domains:
 | Subdomain | Points to | Type |
 |---|---|---|
 | `nsroadsense.ca` | Cloudflare web Worker | Worker route |
-| `www.nsroadsense.ca` | Cloudflare web Worker / redirect | Worker route |
+| `www.nsroadsense.ca` | Cloudflare web Worker (301 to apex) | Worker route |
 | `api.nsroadsense.ca` | Cloudflare API proxy Worker | Worker route |
 | `tiles.nsroadsense.ca` | Cloudflare API proxy Worker | Worker route |
 
@@ -359,5 +362,5 @@ If the site goes viral and we serve 100k+ users/month: still ~$2/month, because 
 1. **Mapbox style**: do we use a Mapbox-Studio-hosted style with our R2 source layered on top, or fully self-hosted style JSON? Hosted is simpler. Recommend hosted for v1.
 2. **Initial dataset**: how much real data do we have to render? If <1k segments scored, the map will look empty. Worth seeding the bake from the calibration drive data first.
 3. **Privacy zone bake-out**: confirm the segment aggregates query already excludes private-zone-flagged readings (it should, per `ReadingStore.swift`, but worth a unit test on the bake side).
-4. **`apps/web/.vercel/` removal**: keep both providers configured during transition, or delete Vercel link before Cloudflare Pages goes live? Recommend deleting after Cloudflare is verified to avoid confusion.
+4. **Vercel removal**: done for config on 2026-11-08 (`apps/web/vercel.json` deleted). Delete any local `apps/web/.vercel/` link too.
 5. **Sentry**: in scope for launch, or defer? Recommend defer — soft launch first, add Sentry once we have real traffic and crashes.
