@@ -7,6 +7,7 @@ import {
     validateUploadPayload,
 } from "./handler.ts";
 import { createRateLimitChecker, type RpcResponse } from "./runtime.ts";
+import { endlessChunkedPost, unexpectedCall } from "../_shared/test_helpers.ts";
 
 const validPayload = {
     batch_id: "b5f6a3c2-8e10-4d1f-9a7b-0e2c6d4f8a31",
@@ -680,4 +681,21 @@ Deno.test("validateUploadPayload accepts boundary lat/lng values", () => {
     });
 
     assertEquals(result.ok, true);
+});
+
+Deno.test("upload handler aborts a chunked body with no Content-Length once it passes the byte cap", async () => {
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: unexpectedCall("hashDeviceToken"),
+        checkRateLimit: unexpectedCall("checkRateLimit"),
+        ingestBatch: unexpectedCall("ingestBatch"),
+    });
+    const { request, pulls } = endlessChunkedPost("http://localhost/functions/v1/upload-readings");
+
+    const response = await handler(request);
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+    // 16 KiB chunks against a <= 256 KiB cap: the stream is cancelled after a
+    // handful of chunks instead of being drained (10,000 chunks = ~160 MB).
+    assertEquals(pulls() < 40, true);
 });

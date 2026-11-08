@@ -7,6 +7,7 @@ import {
 } from "./handler.ts";
 import { createPotholeActionRateLimitChecker } from "./runtime.ts";
 import type { RpcResponse } from "../upload-readings/runtime.ts";
+import { endlessChunkedPost, unexpectedCall } from "../_shared/test_helpers.ts";
 
 const validPayload = {
     action_id: "d89fe2a5-6b3f-4207-a592-5fe67bb4b6ff",
@@ -461,4 +462,21 @@ Deno.test("validatePotholeActionPayload accepts boundary lat/lng values", () => 
     });
 
     assertEquals(result.ok, true);
+});
+
+Deno.test("pothole-actions handler aborts a chunked body with no Content-Length once it passes the byte cap", async () => {
+    const handler = createPotholeActionsHandler({
+        hashDeviceToken: unexpectedCall("hashDeviceToken"),
+        checkRateLimit: unexpectedCall("checkRateLimit"),
+        applyAction: unexpectedCall("applyAction"),
+    });
+    const { request, pulls } = endlessChunkedPost("http://localhost/functions/v1/pothole-actions");
+
+    const response = await handler(request);
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+    // 16 KiB chunks against a <= 256 KiB cap: the stream is cancelled after a
+    // handful of chunks instead of being drained (10,000 chunks = ~160 MB).
+    assertEquals(pulls() < 40, true);
 });

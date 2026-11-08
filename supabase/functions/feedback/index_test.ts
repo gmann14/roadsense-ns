@@ -8,6 +8,7 @@ import {
 } from "./handler.ts";
 import { createFeedbackRateLimitChecker } from "./runtime.ts";
 import type { RpcResponse } from "../upload-readings/runtime.ts";
+import { endlessChunkedPost, unexpectedCall } from "../_shared/test_helpers.ts";
 
 const validPayload = {
     source: "ios",
@@ -468,4 +469,20 @@ Deno.test("createFeedbackRateLimitChecker hits IP bucket and returns retry secon
     }
     assertEquals(calls[0].p_key, "feedback-ip:203.0.113.10");
     assertEquals(calls[0].p_limit, 10);
+});
+
+Deno.test("feedback handler aborts a chunked body with no Content-Length once it passes the byte cap", async () => {
+    const handler = createFeedbackHandler({
+        checkRateLimit: unexpectedCall("checkRateLimit"),
+        insertFeedback: unexpectedCall("insertFeedback"),
+    });
+    const { request, pulls } = endlessChunkedPost("http://localhost/functions/v1/feedback");
+
+    const response = await handler(request);
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+    // 16 KiB chunks against a <= 256 KiB cap: the stream is cancelled after a
+    // handful of chunks instead of being drained (10,000 chunks = ~160 MB).
+    assertEquals(pulls() < 40, true);
 });

@@ -9,6 +9,7 @@ import {
 } from "./handler.ts";
 import { createChallengeRateLimitChecker } from "./runtime.ts";
 import type { RpcResponse } from "../upload-readings/runtime.ts";
+import { endlessChunkedPost, unexpectedCall } from "../_shared/test_helpers.ts";
 
 const validRedeemPayload = {
     platform: "ios",
@@ -483,4 +484,21 @@ Deno.test("guard: attested_devices upsert always supplies a hashed key_id_hash, 
     assertEquals(upsertCallMatch !== null, true, "expected to find the upsert_attested_device call site");
     assertEquals(upsertCallMatch![1].includes("keyIdHashHex"), true);
     assertEquals(upsertCallMatch![1].includes("params.keyId"), false);
+});
+
+Deno.test("device-tokens redeem handler aborts a chunked body with no Content-Length once it passes the byte cap", async () => {
+    const handler = createDeviceTokenRedeemHandler({
+        verifyAttestation: unexpectedCall("verifyAttestation"),
+        redeemChallenge: unexpectedCall("redeemChallenge"),
+        issueDeviceToken: unexpectedCall("issueDeviceToken"),
+    });
+    const { request, pulls } = endlessChunkedPost("http://localhost/functions/v1/device-tokens");
+
+    const response = await handler(request);
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+    // 16 KiB chunks against a <= 256 KiB cap: the stream is cancelled after a
+    // handful of chunks instead of being drained (10,000 chunks = ~160 MB).
+    assertEquals(pulls() < 40, true);
 });

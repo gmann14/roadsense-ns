@@ -13,6 +13,7 @@
 // implement.
 
 import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { readBodyWithLimit } from "../_shared/body.ts";
 import { extractClientIp } from "../_shared/clientIp.ts";
 
 export { extractClientIp };
@@ -230,10 +231,11 @@ export function createDeviceTokenRedeemHandler(deps: DeviceTokenRedeemHandlerDep
             });
         }
 
-        const contentLengthHeader = req.headers.get("content-length");
-        if (contentLengthHeader) {
-            const declaredLength = Number(contentLengthHeader);
-            if (Number.isFinite(declaredLength) && declaredLength > MAX_PAYLOAD_BYTES) {
+        // Streamed with a byte counter so a chunked body (no Content-Length)
+        // or an understated one can't be buffered whole before the cap runs.
+        const body = await readBodyWithLimit(req, MAX_PAYLOAD_BYTES);
+        if (!body.ok) {
+            if (body.reason === "too_large") {
                 return errorResponse(
                     "payload_too_large",
                     "Device token payload is too large.",
@@ -241,12 +243,6 @@ export function createDeviceTokenRedeemHandler(deps: DeviceTokenRedeemHandlerDep
                     requestId,
                 );
             }
-        }
-
-        let rawText: string;
-        try {
-            rawText = await req.text();
-        } catch {
             return errorResponse(
                 "validation_failed",
                 "Payload is malformed.",
@@ -255,15 +251,7 @@ export function createDeviceTokenRedeemHandler(deps: DeviceTokenRedeemHandlerDep
                 { field_errors: { payload: "must be readable" } },
             );
         }
-
-        if (rawText.length > MAX_PAYLOAD_BYTES) {
-            return errorResponse(
-                "payload_too_large",
-                "Device token payload is too large.",
-                413,
-                requestId,
-            );
-        }
+        const rawText = body.text;
 
         let rawPayload: unknown;
         try {
