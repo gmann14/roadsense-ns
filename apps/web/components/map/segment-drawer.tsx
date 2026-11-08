@@ -216,28 +216,56 @@ export function SegmentDrawerPanel({
 }: SegmentDrawerPanelProps) {
   const handleClose = onClose ?? onClearSelection;
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const asideRef = useRef<HTMLElement | null>(null);
+  // The parent passes a new close callback on every render (and the map
+  // re-renders on every `moveend`), so effects read it through a ref instead
+  // of depending on it — otherwise they re-run and steal focus constantly.
+  const handleCloseRef = useRef(handleClose);
+  useEffect(() => {
+    handleCloseRef.current = handleClose;
+  });
 
-  // Move focus into the drawer when it opens, and let Escape close it —
-  // matches the WAI-ARIA dialog/complementary-panel pattern users expect
-  // from a slide-in panel with a backdrop.
+  // Move focus into the drawer only when it transitions to open, and hand it
+  // back to whatever had focus before once it closes.
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeButtonRef.current?.focus();
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        handleClose();
+    return () => {
+      const aside = asideRef.current;
+      if (previouslyFocused && aside && aside.contains(document.activeElement)) {
+        previouslyFocused.focus();
       }
+    };
+  }, [isOpen]);
+
+  // Escape closes the drawer, unless something else already handled the key
+  // or it came from inside a dialog (e.g. the feedback form, whose own Escape
+  // must close only itself and keep its draft).
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+      if (isInsideDialog(event.target)) {
+        return;
+      }
+      handleCloseRef.current();
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, handleClose]);
+  }, [isOpen]);
 
   const renderPotholeRows = (rows: PotholeRow[], label: string) => (
     <div className="pothole-list" aria-label={label}>
@@ -435,6 +463,7 @@ export function SegmentDrawerPanel({
         />
       )}
       <aside
+        ref={asideRef}
         className="drawer"
         data-variant={drawerVariant}
         data-open={isOpen}
@@ -472,6 +501,10 @@ export function SegmentDrawerPanel({
       </aside>
     </>
   );
+}
+
+function isInsideDialog(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest("dialog") !== null;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
