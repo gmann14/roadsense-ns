@@ -2,9 +2,21 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  # shellcheck source=scripts/lib/pg-env.sh
+  source "${SCRIPT_DIR}/lib/pg-env.sh"
+  # Credentials reach psql through PG* variables, never argv.
+  roadsense_pg_env_from_database_url
+  USE_PG_ENV=1
+else
+  USE_PG_ENV=0
+fi
+
 run_psql() {
-  if [[ -n "${DATABASE_URL:-}" ]]; then
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 "$@"
+  if [[ "${USE_PG_ENV}" -eq 1 ]]; then
+    psql -X -v ON_ERROR_STOP=1 "$@"
   else
     docker exec -i supabase_db_roadsense-ns psql -U postgres -d postgres -v ON_ERROR_STOP=1 "$@"
   fi

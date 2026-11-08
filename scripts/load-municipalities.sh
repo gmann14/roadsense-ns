@@ -3,9 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=scripts/canada-region-config.sh
 source "${SCRIPT_DIR}/canada-region-config.sh"
+# shellcheck source=scripts/lib/pg-env.sh
+source "${SCRIPT_DIR}/lib/pg-env.sh"
 
-: "${DATABASE_URL:?DATABASE_URL must be set}"
+# Connection details go to psql/ogr2ogr through libpq PG* variables, never
+# argv (a URL on the command line is visible to every user via `ps`).
+roadsense_pg_env_from_database_url
 
 REGION_KEY="${REGION_KEY:-nova-scotia}"
 roadsense_load_region_config "${REGION_KEY}"
@@ -74,13 +79,13 @@ if [[ -z "${LAYER_NAME}" ]]; then
     exit 1
 fi
 
-echo "→ Loading ${ROAD_SENSE_REGION_NAME} municipalities from ${GPKG_PATH}"
+echo "→ Loading ${ROAD_SENSE_REGION_NAME} municipalities from ${GPKG_PATH} into ${ROADSENSE_DB_URL_REDACTED}"
 
-psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS ref; DROP TABLE IF EXISTS ${RAW_TABLE};"
+psql -X -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS ref; DROP TABLE IF EXISTS ${RAW_TABLE};"
 
 ogr2ogr \
     -f PostgreSQL \
-    PG:"${DATABASE_URL}" \
+    PG:"dbname=${PGDATABASE}" \
     "${GPKG_PATH}" \
     -dialect SQLITE \
     -sql "SELECT CSDNAME AS csd_name, PRUID AS pruid, PRNAME AS province_name, geom FROM ${LAYER_NAME} WHERE PRUID = '${ROAD_SENSE_REGION_PRUID}'" \
@@ -89,7 +94,7 @@ ogr2ogr \
     -nlt PROMOTE_TO_MULTI \
     -t_srs EPSG:4326
 
-psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 --single-transaction <<SQL
+psql -X -v ON_ERROR_STOP=1 --single-transaction <<SQL
 DROP TABLE IF EXISTS ref.municipalities;
 CREATE TABLE ref.municipalities AS
 SELECT
@@ -109,4 +114,4 @@ DROP TABLE ${RAW_TABLE};
 SQL
 
 echo "→ ${ROAD_SENSE_REGION_NAME} municipalities loaded"
-psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -c "SELECT count(*) AS municipality_count FROM ref.municipalities;"
+psql -X -v ON_ERROR_STOP=1 -c "SELECT count(*) AS municipality_count FROM ref.municipalities;"
