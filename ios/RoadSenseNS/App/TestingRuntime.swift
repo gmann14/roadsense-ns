@@ -143,7 +143,9 @@ extension AppContainer {
             )
 
             let context = ModelContext(container)
-            let baseTime = Date(timeIntervalSince1970: 1_713_000_000)
+            // Relative to now so the launch retention sweep (30 days) keeps
+            // the seeded rows.
+            let baseTime = Date().addingTimeInterval(-60 * 60)
 
             context.insert(
                 ReadingRecord(

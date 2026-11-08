@@ -4,25 +4,31 @@ import UIKit
 
 struct PotholeCameraFlowView: View {
     let coordinateLabel: String
-    let isLikelyMoving: Bool
+    /// Live speed source, polled while the camera is open. Above
+    /// `DriverSafetyPolicy.maxPhotoCaptureSpeedKmh` the shutter and Submit
+    /// are removed (App Review 1.4.5): this is a block, not a warning.
+    let currentSpeedKmh: () -> Double?
     let onCancel: () -> Void
     let onSubmit: (Data) -> Void
 
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var camera = CameraCaptureModel()
     @State private var capturedData: Data?
-    @State private var safetyBannerDismissed: Bool = false
+    @State private var isMoving: Bool
 
     init(
         coordinateLabel: String,
-        isLikelyMoving: Bool = false,
+        currentSpeedKmh: @escaping () -> Double? = { nil },
         onCancel: @escaping () -> Void,
         onSubmit: @escaping (Data) -> Void
     ) {
         self.coordinateLabel = coordinateLabel
-        self.isLikelyMoving = isLikelyMoving
+        self.currentSpeedKmh = currentSpeedKmh
         self.onCancel = onCancel
         self.onSubmit = onSubmit
+        _isMoving = State(
+            initialValue: !DriverSafetyPolicy.isPhotoCaptureAllowed(speedKmh: currentSpeedKmh())
+        )
     }
 
     var body: some View {
@@ -44,6 +50,17 @@ struct PotholeCameraFlowView: View {
         }
         .task {
             await camera.startIfNeeded()
+        }
+        .task {
+            while !Task.isCancelled {
+                let moving = !DriverSafetyPolicy.isPhotoCaptureAllowed(speedKmh: currentSpeedKmh())
+                if moving != isMoving {
+                    withAnimation(DesignTokens.Motion.standard) {
+                        isMoving = moving
+                    }
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
@@ -91,6 +108,12 @@ struct PotholeCameraFlowView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(DesignTokens.Palette.signal)
+                    .disabled(isMoving)
+                }
+
+                if isMoving {
+                    movingBlockBanner
+                        .padding(.horizontal, DesignTokens.Space.lg)
                 }
 
                 Button("Cancel", action: onCancel)
@@ -120,9 +143,9 @@ struct PotholeCameraFlowView: View {
                     Spacer()
                 }
 
-                if isLikelyMoving && !safetyBannerDismissed && camera.startupState == .running {
+                if isMoving && camera.startupState == .running {
                     VStack {
-                        safetyBanner
+                        movingBlockBanner
                             .padding(.top, DesignTokens.Space.xxxl)
                             .padding(.horizontal, DesignTokens.Space.lg)
                             .transition(.move(edge: .top).combined(with: .opacity))
@@ -134,7 +157,9 @@ struct PotholeCameraFlowView: View {
                 case .idle, .starting:
                     cameraLoadingBody
                 case .running:
-                    cameraControls
+                    if !isMoving {
+                        cameraControls
+                    }
                 case let .failed(message):
                     cameraFailureBody(message)
                 }
@@ -218,45 +243,34 @@ struct PotholeCameraFlowView: View {
         .padding(DesignTokens.Space.lg)
     }
 
-    /// Soft, dismissable warning shown over the camera preview when the device's
-    /// reported speed suggests the user might be driving. Capture stays available;
-    /// this is a nudge, not a block. Per §13.4 of the design audit.
-    private var safetyBanner: some View {
+    /// Shown while the vehicle is moving. The shutter and Submit are gone
+    /// until the speed drops, so there is nothing to dismiss.
+    private var movingBlockBanner: some View {
         HStack(alignment: .center, spacing: DesignTokens.Space.sm) {
             Image(systemName: "car.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
 
-            Text(BrandVoice.Camera.safetyWarningWhileMoving)
-                .font(.system(.footnote, design: .rounded, weight: .semibold))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: DesignTokens.Space.xs)
-
-            Button {
-                withAnimation(DesignTokens.Motion.standard) {
-                    safetyBannerDismissed = true
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .padding(6)
-                    .background(Circle().fill(.white.opacity(0.18)))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(BrandVoice.DriverSafety.cameraBlockedTitle)
+                    .font(.system(.footnote, design: .rounded, weight: .bold))
+                Text(BrandVoice.DriverSafety.cameraBlockedBody)
+                    .font(.system(.footnote, design: .rounded, weight: .medium))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss warning")
+            .foregroundStyle(.white)
+            .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, DesignTokens.Space.md)
         .padding(.vertical, DesignTokens.Space.sm)
         .background(
-            Capsule().fill(DesignTokens.Palette.warning)
-        )
-        .overlay(
-            Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.lg, style: .continuous)
+                .fill(DesignTokens.Palette.warning)
         )
         .shadow(color: .black.opacity(0.32), radius: 12, y: 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("camera.moving-block")
     }
 
     private var deniedBody: some View {

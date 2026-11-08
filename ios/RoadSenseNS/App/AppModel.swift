@@ -20,6 +20,7 @@ enum PotholePhotoSubmissionResult: Equatable {
     case insidePrivacyZone
     case outsideCoverage
     case featureDisabled
+    case movingTooFast
 }
 
 struct CollectionDiagnosticsSummary: Equatable {
@@ -65,9 +66,10 @@ final class AppModel {
     private let uploadQueueStore: UploadQueueStore
     private let uploadDrainCoordinator: UploadDrainCoordinator
     private let sensorCoordinator: SensorCoordinator
-    private let haptics: HapticsServicing
     private let logger: RoadSenseLogger
-    private let potholeLocator = ManualPotholeLocator()
+    private let potholeReporter: ManualPotholeReporter
+    private let retentionSweeper: LocalRetentionSweeper
+    private let storeURL: URL?
     // Collapses the high-frequency sensor-driven stats refresh (a fix per second
     // during a drive) down to one heavy SwiftData pass every couple of seconds.
     private var statsRefreshThrottle = StatsRefreshThrottle(minimumInterval: 2)
@@ -107,8 +109,14 @@ final class AppModel {
         self.uploadQueueStore = container.uploadQueueStore
         self.uploadDrainCoordinator = container.uploadDrainCoordinator
         self.sensorCoordinator = container.sensorCoordinator
-        self.haptics = container.haptics
         self.logger = container.logger
+        self.retentionSweeper = LocalRetentionSweeper(
+            readingStore: container.readingStore,
+            defaults: defaults,
+            logger: container.logger
+        )
+        self.storeURL = container.modelContainer.configurations.first?.url
+        self.potholeReporter = ManualPotholeReporter(container: container)
 
         let privacyZones = Self.resolvePrivacyZoneState(
             defaults: defaults,
@@ -116,6 +124,7 @@ final class AppModel {
             privacyZoneStore: container.privacyZoneStore
         )
         self.snapshot = container.permissions.currentSnapshot(privacyZones: privacyZones)
+        retentionSweeper.runIfDue()
         _ = try? container.potholeActionStore.promoteExpiredPendingUndoActions()
         _ = try? container.potholeActionStore.recoverRecoverableFailures()
         _ = try? container.potholeActionStore.reconcileManualReportStats()
@@ -238,13 +247,16 @@ final class AppModel {
         _ = try? potholeActionStore.recoverRecoverableFailures()
         _ = try? potholeActionStore.reconcileManualReportStats()
         refreshPermissions()
+        retentionSweeper.runIfDue()
         _ = await uploadDrainCoordinator.requestDrain(reason: .foreground)
         refreshCollectionStats()
     }
 
     func handleAppDidEnterBackground() {
         refreshCollectionStats()
-        guard pendingUploadCount >= 100 else {
+        // Any pending work gets a background drain; a short drive's few
+        // readings would otherwise wait until the next foreground.
+        guard pendingUploadCount > 0 else {
             return
         }
 
@@ -304,6 +316,20 @@ final class AppModel {
         try potholeActionStore.deleteAllActions()
         try potholePhotoStore.deleteAllReports()
         try readingStore.deleteAllContributionData()
+        // The coordinator would otherwise keep writing into a deleted session
+        // and re-persist its in-memory location in the next checkpoint.
+        sensorCoordinator.resetCurrentDriveSession()
+        if let storeURL {
+            try PersistentStoreRecovery.deleteRecoveredStores(for: storeURL)
+        }
+        refreshCollectionStats()
+    }
+
+    /// Deletes one drive and its readings. If it is the drive being recorded,
+    /// the coordinator starts a fresh session on the next fix.
+    func deleteDrive(id: UUID) throws {
+        try readingStore.deleteDriveSession(id: id)
+        sensorCoordinator.handleDriveSessionDeleted(id: id)
         refreshCollectionStats()
     }
 
@@ -315,48 +341,23 @@ final class AppModel {
         try await apiClient.fetchSegmentDetail(id: id)
     }
 
+    /// Whether a pothole tap at the current speed must first confirm the
+    /// user is a passenger (App Review 1.4.5).
+    var manualMarkRequiresPassengerConfirmation: Bool {
+        DriverSafetyPolicy.manualMarkRequiresPassengerConfirmation(speedKmh: currentSpeedKmh)
+    }
+
+    /// Whether the camera may open at the current speed.
+    var isPhotoCaptureAllowedAtCurrentSpeed: Bool {
+        DriverSafetyPolicy.isPhotoCaptureAllowed(speedKmh: currentSpeedKmh)
+    }
+
     func markPothole(now: Date = Date()) -> PotholeActionSubmissionResult {
-        do {
-            try potholeActionStore.promoteExpiredPendingUndoActions(now: now)
-        } catch {
-            logger.error("failed to promote pending pothole actions: \(error.localizedDescription)")
+        let result = potholeReporter.report(now: now)
+        if case let .queued(actionID) = result {
+            schedulePendingUndoPromotion(for: actionID)
         }
-
-        let reactionSample = potholeLocator.locate(
-            tapTimestamp: now,
-            recentSamples: locationService.recentSamples,
-            latestSample: locationService.latestSample
-        )
-
-        guard let chosenSample = usableManualLocationSample(preferred: reactionSample, now: now) else {
-            haptics.notification(.warning)
-            return .unavailableLocation
-        }
-
-        guard !isInsidePrivacyZone(chosenSample) else {
-            haptics.notification(.warning)
-            return .insidePrivacyZone
-        }
-
-        do {
-            let sensorBackedCandidate = sensorCoordinator.strongestRecentPotholeCandidate(
-                near: chosenSample,
-                now: now
-            )
-            let action = try potholeActionStore.queueManualReport(
-                sample: chosenSample,
-                sensorBackedCandidate: sensorBackedCandidate,
-                now: now
-            )
-            logger.info("manual pothole report queued: \(action.id.uuidString)")
-            schedulePendingUndoPromotion(for: action.id)
-            haptics.notification(.success)
-            return .queued(action.id)
-        } catch {
-            logger.error("failed to queue pothole report: \(error.localizedDescription)")
-            haptics.notification(.warning)
-            return .unavailableLocation
-        }
+        return result
     }
 
     func queuePotholeFollowUp(
@@ -432,6 +433,10 @@ final class AppModel {
     ) async -> PotholePhotoSubmissionResult {
         guard config.enablePotholePhotos else {
             return .featureDisabled
+        }
+
+        guard DriverSafetyPolicy.isPhotoCaptureAllowed(speedKmh: currentSpeedKmh) else {
+            return .movingTooFast
         }
 
         guard let sample = photoSubmissionLocationSample(
@@ -570,14 +575,6 @@ final class AppModel {
         usableLocationSamples(now: now)
             .filter { hasFreshStoppedLocation($0, now: now) }
             .max { $0.timestamp < $1.timestamp }
-    }
-
-    private func usableManualLocationSample(preferred: LocationSample?, now: Date) -> LocationSample? {
-        if let preferred, hasUsableLocation(preferred, now: now) {
-            return preferred
-        }
-
-        return freshestUsableLocationSample(now: now)
     }
 
     private func photoSubmissionLocationSample(

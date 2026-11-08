@@ -5,7 +5,8 @@ struct SegmentDetailSheet: View {
     var onSubmitPotholeAction: (SegmentPothole, PotholeActionType) -> PotholeActionSubmissionResult = { _, _ in
         .unavailableLocation
     }
-    var onAddPhoto: (UUID?) -> Void = { _ in }
+    /// nil hides the "Add photo" entry point (builds with photos disabled).
+    var onAddPhoto: ((UUID?) -> Void)? = nil
 
     @State private var followUpFeedback: FollowUpFeedback?
 
@@ -275,16 +276,18 @@ struct SegmentDetailSheet: View {
     private var potholesCard: some View {
         sectionCard(title: "Pothole updates") {
             VStack(alignment: .leading, spacing: DesignTokens.Space.md) {
-                Button {
-                    onAddPhoto(segment.id)
-                } label: {
-                    Label("Add photo", systemImage: "camera.viewfinder")
-                        .font(.system(size: 14, weight: .semibold))
+                if let onAddPhoto {
+                    Button {
+                        onAddPhoto(segment.id)
+                    } label: {
+                        Label("Add photo", systemImage: "camera.viewfinder")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(DesignTokens.Palette.deep)
+                    .accessibilityIdentifier("segmentDetail.add-photo")
+                    .accessibilityHint("Opens the camera to attach a pothole photo for this road.")
                 }
-                .buttonStyle(.bordered)
-                .tint(DesignTokens.Palette.deep)
-                .accessibilityIdentifier("segmentDetail.add-photo")
-                .accessibilityHint("Opens the camera to attach a pothole photo for this road.")
 
                 if segment.potholes.isEmpty {
                     Text("No nearby pothole markers are available for follow-up on this road yet.")

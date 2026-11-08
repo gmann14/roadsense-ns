@@ -71,6 +71,9 @@ struct ContentView: View {
                         mapboxAccessToken: model.config.mapboxAccessToken,
                         onOpenOnMap: { bbox in
                             pendingMapTarget = bbox
+                        },
+                        onDeleteDrive: { id in
+                            try model.deleteDrive(id: id)
                         }
                     )
                 }

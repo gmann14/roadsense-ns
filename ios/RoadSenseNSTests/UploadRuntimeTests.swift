@@ -52,7 +52,14 @@ final class UploadRuntimeTests: XCTestCase {
             setTaskCompleted: { completionResults.append($0) }
         )
 
-        await execution.task.value
+        // Nothing runs until start(), so the BGTask expiration handler can be
+        // installed first.
+        await Task.yield()
+        XCTAssertEqual(coordinator.requestCount, 0)
+        XCTAssertNil(execution.task)
+
+        execution.start()
+        await execution.task?.value
 
         XCTAssertEqual(coordinator.requestCount, 1)
         XCTAssertEqual(coordinator.requestedReasons, [.backgroundTask])
@@ -78,9 +85,10 @@ final class UploadRuntimeTests: XCTestCase {
             setTaskCompleted: { completionResults.append($0) }
         )
 
+        execution.start()
         await fulfillment(of: [started], timeout: 1.0)
         execution.expirationHandler()
-        await execution.task.value
+        await execution.task?.value
 
         XCTAssertEqual(coordinator.requestCount, 1)
         XCTAssertEqual(coordinator.cancelCount, 1)

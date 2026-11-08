@@ -406,14 +406,8 @@ enum BrandVoice {
     enum Camera {
         static let captureGuidance = NSLocalizedString(
             "camera.captureGuidance",
-            value: "Slow down or pull over first. Daylight works best.",
+            value: "Only take photos while stopped. Daylight works best.",
             comment: "Always-on safety nudge below the camera capture button."
-        )
-
-        static let safetyWarningWhileMoving = NSLocalizedString(
-            "camera.safetyWarning.whileMoving",
-            value: "Looks like you might be driving. Pull over to be safe — we'll wait.",
-            comment: "Banner shown at the top of the camera capture view when speed suggests driving."
         )
 
         static let reviewTitle = NSLocalizedString(
@@ -590,6 +584,40 @@ enum BrandVoice {
         )
     }
 
+    // MARK: - Driver safety (App Review 1.4.5)
+
+    enum DriverSafety {
+        static let passengerConfirmTitle = NSLocalizedString(
+            "driverSafety.passengerConfirm.title",
+            value: "Are you a passenger?",
+            comment: "Title of the confirmation shown when the pothole button is tapped while moving."
+        )
+
+        static let passengerConfirmMessage = NSLocalizedString(
+            "driverSafety.passengerConfirm.message",
+            value: "Only mark potholes when it's safe. Drivers can say \"Hey Siri, mark pothole in RoadSense NS\" instead.",
+            comment: "Message of the passenger confirmation; points drivers to the Siri shortcut."
+        )
+
+        static let passengerConfirmAction = NSLocalizedString(
+            "driverSafety.passengerConfirm.action",
+            value: "I'm a passenger, mark it",
+            comment: "Confirm button on the passenger confirmation."
+        )
+
+        static let cameraBlockedTitle = NSLocalizedString(
+            "driverSafety.cameraBlocked.title",
+            value: "Camera is off while moving",
+            comment: "Title shown when the camera is blocked because the vehicle is moving."
+        )
+
+        static let cameraBlockedBody = NSLocalizedString(
+            "driverSafety.cameraBlocked.body",
+            value: "Pull over and stop to take a pothole photo.",
+            comment: "Body shown when the camera is blocked because the vehicle is moving."
+        )
+    }
+
     // MARK: - Failure feedback (toast/banner copy)
 
     enum Failures {
@@ -651,18 +679,6 @@ enum BrandVoice {
             "failure.photoQueued.body",
             value: "We'll upload it and send it to moderation automatically.",
             comment: "Success body after a photo is queued for upload."
-        )
-
-        static let photosComingSoonTitle = NSLocalizedString(
-            "failure.photosComingSoon.title",
-            value: "Photos coming soon",
-            comment: "Title shown when pothole photo uploads are not enabled in this build."
-        )
-
-        static let photosComingSoonBody = NSLocalizedString(
-            "failure.photosComingSoon.body",
-            value: "Pothole photos aren't live in this beta yet. Your pothole marks still count.",
-            comment: "Body shown when pothole photo uploads are not enabled in this build."
         )
     }
 

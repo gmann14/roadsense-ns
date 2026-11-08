@@ -41,6 +41,7 @@ struct MapScreenRedesign: View {
     @State private var rejectionFeedback: RedesignRejectionFeedback?
     @State private var followUpPrompt: RedesignFollowUpPrompt?
     @State private var deferredRedesignFollowUpPrompt: RedesignFollowUpPrompt?
+    @State private var isConfirmingPassengerMark = false
 
     /// Whether the idle "Your contribution" well is shown full-size or
     /// collapsed to a chip. Persisted so the user's choice survives launches —
@@ -148,16 +149,28 @@ struct MapScreenRedesign: View {
                         actionType: actionType
                     )
                 },
-                onAddPhoto: { segmentID in
-                    handleTakePhotoTap(segmentID: segmentID)
-                }
+                onAddPhoto: model.config.enablePotholePhotos
+                    ? { segmentID in handleTakePhotoTap(segmentID: segmentID) }
+                    : nil
             )
+        }
+        .confirmationDialog(
+            BrandVoice.DriverSafety.passengerConfirmTitle,
+            isPresented: $isConfirmingPassengerMark,
+            titleVisibility: .visible
+        ) {
+            Button(BrandVoice.DriverSafety.passengerConfirmAction) {
+                submitManualMark()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(BrandVoice.DriverSafety.passengerConfirmMessage)
         }
         .fullScreenCover(isPresented: $isShowingCamera, onDismiss: handleCameraDismiss) {
             if let photoCaptureContext {
                 PotholeCameraFlowView(
                     coordinateLabel: photoCaptureContext.coordinateLabel,
-                    isLikelyMoving: (model.currentSpeedKmh ?? 0) > 25.0,
+                    currentSpeedKmh: { model.currentSpeedKmh },
                     onCancel: {
                         isShowingCamera = false
                     },
@@ -320,17 +333,20 @@ struct MapScreenRedesign: View {
 
             HStack(alignment: .bottom, spacing: 0) {
                 Spacer()
-                SecondaryFAB(
-                    systemName: "camera.viewfinder",
-                    label: BrandVoice.Driving.photoLabel,
-                    accessibilityLabel: BrandVoice.Driving.photoAccessibilityLabel,
-                    accessibilityHint: BrandVoice.Driving.photoAccessibilityHint,
-                    accessibilityIdentifier: "map.take-photo-button",
-                    action: { handleTakePhotoTap() }
-                )
-                .accessibilitySortPriority(6)
+                // Builds that ship with photos off show no camera entry point.
+                if model.config.enablePotholePhotos {
+                    SecondaryFAB(
+                        systemName: "camera.viewfinder",
+                        label: BrandVoice.Driving.photoLabel,
+                        accessibilityLabel: BrandVoice.Driving.photoAccessibilityLabel,
+                        accessibilityHint: BrandVoice.Driving.photoAccessibilityHint,
+                        accessibilityIdentifier: "map.take-photo-button",
+                        action: { handleTakePhotoTap() }
+                    )
+                    .accessibilitySortPriority(6)
 
-                Spacer()
+                    Spacer()
+                }
 
                 HeroPotholeFAB(
                     isRecording: model.isActivelyCollecting,
@@ -528,6 +544,16 @@ struct MapScreenRedesign: View {
     }
 
     private func handleMarkPotholeTap() {
+        // Above walking pace, a tap must be confirmed as coming from a
+        // passenger; drivers are pointed at the Siri shortcut instead.
+        if model.manualMarkRequiresPassengerConfirmation {
+            isConfirmingPassengerMark = true
+            return
+        }
+        submitManualMark()
+    }
+
+    private func submitManualMark() {
         switch model.markPothole() {
         case let .queued(actionID):
             withAnimation(DesignTokens.Motion.standard) {
@@ -573,15 +599,18 @@ struct MapScreenRedesign: View {
     }
 
     private func handleTakePhotoTap(segmentID: UUID? = nil) {
-        // Photo uploads are deferred until the backend photo flow ships
-        // (review NEW-2 / backlog B130). Say so before opening the camera
-        // instead of letting the user capture a photo that can't upload.
+        // The entry points are hidden when photos are off; this guards any
+        // path that still reaches here.
         guard model.config.enablePotholePhotos else {
+            return
+        }
+
+        guard model.isPhotoCaptureAllowedAtCurrentSpeed else {
             withAnimation(DesignTokens.Motion.enter) {
                 rejectionFeedback = RedesignRejectionFeedback(
-                    title: BrandVoice.Failures.photosComingSoonTitle,
-                    message: BrandVoice.Failures.photosComingSoonBody,
-                    iconName: "camera.fill",
+                    title: BrandVoice.DriverSafety.cameraBlockedTitle,
+                    message: BrandVoice.DriverSafety.cameraBlockedBody,
+                    iconName: "car.fill",
                     tint: DesignTokens.Palette.warning,
                     dismissDelay: .seconds(3)
                 )
@@ -661,6 +690,14 @@ struct MapScreenRedesign: View {
                 title: "Photo reports unavailable",
                 message: "Photo reports are temporarily disabled for this build.",
                 iconName: "camera.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        case .movingTooFast:
+            feedback = RedesignRejectionFeedback(
+                title: BrandVoice.DriverSafety.cameraBlockedTitle,
+                message: BrandVoice.DriverSafety.cameraBlockedBody,
+                iconName: "car.fill",
                 tint: DesignTokens.Palette.warning,
                 dismissDelay: .seconds(3)
             )
