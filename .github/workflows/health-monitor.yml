@@ -2,7 +2,8 @@ name: Production health monitor
 
 # Every 30 minutes: GET /functions/v1/health/deep on production and fail the
 # run (GitHub emails the workflow's last editor / repo watchers on failure)
-# unless it answers {"status":"ok","db":"reachable"}.
+# unless it answers {"status":"ok","db":"reachable"}. A 503 "degraded"
+# (a scheduler job stale or failing) fails it too; the warning lists the jobs.
 #
 # Repository secret (Settings → Secrets and variables → Actions):
 #   HEALTH_CHECK_API_KEY   the public API key sent as `apikey`
@@ -50,7 +51,8 @@ jobs:
               echo "Healthy (attempt ${attempt}): $(jq -c '{status, db, commit, deployed_at}' "${body}")"
               exit 0
             fi
-            echo "::warning::Attempt ${attempt}: HTTP ${code}: $(head -c 300 "${body}")"
+            summary="$(jq -c '{status, db, commit, unhealthy_jobs: ((.scheduler.jobs // {}) | with_entries(select(.value.status != "ok" and .value.status != "pending")))}' "${body}" 2>/dev/null || head -c 300 "${body}")"
+            echo "::warning::Attempt ${attempt}: HTTP ${code}: ${summary}"
             if [[ "${attempt}" != "3" ]]; then
               sleep 20
             fi
