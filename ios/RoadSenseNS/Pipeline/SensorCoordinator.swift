@@ -48,6 +48,7 @@ final class SensorCoordinator {
     private var drivingTask: Task<Void, Never>?
     private var locationTask: Task<Void, Never>?
     private var motionTask: Task<Void, Never>?
+    private var thermalTask: Task<Void, Never>?
     private var pendingStopTask: Task<Void, Never>?
 
     private var readingBuilder = ReadingBuilder()
@@ -67,6 +68,15 @@ final class SensorCoordinator {
     private var lastDrivingEventWasDriving: Bool?
     private var lastPotholeCandidateAt: Date?
     private var shouldResumeCollectionAfterRestore = false
+    /// True while the latest fix was inside a privacy zone. Motion samples and
+    /// pothole detection are skipped so nothing is derived from in-zone travel.
+    private var isInsidePrivacyZone = false
+    /// True while the device is at `.serious`/`.critical` thermal state:
+    /// high-rate sensors are stopped until it cools down (prelaunch P1-2).
+    private(set) var isThermallyPaused = false
+    /// Set when collection was running (or a drive started) during a thermal
+    /// pause, so collection resumes once the device recovers.
+    private var shouldResumeAfterThermalRecovery = false
 
     init(
         locationService: LocationServicing,
@@ -153,6 +163,8 @@ final class SensorCoordinator {
         let locationSamples = locationService.makeSampleStream()
         let motionSamples = motionService.makeSampleStream()
         let drivingEvents = drivingDetector.makeEventStream()
+        let thermalStates = thermalMonitor.makeStateStream()
+        applyThermalState(thermalMonitor.currentState)
 
         locationService.startPassiveMonitoring()
         drivingDetector.start()
@@ -184,6 +196,13 @@ final class SensorCoordinator {
             }
         }
 
+        thermalTask = Task { [weak self] in
+            guard let self else { return }
+            for await state in thermalStates {
+                await self.handleThermalStateChange(state)
+            }
+        }
+
         if shouldResumeCollectionAfterRestore {
             shouldResumeCollectionAfterRestore = false
             Task { [weak self] in
@@ -201,9 +220,13 @@ final class SensorCoordinator {
         drivingTask?.cancel()
         locationTask?.cancel()
         motionTask?.cancel()
+        thermalTask?.cancel()
         drivingTask = nil
         locationTask = nil
         motionTask = nil
+        thermalTask = nil
+        isThermallyPaused = false
+        shouldResumeAfterThermalRecovery = false
         pendingStopTask?.cancel()
         pendingStopTask = nil
         drivingDetector.stop()
@@ -229,6 +252,33 @@ final class SensorCoordinator {
 
     var monitoringState: (isMonitoring: Bool, isCollecting: Bool) {
         (isMonitoring, isCollecting)
+    }
+
+    /// Forgets the in-progress drive after its data was deleted ("Delete local
+    /// data" or deleting the active drive) so later readings start a fresh
+    /// session instead of pointing at a session row that no longer exists.
+    /// Collection itself keeps running.
+    func resetCurrentDriveSession() {
+        currentDriveSessionID = nil
+        readingBuilder = ReadingBuilder()
+        potholeDetector = PotholeDetector()
+        recentPotholes = []
+        latestLocation = nil
+        lastCheckpointAt = nil
+        do {
+            try checkpointStore.clear()
+        } catch {
+            logger.error("failed to clear sensor checkpoint: \(error.localizedDescription)")
+        }
+        stateDidChange?()
+    }
+
+    /// Called after a single drive was deleted locally.
+    func handleDriveSessionDeleted(id: UUID) {
+        guard currentDriveSessionID == id else {
+            return
+        }
+        resetCurrentDriveSession()
     }
 
     var diagnostics: SensorCollectionDiagnostics {
@@ -270,6 +320,12 @@ final class SensorCoordinator {
     private func startCollection() async {
         await cancelPendingStopCollection()
         guard isMonitoring, !isCollecting else {
+            return
+        }
+
+        guard !isThermallyPaused else {
+            shouldResumeAfterThermalRecovery = true
+            logger.info("sensor collection deferred: device thermal state is serious/critical")
             return
         }
 
@@ -318,6 +374,7 @@ final class SensorCoordinator {
         potholeDetector = PotholeDetector()
         recentPotholes = []
         latestLocation = nil
+        isInsidePrivacyZone = false
         currentDriveSessionID = nil
         lastCheckpointAt = nil
     }
@@ -338,21 +395,17 @@ final class SensorCoordinator {
             return
         }
 
-        latestLocation = sample
-        let driveSessionID = ensureCurrentDriveSession(for: sample)
-
+        // The privacy-zone check runs before anything else touches the
+        // sample: an in-zone fix must never become `latestLocation`, a drive
+        // session's start coordinate, a pothole stamp, or checkpoint content.
         if PrivacyZoneFilter.shouldDrop(sample, zones: activePrivacyZones) {
-            do {
-                try readingStore.savePrivacyFilteredSample(sample, driveSessionID: driveSessionID)
-            } catch {
-                logger.error("failed to persist privacy-filtered sample: \(error.localizedDescription)")
-            }
-            readingBuilder = ReadingBuilder()
-            potholeDetector = PotholeDetector()
-            recentPotholes = []
-            persistCheckpointIfNeeded(force: true, redactLocation: true)
+            handlePrivacyZoneSample(sample)
             return
         }
+
+        isInsidePrivacyZone = false
+        latestLocation = sample
+        let driveSessionID = ensureCurrentDriveSession(for: sample)
 
         guard let window = readingBuilder.addLocationSample(sample) else {
             return
@@ -389,8 +442,30 @@ final class SensorCoordinator {
         persistCheckpointIfNeeded(force: false)
     }
 
+    private func handlePrivacyZoneSample(_ sample: LocationSample) {
+        // Count-only bookkeeping, attached to the current drive if one is
+        // already open. No session is created from an in-zone fix; if the
+        // drive started inside a zone the session opens at the first fix
+        // outside it and adopts these rows then.
+        do {
+            try readingStore.savePrivacyFilteredSample(sample, driveSessionID: currentDriveSessionID)
+        } catch {
+            logger.error("failed to persist privacy-filtered sample: \(error.localizedDescription)")
+        }
+
+        let wasInsideZone = isInsidePrivacyZone
+        isInsidePrivacyZone = true
+        latestLocation = nil
+        readingBuilder = ReadingBuilder()
+        potholeDetector = PotholeDetector()
+        recentPotholes = []
+        if !wasInsideZone {
+            persistCheckpointIfNeeded(force: true)
+        }
+    }
+
     private func handleMotionSample(_ sample: MotionSample) async {
-        guard isCollecting else {
+        guard isCollecting, !isInsidePrivacyZone else {
             return
         }
 
@@ -459,22 +534,22 @@ final class SensorCoordinator {
         }
     }
 
-    private func persistCheckpointIfNeeded(force: Bool, redactLocation: Bool = false) {
+    private func persistCheckpointIfNeeded(force: Bool) {
         let now = nowProvider()
         if !force, let lastCheckpointAt, now.timeIntervalSince(lastCheckpointAt) < 60 {
             return
         }
 
         // Privacy zones are processed on-device and the server must never see
-        // readings near a protected zone (home/work). The checkpoint file is
-        // plain JSON on disk, so an in-zone coordinate must never be written
-        // to it even though `latestLocation` itself stays populated in memory
-        // for pothole-candidate geofencing during the current run.
+        // readings near a protected zone (home/work). In-zone fixes never reach
+        // `latestLocation`, the reading builder or `recentPotholes` (all are
+        // cleared on zone entry), so every checkpoint write is zone-free,
+        // including the periodic one from the motion path.
         let checkpoint = SensorCheckpoint(
             savedAt: now,
             wasCollecting: isCollecting,
-            latestLocation: redactLocation ? nil : latestLocation,
-            recentPotholes: recentPotholes,
+            latestLocation: isInsidePrivacyZone ? nil : latestLocation,
+            recentPotholes: isInsidePrivacyZone ? [] : recentPotholes,
             readingBuilder: readingBuilder.snapshot(),
             potholeDetector: potholeDetector.snapshot()
         )
@@ -493,7 +568,10 @@ final class SensorCoordinator {
         }
 
         do {
-            let sessionID = try readingStore.ensureActiveDriveSession(for: sample)
+            let sessionID = try readingStore.ensureActiveDriveSession(
+                for: sample,
+                adoptingPrivacyFilteredSince: lastCollectionStartedAt
+            )
             currentDriveSessionID = sessionID
             return sessionID
         } catch {
@@ -561,6 +639,38 @@ final class SensorCoordinator {
 
             self.pendingStopTask = nil
             await self.stopCollection()
+        }
+    }
+
+    // MARK: - Thermal
+
+    private func handleThermalStateChange(_ state: ProcessInfo.ThermalState) async {
+        let wasPaused = isThermallyPaused
+        applyThermalState(state)
+
+        if isThermallyPaused, !wasPaused {
+            logger.info("thermal state \(String(describing: map(state))): pausing high-rate sensors")
+            if isCollecting {
+                shouldResumeAfterThermalRecovery = true
+                await stopCollection()
+            }
+        } else if !isThermallyPaused, wasPaused {
+            logger.info("thermal state recovered: \(String(describing: map(state)))")
+            let shouldResume = shouldResumeAfterThermalRecovery && lastDrivingEventWasDriving != false
+            shouldResumeAfterThermalRecovery = false
+            if shouldResume {
+                await startCollection()
+            }
+        }
+        stateDidChange?()
+    }
+
+    private func applyThermalState(_ state: ProcessInfo.ThermalState) {
+        switch map(state) {
+        case .serious, .critical:
+            isThermallyPaused = true
+        case .nominal, .fair:
+            isThermallyPaused = false
         }
     }
 

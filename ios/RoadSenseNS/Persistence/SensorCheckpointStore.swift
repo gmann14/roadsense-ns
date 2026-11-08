@@ -2,7 +2,7 @@ import Foundation
 
 @MainActor
 final class SensorCheckpointStore {
-    private let fileURL: URL
+    let fileURL: URL
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
@@ -40,7 +40,9 @@ final class SensorCheckpointStore {
             withIntermediateDirectories: true
         )
         let data = try encoder.encode(checkpoint)
-        try data.write(to: fileURL, options: .atomic)
+        // Readable after first unlock so a background relaunch mid-drive can
+        // restore it, but encrypted at rest while the phone is locked after boot.
+        try data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     }
 
     func clear() throws {

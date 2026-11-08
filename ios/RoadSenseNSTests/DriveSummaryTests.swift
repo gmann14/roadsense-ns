@@ -123,8 +123,104 @@ final class DriveSummaryTests: XCTestCase {
         XCTAssertEqual(drive2.privacyFilteredReadingCount, 1)
         XCTAssertEqual(drive2.distanceKm, 0)
         XCTAssertTrue(drive2.hasOnlyPrivacyFilteredData)
-        let drive2Box = try XCTUnwrap(drive2.bbox)
-        XCTAssertEqual(drive2Box.minLatitude, 44.6480, accuracy: 1e-6)
+        // No upload-eligible point means no mini-map: the session's start/end
+        // coordinates are never used as a fallback frame.
+        XCTAssertNil(drive2.bbox)
+    }
+
+    func testDriveMiniMapFramesOnlyUploadEligiblePoints() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let context = ModelContext(container)
+        let driveID = UUID()
+        let baseDate = Date(timeIntervalSince1970: 1_713_000_000)
+
+        context.insert(
+            DriveSessionRecord(
+                id: driveID,
+                startedAt: baseDate,
+                endedAt: baseDate.addingTimeInterval(600),
+                startLatitude: 44.6000,
+                startLongitude: -63.6000,
+                endLatitude: 44.7000,
+                endLongitude: -63.5000,
+                isSealed: true
+            )
+        )
+        // Endpoint-trimmed reading near the start (home) must not widen the box.
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6001,
+                longitude: -63.6001,
+                roughnessRMS: 0.04,
+                speedKMH: 30,
+                heading: 90,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: baseDate.addingTimeInterval(10),
+                driveSessionID: driveID,
+                endpointTrimmedAt: baseDate.addingTimeInterval(600)
+            )
+        )
+        for (offset, lat) in [44.6500, 44.6510].enumerated() {
+            context.insert(
+                ReadingRecord(
+                    latitude: lat,
+                    longitude: -63.5500,
+                    roughnessRMS: 0.04,
+                    speedKMH: 50,
+                    heading: 0,
+                    gpsAccuracyM: 5,
+                    isPothole: false,
+                    potholeMagnitude: nil,
+                    recordedAt: baseDate.addingTimeInterval(Double(100 + offset * 30)),
+                    driveSessionID: driveID,
+                    uploadReadyAt: baseDate.addingTimeInterval(600)
+                )
+            )
+        }
+        try context.save()
+
+        let summary = try XCTUnwrap(ReadingStore(container: container).recentDriveSummaries().first)
+        let box = try XCTUnwrap(summary.bbox)
+        XCTAssertEqual(box.minLatitude, 44.6500, accuracy: 1e-6)
+        XCTAssertEqual(box.maxLatitude, 44.6510, accuracy: 1e-6)
+        XCTAssertEqual(box.minLongitude, -63.5500, accuracy: 1e-6)
+    }
+
+    func testOpenDriveWithoutEligiblePointsHasNoMiniMap() throws {
+        let container = try ModelContainerProvider.makeInMemory()
+        let context = ModelContext(container)
+        let driveID = UUID()
+        let baseDate = Date(timeIntervalSince1970: 1_713_000_000)
+        context.insert(
+            DriveSessionRecord(
+                id: driveID,
+                startedAt: baseDate,
+                startLatitude: 44.6000,
+                startLongitude: -63.6000
+            )
+        )
+        // Still-recording drive: readings exist but are not upload-ready yet.
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6010,
+                longitude: -63.6010,
+                roughnessRMS: 0.04,
+                speedKMH: 30,
+                heading: 90,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: baseDate.addingTimeInterval(10),
+                driveSessionID: driveID
+            )
+        )
+        try context.save()
+
+        let summary = try XCTUnwrap(ReadingStore(container: container).recentDriveSummaries().first)
+        XCTAssertNil(summary.bbox)
+        XCTAssertEqual(summary.acceptedReadingCount, 1)
     }
 
     func testDeleteDriveSessionRemovesSessionAndItsReadings() throws {
@@ -348,7 +444,7 @@ final class DriveSummaryTests: XCTestCase {
         XCTAssertNil(DriveStore.boundingBox(coordinates: []))
     }
 
-    func testStaticMapURLEncodesCenterZoomAndStrippedChrome() throws {
+    func testStaticMapURLEncodesCenterZoomAndKeepsAttribution() throws {
         let bbox = DriveBoundingBox(
             minLatitude: 44.6488,
             minLongitude: -63.5752,
@@ -374,8 +470,8 @@ final class DriveSummaryTests: XCTestCase {
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let dict = Dictionary(uniqueKeysWithValues: query.map { ($0.name, $0.value ?? "") })
         XCTAssertEqual(dict["access_token"], "pk.test-token")
-        XCTAssertEqual(dict["logo"], "false")
-        XCTAssertEqual(dict["attribution"], "false")
+        XCTAssertEqual(dict["logo"], "true")
+        XCTAssertEqual(dict["attribution"], "true")
     }
 
     func testStaticMapURLReturnsNilForEmptyToken() {
