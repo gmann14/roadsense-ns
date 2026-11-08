@@ -8,6 +8,7 @@ import {
     validateUploadPayload,
 } from "./handler.ts";
 import { createRateLimitChecker, type RpcResponse } from "./runtime.ts";
+import { createPgFindProcessedBatch } from "./pgRuntime.ts";
 import { endlessChunkedPost, unexpectedCall } from "../_shared/test_helpers.ts";
 
 const validPayload = {
@@ -805,4 +806,124 @@ Deno.test("createRateLimitChecker keys IPv6 clients on their /64", async () => {
     await checker("deadbeef", "2001:db8:abcd:12::9");
 
     assertEquals(keys.filter((key) => key === "ip:2001:db8:abcd:12::/64").length, 2);
+});
+
+// ── Already-processed batches skip the quota (review 2026-10-18 P2) ──
+
+function uploadRequest(body: unknown): Request {
+    return new Request("http://localhost/functions/v1/upload-readings", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.10" },
+        body: JSON.stringify(body),
+    });
+}
+
+Deno.test("upload handler answers a retried batch from the stored outcome without spending quota", async () => {
+    const lookups: Array<{ batchId: string; tokenHashHex: string }> = [];
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: unexpectedCall("checkRateLimit"),
+        ingestBatch: unexpectedCall("ingestBatch"),
+        findProcessedBatch: async (params) => {
+            lookups.push(params);
+            return { accepted: 1, rejected: 0, duplicate: true, rejected_reasons: {} };
+        },
+    });
+
+    const response = await handler(uploadRequest(validPayload));
+
+    assertEquals(response.status, 200);
+    const body = await response.json();
+    assertEquals(body.duplicate, true);
+    assertEquals(body.accepted, 1);
+    assertEquals(body.batch_id, validPayload.batch_id);
+    assertEquals(lookups, [{ batchId: validPayload.batch_id, tokenHashHex: "deadbeef" }]);
+});
+
+Deno.test("upload handler spends quota and ingests when the batch is new", async () => {
+    let rateLimited = 0;
+    let ingested = 0;
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => {
+            rateLimited += 1;
+            return { ok: true, retryAfterSeconds: 0 };
+        },
+        ingestBatch: async () => {
+            ingested += 1;
+            return { accepted: 1, rejected: 0, duplicate: false, rejected_reasons: {} };
+        },
+        findProcessedBatch: async () => null,
+    });
+
+    const response = await handler(uploadRequest(validPayload));
+
+    assertEquals(response.status, 200);
+    assertEquals((await response.json()).duplicate, false);
+    assertEquals([rateLimited, ingested], [1, 1]);
+});
+
+Deno.test("upload handler falls back to the rate-limited path when the duplicate lookup fails", async () => {
+    let ingested = 0;
+    const logged: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => logged.push(args.map(String).join(" "));
+    let response: Response;
+    try {
+        const handler = createUploadReadingsHandler({
+            hashDeviceToken: async () => "deadbeef",
+            checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+            ingestBatch: async () => {
+                ingested += 1;
+                return { accepted: 1, rejected: 0, duplicate: false, rejected_reasons: {} };
+            },
+            findProcessedBatch: async () => {
+                throw new Error("lookup timeout");
+            },
+        });
+        response = await handler(uploadRequest(validPayload));
+    } finally {
+        console.error = originalError;
+    }
+
+    assertEquals(response.status, 200);
+    await response.body?.cancel();
+    assertEquals(ingested, 1);
+    assertEquals(logged.length, 1);
+    assertEquals(logged[0].includes("deadbeef"), false);
+});
+
+Deno.test("upload handler still rate-limits a retried batch when it is IP-limited and not yet processed", async () => {
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: false, retryAfterSeconds: 120 }),
+        ingestBatch: unexpectedCall("ingestBatch"),
+        findProcessedBatch: async () => null,
+    });
+
+    const response = await handler(uploadRequest(validPayload));
+    assertEquals(response.status, 429);
+    await response.body?.cancel();
+});
+
+Deno.test("createPgFindProcessedBatch maps the stored row and scopes the lookup to the device", async () => {
+    const queries: string[] = [];
+    const values: unknown[][] = [];
+    const sql = (strings: TemplateStringsArray, ...params: unknown[]) => {
+        queries.push(strings.join("?"));
+        values.push(params);
+        return Promise.resolve([{ accepted_count: "7", rejected_count: 2, rejected_reasons: { out_of_bounds: "2", bogus: "x" } }]);
+    };
+
+    const result = await createPgFindProcessedBatch(sql as never)({ batchId: "b-1", tokenHashHex: "deadbeef" });
+
+    assertEquals(result, { accepted: 7, rejected: 2, duplicate: true, rejected_reasons: { out_of_bounds: 2 } });
+    assertMatch(queries[0], /FROM processed_batches/);
+    assertMatch(queries[0], /device_token_hash/);
+    assertEquals(values[0], ["b-1", "deadbeef"]);
+});
+
+Deno.test("createPgFindProcessedBatch returns null for an unknown batch", async () => {
+    const sql = () => Promise.resolve([]);
+    assertEquals(await createPgFindProcessedBatch(sql as never)({ batchId: "b-2", tokenHashHex: "00" }), null);
 });

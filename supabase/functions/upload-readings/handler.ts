@@ -3,6 +3,7 @@ import { readBodyWithLimit } from "../_shared/body.ts";
 import { extractClientIp } from "../_shared/clientIp.ts";
 import { isRfc3339Timestamp } from "../_shared/validation.ts";
 import type { RateLimitResult } from "../_shared/rateLimit.ts";
+import { logHandlerError } from "../_shared/log.ts";
 
 export { extractClientIp };
 
@@ -136,6 +137,17 @@ export type UploadHandlerDeps = {
         payload: UploadPayload;
         tokenHashHex: string;
     }) => Promise<UploadResult>;
+    // Optional fast path (review 2026-10-18 P2: "retries of an
+    // already-processed batch burn upload quota"). Returns the stored
+    // outcome when this device already uploaded this batch_id, so a client
+    // retrying after a lost response gets its answer without spending quota
+    // or re-entering ingest. One primary-key lookup, scoped to the same
+    // device token hash so a guessed batch_id from another device still goes
+    // through the normal, rate-limited path.
+    findProcessedBatch?: (params: {
+        batchId: string;
+        tokenHashHex: string;
+    }) => Promise<UploadResult | null>;
 };
 
 function isFiniteNumber(value: unknown): value is number {
@@ -356,6 +368,26 @@ export function mergeGatewayRejections(
     };
 }
 
+/// The duplicate-batch lookup is only an optimisation: if it fails, log and
+/// fall through to the normal rate-limited path (ingest_reading_batch still
+/// dedupes on batch_id), rather than failing the upload.
+async function findProcessedBatchSafely(
+    deps: UploadHandlerDeps,
+    batchId: string,
+    tokenHashHex: string,
+    requestId: string,
+): Promise<UploadResult | null> {
+    if (!deps.findProcessedBatch) {
+        return null;
+    }
+    try {
+        return await deps.findProcessedBatch({ batchId, tokenHashHex });
+    } catch (error) {
+        logHandlerError("upload-readings:find-processed-batch", requestId, error);
+        return null;
+    }
+}
+
 export function createUploadReadingsHandler(deps: UploadHandlerDeps) {
     return async function handleUploadReadings(req: Request): Promise<Response> {
         const requestId = requestIdFrom(req);
@@ -426,6 +458,27 @@ export function createUploadReadingsHandler(deps: UploadHandlerDeps) {
 
         try {
             const tokenHashHex = await deps.hashDeviceToken(payload.device_token);
+
+            const alreadyProcessed = await findProcessedBatchSafely(deps, payload.batch_id, tokenHashHex, requestId);
+            if (alreadyProcessed) {
+                const result = mergeGatewayRejections(
+                    { ...alreadyProcessed, duplicate: true },
+                    validation.gatewayRejectedReasons,
+                );
+                return jsonResponse(
+                    {
+                        batch_id: payload.batch_id,
+                        accepted: result.accepted,
+                        rejected: result.rejected,
+                        duplicate: true,
+                        rejected_reasons: result.rejected_reasons,
+                    },
+                    200,
+                    {},
+                    requestId,
+                );
+            }
+
             const ip = extractClientIp(req.headers);
             const rateLimit = await deps.checkRateLimit(tokenHashHex, ip);
 

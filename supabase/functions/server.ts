@@ -21,7 +21,7 @@ import { createPgFetchStats } from "./stats/pgRuntime.ts";
 
 import { createUploadReadingsHandler } from "./upload-readings/handler.ts";
 import { createRateLimitChecker, hashDeviceToken } from "./upload-readings/runtime.ts";
-import { createPgIngestBatch } from "./upload-readings/pgRuntime.ts";
+import { createPgFindProcessedBatch, createPgIngestBatch } from "./upload-readings/pgRuntime.ts";
 
 import { createPotholeActionsHandler } from "./pothole-actions/handler.ts";
 import { createPotholeActionRateLimitChecker } from "./pothole-actions/runtime.ts";
@@ -105,6 +105,7 @@ export const ROUTES: readonly Route[] = [
                 hashDeviceToken,
                 checkRateLimit: createRateLimitChecker(rpc),
                 ingestBatch: createPgIngestBatch(),
+                findProcessedBatch: createPgFindProcessedBatch(),
             });
         }),
     ),
