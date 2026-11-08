@@ -2,6 +2,43 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 
 SELECT plan(20);
 
+-- Fixture timestamps were authored around 2026-04-18. Every fixture time is
+-- shifted by the same whole number of days so that 2026-04-18 lands on
+-- yesterday (UTC): ordering, time of day and the gaps between fixtures are
+-- unchanged, but the data stays inside the ingest freshness, action-window
+-- and 6-month retention rules and inside the monthly readings partitions
+-- that exist at test time.
+CREATE OR REPLACE FUNCTION pg_temp.fixture_ts(p_value TEXT)
+RETURNS TIMESTAMPTZ
+LANGUAGE sql
+STABLE
+AS $fixture$
+    SELECT p_value::TIMESTAMPTZ
+        + (((now() AT TIME ZONE 'UTC')::DATE - 1) - DATE '2026-04-18') * INTERVAL '1 day'
+$fixture$;
+
+CREATE OR REPLACE FUNCTION pg_temp.fixture_jsonb(p_value TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $fixture$
+DECLARE
+    v_match TEXT;
+    v_result TEXT := p_value;
+BEGIN
+    FOR v_match IN
+        SELECT DISTINCT (regexp_matches(p_value, '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', 'g'))[1]
+    LOOP
+        v_result := replace(
+            v_result,
+            v_match,
+            to_char(pg_temp.fixture_ts(v_match) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        );
+    END LOOP;
+    RETURN v_result::JSONB;
+END;
+$fixture$;
+
 DELETE FROM readings
 WHERE batch_id IN (
     '00000000-0000-0000-0000-000000000601'::UUID,
@@ -99,7 +136,7 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.5694 44.6520)', 4326),
-        '2026-04-18T14:00:00Z'::TIMESTAMPTZ
+        pg_temp.fixture_ts('2026-04-18T14:00:00Z')
     ),
     (
         '00000000-0000-0000-0000-000000000902',
@@ -113,7 +150,7 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.5693 44.6520)', 4326),
-        '2026-04-18T14:01:00Z'::TIMESTAMPTZ
+        pg_temp.fixture_ts('2026-04-18T14:01:00Z')
     );
 
 SELECT lives_ok(
@@ -143,9 +180,9 @@ INSERT INTO readings (
     id, segment_id, batch_id, device_token_hash, roughness_rms, speed_kmh,
     heading_degrees, gps_accuracy_m, is_pothole, pothole_magnitude, location, recorded_at
 ) VALUES
-    ('00000000-0000-0000-0000-000000000903', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000602', decode('03', 'hex'), 0.15, 50.0, 90.0, 5.0, TRUE, 2.10, ST_GeomFromText('POINT(-63.5692 44.6520)', 4326), '2026-04-18T14:02:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-000000000904', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000602', decode('04', 'hex'), 0.15, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5691 44.6520)', 4326), '2026-04-18T14:03:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-000000000905', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000602', decode('05', 'hex'), 0.15, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5690 44.6520)', 4326), '2026-04-18T14:04:00Z'::TIMESTAMPTZ);
+    ('00000000-0000-0000-0000-000000000903', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000602', decode('03', 'hex'), 0.15, 50.0, 90.0, 5.0, TRUE, 2.10, ST_GeomFromText('POINT(-63.5692 44.6520)', 4326), pg_temp.fixture_ts('2026-04-18T14:02:00Z')),
+    ('00000000-0000-0000-0000-000000000904', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000602', decode('04', 'hex'), 0.15, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5691 44.6520)', 4326), pg_temp.fixture_ts('2026-04-18T14:03:00Z')),
+    ('00000000-0000-0000-0000-000000000905', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000602', decode('05', 'hex'), 0.15, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5690 44.6520)', 4326), pg_temp.fixture_ts('2026-04-18T14:04:00Z'));
 
 SELECT lives_ok(
     $$SELECT update_segment_aggregates_from_batch('00000000-0000-0000-0000-000000000602'::UUID)$$,
@@ -180,11 +217,11 @@ INSERT INTO readings (
     id, segment_id, batch_id, device_token_hash, roughness_rms, speed_kmh,
     heading_degrees, gps_accuracy_m, is_pothole, pothole_magnitude, location, recorded_at
 ) VALUES
-    ('00000000-0000-0000-0000-000000000906', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('06', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5689 44.6520)', 4326), '2026-04-18T14:05:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-000000000907', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('07', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5688 44.6520)', 4326), '2026-04-18T14:06:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-000000000908', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('08', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5687 44.6520)', 4326), '2026-04-18T14:07:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-000000000909', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('09', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5686 44.6520)', 4326), '2026-04-18T14:08:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-00000000090a', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('0a', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5685 44.6520)', 4326), '2026-04-18T14:09:00Z'::TIMESTAMPTZ);
+    ('00000000-0000-0000-0000-000000000906', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('06', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5689 44.6520)', 4326), pg_temp.fixture_ts('2026-04-18T14:05:00Z')),
+    ('00000000-0000-0000-0000-000000000907', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('07', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5688 44.6520)', 4326), pg_temp.fixture_ts('2026-04-18T14:06:00Z')),
+    ('00000000-0000-0000-0000-000000000908', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('08', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5687 44.6520)', 4326), pg_temp.fixture_ts('2026-04-18T14:07:00Z')),
+    ('00000000-0000-0000-0000-000000000909', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('09', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5686 44.6520)', 4326), pg_temp.fixture_ts('2026-04-18T14:08:00Z')),
+    ('00000000-0000-0000-0000-00000000090a', '00000000-0000-0000-0000-000000000801', '00000000-0000-0000-0000-000000000603', decode('0a', 'hex'), 0.22, 50.0, 90.0, 5.0, FALSE, NULL, ST_GeomFromText('POINT(-63.5685 44.6520)', 4326), pg_temp.fixture_ts('2026-04-18T14:09:00Z'));
 
 SELECT lives_ok(
     $$SELECT update_segment_aggregates_from_batch('00000000-0000-0000-0000-000000000603'::UUID)$$,
@@ -218,8 +255,8 @@ INSERT INTO pothole_reports (
     '00000000-0000-0000-0000-000000000802',
     ST_GeomFromText('POINT(-63.5690 44.6530)', 4326),
     2.50,
-    '2026-03-01T00:00:00Z'::TIMESTAMPTZ,
-    '2026-04-10T00:00:00Z'::TIMESTAMPTZ,
+    pg_temp.fixture_ts('2026-03-01T00:00:00Z'),
+    pg_temp.fixture_ts('2026-04-10T00:00:00Z'),
     1,
     1,
     'active'
@@ -229,10 +266,10 @@ INSERT INTO readings (
     id, segment_id, batch_id, device_token_hash, roughness_rms, speed_kmh,
     heading_degrees, gps_accuracy_m, is_pothole, pothole_magnitude, location, recorded_at
 ) VALUES
-    ('00000000-0000-0000-0000-00000000090b', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000604', decode('0b', 'hex'), 1.40, 50.0, 90.0, 5.0, TRUE, 2.80, ST_GeomFromText('POINT(-63.5690 44.6530)', 4326), '2026-04-18T15:00:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-00000000090c', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000604', decode('0c', 'hex'), 1.50, 50.0, 90.0, 5.0, TRUE, 3.10, ST_GeomFromText('POINT(-63.56895 44.6530)', 4326), '2026-04-18T15:01:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-00000000090d', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000604', decode('0d', 'hex'), 1.20, 50.0, 90.0, 5.0, TRUE, 2.20, ST_GeomFromText('POINT(-63.5670 44.6530)', 4326), '2026-04-18T15:02:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-00000000090e', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000604', decode('0e', 'hex'), 1.30, 50.0, 90.0, 5.0, TRUE, 2.40, ST_GeomFromText('POINT(-63.56695 44.6530)', 4326), '2026-04-18T15:03:00Z'::TIMESTAMPTZ);
+    ('00000000-0000-0000-0000-00000000090b', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000604', decode('0b', 'hex'), 1.40, 50.0, 90.0, 5.0, TRUE, 2.80, ST_GeomFromText('POINT(-63.5690 44.6530)', 4326), pg_temp.fixture_ts('2026-04-18T15:00:00Z')),
+    ('00000000-0000-0000-0000-00000000090c', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000604', decode('0c', 'hex'), 1.50, 50.0, 90.0, 5.0, TRUE, 3.10, ST_GeomFromText('POINT(-63.56895 44.6530)', 4326), pg_temp.fixture_ts('2026-04-18T15:01:00Z')),
+    ('00000000-0000-0000-0000-00000000090d', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000604', decode('0d', 'hex'), 1.20, 50.0, 90.0, 5.0, TRUE, 2.20, ST_GeomFromText('POINT(-63.5670 44.6530)', 4326), pg_temp.fixture_ts('2026-04-18T15:02:00Z')),
+    ('00000000-0000-0000-0000-00000000090e', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000604', decode('0e', 'hex'), 1.30, 50.0, 90.0, 5.0, TRUE, 2.40, ST_GeomFromText('POINT(-63.56695 44.6530)', 4326), pg_temp.fixture_ts('2026-04-18T15:03:00Z'));
 
 SELECT lives_ok(
     $$SELECT fold_pothole_candidates('00000000-0000-0000-0000-000000000604'::UUID)$$,
@@ -278,8 +315,8 @@ INSERT INTO readings (
     id, segment_id, batch_id, device_token_hash, roughness_rms, speed_kmh,
     heading_degrees, gps_accuracy_m, is_pothole, pothole_magnitude, location, recorded_at
 ) VALUES
-    ('00000000-0000-0000-0000-00000000090f', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000605', decode('0f', 'hex'), 1.10, 34.0, 90.0, 5.0, TRUE, 2.00, ST_GeomFromText('POINT(-63.5660 44.6530)', 4326), '2026-04-18T15:04:00Z'::TIMESTAMPTZ),
-    ('00000000-0000-0000-0000-000000000910', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000605', decode('10', 'hex'), 1.15, 42.0, 90.0, 5.0, TRUE, 2.10, ST_GeomFromText('POINT(-63.56595 44.6530)', 4326), '2026-04-18T15:05:00Z'::TIMESTAMPTZ);
+    ('00000000-0000-0000-0000-00000000090f', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000605', decode('0f', 'hex'), 1.10, 34.0, 90.0, 5.0, TRUE, 2.00, ST_GeomFromText('POINT(-63.5660 44.6530)', 4326), pg_temp.fixture_ts('2026-04-18T15:04:00Z')),
+    ('00000000-0000-0000-0000-000000000910', '00000000-0000-0000-0000-000000000802', '00000000-0000-0000-0000-000000000605', decode('10', 'hex'), 1.15, 42.0, 90.0, 5.0, TRUE, 2.10, ST_GeomFromText('POINT(-63.56595 44.6530)', 4326), pg_temp.fixture_ts('2026-04-18T15:05:00Z'));
 
 SELECT lives_ok(
     $$SELECT fold_pothole_candidates('00000000-0000-0000-0000-000000000605'::UUID)$$,

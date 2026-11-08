@@ -46,6 +46,44 @@ export function setPoolForTests(pool: DB | null): void {
     _pool = pool;
 }
 
+let _schedulerPool: DB | null = null;
+
+// Dedicated pool for the in-process scheduler (_shared/scheduler.ts).
+//
+// The request pool's 8 s session statement_timeout is right for API reads but
+// guarantees that nightly_recompute_aggregates, the readings purge and the
+// materialized-view refreshes fail once the dataset grows (2026-10-18 review,
+// "Railway scheduler is fragile"). This pool has no session statement_timeout;
+// every job sets its own `SET LOCAL statement_timeout` / `lock_timeout` inside
+// its transaction instead. It is small (one job runs at a time per replica,
+// plus one connection for run bookkeeping) so it cannot starve the request
+// pool's connection budget.
+export function schedulerDb(): DB {
+    if (_schedulerPool) return _schedulerPool;
+
+    const url = Deno.env.get("DATABASE_URL");
+    if (!url || url.trim().length === 0) {
+        throw new Error("DATABASE_URL is not set");
+    }
+
+    _schedulerPool = postgres(url, {
+        max: Number(Deno.env.get("PG_SCHEDULER_POOL_MAX") ?? "2"),
+        idle_timeout: Number(Deno.env.get("PG_POOL_IDLE_SECONDS") ?? "30"),
+        connect_timeout: Number(Deno.env.get("PG_POOL_CONNECT_TIMEOUT") ?? "10"),
+        ssl: isRailwayInternalUrl(url) ? false : "require",
+        connection: {
+            application_name: "roadsense-scheduler",
+        },
+    });
+
+    return _schedulerPool;
+}
+
+/// For tests: replace the scheduler pool; pass null to re-enable env-driven init.
+export function setSchedulerPoolForTests(pool: DB | null): void {
+    _schedulerPool = pool;
+}
+
 // Anchored hostname check so a malicious URL like
 // `evil.railway.internal.attacker.com` cannot trick us into disabling TLS.
 export function isRailwayInternalUrl(rawUrl: string): boolean {

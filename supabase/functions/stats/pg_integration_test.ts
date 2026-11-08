@@ -6,7 +6,7 @@
 //   DATABASE_URL="postgres://postgres:postgres@127.0.0.1:54322/postgres" \
 //     deno test --allow-all supabase/functions/stats/pg_integration_test.ts
 
-import { assertEquals } from "jsr:@std/assert";
+import { assertEquals, assertMatch } from "jsr:@std/assert";
 import postgres from "https://deno.land/x/postgresjs@v3.4.4/mod.js";
 import { createPgFetchStats } from "./pgRuntime.ts";
 
@@ -39,6 +39,9 @@ Deno.test({
             assertEquals(typeof stats.active_potholes, "number");
             assertEquals(typeof stats.municipalities_covered, "number");
             assertEquals(typeof stats.generated_at, "string");
+            if (stats.data_updated_at !== null) {
+                assertMatch(stats.data_updated_at, /^\d{4}-\d{2}-\d{2}$/);
+            }
         } finally {
             await sql.end({ timeout: 5 });
         }

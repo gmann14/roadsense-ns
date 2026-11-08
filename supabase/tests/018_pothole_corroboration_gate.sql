@@ -11,7 +11,7 @@
 
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(38);
+SELECT plan(41);
 
 DELETE FROM pothole_actions
 WHERE action_id IN (

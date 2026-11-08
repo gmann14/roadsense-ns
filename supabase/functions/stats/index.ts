@@ -1,7 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { createStatsHandler, type PublicMapBounds, type PublicStats } from "./handler.ts";
+import { createStatsHandler, type PublicMapBounds, type PublicStats, toPublicDay } from "./handler.ts";
 
-type PublicStatsRow = Omit<PublicStats, "map_bounds" | "focus_bounds" | "pothole_bounds"> & {
+type PublicStatsRow = Omit<PublicStats, "map_bounds" | "focus_bounds" | "pothole_bounds" | "data_updated_at"> & {
+    data_updated_at?: unknown;
     map_bounds?: unknown;
     focus_bounds?: unknown;
     pothole_bounds?: unknown;
@@ -25,6 +26,7 @@ function createFetchStats() {
                 map_bounds,
                 focus_bounds,
                 pothole_bounds,
+                data_updated_at,
                 generated_at
             `)
             .maybeSingle();
@@ -47,6 +49,7 @@ function createFetchStats() {
             map_bounds: normalizeBounds(row.map_bounds),
             focus_bounds: normalizeBounds(row.focus_bounds),
             pothole_bounds: normalizeBounds(row.pothole_bounds),
+            data_updated_at: toPublicDay(row.data_updated_at),
             generated_at: row.generated_at,
         };
     };

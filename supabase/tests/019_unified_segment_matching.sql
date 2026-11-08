@@ -2,6 +2,43 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 
 SELECT plan(15);
 
+-- Fixture timestamps were authored around 2026-07-02. Every fixture time is
+-- shifted by the same whole number of days so that 2026-07-02 lands on
+-- yesterday (UTC): ordering, time of day and the gaps between fixtures are
+-- unchanged, but the data stays inside the ingest freshness, action-window
+-- and 6-month retention rules and inside the monthly readings partitions
+-- that exist at test time.
+CREATE OR REPLACE FUNCTION pg_temp.fixture_ts(p_value TEXT)
+RETURNS TIMESTAMPTZ
+LANGUAGE sql
+STABLE
+AS $fixture$
+    SELECT p_value::TIMESTAMPTZ
+        + (((now() AT TIME ZONE 'UTC')::DATE - 1) - DATE '2026-07-02') * INTERVAL '1 day'
+$fixture$;
+
+CREATE OR REPLACE FUNCTION pg_temp.fixture_jsonb(p_value TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $fixture$
+DECLARE
+    v_match TEXT;
+    v_result TEXT := p_value;
+BEGIN
+    FOR v_match IN
+        SELECT DISTINCT (regexp_matches(p_value, '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', 'g'))[1]
+    LOOP
+        v_result := replace(
+            v_result,
+            v_match,
+            to_char(pg_temp.fixture_ts(v_match) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        );
+    END LOOP;
+    RETURN v_result::JSONB;
+END;
+$fixture$;
+
 -- P1: rematch_readings_after_segment_refresh, ingest_reading_batch, and
 -- replay_unmatched_readings had drifted onto three different matching
 -- criteria (flat 20m + strict surface allowlist vs tiered radii + permissive
@@ -76,8 +113,8 @@ CREATE TEMP TABLE tmp_unify_ingest AS
 SELECT ingest_reading_batch(
     '00000000-0000-0000-0000-000000019401'::UUID,
     decode('19', 'hex'),
-    '[{"lat":44.68020,"lng":-63.6490,"roughness_rms":0.30,"speed_kmh":45,"heading":90,"gps_accuracy_m":5,"is_pothole":false,"pothole_magnitude":null,"recorded_at":"2026-07-02T12:00:00Z"}]'::JSONB,
-    '2026-07-02T12:01:00Z'::TIMESTAMPTZ,
+    pg_temp.fixture_jsonb('[{"lat":44.68020,"lng":-63.6490,"roughness_rms":0.30,"speed_kmh":45,"heading":90,"gps_accuracy_m":5,"is_pothole":false,"pothole_magnitude":null,"recorded_at":"2026-07-02T12:00:00Z"}]'),
+    pg_temp.fixture_ts('2026-07-02T12:01:00Z'),
     '0.1.0 (test)',
     'iOS test'
 ) AS payload;
@@ -117,11 +154,11 @@ INSERT INTO readings (
     FALSE,
     NULL,
     ST_SetSRID(ST_MakePoint(-63.6490, 44.68020), 4326),
-    '2026-07-02T13:00:00Z'::TIMESTAMPTZ
+    pg_temp.fixture_ts('2026-07-02T13:00:00Z')
 );
 
 SELECT lives_ok(
-    $$SELECT rematch_readings_after_segment_refresh('2026-07-02T12:59:00Z'::TIMESTAMPTZ)$$,
+    $$SELECT rematch_readings_after_segment_refresh(pg_temp.fixture_ts('2026-07-02T12:59:00Z'))$$,
     'rematch_readings_after_segment_refresh runs against the fixture'
 );
 
@@ -151,7 +188,7 @@ INSERT INTO unmatched_readings (
     5.0,
     FALSE,
     NULL,
-    '2026-07-02T14:00:00Z'::TIMESTAMPTZ,
+    pg_temp.fixture_ts('2026-07-02T14:00:00Z'),
     NULL
 );
 
@@ -165,7 +202,7 @@ SELECT is(
         SELECT segment_id::TEXT
         FROM readings
         WHERE device_token_hash = decode('19', 'hex')
-          AND recorded_at = '2026-07-02T14:00:00Z'::TIMESTAMPTZ
+          AND recorded_at = pg_temp.fixture_ts('2026-07-02T14:00:00Z')
     ),
     '00000000-0000-0000-0000-000000019a01',
     'replay_unmatched_readings promotes the same 22m-offset NULL-surface reading to the same segment'
@@ -210,8 +247,8 @@ CREATE TEMP TABLE tmp_unify_ingest_gravel AS
 SELECT ingest_reading_batch(
     '00000000-0000-0000-0000-000000019403'::UUID,
     decode('19', 'hex'),
-    '[{"lat":44.68020,"lng":-63.7490,"roughness_rms":0.30,"speed_kmh":45,"heading":90,"gps_accuracy_m":5,"is_pothole":false,"pothole_magnitude":null,"recorded_at":"2026-07-02T15:00:00Z"}]'::JSONB,
-    '2026-07-02T15:01:00Z'::TIMESTAMPTZ,
+    pg_temp.fixture_jsonb('[{"lat":44.68020,"lng":-63.7490,"roughness_rms":0.30,"speed_kmh":45,"heading":90,"gps_accuracy_m":5,"is_pothole":false,"pothole_magnitude":null,"recorded_at":"2026-07-02T15:00:00Z"}]'),
+    pg_temp.fixture_ts('2026-07-02T15:01:00Z'),
     '0.1.0 (test)',
     'iOS test'
 ) AS payload;

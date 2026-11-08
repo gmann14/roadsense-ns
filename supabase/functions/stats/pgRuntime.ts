@@ -4,7 +4,7 @@
 // already-parsed objects come back as plain objects from postgres-deno.
 
 import { db, type DB as Sql } from "../db.ts";
-import type { PublicMapBounds, PublicStats } from "./handler.ts";
+import { type PublicMapBounds, type PublicStats, toPublicDay } from "./handler.ts";
 
 type PublicStatsRow = {
     total_km_mapped: number | string;
@@ -15,6 +15,7 @@ type PublicStatsRow = {
     map_bounds: unknown;
     focus_bounds: unknown;
     pothole_bounds: unknown;
+    data_updated_at: Date | string | null;
     generated_at: Date | string;
 };
 
@@ -33,12 +34,13 @@ export function createPgFetchStats(
                 map_bounds,
                 focus_bounds,
                 pothole_bounds,
+                data_updated_at,
                 generated_at
             FROM public_stats_mv
             LIMIT 1
         `) as PublicStatsRow[];
-        if (rows.length === 0) return null;
-        const row = rows[0];
+        const row = rows?.[0];
+        if (!row) return null;
         return {
             total_km_mapped: Number(row.total_km_mapped),
             total_readings: Number(row.total_readings),
@@ -48,6 +50,7 @@ export function createPgFetchStats(
             map_bounds: normalizeBounds(row.map_bounds),
             focus_bounds: normalizeBounds(row.focus_bounds),
             pothole_bounds: normalizeBounds(row.pothole_bounds),
+            data_updated_at: toPublicDay(row.data_updated_at),
             generated_at: row.generated_at instanceof Date
                 ? row.generated_at.toISOString()
                 : String(row.generated_at),

@@ -2,6 +2,43 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 
 SELECT plan(25);
 
+-- Fixture timestamps were authored around 2026-04-21. Every fixture time is
+-- shifted by the same whole number of days so that 2026-04-21 lands on
+-- yesterday (UTC): ordering, time of day and the gaps between fixtures are
+-- unchanged, but the data stays inside the ingest freshness, action-window
+-- and 6-month retention rules and inside the monthly readings partitions
+-- that exist at test time.
+CREATE OR REPLACE FUNCTION pg_temp.fixture_ts(p_value TEXT)
+RETURNS TIMESTAMPTZ
+LANGUAGE sql
+STABLE
+AS $fixture$
+    SELECT p_value::TIMESTAMPTZ
+        + (((now() AT TIME ZONE 'UTC')::DATE - 1) - DATE '2026-04-21') * INTERVAL '1 day'
+$fixture$;
+
+CREATE OR REPLACE FUNCTION pg_temp.fixture_jsonb(p_value TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $fixture$
+DECLARE
+    v_match TEXT;
+    v_result TEXT := p_value;
+BEGIN
+    FOR v_match IN
+        SELECT DISTINCT (regexp_matches(p_value, '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', 'g'))[1]
+    LOOP
+        v_result := replace(
+            v_result,
+            v_match,
+            to_char(pg_temp.fixture_ts(v_match) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        );
+    END LOOP;
+    RETURN v_result::JSONB;
+END;
+$fixture$;
+
 DELETE FROM pothole_actions
 WHERE action_id IN (
     '00000000-0000-0000-0000-000000001501'::UUID,
@@ -70,7 +107,7 @@ SELECT lives_ok(
         44.6488,
         -63.5752,
         6.2,
-        '2026-04-21T18:22:00Z'::TIMESTAMPTZ,
+        pg_temp.fixture_ts('2026-04-21T18:22:00Z'),
         NULL
     )
     $sql$,
@@ -92,7 +129,7 @@ SELECT is(
             44.6488,
             -63.5752,
             6.2,
-            '2026-04-21T18:22:00Z'::TIMESTAMPTZ,
+            pg_temp.fixture_ts('2026-04-21T18:22:00Z'),
             NULL
         )->>'pothole_report_id'
     ),
@@ -115,7 +152,7 @@ SELECT is(
             44.64881,
             -63.57519,
             5.5,
-            '2026-04-21T19:10:00Z'::TIMESTAMPTZ,
+            pg_temp.fixture_ts('2026-04-21T19:10:00Z'),
             NULL
         )->>'pothole_report_id'
     ),
@@ -145,8 +182,8 @@ INSERT INTO pothole_reports (
     '00000000-0000-0000-0000-000000001301',
     ST_GeomFromText('POINT(-63.57485 44.64880)', 4326),
     2.10,
-    '2026-04-01T00:00:00Z'::TIMESTAMPTZ,
-    '2026-04-20T00:00:00Z'::TIMESTAMPTZ,
+    pg_temp.fixture_ts('2026-04-01T00:00:00Z'),
+    pg_temp.fixture_ts('2026-04-20T00:00:00Z'),
     3,
     3,
     'active',
@@ -163,7 +200,7 @@ SELECT lives_ok(
         44.64880,
         -63.57485,
         5.0,
-        '2026-04-21T20:00:00Z'::TIMESTAMPTZ,
+        pg_temp.fixture_ts('2026-04-21T20:00:00Z'),
         '00000000-0000-0000-0000-000000001401'::UUID
     )
     $sql$,
@@ -185,7 +222,7 @@ SELECT lives_ok(
         44.64881,
         -63.57484,
         5.0,
-        '2026-04-21T20:05:00Z'::TIMESTAMPTZ,
+        pg_temp.fixture_ts('2026-04-21T20:05:00Z'),
         '00000000-0000-0000-0000-000000001401'::UUID
     )
     $sql$,
@@ -213,7 +250,7 @@ SELECT throws_ok(
         44.6520,
         -63.5700,
         6.0,
-        '2026-04-21T20:10:00Z'::TIMESTAMPTZ,
+        pg_temp.fixture_ts('2026-04-21T20:10:00Z'),
         '00000000-0000-0000-0000-000000001401'::UUID
     )
     $sql$,
@@ -231,7 +268,7 @@ SELECT lives_ok(
         44.64880,
         -63.57485,
         4.0,
-        '2026-04-21T21:00:00Z'::TIMESTAMPTZ,
+        pg_temp.fixture_ts('2026-04-21T21:00:00Z'),
         NULL
     )
     $sql$,
@@ -253,7 +290,7 @@ SELECT is(
         44.64880,
         -63.57485,
             4.0,
-            '2026-04-21T21:30:00Z'::TIMESTAMPTZ,
+            pg_temp.fixture_ts('2026-04-21T21:30:00Z'),
             NULL
         )->>'status'
     ),
@@ -276,7 +313,7 @@ SELECT throws_ok(
         44.64880,
         -63.57485,
         4.0,
-        '2026-04-21T21:40:00Z'::TIMESTAMPTZ,
+        pg_temp.fixture_ts('2026-04-21T21:40:00Z'),
         NULL,
         2.70,
         NULL
@@ -296,10 +333,10 @@ SELECT throws_ok(
         44.64880,
         -63.57485,
         4.0,
-        '2026-04-21T21:40:00Z'::TIMESTAMPTZ,
+        pg_temp.fixture_ts('2026-04-21T21:40:00Z'),
         '00000000-0000-0000-0000-000000001401'::UUID,
         2.70,
-        '2026-04-21T21:39:54Z'::TIMESTAMPTZ
+        pg_temp.fixture_ts('2026-04-21T21:39:54Z')
     )
     $sql$,
     '22023',
@@ -316,10 +353,10 @@ SELECT lives_ok(
         44.64880,
         -63.57485,
         4.0,
-        '2026-04-21T21:45:00Z'::TIMESTAMPTZ,
+        pg_temp.fixture_ts('2026-04-21T21:45:00Z'),
         NULL,
         2.70,
-        '2026-04-21T21:44:54Z'::TIMESTAMPTZ
+        pg_temp.fixture_ts('2026-04-21T21:44:54Z')
     )
     $sql$,
     'manual report can carry sensor-backed severity'

@@ -1,6 +1,6 @@
 # 02 — Backend Implementation
 
-*Last updated: 2026-04-17*
+*Last updated: 2026-11-08 (see [2026-11 hardening: current operational behaviour](#2026-11-hardening-current-operational-behaviour); the sections above it are the original design and are superseded where they disagree)*
 
 Covers: Supabase project setup, schema migrations, OSM import, ingestion Edge Function, stored procedures, vector tile endpoint, and nightly aggregation.
 
@@ -428,6 +428,8 @@ SELECT cron.schedule(
 
 Beyond MVP: also pre-create three months ahead (run on the 1st) so a single cron failure doesn't cascade.
 
+> **Superseded (2026-11).** `rate-limit-gc` and `segment-contributor-marks-gc` are replaced by the daily `retention-sweeps` job, and `purge-expired-readings` / `replay-unmatched-readings` were added. On Railway none of these `cron.schedule` calls fire (pg_cron is stubbed); the Deno scheduler runs them. See [2026-11 hardening](#2026-11-hardening-current-operational-behaviour).
+
 ## OSM Import Pipeline
 
 Run as a one-off script (not a migration) — the OSM data is too large to shove into migrations, and we refresh it quarterly.
@@ -621,6 +623,8 @@ GRANT EXECUTE ON FUNCTION rematch_readings_after_segment_refresh(TIMESTAMPTZ) TO
 **Cost note:** the rematch query does a KNN lookup per reading since `p_since`. At MVP scale (~2.6M readings over 6 months, per the testing spec), expect a few minutes on the Small Supabase instance. Run quarterly, off-peak, with session-level `statement_timeout` raised accordingly. Beyond MVP, partition the work by month and drive it from a worker that commits per-partition.
 
 ### Script: `scripts/osm-import.sh`
+
+> **Required change (2026-11).** The script below and the checked-in `scripts/osm-import.sh` only call `apply_road_segment_refresh()`. After the 2026-11 migrations a re-import must also run `finalize_road_segment_refresh()` in the same transaction, then refresh the MVs. See the [OSM re-import runbook](#osm-re-import-runbook).
 
 ```bash
 #!/usr/bin/env bash
@@ -1739,6 +1743,8 @@ LIMIT 500;
 
 ### `GET /functions/v1/stats`
 
+> **2026-11.** `public_stats_mv` now also has `data_updated_at` (UTC day of the newest reading on a k >= 3 segment; returned by `/stats` as `YYYY-MM-DD` or `null`), and its map/focus bounds only cover k >= 3 segments. Definition: `20261108100000_public_privacy_floor.sql`.
+
 Back the public stats card with a materialized view refreshed every 5 minutes. `public_stats_mv` is MVP; `public_worst_segments_mv` (Phase 9) is defined later in the `/segments/worst` section. Each MV has its own refresh function so the two are decoupled — a slow worst-segments refresh cannot stall the stats card, and Phase-9 can ship without touching MVP cron.
 
 ```sql
@@ -1860,6 +1866,8 @@ FROM filtered;
 ```
 
 ### `GET /functions/v1/health`
+
+> **2026-11.** `/health` takes `commit` from `RAILWAY_GIT_COMMIT_SHA`, then `GIT_COMMIT_SHA`, then the legacy `GIT_SHA` (`"local"` if none), and `version` from `APP_VERSION`. `/health/deep` adds a `scheduler` block when the scheduler runs and returns 503 `status: "degraded"` when a job is stale or failing. See [Scheduler](#scheduler-railway).
 
 The only unauthenticated endpoint. It proves the DB is reachable and returns deploy metadata from env vars:
 
@@ -2189,3 +2197,71 @@ Both buckets reuse the existing `rate_limits` table and `check_and_bump_rate_lim
 - Automatic image classification (CLIP / dedicated pothole classifier). Human moderation is fine for TestFlight volume (< 200 photos/week).
 - Reverse geocoding display names on the server. The client already knows the road name from the nearest segment.
 - Per-municipality moderator assignment. Single moderator queue for the beta.
+
+## 2026-11 hardening: current operational behaviour
+
+Migrations `20261108090000` .. `20261108150000` (docs/reviews/2026-10-18-full-codebase-review.md). Apply them in timestamp order; each one redefines functions from their latest body.
+
+### Scheduler (Railway)
+
+Railway's PostGIS has no pg_cron, so `supabase/functions/_shared/scheduler.ts` runs the jobs from the Deno service (started by `server.ts` when `RAILWAY_ENVIRONMENT` is set or `ENABLE_SCHEDULER=true`).
+
+- **Pool.** Jobs use `schedulerDb()` (`supabase/functions/db.ts`): its own pool (`PG_SCHEDULER_POOL_MAX`, default 2), `application_name=roadsense-scheduler`, and no session `statement_timeout`. The request pool keeps its 8 s limit.
+- **One transaction per run.** `set_config('statement_timeout' | 'lock_timeout', …, true)` (SET LOCAL semantics) → `pg_try_advisory_xact_lock(hashtextextended('roadsense-scheduler:<job>', 0))` (another replica or a slow previous run → skip) → `scheduler_job_seconds_until_due()` (not due → skip) → the job → `record_scheduler_job_run(…, ok)`. A failure rolls back and is recorded on the pool afterwards; it is logged, never thrown.
+- **Due-ness is in the database.** A job is due `interval` after its last successful start, or `min(interval, 15 min)` after a failed one, by the DB clock. Redeploys therefore do not re-run daily jobs, and a crash loop does not skip them.
+- **Jobs** (first check after startup is staggered by `offsetMs` plus up to 30 s of jitter):
+
+| Job | Interval | Timeout | Runs |
+|---|---|---|---|
+| `refresh-public-stats-mv` | 5 min | 2 min | `REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv` |
+| `refresh-public-worst-segments-mv` | 15 min | 5 min | `REFRESH MATERIALIZED VIEW CONCURRENTLY public_worst_segments_mv` |
+| `create-next-readings-partition` | 1 day | 1 min | `create_next_readings_partition()` |
+| `purge-expired-readings` | 1 day | 20 min | `purge_expired_readings()` |
+| `drop-old-readings-partitions` | 1 day | 2 min (lock wait 5 s) | `drop_old_readings_partitions()` |
+| `replay-unmatched-readings` | 1 day | 15 min | `replay_unmatched_readings()` |
+| `nightly-aggregate-recompute` | 1 day | 30 min | `nightly_recompute_aggregates()` |
+| `pothole-expiry` | 1 day | 5 min | `expire_unconfirmed_potholes()` |
+| `retention-sweeps` | 1 day | 10 min | `run_retention_sweeps()` |
+
+- **Health.** `scheduler_job_runs` (service_role only) holds the last start/finish/status/duration/result and `consecutive_failures` per job. `/health/deep` reports each job as `ok`, `pending` (never succeeded, scheduler up for less than the stale window), `stale` (no success within `2 × interval + timeout`) or `failing` (3+ consecutive failures); any stale/failing job, or an unreadable table, makes the response 503 `status: "degraded"`. Error text is not exposed; read `scheduler_job_runs.last_error` or the logs.
+- **Not done.** postgres.js 3.4.4 has no pool-acquire timeout, so the request pool still has no bounded wait for a free connection.
+
+### Retention
+
+`run_retention_sweeps()` and `purge_expired_readings()`; the schedule is in [06 — Retention schedule](06-security-and-privacy.md#retention-schedule).
+
+### Aggregates and pothole folding
+
+- `nightly_recompute_aggregates()` (full run) targets readings uploaded since the previous full run started (`aggregate_recompute_state`, never less than 24 h), readings that crossed the 6-month line since then, and aggregates whose newest reading is already outside the window. A target segment with no retained readings has its aggregate and contributor marks deleted.
+- `update_segment_aggregates_from_readings(batch, uploaded_since)` and `fold_pothole_candidates_for_readings(batch, uploaded_since)` fold only rows uploaded at or after `uploaded_since`; the `_from_batch` / `fold_pothole_candidates(batch)` wrappers pass NULL (whole batch). `replay_unmatched_readings()` stamps promoted readings with one `uploaded_at` and folds only those, so a batch's already-matched readings are no longer counted twice. Replay runs daily.
+- Pothole find-or-create (sensor fold and `manual_report`) takes `pg_advisory_xact_lock(7301, key)` for every `pothole_area_lock_keys(point)` key, in ascending order, so two concurrent reports of the same pothole cannot both insert. DBSCAN runs in EPSG:2961 metres (eps 15 m).
+- Aggregate and mark upserts run in `segment_id` order (deadlock avoidance).
+
+### Ingest and matching
+
+- `ingest_reading_batch`: a heading outside [0, 360) is stored as NULL; missing required values, a NULL or negative `gps_accuracy_m`, or a `pothole_magnitude` outside [0, 8] reject that reading as `low_quality` instead of failing the batch. (The gateway still rejects a magnitude outside [0, 8] for the whole request.)
+- `match_reading_to_segment`: picks the nearest accepted candidate first and only then applies the paved check, so a reading whose nearest road is gravel is rejected rather than snapped to a farther paved road (pre-20260702150000 behaviour). An out-of-range heading falls back to the segment bearing.
+- `readings(uploaded_at)` has an index on the partitioned parent.
+
+### Pothole actions
+
+`apply_pothole_action` rejects `recorded_at` NULL, more than 5 minutes in the future, or more than 30 days old with `RAISE EXCEPTION 'recorded_at_out_of_window' USING ERRCODE = '22023'`, clamps a slightly-future value to `now()`, and caps `accuracy_m` at 999.99 (NULL when negative or NaN) so it fits `NUMERIC(5,2)`. The gateway currently maps any error other than `stale_target` to 502; it should map this one to 400.
+
+### Attested devices
+
+`upsert_attested_device` never overwrites `public_key` on conflict and never lowers `sign_count`; only the token hash and `last_rotated_at` rotate.
+
+### OSM re-import runbook
+
+`road_segments.length_m` was backfilled from `ST_Length(geom::geography)` (20261108090000). A re-import changes segment ids and geometry, so it must be followed by a rematch and a full recompute in the same transaction:
+
+```sql
+BEGIN;
+SELECT * FROM apply_road_segment_refresh();
+SELECT finalize_road_segment_refresh();  -- default p_since: now() - 6 months
+COMMIT;
+REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv;
+REFRESH MATERIALIZED VIEW CONCURRENTLY public_worst_segments_mv;
+```
+
+`finalize_road_segment_refresh()` rematches retained readings, recomputes every segment that has readings or an aggregate (clearing ones left empty), rebuilds `segment_contributor_marks`, re-anchors active and candidate potholes to the nearest non-parking segment within 30 m, and returns `{segments_touched_by_rematch, segments_recomputed, potholes_reanchored}`. Run it from a `psql` session without the API pool's 8 s `statement_timeout` (raise it with `SET statement_timeout` if the role has one). `scripts/osm-import.sh` still calls only `apply_road_segment_refresh()` and must be updated to the block above.
