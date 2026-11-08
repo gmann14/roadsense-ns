@@ -195,6 +195,107 @@ button {
   margin: 0;
 }
 
+.content-card h3 {
+  margin: 8px 0 0;
+  font-size: 1.08rem;
+  line-height: 1.3;
+}
+
+.content-bullets {
+  margin: 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: 6px;
+  max-width: 62ch;
+  color: var(--rs-ink-muted);
+  line-height: 1.55;
+}
+
+.content-table {
+  margin: 0;
+  display: grid;
+  border-top: 1px solid var(--rs-border);
+}
+
+.content-table__row {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  gap: 6px 20px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rs-border);
+}
+
+.content-table dt {
+  font-weight: 700;
+  color: var(--rs-ink);
+}
+
+.content-table dd {
+  margin: 0;
+  color: var(--rs-ink-muted);
+  line-height: 1.55;
+}
+
+.content-table__note {
+  display: block;
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--rs-ink-faint);
+}
+
+.content-faq {
+  display: grid;
+  gap: 8px;
+}
+
+.content-faq details {
+  border-bottom: 1px solid var(--rs-border);
+  padding: 10px 0;
+}
+
+.content-faq summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--rs-ink);
+}
+
+.content-faq details > p {
+  margin: 8px 0 0;
+}
+
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 24px;
+  width: min(860px, 100%);
+  margin: 0 auto;
+  padding: 20px 0 8px;
+  border-top: 1px solid var(--rs-border);
+  font-size: 0.9rem;
+  color: var(--rs-ink-muted);
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.site-footer a {
+  color: inherit;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .content-table__row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .content-heading {
   margin: 0;
   font-family: var(--rs-font-display);
@@ -456,26 +557,6 @@ nav a[aria-current="page"] {
   .freshness-pill {
     display: none;
   }
-}
-
-/* === Trust strip === */
-
-.trust-strip {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 14px;
-  padding: 18px;
-  margin-bottom: 18px;
-}
-
-.trust-strip__metric {
-  display: grid;
-  gap: 4px;
-}
-
-.trust-strip__metric strong {
-  font-size: 1.2rem;
-  letter-spacing: -0.02em;
 }
 
 /* === Editorial header === */
@@ -803,6 +884,13 @@ nav a[aria-current="page"] {
   color: var(--rs-ink-faint);
   font-family: var(--rs-font-mono);
   font-weight: 500;
+}
+
+.stat-strip__notice {
+  margin: 0;
+  align-self: center;
+  font-size: 0.78rem;
+  color: var(--rs-ink-muted);
 }
 
 .mode-switcher-floating {

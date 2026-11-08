@@ -6,10 +6,12 @@ import {
   getPotholes,
   getSegmentDetail,
   isPotholeBboxWithinLookupCap,
+  type ApiResult,
   type Bbox,
   type PotholeRow,
   type SegmentDetail,
 } from "@/lib/api/client";
+import { formatCalendarDate, formatCount } from "@/lib/format";
 import type { MapMode } from "@/lib/url-state";
 
 type SegmentDrawerProps = {
@@ -17,6 +19,8 @@ type SegmentDrawerProps = {
   selectedSegmentId: string | null;
   visibleBbox: Bbox | null;
   topPotholes: PotholeRow[];
+  /** True when the top-potholes list failed to load (not merely empty). */
+  topPotholesUnavailable?: boolean;
   onClearSelection: () => void;
   onPotholeLocate: (pothole: PotholeRow) => void;
   isOpen?: boolean;
@@ -29,6 +33,7 @@ type SegmentDrawerPanelProps = {
   detail: SegmentDetail | null;
   potholes: PotholeRow[];
   topPotholes: PotholeRow[];
+  topPotholesUnavailable?: boolean;
   isLoading: boolean;
   errorMessage: string | null;
   isPotholeViewportTooWide?: boolean;
@@ -37,6 +42,22 @@ type SegmentDrawerPanelProps = {
   isOpen?: boolean;
   onClose?: () => void;
 };
+
+export const ROAD_NOT_PUBLISHED_MESSAGE =
+  "This road doesn't have enough different drivers yet to publish details.";
+export const ROAD_UNAVAILABLE_MESSAGE = "Road details are unavailable right now. Try again shortly.";
+export const POTHOLES_UNAVAILABLE_MESSAGE = "Pothole data is unavailable right now. Try again shortly.";
+
+/** Maps a failed segment-detail read to visitor-facing copy; null means "ignore" (aborted). */
+export function segmentDetailErrorMessage(result: Extract<ApiResult<unknown>, { ok: false }>): string | null {
+  if (result.reason === "aborted") {
+    return null;
+  }
+  if (result.reason === "http" && result.status === 404) {
+    return ROAD_NOT_PUBLISHED_MESSAGE;
+  }
+  return ROAD_UNAVAILABLE_MESSAGE;
+}
 
 const categoryLabel: Record<SegmentDetail["aggregate"]["category"], string> = {
   smooth: "Smooth",
@@ -63,6 +84,7 @@ export function SegmentDrawer({
   selectedSegmentId,
   visibleBbox,
   topPotholes,
+  topPotholesUnavailable = false,
   onClearSelection,
   onPotholeLocate,
   isOpen,
@@ -92,24 +114,24 @@ export function SegmentDrawer({
     setIsLoading(true);
     setErrorMessage(null);
 
-    void getSegmentDetail(selectedSegmentId)
+    void getSegmentDetail(selectedSegmentId, { signal: controller.signal })
       .then((result) => {
         if (controller.signal.aborted) {
           return;
         }
 
-        if (!result) {
+        if (!result.ok) {
           setDetail(null);
-          setErrorMessage("We could not load details for this road.");
+          setErrorMessage(segmentDetailErrorMessage(result));
           return;
         }
 
-        setDetail(result);
+        setDetail(result.data);
       })
       .catch(() => {
         if (!controller.signal.aborted) {
           setDetail(null);
-          setErrorMessage("We could not load details for this road.");
+          setErrorMessage(ROAD_UNAVAILABLE_MESSAGE);
         }
       })
       .finally(() => {
@@ -146,18 +168,24 @@ export function SegmentDrawer({
     setIsLoading(true);
     setErrorMessage(null);
 
-    void getPotholes(visibleBbox)
-      .then((response) => {
+    void getPotholes(visibleBbox, { signal: controller.signal })
+      .then((result) => {
         if (controller.signal.aborted) {
           return;
         }
 
-        setPotholes((response?.potholes ?? []).slice(0, 6));
+        if (!result.ok) {
+          setPotholes([]);
+          setErrorMessage(result.reason === "aborted" ? null : POTHOLES_UNAVAILABLE_MESSAGE);
+          return;
+        }
+
+        setPotholes(result.data.potholes.slice(0, 6));
       })
       .catch(() => {
         if (!controller.signal.aborted) {
           setPotholes([]);
-          setErrorMessage("We could not load potholes for this map view.");
+          setErrorMessage(POTHOLES_UNAVAILABLE_MESSAGE);
         }
       })
       .finally(() => {
@@ -189,6 +217,7 @@ export function SegmentDrawer({
       detail={detail}
       potholes={potholes}
       topPotholes={topPotholes}
+      topPotholesUnavailable={topPotholesUnavailable}
       isLoading={isLoading}
       errorMessage={errorMessage}
       isPotholeViewportTooWide={isPotholeViewportTooWide}
@@ -206,6 +235,7 @@ export function SegmentDrawerPanel({
   detail,
   potholes,
   topPotholes,
+  topPotholesUnavailable = false,
   isLoading,
   errorMessage,
   isPotholeViewportTooWide = false,
@@ -274,11 +304,12 @@ export function SegmentDrawerPanel({
           <div className="pothole-row__rank">#{index + 1}</div>
           <div className="pothole-row__meta">
             <strong>
-              {pothole.confirmation_count} confirmation{pothole.confirmation_count === 1 ? "" : "s"} · magnitude{" "}
-              {formatFixed(pothole.magnitude, 1)}
+              {formatCount(pothole.confirmation_count)} confirmation{pothole.confirmation_count === 1 ? "" : "s"} ·
+              magnitude {formatFixed(pothole.magnitude, 1)}
             </strong>
             <span>
-              Last seen {formatRelativeDate(pothole.last_confirmed_at)} · {formatFixed(pothole.lat, 4)}°N,{" "}
+              Last seen {formatCalendarDate(pothole.last_confirmed_at) ?? "date unavailable"} ·{" "}
+              {formatFixed(pothole.lat, 4)}°N,{" "}
               {formatFixed(absOrNull(pothole.lng), 4)}°W
             </span>
           </div>
@@ -344,6 +375,7 @@ export function SegmentDrawerPanel({
             <strong>Zoom the map to inspect active potholes.</strong>
             <span className="lede">
               Live pothole lists are capped to a roughly 10 km viewport so the public map stays responsive.
+              {topPotholesUnavailable ? " The province-wide top list is unavailable right now." : null}
             </span>
           </div>
         );
@@ -410,6 +442,14 @@ export function SegmentDrawerPanel({
       );
     }
 
+    const aggregate = detail.aggregate;
+    const summary = [
+      aggregate?.category ? categoryLabel[aggregate.category] : null,
+      aggregate?.confidence ? confidenceLabel[aggregate.confidence] : null,
+      aggregate?.trend ? trendLabel[aggregate.trend] : null,
+    ].filter((part): part is string => Boolean(part));
+    const lastReading = formatCalendarDate(aggregate?.last_reading_at);
+
     return (
       <>
         <div style={{ display: "grid", gap: 8 }}>
@@ -417,28 +457,29 @@ export function SegmentDrawerPanel({
           <h2 style={{ margin: 0, fontSize: "1.7rem", lineHeight: 1.05 }}>
             {detail.road_name ?? "Unnamed road"}
           </h2>
-          <p className="lede" style={{ margin: 0 }}>
-            {categoryLabel[detail.aggregate.category]} · {confidenceLabel[detail.aggregate.confidence]} ·{" "}
-            {trendLabel[detail.aggregate.trend]}
-          </p>
+          {summary.length > 0 ? (
+            <p className="lede" style={{ margin: 0 }}>
+              {summary.join(" · ")}
+            </p>
+          ) : null}
         </div>
 
         <div className="drawer-grid" aria-label="Road detail stats">
-          <Metric label="Roughness score" value={formatFixed(detail.aggregate.avg_roughness_score, 2)} />
-          <Metric label="Drive samples" value={String(detail.aggregate.total_readings)} />
-          <Metric label="Drivers" value={String(detail.aggregate.unique_contributors)} />
-          <Metric label="Potholes" value={String(detail.aggregate.pothole_count)} />
-          <Metric label="Road type" value={detail.road_type} />
+          <Metric label="Roughness score" value={formatFixed(aggregate?.avg_roughness_score, 2)} />
+          <Metric label="Drive samples" value={formatCount(aggregate?.total_readings)} />
+          <Metric label="Drivers" value={formatCount(aggregate?.unique_contributors)} />
+          <Metric label="Potholes" value={formatCount(aggregate?.pothole_count)} />
+          <Metric label="Road type" value={detail.road_type ?? "Unknown"} />
           <Metric label="Surface" value={detail.surface_type ?? "Unknown"} />
         </div>
 
         <div className="drawer-callout">
           <span className="eyebrow">Trust</span>
           <strong>
-            Last community reading {detail.aggregate.last_reading_at ? formatRelativeDate(detail.aggregate.last_reading_at) : "not available"}
+            {lastReading ? `Last community reading on ${lastReading}` : "Last reading date not available"}
           </strong>
           <span className="lede">
-            Scores may evolve as more drivers cover the same road.
+            Dates are rounded to the day. Scores may change as more drivers cover the same road.
           </span>
         </div>
       </>
@@ -514,19 +555,6 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
-}
-
-function formatRelativeDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "is unavailable";
-  }
-
-  return date.toLocaleDateString("en-CA", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
 }
 
 function formatFixed(value: number | null | undefined, digits: number): string {

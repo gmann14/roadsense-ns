@@ -1,12 +1,11 @@
 import { AppShell } from "@/components/chrome/app-shell";
 import { PrivacyContent } from "@/components/content/privacy-content";
-import { getPublicStats } from "@/lib/api/client";
 
-export default async function PrivacyPage() {
-  const stats = await getPublicStats();
-
+// Static on purpose: the App Store privacy-policy URL must load even when the
+// API is down, so this page makes no data requests.
+export default function PrivacyPage() {
   return (
-    <AppShell freshness={stats?.generated_at ?? null}>
+    <AppShell>
       <PrivacyContent />
     </AppShell>
   );

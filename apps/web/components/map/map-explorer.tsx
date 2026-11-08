@@ -1,9 +1,16 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { startTransition, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 
-import type { Bbox, PotholeRow, PublicStats } from "@/lib/api/client";
+import {
+  getTopPotholes,
+  type ApiResult,
+  type Bbox,
+  type PotholeResponse,
+  type PotholeRow,
+  type PublicStats,
+} from "@/lib/api/client";
 import type { MunicipalityConfig } from "@/lib/municipality-manifest";
 import {
   parseViewportState,
@@ -24,10 +31,24 @@ type MapExplorerProps = {
   municipality?: MunicipalityConfig | null;
   searchParams?: SearchParamRecord;
   stats: PublicStats | null;
-  topPotholes: PotholeRow[];
+  /** Server-loaded top potholes; null when the server didn't load them. */
+  initialTopPotholes?: ApiResult<PotholeResponse> | null;
 };
 
-export function MapExplorer({ municipality, searchParams = {}, stats, topPotholes }: MapExplorerProps) {
+type TopPotholesState =
+  | { status: "idle" | "loading" | "unavailable"; rows: PotholeRow[] }
+  | { status: "ready"; rows: PotholeRow[] };
+
+const TOP_POTHOLES_LIMIT = 100;
+
+export function topPotholesStateFrom(result: ApiResult<PotholeResponse> | null | undefined): TopPotholesState {
+  if (!result) {
+    return { status: "idle", rows: [] };
+  }
+  return result.ok ? { status: "ready", rows: result.data.potholes } : { status: "unavailable", rows: [] };
+}
+
+export function MapExplorer({ municipality, searchParams = {}, stats, initialTopPotholes = null }: MapExplorerProps) {
   const pathname = usePathname();
   const router = useRouter();
   const liveSearchParams = useSearchParams();
@@ -35,12 +56,36 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
   const [mapError, setMapError] = useState<string | null>(null);
   const [visibleBbox, setVisibleBbox] = useState<Bbox | null>(null);
   const [isDrawerDismissed, setIsDrawerDismissed] = useState(false);
+  const [topPotholes, setTopPotholes] = useState<TopPotholesState>(() => topPotholesStateFrom(initialTopPotholes));
 
   const baseSearchParams =
     liveSearchParams.size > 0
       ? new URLSearchParams(liveSearchParams)
       : searchParamRecordToUrlSearchParams(searchParams);
   const routeState = parseViewportState(baseSearchParams);
+
+  // Potholes mode can be entered client-side (no server render), so load the
+  // top-potholes list here when the server didn't already provide it.
+  const needsTopPotholes = routeState.mode === "potholes" && topPotholes.status !== "ready";
+  useEffect(() => {
+    if (!needsTopPotholes) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setTopPotholes((current) => ({ status: "loading", rows: current.rows }));
+
+    void getTopPotholes(TOP_POTHOLES_LIMIT, { signal: controller.signal }).then((result) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+      setTopPotholes(topPotholesStateFrom(result));
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [needsTopPotholes]);
 
   const navigate = (nextParams: URLSearchParams) => {
     const nextQuery = nextParams.toString();
@@ -117,8 +162,8 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
     ? `Road quality in ${municipality.name}`
     : "Nova Scotia's roads, scored by the people who drive them";
   const headlineLede = municipality
-    ? `Community-reported road quality across ${municipality.name}, refreshed nightly.`
-    : "Every line on this map is data from real drivers — passively collected, privately filtered, recomputed nightly.";
+    ? `Community-reported road quality across ${municipality.name}. A road appears once at least three different drivers have covered it.`
+    : "Every line on this map is data from real drivers — collected passively, filtered on the phone, and published only as road-level averages.";
 
   return (
     <section className="map-explorer map-explorer--overlay" aria-labelledby="map-explorer-title">
@@ -130,7 +175,7 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
           mapBounds={stats?.map_bounds ?? null}
           mapFocusBounds={stats?.focus_bounds ?? stats?.map_bounds ?? null}
           potholeBounds={stats?.pothole_bounds ?? null}
-          topPotholes={topPotholes}
+          topPotholes={topPotholes.rows}
           onSegmentSelect={handleSegmentSelect}
           onViewportCommit={handleViewportCommit}
           onMapReadyChange={setMapReady}
@@ -169,7 +214,8 @@ export function MapExplorer({ municipality, searchParams = {}, stats, topPothole
         mode={routeState.mode}
         selectedSegmentId={routeState.segment}
         visibleBbox={visibleBbox}
-        topPotholes={topPotholes}
+        topPotholes={topPotholes.rows}
+        topPotholesUnavailable={topPotholes.status === "unavailable"}
         onClearSelection={handleClearSelection}
         onPotholeLocate={handlePotholeLocate}
         isOpen={drawerOpen}

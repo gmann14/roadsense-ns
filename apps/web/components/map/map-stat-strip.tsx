@@ -1,31 +1,22 @@
 import type { PublicStats } from "@/lib/api/client";
+import { formatCount } from "@/lib/format";
 
 type MapStatStripProps = {
+  /** Null means the stats request failed, not that the counts are zero. */
   stats: PublicStats | null;
 };
-
-const PLACEHOLDER = "—";
-
-function formatStat(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return PLACEHOLDER;
-  }
-  return value.toLocaleString();
-}
-
-function formatRoundedStat(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return PLACEHOLDER;
-  }
-  return Math.round(value).toLocaleString();
-}
 
 export function MapStatStrip({ stats }: MapStatStripProps) {
   return (
     <div className="map-overlay stat-strip" aria-label="Province-wide stats">
-      <StatCard label="Roads mapped" value={formatRoundedStat(stats?.total_km_mapped)} unit="km" />
-      <StatCard label="Municipalities covered" value={formatStat(stats?.municipalities_covered)} />
-      <StatCard label="Pothole reports" value={formatStat(stats?.active_potholes)} unit="active" />
+      <StatCard label="Roads mapped" value={formatCount(stats?.total_km_mapped)} unit="km" />
+      <StatCard label="Municipalities covered" value={formatCount(stats?.municipalities_covered)} />
+      <StatCard label="Pothole reports" value={formatCount(stats?.active_potholes)} unit="active" />
+      {stats ? null : (
+        <p className="stat-strip__notice" role="status">
+          Live stats are unavailable right now.
+        </p>
+      )}
     </div>
   );
 }

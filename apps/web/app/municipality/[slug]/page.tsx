@@ -55,12 +55,12 @@ export default async function MunicipalityPage({
   ]);
 
   return (
-    <AppShell variant="map" freshness={stats?.generated_at ?? null}>
+    <AppShell variant="map" dataUpdatedAt={stats?.data_updated_at ?? null}>
       <MapShell
         stats={stats}
         municipality={municipality}
         searchParams={resolvedSearchParams}
-        topPotholes={topPotholes?.potholes ?? []}
+        initialTopPotholes={topPotholes}
       />
     </AppShell>
   );

@@ -26,7 +26,7 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "RoadSense NS — community road quality for Nova Scotia",
   description:
-    "A public, crowdsourced map of Nova Scotia road roughness, potholes, and coverage. Built by drivers, refreshed nightly.",
+    "A public, crowdsourced map of Nova Scotia road roughness, potholes, and coverage, built from drivers' phones and published only as road-level averages.",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
     shortcut: [{ url: "/icon.svg", type: "image/svg+xml" }],

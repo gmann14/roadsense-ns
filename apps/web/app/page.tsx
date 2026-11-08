@@ -21,12 +21,8 @@ export default async function HomePage({
   ]);
 
   return (
-    <AppShell variant="map" freshness={stats?.generated_at ?? null}>
-      <MapShell
-        stats={stats}
-        searchParams={resolvedSearchParams}
-        topPotholes={topPotholes?.potholes ?? []}
-      />
+    <AppShell variant="map" dataUpdatedAt={stats?.data_updated_at ?? null}>
+      <MapShell stats={stats} searchParams={resolvedSearchParams} initialTopPotholes={topPotholes} />
     </AppShell>
   );
 }

@@ -9,8 +9,8 @@ type ErrorPageProps = {
 
 export default function ErrorPage({ error, reset }: ErrorPageProps) {
   useEffect(() => {
-    // Surface to the browser console (and, in production, to Sentry via its
-    // global error listener) without rendering internals to the public page.
+    // Log to the browser console without rendering internals to the public
+    // page. The website has no error-reporting service installed.
     console.error("RoadSense NS: unhandled page error", error);
   }, [error]);
 

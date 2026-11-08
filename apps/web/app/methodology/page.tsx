@@ -6,7 +6,7 @@ export default async function MethodologyPage() {
   const stats = await getPublicStats();
 
   return (
-    <AppShell freshness={stats?.generated_at ?? null}>
+    <AppShell dataUpdatedAt={stats?.data_updated_at ?? null}>
       <MethodologyContent />
     </AppShell>
   );
