@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
+import { wwwToApexRedirects } from "./lib/redirects";
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  async redirects() {
+    return wwwToApexRedirects();
+  },
   async headers() {
     return [
       {

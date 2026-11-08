@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { AppShell } from "@/components/chrome/app-shell";
 import { MapShell } from "@/components/map/map-shell";
 import { getPublicStats, getTopPotholes } from "@/lib/api/client";
 import { getMunicipalityBySlug } from "@/lib/municipality-manifest";
+import { pageMetadata, pageTitle } from "@/lib/seo";
 import {
   parseViewportState,
   searchParamRecordToUrlSearchParams,
@@ -14,20 +16,22 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
-}) {
+}): Promise<Metadata> {
   const { slug } = await params;
   const municipality = getMunicipalityBySlug(slug);
 
   if (!municipality) {
     return {
-      title: "Municipality not found | RoadSense NS",
+      title: pageTitle("Municipality not found"),
+      robots: { index: false },
     };
   }
 
-  return {
-    title: `Road conditions in ${municipality.name} | RoadSense NS`,
-    description: `Explore community-reported road quality, potholes, and coverage in ${municipality.name}.`,
-  };
+  return pageMetadata({
+    path: `/municipality/${municipality.slug}`,
+    title: `Road conditions in ${municipality.name}`,
+    description: `Community-measured road roughness, pothole reports and coverage in ${municipality.name}, Nova Scotia, published as road-level averages from at least 3 drivers.`,
+  });
 }
 
 export default async function MunicipalityPage({
