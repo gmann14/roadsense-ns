@@ -83,8 +83,11 @@ final class Uploader: UploadDrainPerforming {
                 return
             }
 
+            // Resolve the device token before the batch is marked in flight:
+            // a token failure must not strand the batch in `inFlight`.
+            let deviceToken = try DeviceTokenStore.currentToken(in: ModelContext(container)).token
             try queueStore.markBatchInFlight(batchID: batch.id, now: now)
-            let shouldContinue = try await uploadBatch(batch, nowProvider: nowProvider)
+            let shouldContinue = try await uploadBatch(batch, deviceToken: deviceToken, nowProvider: nowProvider)
             guard shouldContinue else {
                 return
             }
@@ -101,10 +104,9 @@ final class Uploader: UploadDrainPerforming {
 
     private func uploadBatch(
         _ batch: QueueUploadBatch,
+        deviceToken: String,
         nowProvider: @escaping @Sendable () -> Date
     ) async throws -> Bool {
-        let context = ModelContext(container)
-        let deviceToken = try DeviceTokenStore.currentToken(in: context).token
         let readings = try queueStore.payloadReadings(for: batch.id).map {
             UploadReadingPayload(
                 lat: $0.latitude,
@@ -137,6 +139,7 @@ final class Uploader: UploadDrainPerforming {
                 batchID: batch.id,
                 disposition: disposition,
                 errorMessage: error.localizedDescription,
+                attemptResult: attemptResult,
                 now: now
             )
             logger.uploadFailed(batchID: batch.id, attemptResult: attemptResult, message: error.localizedDescription)
@@ -164,6 +167,7 @@ final class Uploader: UploadDrainPerforming {
                 batchID: batch.id,
                 disposition: disposition,
                 errorMessage: errorEnvelope?.error ?? "upload_failed",
+                attemptResult: attemptResult,
                 now: now
             )
             logger.uploadFailed(batchID: batch.id, attemptResult: attemptResult, message: errorEnvelope?.error)

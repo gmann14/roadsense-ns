@@ -61,8 +61,12 @@ enum DriveStore {
         let potholes = accepted.filter { $0.isPothole }.count
 
         let distanceKm = haversineDistanceKm(coordinates: accepted.map { ($0.latitude, $0.longitude) })
-        let bbox = boundingBox(coordinates: accepted.map { ($0.latitude, $0.longitude) })
-            ?? boundingBox(from: session)
+        // The drive mini-map only ever frames points that are (or will be)
+        // uploaded. Endpoint-trimmed readings sit near where the drive began
+        // or ended (often home), and the session's start/end coordinates are
+        // exactly the places the endpoint trimmer exists to hide, so neither
+        // is used. A drive with no eligible point gets no map at all.
+        let bbox = boundingBox(coordinates: mapEligibleCoordinates(in: readings))
 
         return DriveSummary(
             id: session.id,
@@ -75,6 +79,17 @@ enum DriveStore {
             distanceKm: distanceKm,
             bbox: bbox
         )
+    }
+
+    @MainActor
+    static func mapEligibleCoordinates(in readings: [ReadingRecord]) -> [(Double, Double)] {
+        readings
+            .filter { reading in
+                reading.droppedByPrivacyZone == false
+                    && reading.endpointTrimmedAt == nil
+                    && (reading.uploadReadyAt != nil || reading.uploadedAt != nil)
+            }
+            .map { ($0.latitude, $0.longitude) }
     }
 
     static func haversineDistanceKm(coordinates: [(Double, Double)]) -> Double {
@@ -122,18 +137,12 @@ enum DriveStore {
             maxLongitude: maxLng
         )
     }
+}
 
-    @MainActor
-    static func boundingBox(from session: DriveSessionRecord) -> DriveBoundingBox? {
-        let endLatitude = session.endLatitude ?? session.startLatitude
-        let endLongitude = session.endLongitude ?? session.startLongitude
-        return DriveBoundingBox(
-            minLatitude: min(session.startLatitude, endLatitude),
-            minLongitude: min(session.startLongitude, endLongitude),
-            maxLatitude: max(session.startLatitude, endLatitude),
-            maxLongitude: max(session.startLongitude, endLongitude)
-        )
-    }
+struct LocalRetentionSweepSummary: Equatable {
+    let prunedReadingCount: Int
+    let prunedBatchCount: Int
+    let prunedDriveSessionCount: Int
 }
 
 struct LocalDriveOverlayPoint: Equatable {
@@ -161,7 +170,18 @@ final class ReadingStore {
         self.container = container
     }
 
-    func ensureActiveDriveSession(for sample: LocationSample) throws -> UUID {
+    /// Returns the open drive session, creating one from `sample` if none is
+    /// open. Callers must only pass samples that are outside every privacy
+    /// zone: the sample becomes the session's start coordinate.
+    ///
+    /// When `adoptingPrivacyFilteredSince` is set, privacy-zone rows recorded
+    /// since then without a session (the drive began inside a zone) are
+    /// attached to the new session so its privacy-filtered count is right.
+    /// Those rows carry no coordinates, so adoption leaks nothing.
+    func ensureActiveDriveSession(
+        for sample: LocationSample,
+        adoptingPrivacyFilteredSince: Date? = nil
+    ) throws -> UUID {
         let context = ModelContext(container)
         if let existing = try fetchActiveDriveSession(in: context) {
             return existing.id
@@ -173,6 +193,23 @@ final class ReadingStore {
             startLongitude: sample.longitude
         )
         context.insert(record)
+
+        if let adoptingPrivacyFilteredSince {
+            let sessionID = record.id
+            let orphans = try context.fetch(
+                FetchDescriptor<ReadingRecord>(
+                    predicate: #Predicate {
+                        $0.droppedByPrivacyZone == true
+                            && $0.driveSessionID == nil
+                            && $0.recordedAt >= adoptingPrivacyFilteredSince
+                    }
+                )
+            )
+            for orphan in orphans {
+                orphan.driveSessionID = sessionID
+            }
+        }
+
         try context.save()
         return record.id
     }
@@ -423,18 +460,21 @@ final class ReadingStore {
         try context.save()
     }
 
+    /// Records that a fix was dropped by a privacy zone. Only the fact and
+    /// time of the drop are kept (for the "filtered by privacy zones" count);
+    /// the coordinate, speed, heading and accuracy are never written to disk.
     func savePrivacyFilteredSample(
         _ sample: LocationSample,
         driveSessionID: UUID? = nil
     ) throws {
         let context = ModelContext(container)
         let record = ReadingRecord(
-            latitude: sample.latitude,
-            longitude: sample.longitude,
+            latitude: 0,
+            longitude: 0,
             roughnessRMS: 0,
-            speedKMH: sample.speedKmh,
-            heading: sample.headingDegrees,
-            gpsAccuracyM: sample.horizontalAccuracyMeters,
+            speedKMH: 0,
+            heading: LocationSample.unknownHeading,
+            gpsAccuracyM: 0,
             isPothole: false,
             potholeMagnitude: nil,
             recordedAt: Date(timeIntervalSince1970: sample.timestamp),
@@ -443,6 +483,116 @@ final class ReadingStore {
         )
         context.insert(record)
         try context.save()
+    }
+
+    /// Builds before the count-only change stored the raw coordinate of
+    /// privacy-zone fixes. Zero them so an upgrade leaves nothing in-zone on
+    /// disk. Returns the number of rows scrubbed.
+    @discardableResult
+    func scrubPrivacyFilteredCoordinates() throws -> Int {
+        let context = ModelContext(container)
+        let rows = try context.fetch(
+            FetchDescriptor<ReadingRecord>(
+                predicate: #Predicate {
+                    $0.droppedByPrivacyZone == true
+                        && ($0.latitude != 0 || $0.longitude != 0)
+                }
+            )
+        )
+        guard !rows.isEmpty else {
+            return 0
+        }
+        for row in rows {
+            row.latitude = 0
+            row.longitude = 0
+            row.speedKMH = 0
+            row.heading = LocationSample.unknownHeading
+            row.gpsAccuracyM = 0
+        }
+        try context.save()
+        return rows.count
+    }
+
+    /// Deletes local data past the 30-day retention window: uploaded
+    /// readings, never-uploadable (privacy-zone / endpoint-trimmed) readings,
+    /// terminal upload batches and empty sealed drives. Readings still
+    /// waiting to upload are always kept.
+    @discardableResult
+    func pruneExpiredLocalData(now: Date = Date()) throws -> LocalRetentionSweepSummary {
+        let context = ModelContext(container)
+        let cutoff = RetentionPolicy.cutoff(now: now)
+
+        let readingCandidates = try context.fetch(
+            FetchDescriptor<ReadingRecord>(
+                predicate: #Predicate { $0.recordedAt < cutoff }
+            )
+        )
+        var prunedReadings = 0
+        for reading in readingCandidates where RetentionPolicy.shouldPruneReading(
+            recordedAt: reading.recordedAt,
+            uploadedAt: reading.uploadedAt,
+            endpointTrimmedAt: reading.endpointTrimmedAt,
+            droppedByPrivacyZone: reading.droppedByPrivacyZone,
+            now: now
+        ) {
+            context.delete(reading)
+            prunedReadings += 1
+        }
+
+        let batchCandidates = try context.fetch(
+            FetchDescriptor<UploadBatch>(
+                predicate: #Predicate { $0.createdAt < cutoff }
+            )
+        )
+        var prunedBatches = 0
+        for batch in batchCandidates where RetentionPolicy.shouldPruneBatch(
+            status: QueueModelMapper.map(batch.status),
+            createdAt: batch.createdAt,
+            lastAttemptAt: batch.lastAttemptAt,
+            now: now
+        ) {
+            context.delete(batch)
+            prunedBatches += 1
+        }
+
+        if prunedReadings > 0 || prunedBatches > 0 {
+            try context.save()
+        }
+
+        let sessionCandidates = try context.fetch(
+            FetchDescriptor<DriveSessionRecord>(
+                predicate: #Predicate { $0.isSealed == true && $0.startedAt < cutoff }
+            )
+        )
+        var prunedSessions = 0
+        for session in sessionCandidates {
+            let sessionID = session.id
+            let remaining = try context.fetchCount(
+                FetchDescriptor<ReadingRecord>(
+                    predicate: #Predicate { $0.driveSessionID == sessionID }
+                )
+            )
+            if RetentionPolicy.shouldPruneDriveSession(
+                isSealed: session.isSealed,
+                startedAt: session.startedAt,
+                endedAt: session.endedAt,
+                remainingReadingCount: remaining,
+                now: now
+            ) {
+                context.delete(session)
+                prunedSessions += 1
+            }
+        }
+
+        if prunedSessions > 0 {
+            try context.save()
+        }
+
+        return LocalRetentionSweepSummary(
+            prunedReadingCount: prunedReadings,
+            prunedBatchCount: prunedBatches,
+            prunedDriveSessionCount: prunedSessions
+        )
     }
 
     func acceptedReadingCount() throws -> Int {
@@ -675,9 +825,13 @@ final class ReadingStore {
         fallback: LocationSample?,
         in context: ModelContext
     ) throws -> LocationSample {
+        // Privacy-zone rows carry no coordinate and must never become the
+        // drive's end point.
         let readings = try context.fetch(
             FetchDescriptor<ReadingRecord>(
-                predicate: #Predicate { $0.driveSessionID == sessionID },
+                predicate: #Predicate {
+                    $0.driveSessionID == sessionID && $0.droppedByPrivacyZone == false
+                },
                 sortBy: [SortDescriptor(\.recordedAt, order: .forward)]
             )
         )

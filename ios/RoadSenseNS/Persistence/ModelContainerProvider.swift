@@ -82,6 +82,26 @@ enum ModelContainerProvider {
 }
 
 enum PersistentStoreRecovery {
+    static func recoveredStoresDirectory(for storeURL: URL) -> URL {
+        storeURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("RecoveredStores", isDirectory: true)
+    }
+
+    /// Removes every backup made by `backupAndRemoveStore` next to `storeURL`.
+    /// Those backups hold full copies of earlier stores (readings, drives),
+    /// so "Delete local data" must remove them too.
+    static func deleteRecoveredStores(
+        for storeURL: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        let directory = recoveredStoresDirectory(for: storeURL)
+        guard fileManager.fileExists(atPath: directory.path) else {
+            return
+        }
+        try fileManager.removeItem(at: directory)
+    }
+
     static func backupAndRemoveStore(
         at storeURL: URL,
         fileManager: FileManager = .default,
@@ -95,9 +115,7 @@ enum PersistentStoreRecovery {
             return
         }
 
-        let backupDirectory = storeURL
-            .deletingLastPathComponent()
-            .appendingPathComponent("RecoveredStores", isDirectory: true)
+        let backupDirectory = recoveredStoresDirectory(for: storeURL)
             .appendingPathComponent(backupDirectoryName(now: now), isDirectory: true)
         try fileManager.createDirectory(at: backupDirectory, withIntermediateDirectories: true)
 

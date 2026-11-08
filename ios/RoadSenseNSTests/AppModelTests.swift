@@ -843,3 +843,138 @@ private final class CountingUploadDrainer: UploadDrainPerforming {
         callCount += 1
     }
 }
+
+// MARK: - Driver safety, deletion, intent (App Review 1.4.5 / privacy)
+
+extension AppModelTests {
+    private func movingSample(speedKmh: Double, now: Date) -> LocationSample {
+        LocationSample(
+            timestamp: now.timeIntervalSince1970 - 0.5,
+            latitude: 44.6488,
+            longitude: -63.5752,
+            horizontalAccuracyMeters: 6,
+            speedKmh: speedKmh,
+            headingDegrees: 180
+        )
+    }
+
+    func testPotholeTapNeedsPassengerConfirmationOnlyWhenMoving() throws {
+        let now = Date()
+        let moving = try makeContainer(
+            locationService: TestLocationService(latestSample: movingSample(speedKmh: 52, now: now))
+        )
+        XCTAssertTrue(AppModel(container: moving, defaults: try makeDefaults()).manualMarkRequiresPassengerConfirmation)
+
+        let crawling = try makeContainer(
+            locationService: TestLocationService(latestSample: movingSample(speedKmh: 6, now: now))
+        )
+        XCTAssertFalse(AppModel(container: crawling, defaults: try makeDefaults()).manualMarkRequiresPassengerConfirmation)
+
+        let noFix = try makeContainer(locationService: TestLocationService())
+        XCTAssertFalse(AppModel(container: noFix, defaults: try makeDefaults()).manualMarkRequiresPassengerConfirmation)
+    }
+
+    func testSubmitPotholePhotoIsBlockedAboveWalkingSpeed() async throws {
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+        let sample = movingSample(speedKmh: 30, now: now)
+        let container = try makeContainer(
+            locationService: TestLocationService(latestSample: sample, recentSamples: [sample])
+        )
+        let model = AppModel(container: container, defaults: try makeDefaults())
+
+        XCTAssertFalse(model.isPhotoCaptureAllowedAtCurrentSpeed)
+        let result = await model.submitPotholePhoto(rawImageData: try makeJPEGData(), now: now)
+
+        XCTAssertEqual(result, .movingTooFast)
+        let reports = try ModelContext(container.modelContainer).fetch(FetchDescriptor<PotholeReportRecord>())
+        XCTAssertTrue(reports.isEmpty)
+    }
+
+    func testDeleteDriveRemovesDriveAndRefreshesCounts() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container.modelContainer)
+        let driveID = UUID()
+        let start = Date(timeIntervalSince1970: 1_713_000_000)
+        context.insert(
+            DriveSessionRecord(
+                id: driveID,
+                startedAt: start,
+                endedAt: start.addingTimeInterval(300),
+                startLatitude: 44.65,
+                startLongitude: -63.57,
+                isSealed: true
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.651,
+                longitude: -63.571,
+                roughnessRMS: 0.05,
+                speedKMH: 40,
+                heading: 90,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: start.addingTimeInterval(60),
+                driveSessionID: driveID,
+                uploadReadyAt: start.addingTimeInterval(300)
+            )
+        )
+        try context.save()
+
+        let model = AppModel(container: container, defaults: try makeDefaults())
+        XCTAssertEqual(model.acceptedReadingCount, 1)
+
+        try model.deleteDrive(id: driveID)
+
+        XCTAssertEqual(model.acceptedReadingCount, 0)
+        XCTAssertTrue(try container.readingStore.recentDriveSummaries().isEmpty)
+    }
+
+    func testMarkPotholeIntentReportsThroughSharedReporter() throws {
+        let now = Date()
+        let sample = movingSample(speedKmh: 52, now: now)
+        let container = try makeContainer(
+            locationService: TestLocationService(latestSample: sample, recentSamples: [sample])
+        )
+        let reporter = ManualPotholeReporter(container: container)
+
+        let result = reporter.report(now: now)
+
+        guard case .queued = result else {
+            return XCTFail("Expected the intent path to queue a report, got \(result)")
+        }
+        XCTAssertEqual(MarkPotholeIntentDialog.text(for: result), "Pothole marked at your current location.")
+        let actions = try ModelContext(container.modelContainer).fetch(FetchDescriptor<PotholeActionRecord>())
+        XCTAssertEqual(actions.count, 1)
+    }
+
+    func testMarkPotholeIntentRefusesInsidePrivacyZone() throws {
+        let now = Date()
+        let sample = movingSample(speedKmh: 52, now: now)
+        let container = try makeContainer(
+            locationService: TestLocationService(latestSample: sample, recentSamples: [sample]),
+            seedPrivacyZone: true
+        )
+
+        let result = ManualPotholeReporter(container: container).report(now: now)
+
+        XCTAssertEqual(result, .insidePrivacyZone)
+        XCTAssertEqual(MarkPotholeIntentDialog.text(for: result), "You're inside a privacy zone, so nothing was marked.")
+    }
+
+    func testRetentionSweepRunsOnLaunchAndIsThrottled() throws {
+        let defaults = try makeDefaults()
+        let container = try makeContainer()
+        _ = AppModel(container: container, defaults: defaults)
+        let firstRun = try XCTUnwrap(defaults.object(forKey: LocalRetentionSweeper.lastRunDefaultsKey) as? Date)
+
+        let sweeper = LocalRetentionSweeper(
+            readingStore: container.readingStore,
+            defaults: defaults,
+            nowProvider: { firstRun.addingTimeInterval(60) }
+        )
+        XCTAssertNil(sweeper.runIfDue(), "a second sweep inside the throttle window is skipped")
+        XCTAssertNotNil(sweeper.runIfDue(force: true), "the nightly task forces a sweep")
+    }
+}

@@ -512,6 +512,8 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("settings.open-licenses")
+
+                LegalLinksView()
             }
         }
     }

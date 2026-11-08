@@ -18,6 +18,12 @@ struct UploadQueueStatusSummary: Equatable {
 @MainActor
 final class UploadQueueStore {
     private let container: ModelContainer
+    /// Batches whose most recent failure in this process was a transport
+    /// error (no HTTP response). Only these have their backoff cleared when
+    /// connectivity returns; a 429/5xx backoff is the server asking us to
+    /// wait and is left alone. In memory on purpose: after a relaunch the
+    /// batch simply waits out its stored backoff.
+    private var networkFailedBatchIDs: Set<UUID> = []
 
     init(container: ModelContainer) {
         self.container = container
@@ -80,6 +86,7 @@ final class UploadQueueStore {
         result: UploadServerResult,
         now: Date = Date()
     ) throws {
+        networkFailedBatchIDs.remove(batchID)
         let context = ModelContext(container)
         guard let batchModel = try fetchBatch(id: batchID, in: context) else {
             return
@@ -106,8 +113,15 @@ final class UploadQueueStore {
         batchID: UUID,
         disposition: UploadDisposition,
         errorMessage: String?,
+        attemptResult: UploadAttemptResult? = nil,
         now: Date = Date()
     ) throws {
+        if attemptResult == .networkError {
+            networkFailedBatchIDs.insert(batchID)
+        } else {
+            networkFailedBatchIDs.remove(batchID)
+        }
+
         let context = ModelContext(container)
         guard let batchModel = try fetchBatch(id: batchID, in: context) else {
             return
@@ -154,15 +168,25 @@ final class UploadQueueStore {
     /// Clears retry backoff on pending batches so the next drain picks them
     /// up immediately. Used when connectivity returns: backoff accumulated
     /// from failed attempts while offline should not delay the upload.
+    /// Clears retry backoff for pending batches whose last failure was a
+    /// network error, so they upload as soon as connectivity returns.
     func requeueEligibleBatches() throws {
+        guard !networkFailedBatchIDs.isEmpty else {
+            return
+        }
+
         let context = ModelContext(container)
         let descriptor = FetchDescriptor<UploadBatch>(
             predicate: #Predicate { $0.statusRawValue == "pending" }
         )
-        let batches = try context.fetch(descriptor).filter { $0.nextAttemptAt != nil }
+        let eligibleIDs = networkFailedBatchIDs
+        let batches = try context.fetch(descriptor).filter {
+            $0.nextAttemptAt != nil && eligibleIDs.contains($0.id)
+        }
 
         for batch in batches {
             batch.nextAttemptAt = nil
+            networkFailedBatchIDs.remove(batch.id)
         }
 
         if !batches.isEmpty {

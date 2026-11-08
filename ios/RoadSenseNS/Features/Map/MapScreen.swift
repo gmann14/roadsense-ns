@@ -24,6 +24,7 @@ struct MapScreen: View {
     @State private var isWaitingToPresentCamera = false
     @State private var scopedPhotoSegmentID: UUID?
     @State private var bottomCardHeight: CGFloat = 0
+    @State private var isConfirmingPassengerMark = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -87,15 +88,28 @@ struct MapScreen: View {
                         actionType: actionType
                     )
                 },
-                onAddPhoto: { segmentID in
-                    handleTakePhotoTap(segmentID: segmentID)
-                }
+                onAddPhoto: model.config.enablePotholePhotos
+                    ? { segmentID in handleTakePhotoTap(segmentID: segmentID) }
+                    : nil
             )
+        }
+        .confirmationDialog(
+            BrandVoice.DriverSafety.passengerConfirmTitle,
+            isPresented: $isConfirmingPassengerMark,
+            titleVisibility: .visible
+        ) {
+            Button(BrandVoice.DriverSafety.passengerConfirmAction) {
+                submitManualMark()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(BrandVoice.DriverSafety.passengerConfirmMessage)
         }
         .fullScreenCover(isPresented: $isShowingCamera, onDismiss: handleCameraDismiss) {
             if let photoCaptureContext {
                 PotholeCameraFlowView(
                     coordinateLabel: photoCaptureContext.coordinateLabel,
+                    currentSpeedKmh: { model.currentSpeedKmh },
                     onCancel: {
                         isShowingCamera = false
                     },
@@ -465,7 +479,9 @@ struct MapScreen: View {
             markPotholeAction
 
             HStack(spacing: DesignTokens.Space.sm) {
-                takePhotoAction
+                if model.config.enablePotholePhotos {
+                    takePhotoAction
+                }
 
                 if model.readiness.showsPrivacyRiskWarning {
                     privacyZonesAction
@@ -498,9 +514,11 @@ struct MapScreen: View {
                 }
             }
 
-            Divider().background(Color.white.opacity(0.12))
+            if model.config.enablePotholePhotos {
+                Divider().background(Color.white.opacity(0.12))
 
-            takePhotoAction
+                takePhotoAction
+            }
         }
         .padding(DesignTokens.Space.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -797,6 +815,14 @@ struct MapScreen: View {
     }
 
     private func handleMarkPotholeTap() {
+        if model.manualMarkRequiresPassengerConfirmation {
+            isConfirmingPassengerMark = true
+            return
+        }
+        submitManualMark()
+    }
+
+    private func submitManualMark() {
         let feedback: PotholeFeedback
         switch model.markPothole() {
         case let .queued(actionID):
@@ -836,11 +862,15 @@ struct MapScreen: View {
         // (review NEW-2 / backlog B130). Say so before opening the camera
         // instead of letting the user capture a photo that can't upload.
         guard model.config.enablePotholePhotos else {
+            return
+        }
+
+        guard model.isPhotoCaptureAllowedAtCurrentSpeed else {
             withAnimation(DesignTokens.Motion.enter) {
                 potholeFeedback = PotholeFeedback(
-                    title: BrandVoice.Failures.photosComingSoonTitle,
-                    message: BrandVoice.Failures.photosComingSoonBody,
-                    iconName: "camera.fill",
+                    title: BrandVoice.DriverSafety.cameraBlockedTitle,
+                    message: BrandVoice.DriverSafety.cameraBlockedBody,
+                    iconName: "car.fill",
                     tint: DesignTokens.Palette.warning,
                     dismissDelay: .seconds(3)
                 )
@@ -920,6 +950,14 @@ struct MapScreen: View {
                 title: "Photo reports unavailable",
                 message: "Photo reports are temporarily disabled for this build.",
                 iconName: "camera.fill",
+                tint: DesignTokens.Palette.warning,
+                dismissDelay: .seconds(3)
+            )
+        case .movingTooFast:
+            feedback = PotholeFeedback(
+                title: BrandVoice.DriverSafety.cameraBlockedTitle,
+                message: BrandVoice.DriverSafety.cameraBlockedBody,
+                iconName: "car.fill",
                 tint: DesignTokens.Palette.warning,
                 dismissDelay: .seconds(3)
             )

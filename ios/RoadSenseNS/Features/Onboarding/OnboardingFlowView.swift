@@ -152,6 +152,8 @@ struct OnboardingFlowView: View {
                 .controlSize(.large)
                 .disabled(model.isRequestingPermissions)
                 .accessibilityIdentifier("onboarding.continue")
+
+                LegalLinksView(style: .inline)
             }
         }
     }

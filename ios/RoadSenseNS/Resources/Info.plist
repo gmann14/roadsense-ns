@@ -40,20 +40,13 @@
 		<string>ca.roadsense.ios.upload-drain</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>RoadSense NS uses the camera so you can submit pothole photos.</string>
+	<string>RoadSense NS uses the camera so you can photograph a pothole while you are stopped. A photo is taken only when you tap the shutter.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>RoadSense NS uses background location to keep collecting road quality readings during a drive.</string>
+	<string>RoadSense NS detects your drives automatically and records road-quality readings in the background, even when the app is closed. Readings inside your privacy zones never leave your phone.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>RoadSense NS uses your location to measure road quality while you drive.</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>RoadSense NS local builds can connect to your Mac on the same Wi-Fi for local map and upload testing.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>RoadSense NS uses motion data to score road roughness and detect potholes.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
 	<key>SENTRY_DSN</key>
 	<string>$(SENTRY_DSN)</string>
 	<key>ENABLE_SENTRY</key>

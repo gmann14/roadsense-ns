@@ -136,10 +136,25 @@ Use [06-security-and-privacy.md](06-security-and-privacy.md#app-store-privacy-la
 | Data type | Collected | Linked | Tracking | Purpose |
 |---|---|---|---|---|
 | Precise Location | yes | yes | no | App Functionality |
+| Device ID (random install token) | yes | yes | no | App Functionality |
+| Email Address (optional, feedback only) | yes | yes | no | App Functionality |
+| Customer Support (feedback text) | yes | yes | no | App Functionality |
+| Other Data Types (road-roughness readings) | yes | yes | no | App Functionality |
 | Crash Data | yes | no | no | App Functionality |
 | Performance Data | yes | no | no | App Functionality |
 
+Photos are **not** declared: App Store builds ship with `ENABLE_POTHOLE_PHOTOS = NO`, and the camera entry points are hidden in those builds. Declare Photos in the same change that turns photos on.
+
+The bundled `ios/RoadSenseNS/PrivacyInfo.xcprivacy` declares exactly this set (`NSPrivacyTracking = false`, no tracking domains) plus the one required-reason API the app calls itself, `UserDefaults` (`CA92.1`). `ReleaseConfigFilesTests.privacyManifestMatchesAppStorePrivacyLabels` fails if the manifest and this table drift. Mapbox and Sentry ship their own manifests, which Xcode merges into the archive's privacy report.
+
 Everything else should remain unselected unless the implementation changes and [06-security-and-privacy.md](06-security-and-privacy.md) is updated in the same PR.
+
+## App Review Guardrails In The Build
+
+- **Driver distraction (1.4.5).** Above 10 km/h the pothole button asks "Are you a passenger?" before it marks anything, and points drivers to Siri. The "Mark Pothole" App Intent (phrase: "Mark pothole in RoadSense NS") marks a pothole hands-free through the same reporting path as the button, including the privacy-zone check. The camera is blocked, not just warned, above 8 km/h: the entry point refuses to open, and inside the camera the shutter and Submit disappear while moving.
+- **Legal links.** Privacy Policy, Terms of Use and Support (`https://nsroadsense.ca/privacy`, `/terms`, `/support`) are linked from onboarding (before any permission prompt) and from Settings → About. Settings → About → Open-source licenses credits Mapbox and "© OpenStreetMap contributors" (ODbL); drive thumbnails keep the Mapbox logo and attribution.
+- **Purpose strings.** The Always-location string says drives are detected and recorded automatically in the background. Shipping builds carry no local-network usage string or ATS exception; only the Local Debug configuration uses `Info-Local.plist`, which adds them.
+- **Encryption.** `ITSAppUsesNonExemptEncryption = false` stays in `Info.plist`.
 
 ## Screenshot Shot List
 

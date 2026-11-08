@@ -45,7 +45,7 @@ enum QueueModelMapper {
         model.wasDuplicateOnResubmit = record.wasDuplicateOnResubmit
     }
 
-    private static func map(_ status: UploadStatus) -> QueueUploadStatus {
+    static func map(_ status: UploadStatus) -> QueueUploadStatus {
         switch status {
         case .pending:
             return .pending

@@ -11,6 +11,18 @@ import SwiftUI
 struct LicensesView: View {
     static let allLicenses: [License] = [
         License(
+            name: "Mapbox Maps SDK for iOS",
+            url: AppLinks.mapboxAttribution,
+            licenseName: "Mapbox Terms of Service",
+            excerpt: "© Mapbox. Draws the road-quality map and drive thumbnails. RoadSense NS turns Mapbox's own usage telemetry off."
+        ),
+        License(
+            name: "OpenStreetMap",
+            url: AppLinks.openStreetMapCopyright,
+            licenseName: "Open Database License (ODbL)",
+            excerpt: "Map data © OpenStreetMap contributors, available under the Open Database License. The road network RoadSense NS scores comes from OpenStreetMap."
+        ),
+        License(
             name: "Sentry Cocoa",
             url: URL(string: "https://github.com/getsentry/sentry-cocoa"),
             licenseName: "MIT License",

@@ -4,6 +4,9 @@ struct DrivesListView: View {
     let readingStore: ReadingStore
     var mapboxAccessToken: String? = nil
     var onOpenOnMap: ((DriveBoundingBox) -> Void)?
+    /// Routes deletion through the app model so an in-progress drive's
+    /// session is reset too. Falls back to the store in previews.
+    var onDeleteDrive: ((UUID) throws -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var sections: [DriveListSection] = []
@@ -246,7 +249,11 @@ struct DrivesListView: View {
 
     private func handleDelete(_ drive: DriveSummary) {
         do {
-            try readingStore.deleteDriveSession(id: drive.id)
+            if let onDeleteDrive {
+                try onDeleteDrive(drive.id)
+            } else {
+                try readingStore.deleteDriveSession(id: drive.id)
+            }
             deleteCandidate = nil
             reload()
         } catch {
@@ -330,8 +337,10 @@ struct DrivesListView: View {
         components.path = path
         components.queryItems = [
             URLQueryItem(name: "access_token", value: token),
-            URLQueryItem(name: "logo", value: "false"),
-            URLQueryItem(name: "attribution", value: "false")
+            // Mapbox and OpenStreetMap attribution must stay visible on
+            // every rendered map, including these thumbnails.
+            URLQueryItem(name: "logo", value: "true"),
+            URLQueryItem(name: "attribution", value: "true")
         ]
         return components.url
     }

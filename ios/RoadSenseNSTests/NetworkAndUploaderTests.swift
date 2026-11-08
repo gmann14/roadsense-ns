@@ -869,31 +869,58 @@ final class NetworkAndUploaderTests: XCTestCase {
     func testNetworkRestoreRequeuesBatchesAndRequestsDrain() async throws {
         let container = try makeInMemoryContainer()
         let context = ModelContext(container)
-        context.insert(
-            UploadBatch(
-                createdAt: Date(timeIntervalSince1970: 1_713_000_000),
-                attemptCount: 4,
-                lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_060),
-                nextAttemptAt: Date(timeIntervalSince1970: 1_713_003_600),
-                status: .pending,
-                readingCount: 10,
-                firstErrorMessage: "network_error"
-            )
+        let networkFailed = UploadBatch(
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000),
+            attemptCount: 3,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030),
+            nextAttemptAt: nil,
+            status: .pending,
+            readingCount: 10,
+            firstErrorMessage: "network_error"
         )
-        context.insert(
-            UploadBatch(
-                createdAt: Date(timeIntervalSince1970: 1_713_000_000),
-                attemptCount: 1,
-                lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030),
-                nextAttemptAt: nil,
-                status: .failedPermanent,
-                readingCount: 5,
-                firstErrorMessage: "validation_failed"
-            )
+        let serverThrottled = UploadBatch(
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000),
+            attemptCount: 1,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030),
+            nextAttemptAt: nil,
+            status: .pending,
+            readingCount: 8,
+            firstErrorMessage: "service_unavailable"
         )
+        let permanentlyFailed = UploadBatch(
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000),
+            attemptCount: 1,
+            lastAttemptAt: Date(timeIntervalSince1970: 1_713_000_030),
+            nextAttemptAt: nil,
+            status: .failedPermanent,
+            readingCount: 5,
+            firstErrorMessage: "validation_failed"
+        )
+        context.insert(networkFailed)
+        context.insert(serverThrottled)
+        context.insert(permanentlyFailed)
         try context.save()
+        let networkFailedID = networkFailed.id
+        let serverThrottledID = serverThrottled.id
+        let permanentlyFailedID = permanentlyFailed.id
 
         let queueStore = UploadQueueStore(container: container)
+        let failureTime = Date(timeIntervalSince1970: 1_713_000_060)
+        try queueStore.applyFailure(
+            batchID: networkFailedID,
+            disposition: .retry(afterSeconds: 3_600),
+            errorMessage: "offline",
+            attemptResult: .networkError,
+            now: failureTime
+        )
+        try queueStore.applyFailure(
+            batchID: serverThrottledID,
+            disposition: .retry(afterSeconds: 3_600),
+            errorMessage: "service_unavailable",
+            attemptResult: .http(statusCode: 503, retryAfterSeconds: 3_600),
+            now: failureTime
+        )
+
         let drainCoordinator = RecordingDrainCoordinator()
         let restorer = UploadConnectivityRestorer(
             queueStore: queueStore,
@@ -905,13 +932,61 @@ final class NetworkAndUploaderTests: XCTestCase {
 
         let updatedContext = ModelContext(container)
         let batches = try updatedContext.fetch(FetchDescriptor<UploadBatch>())
-        let pending = try XCTUnwrap(batches.first(where: { $0.status == .pending }))
-        let failed = try XCTUnwrap(batches.first(where: { $0.status == .failedPermanent }))
+        let restored = try XCTUnwrap(batches.first(where: { $0.id == networkFailedID }))
+        let throttled = try XCTUnwrap(batches.first(where: { $0.id == serverThrottledID }))
+        let failed = try XCTUnwrap(batches.first(where: { $0.id == permanentlyFailedID }))
 
-        XCTAssertNil(pending.nextAttemptAt, "backoff accumulated offline must be cleared on restore")
-        XCTAssertEqual(pending.attemptCount, 4)
+        XCTAssertNil(restored.nextAttemptAt, "backoff accumulated offline must be cleared on restore")
+        XCTAssertEqual(restored.attemptCount, 4)
+        XCTAssertEqual(
+            throttled.nextAttemptAt,
+            failureTime.addingTimeInterval(3_600),
+            "a server-requested backoff (429/5xx) is not a connectivity problem and must be honoured"
+        )
         XCTAssertEqual(failed.status, .failedPermanent, "server-rejected batches stay behind the manual retry button")
         XCTAssertEqual(drainCoordinator.requestedReasons, [.networkRestored])
+    }
+
+    @MainActor
+    func testNetworkRestoreLeavesBackoffAloneAfterLaterHTTPFailure() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let batch = UploadBatch(
+            createdAt: Date(timeIntervalSince1970: 1_713_000_000),
+            attemptCount: 0,
+            lastAttemptAt: nil,
+            nextAttemptAt: nil,
+            status: .pending,
+            readingCount: 10,
+            firstErrorMessage: nil
+        )
+        context.insert(batch)
+        try context.save()
+        let batchID = batch.id
+
+        let queueStore = UploadQueueStore(container: container)
+        let now = Date(timeIntervalSince1970: 1_713_000_060)
+        try queueStore.applyFailure(
+            batchID: batchID,
+            disposition: .retry(afterSeconds: 60),
+            errorMessage: "offline",
+            attemptResult: .networkError,
+            now: now
+        )
+        try queueStore.applyFailure(
+            batchID: batchID,
+            disposition: .retry(afterSeconds: 600),
+            errorMessage: "rate_limited",
+            attemptResult: .http(statusCode: 429, retryAfterSeconds: 600),
+            now: now
+        )
+
+        try queueStore.requeueEligibleBatches()
+
+        let stored = try XCTUnwrap(
+            try ModelContext(container).fetch(FetchDescriptor<UploadBatch>()).first(where: { $0.id == batchID })
+        )
+        XCTAssertEqual(stored.nextAttemptAt, now.addingTimeInterval(600))
     }
 
     @MainActor
@@ -956,7 +1031,7 @@ final class NetworkAndUploaderTests: XCTestCase {
                 let data = try encoder.encode(
                     UploadReadingsResponse(
                         batchID: payload.batchID,
-                        accepted: 1_000,
+                        accepted: payload.readings.count,
                         rejected: 0,
                         duplicate: false,
                         rejectedReasons: [:]
@@ -1018,7 +1093,7 @@ final class NetworkAndUploaderTests: XCTestCase {
         let batches = try updatedContext.fetch(FetchDescriptor<UploadBatch>())
 
         XCTAssertEqual(requestCount, 2)
-        XCTAssertEqual(readings.filter { $0.uploadedAt != nil }.count, 1_000)
+        XCTAssertEqual(readings.filter { $0.uploadedAt != nil }.count, UploadQueueCore.maxReadingsPerBatch)
         XCTAssertEqual(batches.count, 2)
         XCTAssertEqual(batches.filter { $0.status == .succeeded }.count, 1)
         XCTAssertEqual(batches.filter { $0.status == .pending }.count, 1)
@@ -2917,4 +2992,492 @@ private final class RecordingDrainCoordinator: UploadDrainCoordinating {
     }
 
     func cancelActiveDrain() {}
+}
+
+// MARK: - Privacy zones, thermal, retention, background tasks
+
+@MainActor
+private final class ControllableThermalMonitor: ThermalMonitoring {
+    var currentState: ProcessInfo.ThermalState
+    private var continuation: AsyncStream<ProcessInfo.ThermalState>.Continuation?
+
+    init(initialState: ProcessInfo.ThermalState = .nominal) {
+        currentState = initialState
+    }
+
+    func makeStateStream() -> AsyncStream<ProcessInfo.ThermalState> {
+        continuation?.finish()
+        let (stream, continuation) = AsyncStream.makeStream(of: ProcessInfo.ThermalState.self)
+        self.continuation = continuation
+        return stream
+    }
+
+    func send(_ state: ProcessInfo.ThermalState) {
+        currentState = state
+        continuation?.yield(state)
+    }
+}
+
+extension NetworkAndUploaderTests {
+    private static let zoneLatitude = 44.6488
+    private static let zoneLongitude = -63.5752
+
+    @MainActor
+    private func seedHomeZone(in container: ModelContainer) throws {
+        let context = ModelContext(container)
+        context.insert(
+            PrivacyZoneRecord(
+                label: "Home",
+                latitude: Self.zoneLatitude,
+                longitude: Self.zoneLongitude,
+                radiusM: 300,
+                createdAt: Date(timeIntervalSince1970: 1_713_000_000)
+            )
+        )
+        try context.save()
+    }
+
+    private func sample(latitude: Double, longitude: Double, at timestamp: TimeInterval) -> LocationSample {
+        LocationSample(
+            timestamp: timestamp,
+            latitude: latitude,
+            longitude: longitude,
+            horizontalAccuracyMeters: 8,
+            speedKmh: 40,
+            headingDegrees: 90
+        )
+    }
+
+    @MainActor
+    func testInZoneFixNeverStartsADriveSessionOrStoresItsCoordinate() async throws {
+        let container = try makeInMemoryContainer()
+        try seedHomeZone(in: container)
+        let readingStore = ReadingStore(container: container)
+        let locationService = CountingLocationService()
+        let drivingDetector = StreamDrivingDetector()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: CountingMotionService(),
+            drivingDetector: drivingDetector,
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: readingStore,
+            logger: .app,
+            checkpointStore: checkpointStore,
+            nowProvider: { now },
+            scheduleUploadDrain: { _ in }
+        )
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(10))
+
+        // Drive starts at home: the first fix is inside the zone.
+        locationService.send(sample(latitude: Self.zoneLatitude, longitude: Self.zoneLongitude, at: now.timeIntervalSince1970))
+        try? await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertNil(try readingStore.activeDriveSessionID(), "an in-zone fix must not open a drive session")
+        let zoneRows = try ModelContext(container).fetch(
+            FetchDescriptor<ReadingRecord>(predicate: #Predicate { $0.droppedByPrivacyZone == true })
+        )
+        XCTAssertEqual(zoneRows.count, 1)
+        XCTAssertEqual(zoneRows.first?.latitude, 0)
+        XCTAssertEqual(zoneRows.first?.longitude, 0)
+        XCTAssertEqual(zoneRows.first?.speedKMH, 0)
+        let checkpoint = try checkpointStore.load(maxAge: 30 * 60, now: now)
+        XCTAssertNil(checkpoint?.latestLocation)
+        XCTAssertEqual(checkpoint?.recentPotholes, [])
+
+        // First fix outside the zone (~1.5 km east) opens the session there.
+        let outsideLongitude = Self.zoneLongitude + 0.02
+        locationService.send(sample(latitude: Self.zoneLatitude, longitude: outsideLongitude, at: now.timeIntervalSince1970 + 60))
+        try? await Task.sleep(for: .milliseconds(20))
+
+        let sessionID = try XCTUnwrap(try readingStore.activeDriveSessionID())
+        let session = try XCTUnwrap(
+            try ModelContext(container).fetch(FetchDescriptor<DriveSessionRecord>()).first { $0.id == sessionID }
+        )
+        XCTAssertEqual(session.startLatitude, Self.zoneLatitude, accuracy: 1e-9)
+        XCTAssertEqual(session.startLongitude, outsideLongitude, accuracy: 1e-9)
+        let adopted = try ModelContext(container).fetch(
+            FetchDescriptor<ReadingRecord>(predicate: #Predicate { $0.droppedByPrivacyZone == true })
+        )
+        XCTAssertEqual(adopted.first?.driveSessionID, sessionID, "the in-zone count is attached to the drive")
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
+    func testPotholeDetectionIsSkippedInsidePrivacyZone() async throws {
+        let container = try makeInMemoryContainer()
+        try seedHomeZone(in: container)
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let drivingDetector = StreamDrivingDetector()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            scheduleUploadDrain: { _ in }
+        )
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(10))
+
+        let inZone = sample(latitude: Self.zoneLatitude, longitude: Self.zoneLongitude, at: 1_713_000_000)
+        locationService.send(inZone)
+        try? await Task.sleep(for: .milliseconds(20))
+        motionService.sendVerticalAcceleration(-0.8, timestamp: 1_713_000_000.1)
+        motionService.sendVerticalAcceleration(2.6, timestamp: 1_713_000_000.2)
+        try? await Task.sleep(for: .milliseconds(40))
+
+        XCTAssertNil(
+            coordinator.strongestRecentPotholeCandidate(near: inZone, now: Date(timeIntervalSince1970: 1_713_000_005)),
+            "no pothole candidate may be derived from in-zone travel"
+        )
+        XCTAssertNil(coordinator.diagnostics.lastPotholeCandidateAt)
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
+    func testResetCurrentDriveSessionAfterDeleteStartsAFreshSession() async throws {
+        let container = try makeInMemoryContainer()
+        let readingStore = ReadingStore(container: container)
+        let locationService = CountingLocationService()
+        let drivingDetector = StreamDrivingDetector()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: CountingMotionService(),
+            drivingDetector: drivingDetector,
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: readingStore,
+            logger: .app,
+            checkpointStore: checkpointStore,
+            nowProvider: { now },
+            scheduleUploadDrain: { _ in }
+        )
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(10))
+        locationService.send(sample(latitude: 44.70, longitude: -63.60, at: now.timeIntervalSince1970))
+        try? await Task.sleep(for: .milliseconds(20))
+        let firstSession = try XCTUnwrap(try readingStore.activeDriveSessionID())
+
+        try readingStore.deleteAllContributionData()
+        coordinator.resetCurrentDriveSession()
+
+        XCTAssertNil(try checkpointStore.load(maxAge: 30 * 60, now: now))
+        XCTAssertTrue(coordinator.monitoringState.isCollecting, "collection keeps running")
+
+        locationService.send(sample(latitude: 44.71, longitude: -63.61, at: now.timeIntervalSince1970 + 30))
+        try? await Task.sleep(for: .milliseconds(20))
+        let secondSession = try XCTUnwrap(try readingStore.activeDriveSessionID())
+        XCTAssertNotEqual(secondSession, firstSession)
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
+    func testSeriousThermalStatePausesCollectionAndResumesOnRecovery() async throws {
+        let container = try makeInMemoryContainer()
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let drivingDetector = StreamDrivingDetector()
+        let thermal = ControllableThermalMonitor()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: thermal,
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            scheduleUploadDrain: { _ in }
+        )
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertTrue(coordinator.monitoringState.isCollecting)
+
+        thermal.send(.serious)
+        try? await Task.sleep(for: .milliseconds(40))
+        XCTAssertTrue(coordinator.isThermallyPaused)
+        XCTAssertFalse(coordinator.monitoringState.isCollecting)
+        XCTAssertEqual(motionService.stopCount, 1)
+
+        thermal.send(.fair)
+        try? await Task.sleep(for: .milliseconds(40))
+        XCTAssertFalse(coordinator.isThermallyPaused)
+        XCTAssertTrue(coordinator.monitoringState.isCollecting, "collection resumes once the device cools")
+        XCTAssertEqual(motionService.startCount, 2)
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
+    func testCriticalThermalStateAtLaunchDefersCollection() async throws {
+        let container = try makeInMemoryContainer()
+        let drivingDetector = StreamDrivingDetector()
+        let motionService = CountingMotionService()
+        let thermal = ControllableThermalMonitor(initialState: .critical)
+        let checkpointStore = try makeIsolatedCheckpointStore()
+
+        let coordinator = SensorCoordinator(
+            locationService: CountingLocationService(),
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: thermal,
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            scheduleUploadDrain: { _ in }
+        )
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertFalse(coordinator.monitoringState.isCollecting)
+        XCTAssertEqual(motionService.startCount, 0)
+
+        thermal.send(.nominal)
+        try? await Task.sleep(for: .milliseconds(40))
+        XCTAssertTrue(coordinator.monitoringState.isCollecting, "the deferred drive starts once the device cools")
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    @MainActor
+    func testFinalizeNeverUsesAPrivacyZoneRowAsTheDriveEndPoint() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let driveID = UUID()
+        let start = Date(timeIntervalSince1970: 1_713_000_000)
+        context.insert(
+            DriveSessionRecord(id: driveID, startedAt: start, startLatitude: 44.60, startLongitude: -63.60)
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.62, longitude: -63.62, roughnessRMS: 0.05, speedKMH: 40, heading: 90,
+                gpsAccuracyM: 5, isPothole: false, potholeMagnitude: nil,
+                recordedAt: start.addingTimeInterval(60), driveSessionID: driveID
+            )
+        )
+        // Legacy in-zone row that still carries a raw coordinate (the drive
+        // ended at home). It is the latest row but must not become the end.
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6488, longitude: -63.5752, roughnessRMS: 0, speedKMH: 10, heading: 0,
+                gpsAccuracyM: 5, isPothole: false, potholeMagnitude: nil,
+                recordedAt: start.addingTimeInterval(120), driveSessionID: driveID,
+                droppedByPrivacyZone: true
+            )
+        )
+        try context.save()
+
+        _ = try ReadingStore(container: container).finalizeDriveSession(id: driveID, now: start.addingTimeInterval(200))
+
+        let session = try XCTUnwrap(try ModelContext(container).fetch(FetchDescriptor<DriveSessionRecord>()).first)
+        XCTAssertEqual(session.endLatitude, 44.62)
+        XCTAssertEqual(session.endLongitude, -63.62)
+    }
+
+    @MainActor
+    func testScrubPrivacyFilteredCoordinatesZeroesLegacyRows() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6488, longitude: -63.5752, roughnessRMS: 0, speedKMH: 12, heading: 45,
+                gpsAccuracyM: 6, isPothole: false, potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_000), droppedByPrivacyZone: true
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.70, longitude: -63.60, roughnessRMS: 0.05, speedKMH: 40, heading: 90,
+                gpsAccuracyM: 5, isPothole: false, potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_010)
+            )
+        )
+        try context.save()
+
+        let store = ReadingStore(container: container)
+        XCTAssertEqual(try store.scrubPrivacyFilteredCoordinates(), 1)
+        XCTAssertEqual(try store.scrubPrivacyFilteredCoordinates(), 0, "already-scrubbed rows are left alone")
+
+        let rows = try ModelContext(container).fetch(FetchDescriptor<ReadingRecord>())
+        let zoneRow = try XCTUnwrap(rows.first { $0.droppedByPrivacyZone })
+        XCTAssertEqual(zoneRow.latitude, 0)
+        XCTAssertEqual(zoneRow.longitude, 0)
+        XCTAssertEqual(zoneRow.heading, LocationSample.unknownHeading)
+        let normalRow = try XCTUnwrap(rows.first { !$0.droppedByPrivacyZone })
+        XCTAssertEqual(normalRow.latitude, 44.70)
+        XCTAssertEqual(try store.privacyFilteredReadingCount(), 1, "the count survives the scrub")
+    }
+
+    @MainActor
+    func testPruneExpiredLocalDataKeepsPendingWorkAndRecentHistory() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let now = Date(timeIntervalSince1970: 1_720_000_000)
+        let old = now.addingTimeInterval(-40 * 24 * 60 * 60)
+        let recent = now.addingTimeInterval(-2 * 24 * 60 * 60)
+
+        func reading(_ recordedAt: Date, uploadedAt: Date? = nil, zone: Bool = false, session: UUID? = nil) -> ReadingRecord {
+            ReadingRecord(
+                latitude: 44.7, longitude: -63.6, roughnessRMS: 0.05, speedKMH: 40, heading: 90,
+                gpsAccuracyM: 5, isPothole: false, potholeMagnitude: nil,
+                recordedAt: recordedAt, driveSessionID: session, uploadedAt: uploadedAt,
+                droppedByPrivacyZone: zone
+            )
+        }
+
+        let emptyOldDrive = UUID()
+        let oldDriveWithPending = UUID()
+        context.insert(DriveSessionRecord(id: emptyOldDrive, startedAt: old, endedAt: old, startLatitude: 0, startLongitude: 0, isSealed: true))
+        context.insert(DriveSessionRecord(id: oldDriveWithPending, startedAt: old, endedAt: old, startLatitude: 0, startLongitude: 0, isSealed: true))
+        context.insert(reading(old, uploadedAt: old, session: emptyOldDrive))
+        context.insert(reading(old, session: oldDriveWithPending))
+        context.insert(reading(old, zone: true))
+        context.insert(reading(recent, uploadedAt: recent))
+        context.insert(UploadBatch(createdAt: old, lastAttemptAt: old, status: .succeeded, readingCount: 1))
+        context.insert(UploadBatch(createdAt: old, lastAttemptAt: old, status: .pending, readingCount: 1))
+        try context.save()
+
+        let summary = try ReadingStore(container: container).pruneExpiredLocalData(now: now)
+
+        XCTAssertEqual(summary.prunedReadingCount, 2, "old uploaded + old privacy-zone rows")
+        XCTAssertEqual(summary.prunedBatchCount, 1, "only the terminal batch")
+        XCTAssertEqual(summary.prunedDriveSessionCount, 1, "only the drive with nothing left")
+
+        let after = ModelContext(container)
+        let readings = try after.fetch(FetchDescriptor<ReadingRecord>())
+        XCTAssertEqual(readings.count, 2)
+        XCTAssertTrue(readings.contains { $0.uploadedAt == nil && $0.driveSessionID == oldDriveWithPending })
+        XCTAssertEqual(try after.fetch(FetchDescriptor<UploadBatch>()).map(\.status), [.pending])
+        XCTAssertEqual(try after.fetch(FetchDescriptor<DriveSessionRecord>()).map(\.id), [oldDriveWithPending])
+    }
+
+    @MainActor
+    func testNightlyCleanupCompletesAndReschedules() throws {
+        let container = try makeInMemoryContainer()
+        let suiteName = "NightlyCleanup.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        let sweeper = LocalRetentionSweeper(readingStore: ReadingStore(container: container), defaults: defaults)
+        let now = Date(timeIntervalSince1970: 1_720_000_000)
+
+        var completions: [Bool] = []
+        var scheduled: [Date] = []
+        NightlyCleanupRunner.run(
+            sweeper: sweeper,
+            isExpired: { false },
+            now: now,
+            scheduleNext: { scheduled.append($0) },
+            setTaskCompleted: { completions.append($0) }
+        )
+        XCTAssertEqual(completions, [true])
+        XCTAssertEqual(scheduled, [now.addingTimeInterval(24 * 60 * 60)])
+
+        NightlyCleanupRunner.run(
+            sweeper: sweeper,
+            isExpired: { true },
+            now: now,
+            scheduleNext: { scheduled.append($0) },
+            setTaskCompleted: { completions.append($0) }
+        )
+        XCTAssertEqual(completions, [true, false], "an expired task reports failure without running")
+        XCTAssertEqual(scheduled.count, 2, "and still books the next night")
+    }
+
+    @MainActor
+    func testCheckpointIsWrittenWithFileProtection() throws {
+        let store = try makeIsolatedCheckpointStore()
+        try store.save(
+            SensorCheckpoint(
+                savedAt: Date(),
+                wasCollecting: true,
+                latestLocation: nil,
+                recentPotholes: [],
+                readingBuilder: ReadingBuilder().snapshot(),
+                potholeDetector: PotholeDetector().snapshot()
+            )
+        )
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: store.fileURL.path)
+        // The simulator may not report a protection class; a device must.
+        if let protection = attributes[.protectionKey] as? FileProtectionType {
+            XCTAssertEqual(protection, .completeUntilFirstUserAuthentication)
+        }
+    }
+
+    func testDeleteRecoveredStoresRemovesBackups() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RecoveredStoresTest-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let storeURL = directory.appendingPathComponent("default.store")
+        let backup = PersistentStoreRecovery.recoveredStoresDirectory(for: storeURL)
+            .appendingPathComponent("2026-01-01", isDirectory: true)
+        try FileManager.default.createDirectory(at: backup, withIntermediateDirectories: true)
+        try Data("old store".utf8).write(to: backup.appendingPathComponent("default.store"))
+
+        try PersistentStoreRecovery.deleteRecoveredStores(for: storeURL)
+
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: PersistentStoreRecovery.recoveredStoresDirectory(for: storeURL).path
+        ))
+        XCTAssertNoThrow(try PersistentStoreRecovery.deleteRecoveredStores(for: storeURL), "deleting again is a no-op")
+    }
+
+    func testMapboxTelemetryOptOutWritesTheSDKDefault() throws {
+        let suiteName = "MapboxOptOut.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertFalse(MapboxTelemetryOptOut.isOptedOut(defaults: defaults))
+        MapboxTelemetryOptOut.apply(defaults: defaults)
+        XCTAssertTrue(MapboxTelemetryOptOut.isOptedOut(defaults: defaults))
+        XCTAssertEqual(defaults.object(forKey: "MGLMapboxMetricsEnabled") as? Bool, false)
+    }
+
+    @MainActor
+    func testUploadPayloadSendsNullHeadingForUnknownCourse() throws {
+        let payload = UploadReadingPayload(
+            lat: 44.7, lng: -63.6, roughnessRms: 0.05, speedKmh: 40,
+            heading: LocationSample.unknownHeading, gpsAccuracyM: 5, isPothole: false,
+            potholeMagnitude: nil, recordedAt: Date(timeIntervalSince1970: 1_713_000_000)
+        )
+        let data = try UploadCodec.makeEncoder().encode(payload)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertTrue(json["heading"] is NSNull, "the server requires the key; unknown course is sent as null")
+    }
 }

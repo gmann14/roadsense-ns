@@ -47,6 +47,8 @@ Current status:
   - `DEVELOPMENT_TEAM = <your Apple team ID>`
   - `ROAD_SENSE_APP_BUNDLE_IDENTIFIER = <your unique bundle ID>`
 - `.xcconfig` templates still exist under `Config/Templates/` as copy/reference material
+- no real API key is committed: every base xcconfig carries an `anon.placeholder.*` key (a `ReleaseConfigFilesTests` check enforces it). Copy `Config/Templates/RoadSenseNS.secrets.xcconfig.template` to `Config/RoadSenseNS.<Channel>.secrets.xcconfig` for local Staging/Production builds; CI writes that file from `ROAD_SENSE_PUBLIC_API_KEY`
+- Local Debug builds use `RoadSenseNS/Resources/Info-Local.plist`, the only plist with the local-network usage string and ATS local-networking exception; Staging and Production ship `Info.plist` without them
 - a generator spec exists and can now generate `RoadSenseNS.xcodeproj`
 - the main `RoadSenseNS` app target now builds for `iphonesimulator` with the current pre-map shell; only Sentry is linked for now
 
