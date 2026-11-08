@@ -89,6 +89,7 @@ Deno.test("segments worst handler returns ranked rows", async () => {
 
     assertEquals(response.status, 200);
     assertEquals(response.headers.get("x-request-id"), "req-worst");
+    assertEquals(response.headers.get("cache-control"), "public, max-age=300, s-maxage=300");
 
     const body = await response.json();
     assertEquals(body.municipality, "Halifax");

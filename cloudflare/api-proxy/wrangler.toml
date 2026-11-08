@@ -15,5 +15,10 @@ pattern = "tiles.nsroadsense.ca/*"
 zone_name = "nsroadsense.ca"
 
 # Origin URL for the Railway-hosted Supabase-compatible functions gateway.
+#
+# This URL is public, so the worker authenticates itself to the origin with
+# the ORIGIN_SHARED_SECRET Worker secret (sent as `x-origin-auth`). It is a
+# secret, not a var — set it with `wrangler secret put ORIGIN_SHARED_SECRET`
+# and set the same value as ORIGIN_SHARED_SECRET on the Railway service.
 [vars]
 ORIGIN_BASE = "https://api-production-075e9.up.railway.app"

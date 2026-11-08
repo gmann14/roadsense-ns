@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_MEDIUM } from "../_shared/http.ts";
 
 export type WorstSegmentRow = {
     rank: number;
@@ -86,7 +86,7 @@ export function createSegmentsWorstHandler(
                     rows: result.rows,
                 },
                 200,
-                { "cache-control": "public, max-age=900, s-maxage=900" },
+                { "cache-control": PUBLIC_JSON_CACHE_CONTROL_MEDIUM },
                 requestId,
             );
         } catch {

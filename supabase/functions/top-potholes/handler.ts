@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_MEDIUM } from "../_shared/http.ts";
 import type { PotholeRow } from "../potholes/handler.ts";
 
 export type { PotholeRow };
@@ -42,7 +42,7 @@ export function createTopPotholesHandler(
 
         try {
             const potholes = await deps.fetchTopPotholes(limit);
-            return jsonResponse({ potholes }, 200, {}, requestId);
+            return jsonResponse({ potholes }, 200, { "cache-control": PUBLIC_JSON_CACHE_CONTROL_MEDIUM }, requestId);
         } catch {
             return errorResponse(
                 "service_unavailable",

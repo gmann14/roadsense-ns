@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_SHORT } from "../_shared/http.ts";
 
 export type Bbox = {
     minLng: number;
@@ -66,7 +66,7 @@ export function createPotholesHandler(
 
         try {
             const potholes = await deps.fetchPotholes(bbox);
-            return jsonResponse({ potholes }, 200, {}, requestId);
+            return jsonResponse({ potholes }, 200, { "cache-control": PUBLIC_JSON_CACHE_CONTROL_SHORT }, requestId);
         } catch {
             return errorResponse(
                 "service_unavailable",

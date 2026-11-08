@@ -41,6 +41,7 @@ Deno.test("top potholes handler returns rows", async () => {
 
     assertEquals(response.status, 200);
     assertEquals(response.headers.get("x-request-id"), "req-top-potholes");
+    assertEquals(response.headers.get("cache-control"), "public, max-age=300, s-maxage=300");
     assertEquals(seenLimit, 5);
     assertEquals((await response.json()).potholes.length, 1);
 });
