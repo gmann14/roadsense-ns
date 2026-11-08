@@ -123,13 +123,14 @@ export function FeedbackDialog({
         Always mounted (never conditionally rendered on `isOpen`) so that
         native Escape-triggered close — which fires the dialog's `close`
         event before React re-renders — doesn't unmount this subtree and
-        destroy the in-progress draft. Visibility is driven imperatively via
-        showModal()/close() in the effect above; the `open` attribute below
-        just keeps the DOM state and React's view consistent.
+        destroy the in-progress draft. Visibility is driven only imperatively
+        via showModal()/close() in the effect above. Do NOT add an `open`
+        prop: React would set the attribute first, the effect would then see
+        `dialog.open === true` and skip showModal(), and the dialog would open
+        non-modally (no backdrop, no focus trap, no Escape-to-close).
       */}
       <dialog
         ref={dialogRef}
-        open={isOpen}
         className="feedback-dialog"
         aria-labelledby="feedback-dialog-title"
         onClose={() => setIsOpen(false)}

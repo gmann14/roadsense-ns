@@ -13,19 +13,51 @@ vi.mock("@/lib/api/client", () => ({
   submitFeedback: submitFeedbackMock,
 }));
 
+// jsdom has no real <dialog> modality, so this shim reproduces the parts of
+// the HTML spec the component depends on:
+//   - showModal() throws InvalidStateError if the dialog is already open
+//     non-modally (e.g. because something set the `open` attribute first),
+//   - only showModal() makes the dialog modal,
+//   - close() removes `open` and fires `close`.
+// The earlier shim set `open` unconditionally, which hid a regression where
+// an `open={isOpen}` prop stopped showModal() from ever running.
+const modalDialogs = new WeakSet<HTMLDialogElement>();
+
+function isModal(dialog: HTMLDialogElement): boolean {
+  return modalDialogs.has(dialog) && dialog.hasAttribute("open");
+}
+
 beforeEach(() => {
   submitFeedbackMock.mockReset();
 
-  if (typeof HTMLDialogElement !== "undefined") {
-    HTMLDialogElement.prototype.showModal = function showModal() {
-      this.setAttribute("open", "");
-    };
-    HTMLDialogElement.prototype.close = function close() {
-      this.removeAttribute("open");
-      this.dispatchEvent(new Event("close"));
-    };
-  }
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    if (this.hasAttribute("open")) {
+      if (modalDialogs.has(this)) {
+        return;
+      }
+      throw new DOMException("Dialog is already open non-modally", "InvalidStateError");
+    }
+    modalDialogs.add(this);
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    if (!this.hasAttribute("open")) {
+      return;
+    }
+    modalDialogs.delete(this);
+    this.removeAttribute("open");
+    this.dispatchEvent(new Event("close"));
+  };
 });
+
+// Native Escape on a modal dialog: `cancel` fires, then the dialog closes.
+function pressNativeEscape(dialog: HTMLDialogElement) {
+  const cancelEvent = new Event("cancel", { cancelable: true });
+  dialog.dispatchEvent(cancelEvent);
+  if (!cancelEvent.defaultPrevented) {
+    dialog.close();
+  }
+}
 
 afterEach(() => {
   cleanup();
@@ -142,11 +174,10 @@ describe("FeedbackDialog", () => {
       target: { value: "Draft that should survive Escape." },
     });
 
-    // Simulate the browser's native Escape-to-close behavior: the <dialog>
-    // fires its own `close` event (jsdom doesn't do this automatically for
-    // Escape, so we dispatch it directly, same as our showModal/close shim).
     const dialog = document.querySelector("dialog") as HTMLDialogElement;
-    dialog.close();
+    expect(isModal(dialog)).toBe(true);
+
+    pressNativeEscape(dialog);
 
     await waitFor(() => {
       expect(dialog).not.toHaveAttribute("open");
@@ -154,9 +185,38 @@ describe("FeedbackDialog", () => {
 
     fireEvent.click(screen.getByTestId("open-feedback"));
 
+    expect(isModal(dialog)).toBe(true);
     expect((screen.getByTestId("feedback-message") as HTMLTextAreaElement).value).toBe(
       "Draft that should survive Escape.",
     );
+  });
+
+  it("opens as a modal dialog via showModal()", () => {
+    const showModalSpy = vi.spyOn(HTMLDialogElement.prototype, "showModal");
+
+    render(<FeedbackDialog />);
+    const dialog = document.querySelector("dialog") as HTMLDialogElement;
+    expect(dialog).not.toHaveAttribute("open");
+
+    fireEvent.click(screen.getByTestId("open-feedback"));
+
+    expect(showModalSpy).toHaveBeenCalledTimes(1);
+    expect(isModal(dialog)).toBe(true);
+    showModalSpy.mockRestore();
+  });
+
+  it("closes from the close button and reopens modally", async () => {
+    render(<FeedbackDialog />);
+    fireEvent.click(screen.getByTestId("open-feedback"));
+    const dialog = document.querySelector("dialog") as HTMLDialogElement;
+
+    fireEvent.click(screen.getByRole("button", { name: /close feedback form/i }));
+    await waitFor(() => {
+      expect(dialog).not.toHaveAttribute("open");
+    });
+
+    fireEvent.click(screen.getByTestId("open-feedback"));
+    expect(isModal(dialog)).toBe(true);
   });
 
   it("keeps form state when the network call fails", async () => {
