@@ -40,6 +40,9 @@ permissions:
 jobs:
   build:
     runs-on: macos-26
+    # Release secrets belong to this environment (Settings → Environments →
+    # testflight), so only runs that pass its protection rules can read them.
+    environment: testflight
     timeout-minutes: 75
     env:
       APPLE_ASC_API_KEY_ID: ${{ secrets.APPLE_ASC_API_KEY_ID }}
@@ -65,7 +68,9 @@ jobs:
       TESTFLIGHT_CHANGELOG: Internal RoadSense NS field-test build from ${{ github.sha }}.
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Check required release secrets
         shell: bash
@@ -87,7 +92,7 @@ jobs:
           fi
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
+        uses: ruby/setup-ruby@b3aaceaef7e0ee231b499e7b5f49c03fc1d32199 # v1.338.0
         with:
           ruby-version: "3.3"
           bundler-cache: true
@@ -153,9 +158,11 @@ jobs:
           cp "${profile_path}" "${profiles_dir}/${profile_uuid}.mobileprovision"
 
           echo "Installed provisioning profile: ${profile_name} (${profile_uuid})"
-          echo "APPLE_TEAM_ID=${profile_team_id}" >> "${GITHUB_ENV}"
-          echo "ROAD_SENSE_APP_PROFILE_UUID=${profile_uuid}" >> "${GITHUB_ENV}"
-          echo "ROAD_SENSE_APP_PROFILE_SPECIFIER=${profile_name}" >> "${GITHUB_ENV}"
+          {
+            echo "APPLE_TEAM_ID=${profile_team_id}"
+            echo "ROAD_SENSE_APP_PROFILE_UUID=${profile_uuid}"
+            echo "ROAD_SENSE_APP_PROFILE_SPECIFIER=${profile_name}"
+          } >> "${GITHUB_ENV}"
 
       - name: Build and upload internal TestFlight build
         shell: bash
@@ -164,27 +171,32 @@ jobs:
           bundle exec fastlane ios internal_testflight
 
       - name: Upload IPA artifact
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: success()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roadsense-ios-ipa
           path: ios/build/ipas/*.ipa
+          retention-days: 14
           if-no-files-found: ignore
 
       - name: Upload dSYM artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: success()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roadsense-ios-dsyms
           path: ios/build/archives/*.xcarchive/dSYMs
+          retention-days: 30
           if-no-files-found: ignore
 
-      - name: Upload archive logs
+      # Logs only: ios/build can hold the signed archive, export options and
+      # generated config, so it is never uploaded wholesale on failure.
+      - name: Upload build logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: roadsense-ios-build-logs
           path: |
-            ios/build
-            ~/Library/Logs/gym
+            ~/Library/Logs/gym/*.log
+            ios/build/**/*.log
           if-no-files-found: ignore
+          retention-days: 7
