@@ -8,7 +8,7 @@ Privacy isn't a feature; it's the foundation. A data leak in a civic-tech app tr
 
 ## Design Principles (non-negotiable)
 
-1. **Collect only what's needed.** No email, no phone, no name. No account system in MVP.
+1. **Collect only what's needed.** No phone, no name, no account system in MVP. The only email we ever hold is the optional reply address someone types into the feedback form.
 2. **Never see raw tracks server-side.** Client strips privacy-zone readings; server only ingests individual windows with midpoint coordinates.
 3. **Never store the raw device token.** The client sends the token UUID over TLS; the Edge Function hashes it with a server-side pepper on receipt and discards the cleartext in the same request. The raw token is never persisted, never logged, never returned. (It *is* in server memory for the duration of the request — that's a necessary trust boundary, not a marketing claim to obscure.) Rotate monthly. As of B160 ([17-device-attestation-and-trust.md](17-device-attestation-and-trust.md)), the same rule extends to the attestation key id and challenge that back token issuance: `attested_devices.key_id_hash` and `token_challenges.challenge_hash` are peppered hashes, the raw values are never persisted or logged, and `attested_devices` holds only the *current* token hash, overwritten in place at each rotation — there is no history table and no code path that joins a device across rotations.
 4. **No third-party analytics or ad SDKs.** Sentry for crashes and limited performance diagnostics only, with PII scrubbing, and nothing else.
@@ -84,7 +84,7 @@ Publish at `https://nsroadsense.ca/privacy` before TestFlight external review.
 Sections:
 
 1. **What we collect** — accelerometer, GPS, speed, timestamps, IP (for rate limiting, not logged), and crash / performance diagnostics from Sentry with PII scrubbing. Since B160, we also perform a one-time hardware attestation check (Apple App Attest / Google Play Integrity) per device rotation to prove the app is running on genuine, unmodified hardware — this proves device integrity, not identity: the current token is bound to an anonymous hardware-attested key, and past tokens are not linkable.
-2. **What we don't collect** — no name, no email, no phone, no account, no raw GPS tracks, no rotation history of your device's past tokens
+2. **What we don't collect** — no name, no phone, no account, no email (except an optional reply address you choose to add to feedback), no raw GPS tracks, no rotation history of your device's past tokens
 3. **How we use it** — aggregate road quality scores shown on a public map
 4. **How long we keep it** — raw readings 6 months, aggregates indefinitely
 5. **Who we share it with** — nobody, except the public aggregate map
@@ -125,7 +125,7 @@ What we enter in App Store Connect:
   - Used for tracking? **No**
 
 **Data NOT collected:**
-- Contact info (name, email, phone, address)
+- Contact info other than the optional feedback reply email (no name, phone or address)
 - Health & fitness
 - Financial
 - User content
@@ -212,7 +212,7 @@ Separate from general ops incidents (see [05-deployment-and-observability.md](05
 
 1. **Contain** — rotate keys; disable affected endpoints; take tile endpoint read-only
 2. **Assess** — scope of data affected, number of users, what fields
-3. **Notify** — Office of the Privacy Commissioner of Canada (OPC) "as soon as feasible" if a real risk of significant harm (RROSH) exists (per PIPEDA's breach-reporting regulations; no fixed hour deadline, but our internal target is within 72 hours of confirmation). Notify affected users via in-app banner; we have no email addresses so email notification isn't an option — document that reality in the OPC report.
+3. **Notify** — Office of the Privacy Commissioner of Canada (OPC) "as soon as feasible" if a real risk of significant harm (RROSH) exists (per PIPEDA's breach-reporting regulations; no fixed hour deadline, but our internal target is within 72 hours of confirmation). Notify affected users via in-app banner; we hold no email addresses for contributors (only optional feedback reply addresses), so email notification is possible only for feedback senders — document that reality in the OPC report.
 4. **Remediate** — fix the issue, publish postmortem
 5. **Review** — full review of privacy model within 14 days
 
