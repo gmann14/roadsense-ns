@@ -25,8 +25,11 @@ WHERE segment_id = '00000000-0000-0000-0000-000000002101'::UUID;
 DELETE FROM segment_aggregates
 WHERE segment_id = '00000000-0000-0000-0000-000000002101'::UUID;
 
+-- 010 uses the same fixture id for a different way; delete by id as well so
+-- the file does not depend on run order.
 DELETE FROM road_segments
-WHERE osm_way_id = 990001;
+WHERE osm_way_id = 990001
+   OR id = '00000000-0000-0000-0000-000000002101'::UUID;
 
 INSERT INTO road_segments (
     id,
@@ -214,10 +217,12 @@ SELECT is(
     'nightly recompute re-seeds the GCed mark while readings are retained'
 );
 
--- 5. The GC job is registered (the Deno scheduler mirrors it on Railway).
+-- 5. The marks GC now runs inside the retention-sweeps job (the Deno
+--    scheduler mirrors it on Railway); the standalone job is gone.
 SELECT ok(
-    EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'segment-contributor-marks-gc'),
-    'segment-contributor-marks-gc job is registered'
+    EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'retention-sweeps')
+    AND NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'segment-contributor-marks-gc'),
+    'segment contributor marks GC is registered via retention-sweeps'
 );
 
 SELECT * FROM finish();

@@ -277,9 +277,11 @@ SELECT ok(
 
 SELECT ok(
     EXISTS (
+        SELECT 1 FROM cron.job WHERE jobname = 'retention-sweeps'
+    ) AND NOT EXISTS (
         SELECT 1 FROM cron.job WHERE jobname = 'rate-limit-gc'
     ),
-    'cron registration exists for rate-limit-gc'
+    'rate_limits GC runs inside retention-sweeps (the old rate-limit-gc job is gone)'
 );
 
 SELECT ok(
