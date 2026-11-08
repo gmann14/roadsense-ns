@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, requestIdFrom } from "../_shared/http.ts";
 import { readBodyWithLimit } from "../_shared/body.ts";
 import { extractClientIp } from "../_shared/clientIp.ts";
 
@@ -152,7 +152,7 @@ export function validateFeedbackPayload(payload: unknown): ValidationResult {
 
 export function createFeedbackHandler(deps: FeedbackHandlerDeps) {
     return async function handleFeedback(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "POST") {
             return new Response(null, {

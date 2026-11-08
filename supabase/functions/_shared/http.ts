@@ -4,6 +4,21 @@
 export const PUBLIC_JSON_CACHE_CONTROL_SHORT = "public, max-age=60, s-maxage=60";
 export const PUBLIC_JSON_CACHE_CONTROL_MEDIUM = "public, max-age=300, s-maxage=300";
 
+// x-request-id is client-supplied, echoed in responses and logs, and stored
+// with feedback rows, so it is bounded (review 2026-10-18 P2: "x-request-id
+// is stored unbounded"). Anything longer than 64 characters or outside a
+// conservative token charset is replaced with a fresh UUID.
+const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,64}$/;
+
+export function isSafeRequestId(value: string | null | undefined): value is string {
+    return typeof value === "string" && REQUEST_ID_RE.test(value);
+}
+
+export function requestIdFrom(req: Request): string {
+    const incoming = req.headers.get("x-request-id");
+    return isSafeRequestId(incoming) ? incoming : crypto.randomUUID();
+}
+
 export function jsonResponse(
     body: unknown,
     status = 200,

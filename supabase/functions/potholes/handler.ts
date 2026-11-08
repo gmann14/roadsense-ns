@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_SHORT } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_SHORT, requestIdFrom } from "../_shared/http.ts";
 
 export type Bbox = {
     minLng: number;
@@ -45,7 +45,7 @@ export function createPotholesHandler(
     deps: { fetchPotholes: (bbox: Bbox) => Promise<PotholeRow[]> },
 ) {
     return async function handlePotholesRequest(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "GET" && req.method !== "HEAD") {
             return new Response(null, {

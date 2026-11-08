@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_MEDIUM } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_MEDIUM, requestIdFrom } from "../_shared/http.ts";
 
 export type WorstSegmentRow = {
     rank: number;
@@ -46,7 +46,7 @@ export function createSegmentsWorstHandler(
     },
 ) {
     return async function handleSegmentsWorstRequest(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "GET" && req.method !== "HEAD") {
             return new Response(null, {

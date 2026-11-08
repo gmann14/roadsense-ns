@@ -1,3 +1,4 @@
+import { requestIdFrom } from "../_shared/http.ts";
 import {
     isValidTileCoord,
     normalizeTilePayload,
@@ -32,7 +33,7 @@ export function parseCoverageTilePath(pathname: string): { z: number; x: number;
 
 export function createCoverageTileHandler(deps: { rpcGetCoverageTile: CoverageTileRpc }) {
     return async function handleCoverageTileRequest(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "GET" && req.method !== "HEAD") {
             return new Response(null, {

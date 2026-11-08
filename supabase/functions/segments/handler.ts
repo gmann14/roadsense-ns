@@ -1,4 +1,4 @@
-import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_SHORT } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_SHORT, requestIdFrom } from "../_shared/http.ts";
 
 export type SegmentAggregate = {
     avg_roughness_score: number;
@@ -48,7 +48,7 @@ export function createSegmentsHandler(
     deps: { fetchSegmentDetail: (segmentId: string) => Promise<SegmentDetail | null> },
 ) {
     return async function handleSegmentsRequest(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "GET" && req.method !== "HEAD") {
             return new Response(null, {

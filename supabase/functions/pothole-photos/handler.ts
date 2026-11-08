@@ -1,4 +1,5 @@
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, requestIdFrom } from "../_shared/http.ts";
+import { isRfc3339Timestamp } from "../_shared/validation.ts";
 import { extractClientIp } from "../_shared/clientIp.ts";
 
 const UUID_V4_REGEX =
@@ -50,9 +51,6 @@ function isFiniteNumber(value: unknown): value is number {
     return typeof value === "number" && Number.isFinite(value);
 }
 
-function isIsoTimestamp(value: unknown): value is string {
-    return typeof value === "string" && !Number.isNaN(Date.parse(value));
-}
 
 export function validatePotholePhotoPayload(payload: unknown): ValidationResult {
     if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
@@ -77,7 +75,7 @@ export function validatePotholePhotoPayload(payload: unknown): ValidationResult 
         fieldErrors.device_token = "must be a UUIDv4 string";
     }
 
-    if (!isIsoTimestamp(input.client_sent_at)) {
+    if (!isRfc3339Timestamp(input.client_sent_at)) {
         fieldErrors.client_sent_at = "must be an RFC3339 timestamp";
     }
 
@@ -101,7 +99,7 @@ export function validatePotholePhotoPayload(payload: unknown): ValidationResult 
         fieldErrors.accuracy_m = "must be numeric or null";
     }
 
-    if (!isIsoTimestamp(input.captured_at)) {
+    if (!isRfc3339Timestamp(input.captured_at)) {
         fieldErrors.captured_at = "must be an RFC3339 timestamp";
     }
 
@@ -143,7 +141,7 @@ export function validatePotholePhotoPayload(payload: unknown): ValidationResult 
 
 export function createPotholePhotosHandler(deps: PotholePhotoHandlerDeps) {
     return async function handlePotholePhotos(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "POST") {
             return new Response(null, {

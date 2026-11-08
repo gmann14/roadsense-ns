@@ -12,7 +12,7 @@
 // VerifyAttestation type below for the exact interface B161/B163 must
 // implement.
 
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, requestIdFrom } from "../_shared/http.ts";
 import { readBodyWithLimit } from "../_shared/body.ts";
 import { extractClientIp } from "../_shared/clientIp.ts";
 
@@ -43,7 +43,7 @@ export type ChallengeHandlerDeps = {
 
 export function createDeviceTokenChallengeHandler(deps: ChallengeHandlerDeps) {
     return async function handleDeviceTokenChallenge(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "POST") {
             return new Response(null, {
@@ -222,7 +222,7 @@ export type DeviceTokenRedeemHandlerDeps = {
 
 export function createDeviceTokenRedeemHandler(deps: DeviceTokenRedeemHandlerDeps) {
     return async function handleDeviceTokenRedeem(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "POST") {
             return new Response(null, {

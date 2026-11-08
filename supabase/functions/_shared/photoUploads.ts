@@ -16,7 +16,7 @@
 // (fix latent P1-7/P2-8 first), passing the real handler factory to
 // `photoUploadsGate` enables the route with zero routing changes.
 
-import { errorResponse } from "./http.ts";
+import { errorResponse, requestIdFrom } from "./http.ts";
 import type { RouteHandler } from "./routes.ts";
 
 /// Stable error code clients key off; documented alongside the standard
@@ -54,7 +54,7 @@ export function photoStorageConfigured(): boolean {
 /// GET, HEAD, and POST alike, and a stable shape beats per-method nuance.
 export function createPhotosDisabledHandler(endpoint: string): RouteHandler {
     return (req) => {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
         return Promise.resolve(errorResponse(
             PHOTOS_DISABLED_ERROR_CODE,
             "Photo uploads are temporarily disabled.",

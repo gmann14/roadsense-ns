@@ -4,6 +4,7 @@ import {
     extractClientIp,
     MAX_PAYLOAD_BYTES,
     maxPotholeReadingsForBatch,
+    mergeGatewayRejections,
     validateUploadPayload,
 } from "./handler.ts";
 import { createRateLimitChecker, type RpcResponse } from "./runtime.ts";
@@ -99,70 +100,119 @@ Deno.test("validateUploadPayload rejects malformed payloads", () => {
     }
 });
 
-Deno.test("validateUploadPayload rejects forged out-of-range pothole_magnitude", () => {
-    const result = validateUploadPayload({
+// Per-reading value problems are rejected individually (counted in
+// gatewayRejectedReasons and merged into rejected_reasons), never by failing
+// the whole batch (review 2026-10-18 theme 3 / N8).
+function okResult(result: ReturnType<typeof validateUploadPayload>) {
+    if (!result.ok) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+    return result;
+}
+
+Deno.test("validateUploadPayload drops forged out-of-range pothole_magnitude readings, keeping the rest", () => {
+    const result = okResult(validateUploadPayload({
         ...validPayload,
         readings: [
             { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 50 },
             { ...validPayload.readings[0], is_pothole: false, pothole_magnitude: -0.5 },
+            validPayload.readings[0],
         ],
-    });
+    }));
 
-    assertEquals(result.ok, false);
-    if (!result.ok && result.error === "validation_failed") {
-        assertObjectMatch(result.fieldErrors ?? {}, {
-            "readings[0].pothole_magnitude": "must be between 0 and 8",
-            "readings[1].pothole_magnitude": "must be between 0 and 8",
-        });
-    }
+    assertEquals(result.payload.readings.length, 1);
+    assertEquals(result.gatewayRejectedReasons, { invalid_pothole_magnitude: 2 });
 });
 
-Deno.test("validateUploadPayload rejects physically impossible speeds", () => {
-    const result = validateUploadPayload({
+Deno.test("validateUploadPayload drops physically impossible speeds as invalid_speed", () => {
+    const result = okResult(validateUploadPayload({
         ...validPayload,
         readings: [
             { ...validPayload.readings[0], speed_kmh: 300 },
             { ...validPayload.readings[0], speed_kmh: -5 },
         ],
+    }));
+
+    assertEquals(result.payload.readings, []);
+    assertEquals(result.gatewayRejectedReasons, { invalid_speed: 2 });
+});
+
+Deno.test("validateUploadPayload drops is_pothole=true readings below the detector spike threshold", () => {
+    const result = okResult(validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 0.4 },
+            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: null },
+        ],
+    }));
+
+    assertEquals(result.payload.readings, []);
+    assertEquals(result.gatewayRejectedReasons, { invalid_pothole_magnitude: 2 });
+});
+
+Deno.test("validateUploadPayload drops negative or absurd gps_accuracy_m as invalid_gps_accuracy", () => {
+    const result = okResult(validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], gps_accuracy_m: -1 },
+            { ...validPayload.readings[0], gps_accuracy_m: 1000.5 },
+            { ...validPayload.readings[0], gps_accuracy_m: 0 },
+            { ...validPayload.readings[0], gps_accuracy_m: 1000 },
+        ],
+    }));
+
+    assertEquals(result.payload.readings.map((r) => r.gps_accuracy_m), [0, 1000]);
+    assertEquals(result.gatewayRejectedReasons, { invalid_gps_accuracy: 2 });
+});
+
+Deno.test("validateUploadPayload stores a heading outside [0, 360) as null instead of rejecting", () => {
+    const result = okResult(validateUploadPayload({
+        ...validPayload,
+        readings: [-1, 0, 359.9, 360, 10000].map((heading) => ({ ...validPayload.readings[0], heading })),
+    }));
+
+    assertEquals(result.payload.readings.map((r) => r.heading), [null, 0, 359.9, null, null]);
+    assertEquals(result.gatewayRejectedReasons, {});
+});
+
+Deno.test("validateUploadPayload still 400s structurally wrong reading fields", () => {
+    const result = validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], heading: "north" },
+            { ...validPayload.readings[0], gps_accuracy_m: null },
+            { ...validPayload.readings[0], recorded_at: "0" },
+        ],
     });
 
     assertEquals(result.ok, false);
     if (!result.ok && result.error === "validation_failed") {
         assertObjectMatch(result.fieldErrors ?? {}, {
-            "readings[0].speed_kmh": "must be between 0 and 220",
-            "readings[1].speed_kmh": "must be between 0 and 220",
+            "readings[0].heading": "must be numeric or null",
+            "readings[1].gps_accuracy_m": "must be numeric",
+            "readings[2].recorded_at": "must be an RFC3339 timestamp",
         });
     }
 });
 
-Deno.test("validateUploadPayload rejects is_pothole=true below the detector spike threshold", () => {
-    const belowThreshold = validateUploadPayload({
-        ...validPayload,
-        readings: [
-            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 0.4 },
-        ],
-    });
-
-    assertEquals(belowThreshold.ok, false);
-    if (!belowThreshold.ok && belowThreshold.error === "validation_failed") {
-        assertObjectMatch(belowThreshold.fieldErrors ?? {}, {
-            "readings[0].pothole_magnitude": "must be at least 1 when is_pothole is true",
-        });
+Deno.test("validateUploadPayload rejects non-RFC3339 client_sent_at that Date.parse accepts", () => {
+    for (const client_sent_at of ["0", "2026-04-17", "April 17 2026", "2026-02-30T00:00:00Z"]) {
+        const result = validateUploadPayload({ ...validPayload, client_sent_at });
+        assertEquals(result.ok, false, client_sent_at);
     }
+});
 
-    const missingMagnitude = validateUploadPayload({
-        ...validPayload,
-        readings: [
-            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: null },
-        ],
-    });
-
-    assertEquals(missingMagnitude.ok, false);
-    if (!missingMagnitude.ok && missingMagnitude.error === "validation_failed") {
-        assertObjectMatch(missingMagnitude.fieldErrors ?? {}, {
-            "readings[0].pothole_magnitude": "must be numeric when is_pothole is true",
-        });
-    }
+Deno.test("mergeGatewayRejections adds gateway counts to the SQL result", () => {
+    assertEquals(
+        mergeGatewayRejections(
+            { accepted: 3, rejected: 2, duplicate: false, rejected_reasons: { low_quality: 1, out_of_bounds: 1 } },
+            { out_of_bounds: 2, invalid_speed: 1 },
+        ),
+        {
+            accepted: 3,
+            rejected: 5,
+            duplicate: false,
+            rejected_reasons: { low_quality: 1, out_of_bounds: 3, invalid_speed: 1 },
+        },
+    );
 });
 
 Deno.test("validateUploadPayload rejects an all-pothole batch", () => {
@@ -236,12 +286,59 @@ Deno.test("upload handler rejects a forged max-severity batch end to end", async
         }),
     );
 
+    // The pothole-fraction cap is a batch-level forgery signal, so it still
+    // fails the whole batch.
     assertEquals(response.status, 400);
     const body = await response.json();
     assertEquals(body.error, "validation_failed");
-    assertMatch(body.field_errors["readings[0].pothole_magnitude"], /between 0 and 8/);
     assertMatch(body.field_errors.readings, /too many pothole-flagged readings/);
     assertEquals(ingestCalled, false);
+});
+
+Deno.test("upload handler soft-rejects bad readings and merges them into the response counts", async () => {
+    let ingestedReadings: unknown[] = [];
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        ingestBatch: async ({ payload }) => {
+            ingestedReadings = payload.readings;
+            return {
+                accepted: payload.readings.length - 1,
+                rejected: 1,
+                duplicate: false,
+                rejected_reasons: { low_quality: 1 },
+            };
+        },
+    });
+
+    const readings = [
+        validPayload.readings[0],
+        validPayload.readings[0],
+        { ...validPayload.readings[0], heading: 10000 },
+        { ...validPayload.readings[0], gps_accuracy_m: -1 },
+        { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 9.5 },
+        { ...validPayload.readings[0], lat: 95 },
+    ];
+    const response = await handler(
+        new Request("http://localhost/functions/v1/upload-readings", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...validPayload, readings }),
+        }),
+    );
+
+    assertEquals(response.status, 200);
+    const body = await response.json();
+    assertEquals(ingestedReadings.length, 3);
+    assertEquals(body.accepted, 2);
+    assertEquals(body.rejected, 4);
+    assertEquals(body.accepted + body.rejected, readings.length);
+    assertEquals(body.rejected_reasons, {
+        low_quality: 1,
+        invalid_gps_accuracy: 1,
+        invalid_pothole_magnitude: 1,
+        out_of_bounds: 1,
+    });
 });
 
 Deno.test("validateUploadPayload returns batch_too_large for >1000 readings", () => {
@@ -650,25 +747,19 @@ Deno.test("validateUploadPayload rejects overlong client_app_version/client_os_v
 
 // ── P1-7: world-bounds validation ──
 
-Deno.test("validateUploadPayload rejects out-of-range lat/lng", () => {
-    const result = validateUploadPayload({
+Deno.test("validateUploadPayload drops out-of-range lat/lng readings as out_of_bounds", () => {
+    const result = okResult(validateUploadPayload({
         ...validPayload,
         readings: [
             { ...validPayload.readings[0], lat: 91, lng: -63.5752 },
             { ...validPayload.readings[0], lat: 44.6488, lng: 181 },
             { ...validPayload.readings[0], lat: -91, lng: -181 },
+            validPayload.readings[0],
         ],
-    });
+    }));
 
-    assertEquals(result.ok, false);
-    if (!result.ok && result.error === "validation_failed") {
-        assertObjectMatch(result.fieldErrors ?? {}, {
-            "readings[0].lat": "must be between -90 and 90",
-            "readings[1].lng": "must be between -180 and 180",
-            "readings[2].lat": "must be between -90 and 90",
-            "readings[2].lng": "must be between -180 and 180",
-        });
-    }
+    assertEquals(result.payload.readings.length, 1);
+    assertEquals(result.gatewayRejectedReasons, { out_of_bounds: 3 });
 });
 
 Deno.test("validateUploadPayload accepts boundary lat/lng values", () => {
