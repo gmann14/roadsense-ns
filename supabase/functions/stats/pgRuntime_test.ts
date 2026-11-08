@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert";
 import { createPgFetchStats } from "./pgRuntime.ts";
+import { toPublicDay } from "./handler.ts";
 
 Deno.test("pg stats runtime normalizes alternate bounds key casing", async () => {
     const sql = async () => [{
@@ -26,11 +27,13 @@ Deno.test("pg stats runtime normalizes alternate bounds key casing", async () =>
             maxLng: -64.1,
             maxLat: 44.5,
         },
+        data_updated_at: new Date("2026-04-27T00:00:00Z"),
         generated_at: "2026-04-28T15:00:00Z",
     }];
 
     const stats = await createPgFetchStats(sql as never)();
 
+    assertEquals(stats?.data_updated_at, "2026-04-27");
     assertEquals(stats?.map_bounds, {
         minLng: -64.34,
         minLat: 44.37,
@@ -66,10 +69,43 @@ Deno.test("pg stats runtime drops invalid bounds", async () => {
         },
         focus_bounds: null,
         pothole_bounds: null,
+        data_updated_at: null,
         generated_at: "2026-04-28T15:00:00Z",
     }];
 
     const stats = await createPgFetchStats(sql as never)();
 
     assertEquals(stats?.map_bounds, null);
+    assertEquals(stats?.data_updated_at, null);
+});
+
+Deno.test("pg stats runtime returns data_updated_at as a UTC day, never a time", async () => {
+    const sql = async () => [{
+        total_km_mapped: 1,
+        total_readings: 1,
+        segments_scored: 1,
+        active_potholes: 0,
+        municipalities_covered: 1,
+        map_bounds: null,
+        focus_bounds: null,
+        pothole_bounds: null,
+        data_updated_at: "2026-04-27T00:00:00+00:00",
+        generated_at: "2026-04-28T15:00:00Z",
+    }];
+
+    const stats = await createPgFetchStats(sql as never)();
+
+    assertEquals(stats?.data_updated_at, "2026-04-27");
+});
+
+Deno.test("pg stats runtime returns null when the materialized view is empty", async () => {
+    const sql = async () => [];
+
+    assertEquals(await createPgFetchStats(sql as never)(), null);
+});
+
+Deno.test("toPublicDay rejects unparseable values", () => {
+    assertEquals(toPublicDay("not a date"), null);
+    assertEquals(toPublicDay(undefined), null);
+    assertEquals(toPublicDay(new Date("2026-04-27T23:59:59Z")), "2026-04-27");
 });

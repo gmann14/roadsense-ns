@@ -9,8 +9,21 @@ export type PublicStats = {
     map_bounds: PublicMapBounds | null;
     focus_bounds: PublicMapBounds | null;
     pothole_bounds: PublicMapBounds | null;
+    /// UTC calendar day (YYYY-MM-DD) of the newest reading on a publicly
+    /// visible (k >= 3) segment. Day granularity on purpose: a fresher
+    /// timestamp would let an observer time a single contributor's drive.
+    /// Null when no segment is public yet.
+    data_updated_at: string | null;
     generated_at: string;
 };
+
+/// Normalizes a database date/timestamp to a UTC calendar day (YYYY-MM-DD).
+export function toPublicDay(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    const date = value instanceof Date ? value : new Date(String(value));
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toISOString().slice(0, 10);
+}
 
 export type PublicMapBounds = {
     minLng: number;
@@ -49,7 +62,8 @@ export function createStatsHandler(
                 { "cache-control": "public, max-age=300" },
                 requestId,
             );
-        } catch {
+        } catch (error) {
+            console.error("stats fetch failed", { request_id: requestId, error });
             return errorResponse(
                 "service_unavailable",
                 "Stats are unavailable.",

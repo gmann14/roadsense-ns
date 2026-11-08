@@ -22,6 +22,7 @@ Deno.test("stats handler returns 200 with cache headers", async () => {
                 maxLat: 44.40,
             },
             pothole_bounds: null,
+            data_updated_at: "2026-04-16",
             generated_at: "2026-04-17T14:00:00Z",
         }),
     });
@@ -39,6 +40,7 @@ Deno.test("stats handler returns 200 with cache headers", async () => {
     assertEquals(body.active_potholes, 213);
     assertEquals(body.map_bounds.minLng, -64.34);
     assertEquals(body.focus_bounds.minLng, -64.33);
+    assertEquals(body.data_updated_at, "2026-04-16");
 });
 
 Deno.test("stats handler returns 503 when stats are unavailable", async () => {
