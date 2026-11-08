@@ -640,11 +640,43 @@ This endpoint is intentionally aggregate-only. No raw-reading or contributor his
 - `/methodology`
 - `/privacy`
 
-Use route-level revalidation:
+Current state (2026-11-08): **there is no persistent server cache on Cloudflare.** `open-next.config.ts` is `defineCloudflareConfig({})`, so OpenNext uses its `dummy` incremental cache and `dummy` queue. Every page request renders on demand, and the `next: { revalidate }` hints in `lib/api/client.ts` are not kept between requests. Home and municipality pages read `searchParams`, so they are dynamic anyway. Do not describe a cache in public copy until the steps below are done.
 
-- home and municipality pages: `revalidate = 300`
-- worst roads page: `revalidate = 300`
-- methodology/privacy: static unless content changes
+The earlier attempt (ec809fa) bound `NEXT_INC_CACHE_KV` to a placeholder id (`REPLACE_WITH_REAL_KV_NAMESPACE_ID`). That made `npm run deploy:cloudflare` fail and left the queue on `dummy`, which throws when a stale entry needs revalidating. It was removed on 2026-11-08.
+
+#### Enabling the OpenNext incremental cache (owner action)
+
+Needs Cloudflare account access. Run from `apps/web/`:
+
+1. Create the KV namespace and note the `id` it prints:
+   ```sh
+   npx wrangler kv namespace create NEXT_INC_CACHE_KV
+   ```
+2. Add the bindings to `wrangler.jsonc` (top level). `WORKER_SELF_REFERENCE` must point at this worker's own name, because the memory queue revalidates by calling the worker:
+   ```jsonc
+   "kv_namespaces": [
+     { "binding": "NEXT_INC_CACHE_KV", "id": "<id from step 1>" }
+   ],
+   "services": [
+     { "binding": "WORKER_SELF_REFERENCE", "service": "nsroadsense-web" }
+   ]
+   ```
+3. Wire the overrides in `open-next.config.ts`:
+   ```ts
+   import { defineCloudflareConfig } from "@opennextjs/cloudflare";
+   import kvIncrementalCache from "@opennextjs/cloudflare/overrides/incremental-cache/kv-incremental-cache";
+   import memoryQueue from "@opennextjs/cloudflare/overrides/queue/memory-queue";
+
+   export default defineCloudflareConfig({
+     incrementalCache: kvIncrementalCache,
+     queue: memoryQueue,
+   });
+   ```
+   Only add a `tagCache` (D1) if the app starts calling `revalidateTag` / `revalidatePath`; it doesn't today.
+4. Verify before deploying: `npm run build:cloudflare && npm run preview:cloudflare`, load `/methodology` twice, and check that `npx wrangler kv key list --binding NEXT_INC_CACHE_KV --local` shows entries. Then `npm run deploy:cloudflare`.
+5. Only then add cache wording to public pages, and update this section.
+
+What is cached today regardless of OpenNext: hashed `/_next/static/*` files are served by Workers Static Assets with `Cache-Control: public, max-age=31536000, immutable` (from `public/_headers`), and the API proxy worker edge-caches vector tiles.
 
 ### Browser-fetched
 
