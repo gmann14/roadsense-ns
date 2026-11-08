@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 /**
  * P0-3 (2026-10-18 review): the committed flavor config once pointed the
- * production API, privacy link and WebView at `roadsense.ca`, a domain owned
+ * production API, privacy link and WebView at the bare `roadsense` .ca domain, owned
  * by a third party. These checks read the committed `android/config/` files
  * that `app/build.gradle.kts` turns into `BuildConfig`, so a regression fails
  * the unit-test run instead of shipping.
@@ -45,7 +45,21 @@ class EnvironmentConfigFilesTest {
         val files = configDir.listFiles { f -> f.name.endsWith(".env.properties") }.orEmpty()
         assertTrue(files.size >= 3, "expected local/staging/production config files in $configDir")
         files.forEach { file ->
-            assertFalse(thirdParty.containsMatchIn(file.readText()), "${file.name} references roadsense.ca")
+            assertFalse(thirdParty.containsMatchIn(file.readText()), "${file.name} references the third-party domain")
         }
+    }
+
+    @Test
+    fun noAndroidSourceOrDocReferencesTheThirdPartyDomain() {
+        val thirdParty = Regex("""(^|[^a-z0-9.-])roadsense\.ca\b""", RegexOption.IGNORE_CASE)
+        val androidRoot = configDir.absoluteFile.parentFile
+        val skipDirs = setOf("build", ".gradle", ".idea")
+        val offenders = androidRoot.walkTopDown()
+            .onEnter { it.name !in skipDirs }
+            .filter { it.isFile && it.extension in setOf("kt", "kts", "xml", "properties", "md", "json") }
+            .filter { thirdParty.containsMatchIn(it.readText()) }
+            .map { it.relativeTo(androidRoot).path }
+            .toList()
+        assertTrue(offenders.isEmpty(), "third-party domain referenced in: $offenders")
     }
 }

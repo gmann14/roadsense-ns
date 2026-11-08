@@ -4,7 +4,8 @@ package ca.roadsense.ns.api
  * Public web pages the app links to. All live on `nsroadsense.ca`, the
  * project's own domain (same host as the iOS App Store metadata).
  *
- * Never use `roadsense.ca`: that domain belongs to an unrelated third party.
+ * Never drop the `ns`: the bare `roadsense` .ca domain belongs to an
+ * unrelated third party.
  */
 object PublicLinks {
     const val WEB_HOST: String = "nsroadsense.ca"
