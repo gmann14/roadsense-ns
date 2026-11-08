@@ -116,33 +116,19 @@ Operational note:
 - [10-app-store-and-testflight-readiness.md](10-app-store-and-testflight-readiness.md) is the release-day checklist and copy source-of-truth for App Store Connect fields.
 - This section remains the canonical policy decision for what the answers must be.
 
-What we enter in App Store Connect:
+What we enter in App Store Connect (must match `ios/RoadSenseNS/PrivacyInfo.xcprivacy`; updated 2026-11-08):
 
-**Data Types Collected:**
-- **Location — Precise Location** ✅
-  - Use: App Functionality
-  - Linked to user? **Yes**
-  - Used for tracking? **No**
+| Data type | Linked to user | Tracking | Purpose | Source |
+|---|---|---|---|---|
+| Location — Precise Location | Yes | No | App Functionality | GPS points on uploaded readings |
+| Identifiers — Device ID | Yes | No | App Functionality | Random rotating upload token (not IDFA/IDFV) |
+| Contact Info — Email Address | Yes | No | App Functionality | Optional reply address in feedback |
+| User Content — Customer Support | Yes | No | App Functionality | Feedback message text |
+| Other Data — Other Data Types | Yes | No | App Functionality | Road-roughness values derived from motion sensors |
+| Diagnostics — Crash Data | No | No | App Functionality | Sentry uncaught exceptions + stack traces |
+| Diagnostics — Performance Data | No | No | App Functionality | Sentry transaction sampling |
 
-**Data NOT collected:**
-- Contact info other than the optional feedback reply email (no name, phone or address)
-- Health & fitness
-- Financial
-- User content
-- Browsing / search history
-- Identifiers (user ID, advertising ID)
-- Purchases
-- Usage data
-
-**Data Types Collected (continued):**
-- **Diagnostics — Crash Data** ✅ (Sentry uncaught exceptions + stack traces)
-  - Use: App Functionality
-  - Linked to user? **No**
-  - Used for tracking? **No**
-- **Diagnostics — Performance Data** ✅ (Sentry transaction sampling at 10%)
-  - Use: App Functionality
-  - Linked to user? **No**
-  - Used for tracking? **No**
+**Data NOT collected:** name, phone, physical address, health & fitness, financial, photos (off in 1.0), browsing / search history, advertising ID, purchases, usage data, sensitive info, audio.
 
 Apple's policy: diagnostics ARE "collected" data under their framework, even if scrubbed. The location answer here is **Linked = Yes** because the uploaded precise location is associated with a rotating device token before aggregation; that token is pseudonymous, but Apple still treats it as linkable app-collected data. This is the honest label — the older rumour that "Sentry doesn't count" is wrong.
 
