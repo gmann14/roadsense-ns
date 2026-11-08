@@ -50,12 +50,16 @@ data class ReadingEntity(
 ) {
     /**
      * Mirror of iOS `ReadingRecord.isReadyForUpload` — privacy-zone-dropped
-     * and endpoint-trimmed readings never upload, and a reading attached to
-     * a drive session waits until the session is sealed (`uploadReadyAt`).
+     * and endpoint-trimmed readings never upload, and a reading waits until
+     * its drive session is sealed (`uploadReadyAt`). Stricter than iOS on one
+     * point: a reading without a drive session never uploads, because its
+     * endpoints were never trimmed. Must stay in sync with
+     * `ReadingDao.pendingForUpload`.
      */
     val isReadyForUpload: Boolean
         get() = !droppedByPrivacyZone &&
             uploadedAt == null &&
             endpointTrimmedAt == null &&
-            (driveSessionId == null || uploadReadyAt != null)
+            driveSessionId != null &&
+            uploadReadyAt != null
 }
