@@ -1,3 +1,5 @@
+import { configuredOriginSecret, hasValidOriginAuth } from "./originAuth.ts";
+
 function normalizeCandidate(raw: string | null): string | null {
     if (!raw) return null;
 
@@ -58,19 +60,16 @@ function publicForwardedIp(headers: Headers): string | null {
     return [...candidates].reverse().find((candidate) => !isPrivateOrLocalIp(candidate)) ?? null;
 }
 
-// Set exclusively by the Cloudflare worker (cloudflare/api-proxy/src/worker.js)
-// from its own `cf-connecting-ip`, which Cloudflare rewrites on every hop and a
-// client cannot spoof past Cloudflare's edge. Note: this only distinguishes
-// "the worker's own edge saw this IP" — it does NOT prove the request came
-// through the worker at all, since nothing today stops a caller from hitting
-// the Railway gateway directly and setting this header themselves. The worker
-// does not currently authenticate itself to the gateway (no shared secret /
-// internal-auth check comparable to _shared/internalAuth.ts is applied to
-// public routes), so a direct-to-Railway caller could still spoof
-// `x-client-ip`. Closing that gap means adding worker->gateway auth, which is
-// out of scope here; direct-to-gateway access should be treated as an
-// internal/rare path in the meantime.
-function trustedWorkerClientIp(headers: Headers): string | null {
+// Set by the Cloudflare worker (cloudflare/api-proxy/src/worker.js) from its
+// own `cf-connecting-ip`, which Cloudflare rewrites on every hop and a client
+// cannot spoof past Cloudflare's edge. The Railway origin URL is public, so the
+// header alone proves nothing: a direct-to-origin caller can set it to any
+// value. It is therefore trusted ONLY when the same request carries the
+// worker's shared secret in `x-origin-auth` (see _shared/originAuth.ts, review
+// 2026-10-18 P0-4). Without a configured secret, or without a matching header,
+// x-client-ip is ignored and the x-forwarded-for logic below applies.
+function trustedWorkerClientIp(headers: Headers, originSecret: string): string | null {
+    if (!hasValidOriginAuth(headers, originSecret)) return null;
     const candidate = normalizeCandidate(headers.get("x-client-ip"));
     if (candidate && !isPrivateOrLocalIp(candidate)) {
         return candidate;
@@ -78,8 +77,11 @@ function trustedWorkerClientIp(headers: Headers): string | null {
     return null;
 }
 
-export function extractClientIp(headers: Headers): string {
-    const fromWorker = trustedWorkerClientIp(headers);
+export function extractClientIp(
+    headers: Headers,
+    originSecret: string = configuredOriginSecret(),
+): string {
+    const fromWorker = trustedWorkerClientIp(headers, originSecret);
     if (fromWorker) return fromWorker;
 
     const forwarded = publicForwardedIp(headers);

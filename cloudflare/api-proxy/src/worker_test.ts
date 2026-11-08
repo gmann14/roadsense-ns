@@ -7,7 +7,7 @@
 // test` alongside the rest of the API layer's test suite, without adding a
 // separate JS test runner/toolchain for this one file.
 import { assertEquals } from "jsr:@std/assert";
-import { buildOriginURL, isCacheableTileRequest, pickApiKey } from "./worker.js";
+import { applyOriginTrustHeaders, buildOriginURL, isCacheableTileRequest, pickApiKey } from "./worker.js";
 
 const ENV = { ORIGIN_BASE: "https://api-production-075e9.up.railway.app" };
 
@@ -91,4 +91,40 @@ Deno.test("pickApiKey prefers query string, then apikey header, then bearer auth
 
     const noneReq = new Request("https://api.nsroadsense.ca/x");
     assertEquals(pickApiKey(noneReq), null);
+});
+
+// ── applyOriginTrustHeaders: worker -> origin authentication (review P0-4) ──
+
+Deno.test("applyOriginTrustHeaders strips client-supplied x-origin-auth and x-client-ip", () => {
+    const request = new Request("https://api.nsroadsense.ca/functions/v1/stats", {
+        headers: { "x-origin-auth": "attacker-guess", "x-client-ip": "6.6.6.6" },
+    });
+    const forward = new Headers(request.headers);
+    applyOriginTrustHeaders(forward, request, { ORIGIN_SHARED_SECRET: "" });
+    assertEquals(forward.has("x-origin-auth"), false);
+    assertEquals(forward.has("x-client-ip"), false);
+});
+
+Deno.test("applyOriginTrustHeaders sets the shared secret and the real client IP", () => {
+    const request = new Request("https://api.nsroadsense.ca/functions/v1/stats", {
+        headers: {
+            "x-origin-auth": "attacker-guess",
+            "x-client-ip": "6.6.6.6",
+            "cf-connecting-ip": "203.0.113.50",
+        },
+    });
+    const forward = new Headers(request.headers);
+    applyOriginTrustHeaders(forward, request, { ORIGIN_SHARED_SECRET: "worker-secret" });
+    assertEquals(forward.get("x-origin-auth"), "worker-secret");
+    assertEquals(forward.get("x-client-ip"), "203.0.113.50");
+});
+
+Deno.test("applyOriginTrustHeaders omits x-origin-auth when the secret binding is missing", () => {
+    const request = new Request("https://api.nsroadsense.ca/functions/v1/stats", {
+        headers: { "cf-connecting-ip": "203.0.113.50" },
+    });
+    const forward = new Headers(request.headers);
+    applyOriginTrustHeaders(forward, request, {});
+    assertEquals(forward.has("x-origin-auth"), false);
+    assertEquals(forward.get("x-client-ip"), "203.0.113.50");
 });

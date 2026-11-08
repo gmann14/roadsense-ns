@@ -40,12 +40,15 @@ Deno.test("extractClientIp uses the last public forwarded hop before fallback he
     assertEquals(extractClientIp(realIpHeaders), "198.51.100.10");
 });
 
-Deno.test("extractClientIp prefers the worker-trusted x-client-ip over x-forwarded-for", () => {
+Deno.test("extractClientIp prefers x-client-ip over x-forwarded-for only with valid origin auth", () => {
     const headers = new Headers({
         "x-client-ip": "1.2.3.4",
+        "x-origin-auth": "worker-secret",
         "x-forwarded-for": "203.0.113.7, 198.51.100.99",
     });
-    assertEquals(extractClientIp(headers), "1.2.3.4");
+    assertEquals(extractClientIp(headers, "worker-secret"), "1.2.3.4");
+    // Same headers, no secret configured on the gateway: x-client-ip is spoofable, so ignored.
+    assertEquals(extractClientIp(headers, ""), "198.51.100.99");
 });
 
 Deno.test("validatePotholeActionPayload rejects malformed payloads", () => {

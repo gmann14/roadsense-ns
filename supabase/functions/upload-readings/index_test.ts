@@ -51,26 +51,30 @@ Deno.test("extractClientIp prefers the worker-trusted x-client-ip over x-forward
     // Regression for the shared-egress-IP bug: through the Cloudflare worker,
     // the rightmost public entry in x-forwarded-for is Cloudflare's own egress
     // IP, not the real client. x-client-ip is set by our worker from its own
-    // cf-connecting-ip and must win.
+    // cf-connecting-ip and must win -- but only when the request also proves
+    // it came through the worker (x-origin-auth, review P0-4).
     const headers = new Headers({
         "x-client-ip": "1.2.3.4",
+        "x-origin-auth": "worker-secret",
         "x-forwarded-for": "203.0.113.7, 198.51.100.99",
     });
-    assertEquals(extractClientIp(headers), "1.2.3.4");
+    assertEquals(extractClientIp(headers, "worker-secret"), "1.2.3.4");
 });
 
 Deno.test("extractClientIp ignores a private/malformed x-client-ip and falls back", () => {
     const privateIp = new Headers({
         "x-client-ip": "10.0.0.5",
+        "x-origin-auth": "worker-secret",
         "x-forwarded-for": "203.0.113.7, 10.0.0.1",
     });
-    assertEquals(extractClientIp(privateIp), "203.0.113.7");
+    assertEquals(extractClientIp(privateIp, "worker-secret"), "203.0.113.7");
 
     const malformed = new Headers({
         "x-client-ip": "not-an-ip",
+        "x-origin-auth": "worker-secret",
         "x-real-ip": "198.51.100.10",
     });
-    assertEquals(extractClientIp(malformed), "198.51.100.10");
+    assertEquals(extractClientIp(malformed, "worker-secret"), "198.51.100.10");
 });
 
 Deno.test("validateUploadPayload rejects malformed payloads", () => {

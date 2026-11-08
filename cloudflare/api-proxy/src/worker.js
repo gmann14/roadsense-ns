@@ -69,6 +69,25 @@ function pickApiKey(request) {
     return null;
 }
 
+// Replaces any client-supplied x-origin-auth / x-client-ip with the values
+// only this worker may assert. ORIGIN_SHARED_SECRET is a Worker secret
+// (`wrangler secret put ORIGIN_SHARED_SECRET`); when it is not configured the
+// header is simply omitted and the gateway falls back to x-forwarded-for.
+function applyOriginTrustHeaders(forwardHeaders, request, env) {
+    forwardHeaders.delete("x-origin-auth");
+    forwardHeaders.delete("x-client-ip");
+
+    const secret = typeof env?.ORIGIN_SHARED_SECRET === "string" ? env.ORIGIN_SHARED_SECRET.trim() : "";
+    if (secret.length > 0) {
+        forwardHeaders.set("x-origin-auth", secret);
+    }
+
+    const realClientIp = request.headers.get("cf-connecting-ip");
+    if (realClientIp) {
+        forwardHeaders.set("x-client-ip", realClientIp);
+    }
+}
+
 function corsHeaders() {
     return {
         "access-control-allow-origin": "*",
@@ -80,7 +99,7 @@ function corsHeaders() {
 
 // Exported for tests only (see worker_test.ts) — Cloudflare's runtime just
 // uses the default export below.
-export { buildOriginURL, isCacheableTileRequest, pickApiKey };
+export { applyOriginTrustHeaders, buildOriginURL, isCacheableTileRequest, pickApiKey };
 
 export default {
     async fetch(request, env, _ctx) {
@@ -110,12 +129,13 @@ export default {
         // and Cloudflare doesn't special-case, so anything a client sets on the
         // inbound request is overwritten here before we forward — the gateway
         // only ever sees the value we assign.
-        const realClientIp = request.headers.get("cf-connecting-ip");
-        if (realClientIp) {
-            forwardHeaders.set("x-client-ip", realClientIp);
-        } else {
-            forwardHeaders.delete("x-client-ip");
-        }
+        //
+        // The gateway only believes x-client-ip when the same request carries
+        // x-origin-auth matching its ORIGIN_SHARED_SECRET (review 2026-10-18
+        // P0-4: the Railway origin URL is public, so the header alone proves
+        // nothing). Any client-supplied copy of either header is dropped here
+        // first, so only values this worker assigns ever reach the origin.
+        applyOriginTrustHeaders(forwardHeaders, request, env);
 
         // Strip headers that don't make sense to forward to a different host.
         forwardHeaders.delete("host");

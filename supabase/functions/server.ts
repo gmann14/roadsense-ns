@@ -9,6 +9,7 @@ import { assertApiKeyConfiguredForEnvironment, isRunningOnRailway, verifyApiKey 
 import { createPgRpc } from "./_shared/pgRpc.ts";
 import { startScheduler } from "./_shared/scheduler.ts";
 import { photoUploadsGate } from "./_shared/photoUploads.ts";
+import { hasValidOriginAuth, originAuthRequired } from "./_shared/originAuth.ts";
 
 import { createDeepHealthHandler, createHealthHandler } from "./health/handler.ts";
 import { createPgDbCheck } from "./health/pgRuntime.ts";
@@ -189,6 +190,31 @@ export async function handleRequest(req: Request): Promise<Response> {
     }
 
     const url = new URL(req.url);
+
+    // Worker -> origin authentication (P0-4). Only enforced when the owner
+    // has set both ORIGIN_SHARED_SECRET and REQUIRE_ORIGIN_AUTH=true; see
+    // _shared/originAuth.ts for the deploy-order-safe rollout. /health stays
+    // reachable so Railway healthchecks (which hit the origin directly) work.
+    if (
+        url.pathname !== "/functions/v1/health" &&
+        originAuthRequired() &&
+        !hasValidOriginAuth(req.headers)
+    ) {
+        return new Response(
+            JSON.stringify({
+                error: "forbidden",
+                message: "Requests must go through api.nsroadsense.ca.",
+            }),
+            {
+                status: 403,
+                headers: {
+                    "content-type": "application/json; charset=utf-8",
+                    ...CORS_HEADERS,
+                },
+            },
+        );
+    }
+
     if (!PUBLIC_PATHS.has(url.pathname)) {
         // Defense-in-depth (P1-5): the startup check below is the primary
         // guard, but re-check here too so a Railway deploy that somehow
