@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert";
 import {
+    createCachedMunicipalityLookup,
     createSegmentsWorstHandler,
     parseWorstSegmentsQuery,
 } from "./handler.ts";
@@ -111,4 +112,56 @@ Deno.test("segments worst handler returns 503 when upstream fails", async () => 
 
     assertEquals(response.status, 503);
     assertEquals((await response.json()).error, "service_unavailable");
+});
+
+Deno.test("municipality lookup is cached for the TTL and refetched after it", async () => {
+    let clock = 1_000;
+    let fetches = 0;
+    const lookup = createCachedMunicipalityLookup(async () => {
+        fetches += 1;
+        return ["Halifax", `Fetch ${fetches}`];
+    }, { ttlMs: 600_000, now: () => clock });
+
+    assertEquals(await lookup(), ["Halifax", "Fetch 1"]);
+    clock += 599_999;
+    assertEquals(await lookup(), ["Halifax", "Fetch 1"]);
+    assertEquals(fetches, 1);
+    clock += 1;
+    assertEquals(await lookup(), ["Halifax", "Fetch 2"]);
+    assertEquals(fetches, 2);
+});
+
+Deno.test("municipality lookup shares one in-flight query between concurrent callers", async () => {
+    let fetches = 0;
+    let release: (value: string[]) => void = () => {};
+    const lookup = createCachedMunicipalityLookup(() => {
+        fetches += 1;
+        return new Promise<string[]>((resolve) => {
+            release = resolve;
+        });
+    });
+
+    const pending = Promise.all([lookup(), lookup(), lookup()]);
+    release(["Halifax"]);
+    assertEquals(await pending, [["Halifax"], ["Halifax"], ["Halifax"]]);
+    assertEquals(fetches, 1);
+});
+
+Deno.test("municipality lookup does not cache failures", async () => {
+    let fetches = 0;
+    const lookup = createCachedMunicipalityLookup(async () => {
+        fetches += 1;
+        if (fetches === 1) throw new Error("db down");
+        return ["Halifax"];
+    });
+
+    let failed = false;
+    try {
+        await lookup();
+    } catch {
+        failed = true;
+    }
+    assertEquals(failed, true);
+    assertEquals(await lookup(), ["Halifax"]);
+    assertEquals(fetches, 2);
 });

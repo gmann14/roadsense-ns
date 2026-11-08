@@ -40,6 +40,42 @@ export function parseWorstSegmentsQuery(url: URL): WorstSegmentsQuery | null {
     return { municipality, limit };
 }
 
+// The municipality allowlist is a DISTINCT over road_segments, which only
+// changes when the road network is re-imported. Without a cache every
+// filtered request ran that scan (review 2026-10-18 P2), so it is held
+// in-process for ten minutes.
+export const MUNICIPALITY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/// Wraps the allowlist query with an in-process TTL cache. Concurrent callers
+/// share one in-flight query; a failed query is not cached, so the next
+/// request retries.
+export function createCachedMunicipalityLookup(
+    fetchKnownMunicipalities: () => Promise<string[]>,
+    options: { ttlMs?: number; now?: () => number } = {},
+): () => Promise<string[]> {
+    const ttlMs = options.ttlMs ?? MUNICIPALITY_CACHE_TTL_MS;
+    const now = options.now ?? (() => Date.now());
+    let cached: { value: string[]; expiresAt: number } | null = null;
+    let inFlight: Promise<string[]> | null = null;
+
+    return () => {
+        if (cached && now() < cached.expiresAt) {
+            return Promise.resolve(cached.value);
+        }
+        if (!inFlight) {
+            inFlight = fetchKnownMunicipalities()
+                .then((value) => {
+                    cached = { value, expiresAt: now() + ttlMs };
+                    return value;
+                })
+                .finally(() => {
+                    inFlight = null;
+                });
+        }
+        return inFlight;
+    };
+}
+
 export function createSegmentsWorstHandler(
     deps: {
         fetchKnownMunicipalities: () => Promise<string[]>;

@@ -46,7 +46,7 @@ import { createPgFetchTopPotholes } from "./top-potholes/pgRuntime.ts";
 import { createSegmentsHandler } from "./segments/handler.ts";
 import { createPgFetchSegmentDetail } from "./segments/pgRuntime.ts";
 
-import { createSegmentsWorstHandler } from "./segments-worst/handler.ts";
+import { createCachedMunicipalityLookup, createSegmentsWorstHandler } from "./segments-worst/handler.ts";
 import {
     createPgFetchKnownMunicipalities,
     createPgFetchWorstSegments,
@@ -164,7 +164,7 @@ export const ROUTES: readonly Route[] = [
     route(
         "/functions/v1/segments-worst",
         lazy(() => createSegmentsWorstHandler({
-            fetchKnownMunicipalities: createPgFetchKnownMunicipalities(),
+            fetchKnownMunicipalities: createCachedMunicipalityLookup(createPgFetchKnownMunicipalities()),
             fetchWorstSegments: createPgFetchWorstSegments(),
         })),
     ),
