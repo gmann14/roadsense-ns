@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { startTransition, useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import {
   getTopPotholes,
@@ -50,8 +50,14 @@ export function topPotholesStateFrom(result: ApiResult<PotholeResponse> | null |
 
 export function MapExplorer({ municipality, searchParams = {}, stats, initialTopPotholes = null }: MapExplorerProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const liveSearchParams = useSearchParams();
+  // After the first in-page URL update the live URL is the only truth, even
+  // when it has no query left (falling back to the server props then would
+  // resurrect a closed segment).
+  const [hasUpdatedUrl, setHasUpdatedUrl] = useState(false);
+  // The mobile search panel stays open only for the page/query it was opened
+  // on, so picking a result closes it without an effect.
+  const [searchOpenFor, setSearchOpenFor] = useState<string | null>(null);
   const [, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [visibleBbox, setVisibleBbox] = useState<Bbox | null>(null);
@@ -59,10 +65,12 @@ export function MapExplorer({ municipality, searchParams = {}, stats, initialTop
   const [topPotholes, setTopPotholes] = useState<TopPotholesState>(() => topPotholesStateFrom(initialTopPotholes));
 
   const baseSearchParams =
-    liveSearchParams.size > 0
+    hasUpdatedUrl || liveSearchParams.size > 0
       ? new URLSearchParams(liveSearchParams)
       : searchParamRecordToUrlSearchParams(searchParams);
   const routeState = parseViewportState(baseSearchParams);
+  const searchKey = `${pathname}?${routeState.q ?? ""}`;
+  const isSearchOpen = searchOpenFor === searchKey;
 
   // Potholes mode can be entered client-side (no server render), so load the
   // top-potholes list here when the server didn't already provide it.
@@ -96,9 +104,8 @@ export function MapExplorer({ municipality, searchParams = {}, stats, initialTop
       return;
     }
 
-    startTransition(() => {
-      router.push(nextUrl, { scroll: false });
-    });
+    replaceMapUrl(nextUrl);
+    setHasUpdatedUrl(true);
   };
 
   const handleModeSelect = (mode: MapMode) => {
@@ -184,7 +191,19 @@ export function MapExplorer({ municipality, searchParams = {}, stats, initialTop
 
         <h1 id="map-explorer-title" className="sr-only">{headlineTitle}. {headlineLede}</h1>
 
-        <div className="map-overlay map-search">
+        <div className="map-overlay map-search-toggle">
+          <button
+            type="button"
+            className="secondary-button"
+            aria-expanded={isSearchOpen}
+            aria-controls="map-search-panel"
+            onClick={() => setSearchOpenFor(isSearchOpen ? null : searchKey)}
+          >
+            {isSearchOpen ? "Close search" : "Search the map"}
+          </button>
+        </div>
+
+        <div id="map-search-panel" className="map-overlay map-search" data-mobile-open={isSearchOpen}>
           <MunicipalitySearch activeMode={routeState.mode} currentQuery={routeState.q} />
           {municipality ? (
             <a href="/" className="secondary-button map-search__clear" aria-label="Switch to province-wide view">
@@ -223,6 +242,16 @@ export function MapExplorer({ municipality, searchParams = {}, stats, initialTop
       />
     </section>
   );
+}
+
+/**
+ * Mode, segment and viewport changes are client state mirrored into the URL
+ * for deep links. Next.js keeps useSearchParams in sync with native
+ * history.replaceState, so this updates the page without a server render
+ * (router.push would refetch the RSC payload, stats and all, per click).
+ */
+export function replaceMapUrl(nextUrl: string) {
+  window.history.replaceState(null, "", nextUrl);
 }
 
 function normalizeBbox(bbox: Bbox): Bbox {

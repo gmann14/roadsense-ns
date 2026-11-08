@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCalendarDate, formatCount, formatPlainFreshness } from "@/lib/format";
+import { formatCalendarDate, formatCount, formatDecimal, formatPlainFreshness } from "@/lib/format";
 
 const NOW = new Date("2026-05-05T15:00:00-03:00");
 
@@ -61,6 +61,19 @@ describe("formatCount", () => {
     expect(formatCount(null)).toBe("—");
     expect(formatCount(undefined)).toBe("—");
     expect(formatCount(Number.NaN)).toBe("—");
+  });
+});
+
+describe("formatDecimal", () => {
+  it("uses fixed digits and Canadian English separators", () => {
+    expect(formatDecimal(1234.5, 2)).toBe("1,234.50");
+    expect(formatDecimal(44.648812, 4)).toBe("44.6488");
+    expect(formatDecimal(0.25, 1)).toBe("0.3");
+  });
+
+  it("renders a dash for missing values", () => {
+    expect(formatDecimal(null, 2)).toBe("—");
+    expect(formatDecimal(Number.POSITIVE_INFINITY, 2)).toBe("—");
   });
 });
 

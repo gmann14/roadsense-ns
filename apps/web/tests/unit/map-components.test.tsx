@@ -1,4 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MapLegend } from "@/components/map/map-legend";
@@ -37,6 +40,8 @@ describe("map legend (mode-aware)", () => {
     expect(screen.getByText("Fair")).toBeInTheDocument();
     expect(screen.getByText("Rough")).toBeInTheDocument();
     expect(screen.getByText("Very rough")).toBeInTheDocument();
+    expect(screen.getByText("Unpaved")).toBeInTheDocument();
+    expect(screen.getByText("No category yet")).toBeInTheDocument();
   });
 
   it("shows pothole markers in potholes mode", () => {
@@ -51,6 +56,29 @@ describe("map legend (mode-aware)", () => {
     expect(screen.getByText("High confidence")).toBeInTheDocument();
     expect(screen.getByText("Medium")).toBeInTheDocument();
     expect(screen.getByText("Emerging")).toBeInTheDocument();
+    expect(screen.getByText("None")).toBeInTheDocument();
+  });
+
+  it("states the real contributor thresholds for coverage", () => {
+    const { container } = render(<MapLegend mode="coverage" defaultExpanded />);
+    const text = container.textContent ?? "";
+    expect(text).toContain("10+ different drivers");
+    expect(text).toContain("3–9 drivers");
+    expect(text).toContain("Fewer than 3 drivers");
+  });
+
+  it("gives every legend swatch a colour class the stylesheet defines", () => {
+    const css = readFileSync(path.join(__dirname, "../../app/globals.css"), "utf8");
+    for (const mode of ["quality", "potholes", "coverage"] as const) {
+      const { container, unmount } = render(<MapLegend mode={mode} defaultExpanded />);
+      const classes = Array.from(container.querySelectorAll(".legend-list .legend-swatch")).map(
+        (node) => Array.from(node.classList).find((name) => name !== "legend-swatch") ?? "",
+      );
+      for (const name of classes) {
+        expect(css).toContain(`.legend-swatch.${name} {`);
+      }
+      unmount();
+    }
   });
 });
 

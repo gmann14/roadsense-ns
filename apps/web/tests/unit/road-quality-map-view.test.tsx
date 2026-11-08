@@ -44,13 +44,18 @@ class FakeMap {
   addControl() {
     return this;
   }
-  addSource() {
+  sources: Array<{ id: string; spec: Record<string, unknown> }> = [];
+  layers: Array<Record<string, unknown>> = [];
+
+  addSource(id: string, spec: Record<string, unknown>) {
+    this.sources.push({ id, spec });
     return this;
   }
   getSource() {
     return undefined;
   }
-  addLayer() {
+  addLayer(layer: Record<string, unknown>) {
+    this.layers.push(layer);
     return this;
   }
   getLayer() {
@@ -94,11 +99,15 @@ vi.mock("mapbox-gl", () => {
   };
 });
 
+const { mapboxTokenMock } = vi.hoisted(() => ({
+  mapboxTokenMock: vi.fn<() => string | null>(() => "test-token"),
+}));
+
 vi.mock("@/lib/api/client", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api/client")>("@/lib/api/client");
   return {
     ...actual,
-    getMapboxToken: () => "test-token",
+    getMapboxToken: mapboxTokenMock,
     getMapboxStyleUrl: () => "mapbox://styles/mapbox/light-v11",
     getQualityTileUrlTemplate: () => "https://test.local/tiles/{z}/{x}/{y}.mvt",
     getCoverageTileUrlTemplate: () => "https://test.local/tiles/coverage/{z}/{x}/{y}.mvt",
@@ -117,6 +126,67 @@ const baseRouteState: UrlViewportState = {
 
 beforeEach(() => {
   FakeMap.instances = [];
+  mapboxTokenMock.mockReturnValue("test-token");
+});
+
+function renderMapView(onMapErrorChange = vi.fn()) {
+  return render(
+    <RoadQualityMapView
+      mode="quality"
+      routeState={baseRouteState}
+      mapBounds={null}
+      mapFocusBounds={null}
+      potholeBounds={null}
+      topPotholes={[]}
+      onViewportCommit={vi.fn()}
+      onSegmentSelect={vi.fn()}
+      onMapReadyChange={vi.fn()}
+      onMapErrorChange={onMapErrorChange}
+    />,
+  );
+}
+
+describe("RoadQualityMapView layers and attribution", () => {
+  it("only requests source-layers the tile server publishes", async () => {
+    renderMapView();
+    await waitFor(() => expect(FakeMap.instances.length).toBe(1));
+    const map = FakeMap.instances[0];
+    map.emit("load");
+
+    const sourceLayers = map.layers.map((layer) => layer["source-layer"]).filter(Boolean);
+    expect(sourceLayers).not.toContain("quality_corridors");
+    expect(new Set(sourceLayers)).toEqual(new Set(["segment_aggregates", "potholes", "segment_coverage"]));
+  });
+
+  it("credits OpenStreetMap and the ODbL on both RoadSense tile sources", async () => {
+    renderMapView();
+    await waitFor(() => expect(FakeMap.instances.length).toBe(1));
+    const map = FakeMap.instances[0];
+    map.emit("load");
+
+    const vectorSources = map.sources.filter(({ spec }) => spec.type === "vector");
+    expect(vectorSources).toHaveLength(2);
+    for (const { spec } of vectorSources) {
+      expect(spec.attribution).toContain("© OpenStreetMap contributors");
+      expect(spec.attribution).toContain("https://www.openstreetmap.org/copyright");
+      expect(spec.attribution).toContain("ODbL");
+    }
+  });
+});
+
+describe("RoadQualityMapView without a Mapbox token", () => {
+  it("shows visitors a friendly message instead of developer setup text", async () => {
+    mapboxTokenMock.mockReturnValue(null);
+    const onMapErrorChange = vi.fn();
+    const { container } = renderMapView(onMapErrorChange);
+
+    await waitFor(() => expect(container.textContent).toContain("The map can't load right now."));
+    // NODE_ENV is "test", so the developer hint stays hidden.
+    expect(container.textContent).not.toContain("NEXT_PUBLIC_MAPBOX_TOKEN");
+    expect(container.textContent).not.toMatch(/token missing/i);
+    expect(onMapErrorChange).not.toHaveBeenCalledWith(expect.stringMatching(/Mapbox/));
+    expect(FakeMap.instances).toHaveLength(0);
+  });
 });
 
 describe("RoadQualityMapView error banner recovery", () => {

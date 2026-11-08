@@ -55,6 +55,17 @@ export function formatCount(value: number | null | undefined): string {
   return countFormatter.format(Math.round(value));
 }
 
+/** Decimal with a fixed number of digits in Canadian English ("1,234.50"), or a dash. */
+export function formatDecimal(value: number | null | undefined, digits: number): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return PLACEHOLDER;
+  }
+  return new Intl.NumberFormat(DISPLAY_LOCALE, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
 /**
  * Calendar date such as "Nov 8, 2026". Public timestamps are rounded to the
  * day server-side, so date-only strings and exact-UTC-midnight timestamps are

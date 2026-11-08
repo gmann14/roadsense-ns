@@ -11,7 +11,7 @@ import {
   type PotholeRow,
   type SegmentDetail,
 } from "@/lib/api/client";
-import { formatCalendarDate, formatCount } from "@/lib/format";
+import { formatCalendarDate, formatCount, formatDecimal } from "@/lib/format";
 import type { MapMode } from "@/lib/url-state";
 
 type SegmentDrawerProps = {
@@ -305,12 +305,12 @@ export function SegmentDrawerPanel({
           <div className="pothole-row__meta">
             <strong>
               {formatCount(pothole.confirmation_count)} confirmation{pothole.confirmation_count === 1 ? "" : "s"} ·
-              magnitude {formatFixed(pothole.magnitude, 1)}
+              magnitude {formatDecimal(pothole.magnitude, 1)}
             </strong>
             <span>
               Last seen {formatCalendarDate(pothole.last_confirmed_at) ?? "date unavailable"} ·{" "}
-              {formatFixed(pothole.lat, 4)}°N,{" "}
-              {formatFixed(absOrNull(pothole.lng), 4)}°W
+              {formatDecimal(pothole.lat, 4)}°N,{" "}
+              {formatDecimal(absOrNull(pothole.lng), 4)}°W
             </span>
           </div>
           <button
@@ -465,7 +465,7 @@ export function SegmentDrawerPanel({
         </div>
 
         <div className="drawer-grid" aria-label="Road detail stats">
-          <Metric label="Roughness score" value={formatFixed(aggregate?.avg_roughness_score, 2)} />
+          <Metric label="Roughness score" value={formatDecimal(aggregate?.avg_roughness_score, 2)} />
           <Metric label="Drive samples" value={formatCount(aggregate?.total_readings)} />
           <Metric label="Drivers" value={formatCount(aggregate?.unique_contributors)} />
           <Metric label="Potholes" value={formatCount(aggregate?.pothole_count)} />
@@ -555,13 +555,6 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
-}
-
-function formatFixed(value: number | null | undefined, digits: number): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return "—";
-  }
-  return value.toFixed(digits);
 }
 
 function absOrNull(value: number | null | undefined): number | null {

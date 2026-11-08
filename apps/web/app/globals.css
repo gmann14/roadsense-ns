@@ -806,6 +806,19 @@ nav a[aria-current="page"] {
   align-items: flex-start;
 }
 
+/* Mobile-only toggle for the search panel (see the 720px query below). */
+.map-search-toggle {
+  display: none;
+  top: 14px;
+  left: 14px;
+}
+
+.map-search-toggle .secondary-button {
+  min-height: 40px;
+  background: rgba(255, 252, 245, 0.96);
+  box-shadow: var(--rs-shadow-soft);
+}
+
 .map-search .municipality-search {
   flex: 1;
   min-width: 0;
@@ -957,8 +970,25 @@ nav a[aria-current="page"] {
   .map-legend-floating .map-legend-chip {
     backdrop-filter: none;
   }
+  .map-search-toggle {
+    display: block;
+  }
   .map-search {
     display: none;
+  }
+  .map-search[data-mobile-open="true"] {
+    display: flex;
+    top: 62px;
+    left: 14px;
+    right: 14px;
+    width: auto;
+    transform: none;
+    flex-wrap: wrap;
+  }
+  /* Above the drawer backdrop (40) and drawer (50) so modes stay usable
+     while the bottom-sheet drawer below is open. */
+  .mode-switcher-floating {
+    z-index: 60;
   }
 }
 
@@ -970,6 +1000,11 @@ nav a[aria-current="page"] {
 .map-canvas {
   position: absolute;
   inset: 0;
+}
+
+.map-overlay-banner__dev {
+  font-size: 0.85rem;
+  color: var(--rs-ink-muted);
 }
 
 .map-overlay-banner {
@@ -1133,6 +1168,27 @@ nav a[aria-current="page"] {
 .drawer-backdrop[data-open="true"] {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Phones: the drawer is a bottom sheet that stops above the mode switcher.
+   Must come after the base .drawer rules to win the cascade. */
+@media (max-width: 720px) {
+  .drawer,
+  .drawer[data-variant="pothole-panel"] {
+    top: auto;
+    left: 10px;
+    right: 10px;
+    bottom: 84px;
+    width: auto;
+    max-height: min(62dvh, calc(100dvh - 190px));
+    border: 1px solid var(--rs-border-strong);
+    border-radius: var(--rs-radius-lg);
+    transform: translateY(calc(100% + 100px));
+  }
+  .drawer[data-open="true"],
+  .drawer[data-variant="pothole-panel"][data-open="true"] {
+    transform: translateY(0);
+  }
 }
 
 /* === Metric grid === */
@@ -1316,6 +1372,10 @@ nav a[aria-current="page"] {
 .legend-swatch.coverage-strong { background: var(--rs-coverage-strong); }
 .legend-swatch.coverage-published { background: var(--rs-coverage-published); }
 .legend-swatch.coverage-emerging { background: var(--rs-coverage-emerging); }
+/* Same colours as the map's line paint (road-quality-map-view.tsx). */
+.legend-swatch.unpaved { background: #7a6754; }
+.legend-swatch.uncategorized { background: #97a6ad; }
+.legend-swatch.coverage-none { background: var(--rs-coverage-none); box-shadow: inset 0 0 0 1px rgba(20, 40, 48, 0.18); }
 
 /* === Methodology editorial === */
 
