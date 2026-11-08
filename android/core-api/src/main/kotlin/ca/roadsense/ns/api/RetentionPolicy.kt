@@ -10,7 +10,13 @@ data class QueueReadingRecord(
 )
 
 object RetentionPolicy {
-    private val LOCAL_RETENTION = Duration.ofDays(30)
+    /** How long finished local records (uploaded readings, trimmed or
+     *  privacy-dropped readings, sealed drives, terminal queue rows) stay on
+     *  the device. Pending, never-uploaded data is not subject to it. */
+    val LOCAL_RETENTION: Duration = Duration.ofDays(30)
+
+    /** Records finished before this instant are eligible for pruning. */
+    fun cutoff(now: Instant): Instant = now.minus(LOCAL_RETENTION)
 
     fun pruneUploadedReadings(
         readings: List<QueueReadingRecord>,

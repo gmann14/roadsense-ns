@@ -108,12 +108,17 @@ object PrivacyZoneFactory {
 }
 
 object PrivacyZoneFilter {
-    fun shouldDrop(sample: LocationSample, zones: List<PrivacyZone>): Boolean {
+    fun shouldDrop(sample: LocationSample, zones: List<PrivacyZone>): Boolean =
+        isInside(sample.latitude, sample.longitude, zones)
+
+    /** True when the coordinate falls inside any of [zones]. Used for stored
+     *  readings and queued pothole actions, not just live samples. */
+    fun isInside(latitude: Double, longitude: Double, zones: List<PrivacyZone>): Boolean {
         if (zones.isEmpty()) return false
         for (zone in zones) {
             val distance = PrivacyZoneFactory.distanceMeters(
-                fromLatitude = sample.latitude,
-                fromLongitude = sample.longitude,
+                fromLatitude = latitude,
+                fromLongitude = longitude,
                 toLatitude = zone.latitude,
                 toLongitude = zone.longitude,
             )
