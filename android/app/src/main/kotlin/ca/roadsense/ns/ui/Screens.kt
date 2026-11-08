@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -58,7 +60,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import ca.roadsense.ns.permissions.PermissionState
+import ca.roadsense.ns.AppLog
+import ca.roadsense.ns.api.PublicLinks
 import ca.roadsense.ns.ui.map.MapHost
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,7 +71,6 @@ fun AppShell(
     selectedTab: BottomTab,
     onSelectTab: (BottomTab) -> Unit,
     onRequestForegroundPermissions: () -> Unit,
-    onRequestBackgroundPermission: () -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onUploadNow: () -> Unit,
@@ -105,7 +107,6 @@ fun AppShell(
             BottomTab.Map -> MapScreen(
                 state = state,
                 onRequestForegroundPermissions = onRequestForegroundPermissions,
-                onRequestBackgroundPermission = onRequestBackgroundPermission,
                 onStart = onStart,
                 onStop = onStop,
                 onReportPothole = onReportPothole,
@@ -118,7 +119,6 @@ fun AppShell(
             BottomTab.Settings -> SettingsScreen(
                 state = state,
                 onRequestForegroundPermissions = onRequestForegroundPermissions,
-                onRequestBackgroundPermission = onRequestBackgroundPermission,
                 onSubmitFeedback = onSubmitFeedback,
                 onDeleteLocalData = onDeleteLocalData,
                 onAddPrivacyZoneAtCurrentLocation = onAddPrivacyZoneAtCurrentLocation,
@@ -136,10 +136,13 @@ enum class BottomTab(val label: String) {
 
 @Composable
 private fun BottomBar(selectedTab: BottomTab, onSelectTab: (BottomTab) -> Unit) {
+    // Edge-to-edge (Android 15 default): the bar's surface runs under the
+    // gesture/nav bar, and its buttons sit above it.
     Surface(tonalElevation = 4.dp) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
@@ -173,7 +176,6 @@ private fun BottomBar(selectedTab: BottomTab, onSelectTab: (BottomTab) -> Unit) 
 private fun MapScreen(
     state: HomeState,
     onRequestForegroundPermissions: () -> Unit,
-    onRequestBackgroundPermission: () -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
     onReportPothole: () -> Unit,
@@ -200,17 +202,20 @@ private fun MapScreen(
             PermissionsCallout(
                 title = "Permissions needed",
                 missing = state.permissions.missingForForeground,
-                actionLabel = "Grant required permissions",
-                onAction = onRequestForegroundPermissions,
-            )
-        }
-
-        if (state.permissions.canStartForegroundDrive && !state.permissions.backgroundLocation) {
-            PermissionsCallout(
-                title = "Background location",
-                missing = listOf("Without 'Allow all the time', drives will end as soon as the screen turns off."),
-                actionLabel = "Open Android settings",
-                onAction = onRequestBackgroundPermission,
+                actionLabel = if (state.permissions.hasOnlyApproximateLocation) {
+                    "Allow precise location"
+                } else {
+                    "Grant location access"
+                },
+                onAction = {
+                    // After "approximate" was chosen, Android only offers the
+                    // upgrade from Settings on some versions.
+                    if (state.permissions.hasOnlyApproximateLocation) {
+                        context.openAppSettings()
+                    } else {
+                        onRequestForegroundPermissions()
+                    }
+                },
             )
         }
 
@@ -245,11 +250,7 @@ private fun MapScreen(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 FilledTonalButton(
-                    onClick = {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse("https://roadsense.ca")),
-                        )
-                    },
+                    onClick = { context.openLink(PublicLinks.WEB_MAP) },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Open public map") }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -337,8 +338,9 @@ private fun DriveControlCard(
             Text("Drive collection", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Tap Start before you begin driving. The persistent notification " +
-                    "will appear so you know collection is active.",
+                "Tap Start before you begin driving. A notification stays up while " +
+                    "recording, which continues with the screen off. The drive ends " +
+                    "automatically after 5 minutes parked, or when you tap Stop.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -380,7 +382,7 @@ private fun PotholeReportCard(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 "Use only when stopped. Tap to log the spot you're at right now. " +
-                    "Reports upload after you stop the drive.",
+                    "Reports upload in the background once the undo window passes.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -487,7 +489,6 @@ private fun StatRow(label: String, value: String) {
 private fun SettingsScreen(
     state: HomeState,
     onRequestForegroundPermissions: () -> Unit,
-    onRequestBackgroundPermission: () -> Unit,
     onSubmitFeedback: (String, String, String?, Boolean) -> Unit,
     onDeleteLocalData: () -> Unit,
     onAddPrivacyZoneAtCurrentLocation: () -> Unit,
@@ -504,6 +505,8 @@ private fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(contentPadding)
+            // Keeps the feedback fields above the keyboard edge-to-edge.
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -512,23 +515,20 @@ private fun SettingsScreen(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Permissions", style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
-                PermissionRow("Fine location", state.permissions.fineLocation)
-                PermissionRow("Activity recognition", state.permissions.activityRecognition)
+                PermissionRow("Precise location", state.permissions.fineLocation)
                 PermissionRow("Notifications", state.permissions.notifications)
-                PermissionRow("Background location", state.permissions.backgroundLocation)
-                PermissionRow("Camera (optional)", state.permissions.camera)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Location is used only while a drive is recording or the app is open. " +
+                        "RoadSense never asks for \"Allow all the time\".",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 Spacer(modifier = Modifier.height(8.dp))
-                Row {
-                    OutlinedButton(
-                        onClick = onRequestForegroundPermissions,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Foreground") }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    OutlinedButton(
-                        onClick = onRequestBackgroundPermission,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("Background") }
-                }
+                OutlinedButton(
+                    onClick = onRequestForegroundPermissions,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Request permissions") }
             }
         }
 
@@ -560,22 +560,19 @@ private fun SettingsScreen(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 OutlinedButton(
-                    onClick = {
-                        context.startActivity(
-                            Intent(
-                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                Uri.fromParts("package", context.packageName, null),
-                            ),
-                        )
-                    },
+                    onClick = { context.openAppSettings() },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Manage Android app permissions") }
                 Spacer(modifier = Modifier.height(4.dp))
-                TextButton(onClick = {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://roadsense.ca/privacy")),
-                    )
-                }) { Text("View privacy policy") }
+                TextButton(onClick = { context.openLink(PublicLinks.PRIVACY_POLICY) }) {
+                    Text("View privacy policy")
+                }
+                TextButton(onClick = { context.openLink(PublicLinks.TERMS) }) {
+                    Text("Terms of use")
+                }
+                TextButton(onClick = { context.openLink(PublicLinks.SUPPORT) }) {
+                    Text("Support")
+                }
             }
         }
 
@@ -742,5 +739,27 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
             )
             TextButton(onClick = onDismiss) { Text("Dismiss") }
         }
+    }
+}
+
+/** Opens [url] in the user's browser; a device with no browser logs and no-ops. */
+private fun android.content.Context.openLink(url: String) {
+    try {
+        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (e: android.content.ActivityNotFoundException) {
+        AppLog.warn("no activity can open a web link", e)
+    }
+}
+
+private fun android.content.Context.openAppSettings() {
+    try {
+        startActivity(
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", packageName, null),
+            ),
+        )
+    } catch (e: android.content.ActivityNotFoundException) {
+        AppLog.warn("app settings screen unavailable", e)
     }
 }

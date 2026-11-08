@@ -2,28 +2,24 @@ package ca.roadsense.ns.ui
 
 import android.app.Application
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Looper
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import ca.roadsense.ns.AppLog
 import ca.roadsense.ns.RoadSenseContainer
 import ca.roadsense.ns.api.AppEnvironment
 import ca.roadsense.ns.collection.CollectionService
 import ca.roadsense.ns.data.room.FeedbackUploadState
-import ca.roadsense.ns.data.room.PotholeActionUploadState
 import ca.roadsense.ns.data.room.PrivacyZoneEntity
 import ca.roadsense.ns.data.room.RoadSenseDatabase
 import ca.roadsense.ns.permissions.PermissionState
 import ca.roadsense.ns.pothole.PotholeActionCoordinator
 import ca.roadsense.ns.pothole.PotholeLocation
-import ca.roadsense.ns.sensor.LocationSample
-import ca.roadsense.ns.sensor.PrivacyZone
 import ca.roadsense.ns.sensor.PrivacyZoneFactory
 import ca.roadsense.ns.sensor.PrivacyZoneFilter
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
+import ca.roadsense.ns.toSensorZone
 import ca.roadsense.ns.upload.UploadDrainWorker
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,7 +46,11 @@ data class HomeState(
     val totalPotholesReported: Int = 0,
     val totalUploadedReadings: Long = 0,
     val lastLocation: LocationSnapshot? = null,
-    val permissions: PermissionState = PermissionState(false, false, false, false, false),
+    val permissions: PermissionState = PermissionState(
+        fineLocation = false,
+        coarseLocation = false,
+        notifications = false,
+    ),
     val environment: AppEnvironment = AppEnvironment.STAGING,
     val appVersion: String = "0.0.0",
     val privacyZoneCount: Int = 0,
@@ -72,6 +72,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val locationManager: LocationManager? =
         application.getSystemService(LocationManager::class.java)
     private val secureRandom = SecureRandom()
+    private var observingLocation = false
+
+    /** Live GPS while the app is on screen, so "Mark pothole here" and "Add
+     *  privacy zone here" use where the phone is now, not a snapshot taken
+     *  when the activity resumed. */
+    private val liveLocationListener = LocationListener { location ->
+        _state.value = _state.value.copy(lastLocation = location.toSnapshot())
+    }
 
     /** Tracks the coroutine scheduled to auto-clear `pendingActionId` once
      *  the undo window lapses, so a second report (or Undo) can cancel a
@@ -88,16 +96,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refresh() {
         val app = getApplication<Application>()
-        val running = app
-            .getSharedPreferences(CollectionService.PREFS_NAME, android.content.Context.MODE_PRIVATE)
-            .getBoolean(CollectionService.PREF_IS_RUNNING, false)
         val permissions = PermissionState.snapshot(app)
-        val location = lastKnownLocation(app)
 
         _state.value = _state.value.copy(
-            isRecording = running,
+            isRecording = CollectionService.isRecording(app),
             permissions = permissions,
-            lastLocation = location,
+            lastLocation = _state.value.lastLocation ?: lastKnownGpsLocation(permissions),
         )
 
         viewModelScope.launch {
@@ -118,49 +122,72 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun onPermissionsChanged() = refresh()
+    fun onPermissionsChanged() {
+        refresh()
+        if (observingLocation) {
+            // A fresh grant should start the live feed without a restart.
+            stopLocationUpdates()
+            startLocationUpdates()
+        }
+    }
+
+    /** Called from the activity's onStart. */
+    fun startLocationUpdates() {
+        val manager = locationManager ?: return
+        if (!PermissionState.snapshot(getApplication()).fineLocation) return
+        if (LocationManager.GPS_PROVIDER !in manager.allProviders) return
+        try {
+            manager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                LIVE_LOCATION_INTERVAL_MS,
+                0f,
+                liveLocationListener,
+                Looper.getMainLooper(),
+            )
+            observingLocation = true
+        } catch (e: SecurityException) {
+            AppLog.warn("live location refused", e)
+        } catch (e: IllegalArgumentException) {
+            AppLog.warn("live location unavailable", e)
+        }
+    }
+
+    /** Called from the activity's onStop: no GPS while the app is hidden
+     *  (the collection service has its own subscription). */
+    fun stopLocationUpdates() {
+        observingLocation = false
+        locationManager?.removeUpdates(liveLocationListener)
+    }
+
+    override fun onCleared() {
+        stopLocationUpdates()
+        super.onCleared()
+    }
 
     fun startRecording() {
-        CollectionService.start(getApplication())
+        if (!CollectionService.start(getApplication())) {
+            _state.value = _state.value.copy(
+                lastError = "Recording needs precise location. Grant it, then tap Start again.",
+            )
+        }
         refresh()
     }
 
     fun stopRecording() {
+        // The service seals the drive in onDestroy and then queues the
+        // drive-end upload itself, so the upload sees the trimmed readings.
         CollectionService.stop(getApplication())
-        enqueueDrain()
         refresh()
     }
 
+    /** "Upload pending drives now". */
     fun enqueueDrain() {
-        val request = OneTimeWorkRequestBuilder<UploadDrainWorker>()
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build(),
-            )
-            .addTag(UploadDrainWorker.TAG)
-            .build()
-        // enqueueUniqueWork + KEEP: if a drain is already queued/running,
-        // don't stack another one on top of it. Combined with the Room
-        // transaction in UploadDrainCoordinator, this closes both the
-        // WorkManager-level and the DB-level route to two concurrent drains
-        // selecting the same pending readings into separate batches.
-        WorkManager.getInstance(getApplication()).enqueueUniqueWork(
-            UploadDrainWorker.ONE_SHOT_WORK_NAME,
-            ExistingWorkPolicy.KEEP,
-            request,
-        )
+        UploadDrainWorker.enqueueOneShot(getApplication(), manual = true)
     }
 
     /**
-     * Submits a manual pothole report at the device's last known location.
-     *
-     * This used to return `UUID?` synchronously, but the id is only produced
-     * inside the launched coroutine — the function returned (always null to
-     * any caller) before that assignment ever ran. No production caller
-     * actually used the return value (the UI observes `state.pendingActionId`
-     * reactively instead), so the fix drops the misleading synchronous
-     * return entirely rather than blocking the caller on the coroutine.
+     * Submits a manual pothole report at the device's current location.
+     * Rejects a missing or stale fix rather than guessing.
      */
     fun reportPothole() {
         val location = _state.value.lastLocation ?: run {
@@ -177,23 +204,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         val now = Instant.now()
         viewModelScope.launch {
-            // Same privacy-zone filter the passive collection pipeline uses
-            // (`CollectionPipeline` → `PrivacyZoneFilter.shouldDrop`). A
-            // manual report at home/work must be rejected exactly like a
-            // passive reading would be dropped there — otherwise "mark
-            // pothole here" is a hole in the privacy-zone guarantee.
-            val zones = db.privacyZoneDao().list().map {
-                PrivacyZone(latitude = it.latitude, longitude = it.longitude, radiusMeters = it.radiusM)
-            }
-            val sample = LocationSample(
-                timestamp = location.timestampMillis / 1000.0,
-                latitude = location.latitude,
-                longitude = location.longitude,
-                horizontalAccuracyMeters = location.accuracyMeters,
-                speedKmh = 0.0,
-                headingDegrees = 0.0,
-            )
-            if (PrivacyZoneFilter.shouldDrop(sample, zones)) {
+            // Same privacy-zone filter the passive collection pipeline uses.
+            // A manual report at home/work must be rejected exactly like a
+            // passive reading would be dropped there. Queued reports are
+            // checked again at upload time (PotholeActionCoordinator) in
+            // case a zone is added afterwards.
+            val zones = container.privacyZones()
+            if (PrivacyZoneFilter.isInside(location.latitude, location.longitude, zones)) {
                 _state.value = _state.value.copy(
                     lastError = "You're inside a privacy zone — this location can't be reported.",
                 )
@@ -254,6 +271,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * coordinate) around [latitude]/[longitude]. This is the only production
      * code path that inserts a `PrivacyZoneEntity`; wire a UI entry point to
      * this function rather than calling `privacyZoneDao().upsert` directly.
+     * A running drive picks the zone up immediately (the service observes
+     * the table).
      */
     fun addPrivacyZone(
         latitude: Double,
@@ -283,7 +302,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Adds a privacy zone at the device's last known location. Surfaces an
+    /** Adds a privacy zone at the device's current location. Surfaces an
      *  error via [HomeState.lastError] the same way [reportPothole] does when
      *  there's no usable fix. */
     fun addPrivacyZoneAtCurrentLocation(label: String = "Custom zone") {
@@ -312,17 +331,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 locale = java.util.Locale.getDefault().toLanguageTag(),
                 route = null,
             )
-            enqueueDrain()
+            UploadDrainWorker.enqueueOneShot(getApplication(), manual = false)
             refresh()
         }
     }
 
     fun deleteAllLocalData() {
+        // stopService never starts the service, so this can't crash when it
+        // isn't running or location was revoked. Session writes are blocked
+        // during the wipe, so a service still winding down can't write back.
+        CollectionService.stop(getApplication())
         viewModelScope.launch {
-            // Stop any active drive first to avoid the service writing back
-            // into a freshly-cleared database.
-            CollectionService.stop(getApplication())
-            container.deleteAllLocalData()
+            try {
+                container.deleteAllLocalData()
+                _state.value = _state.value.copy(pendingActionId = null, pendingActionExpiresAt = null)
+            } catch (e: Exception) {
+                AppLog.error("delete local data failed", e)
+                _state.value = _state.value.copy(lastError = "Couldn't delete local data. Please try again.")
+            }
             refresh()
         }
     }
@@ -331,34 +357,30 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = _state.value.copy(lastError = null)
     }
 
-    private fun lastKnownLocation(app: Application): LocationSnapshot? {
+    /** Seeds the UI before the first live fix. GPS only; the staleness check
+     *  in [reportPothole] still applies. */
+    private fun lastKnownGpsLocation(permissions: PermissionState): LocationSnapshot? {
         val manager = locationManager ?: return null
-        if (PermissionState.snapshot(app).fineLocation.not()) return null
-        // Order matters: GPS gives the freshest reading; NETWORK is the
-        // last-resort fallback for indoors.
-        val candidates = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
-        var best: Location? = null
-        for (provider in candidates) {
-            if (provider !in manager.allProviders) continue
-            val loc = try {
-                @Suppress("MissingPermission") manager.getLastKnownLocation(provider)
-            } catch (_: SecurityException) {
-                null
-            } ?: continue
-            if (best == null || loc.time > best.time) best = loc
-        }
-        return best?.let {
-            LocationSnapshot(
-                latitude = it.latitude,
-                longitude = it.longitude,
-                accuracyMeters = if (it.hasAccuracy()) it.accuracy.toDouble() else 0.0,
-                timestampMillis = it.time,
-            )
+        if (!permissions.fineLocation) return null
+        if (LocationManager.GPS_PROVIDER !in manager.allProviders) return null
+        return try {
+            @Suppress("MissingPermission")
+            manager.getLastKnownLocation(LocationManager.GPS_PROVIDER)?.toSnapshot()
+        } catch (_: SecurityException) {
+            null
         }
     }
 
+    private fun Location.toSnapshot(): LocationSnapshot = LocationSnapshot(
+        latitude = latitude,
+        longitude = longitude,
+        accuracyMeters = if (hasAccuracy()) accuracy.toDouble() else 999.0,
+        timestampMillis = time,
+    )
+
     companion object {
         const val STALE_FIX_MS: Long = 30_000
+        const val LIVE_LOCATION_INTERVAL_MS: Long = 2_000
         const val DEFAULT_ZONE_RADIUS_METERS: Double = 250.0
     }
 }

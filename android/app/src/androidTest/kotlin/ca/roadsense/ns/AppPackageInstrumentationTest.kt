@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  *
  * Concrete instrumentation tests to add next:
  *  - foreground-service start/stop survives an app-task swipe
- *  - permission deny matrix (fine location, notifications, activity recognition)
+ *  - permission deny matrix (precise vs approximate location, notifications)
  *  - Compose-level: tap "Mark pothole here" then "Undo last report" within 8s
  *
  * Each of those needs UI-thread + Android-runtime coverage that JVM-only
