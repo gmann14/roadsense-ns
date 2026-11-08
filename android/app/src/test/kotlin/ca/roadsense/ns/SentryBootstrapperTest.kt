@@ -125,6 +125,47 @@ class SentryBootstrapperTest {
     }
 
     @Test
+    fun redactsQuotedJsonCoordinatesAndLonePreciseDecimals() {
+        assertEquals(
+            """{"lat": [redacted], "lng":"[redacted]"}""",
+            SentryBootstrapper.scrubText("""{"lat": 44.6488, "lng":"-63.5752"}"""),
+        )
+        assertFalse("44.6488" in SentryBootstrapper.scrubText("""{"lat": 44.6488}"""))
+        assertFalse("-63.5752" in SentryBootstrapper.scrubText("""{"lng":"-63.5752"}"""))
+        assertEquals("last fix [number] then [number]", SentryBootstrapper.scrubText("last fix 44.64881 then -63.57520"))
+    }
+
+    @Test
+    fun scrubsReadOnlyNestedMapsInsteadOfFailing() {
+        val event = SentryEvent().apply {
+            contexts["drive"] = mapOf("inner" to java.util.Collections.unmodifiableMap(mapOf("lat" to 44.6, "n" to 2)))
+            setExtra("nested", java.util.Collections.unmodifiableMap(mapOf("token" to token, "ok" to "yes")))
+        }
+
+        val scrubbed = SentryBootstrapper.scrubOrDrop(event)!!
+
+        @Suppress("UNCHECKED_CAST")
+        val inner = (scrubbed.contexts["drive"] as Map<String, Any?>)["inner"] as Map<String, Any?>
+        assertFalse("lat" in inner)
+        assertEquals(2, inner["n"])
+        @Suppress("UNCHECKED_CAST")
+        val nested = scrubbed.getExtra("nested") as Map<String, Any?>
+        assertFalse("token" in nested)
+        assertEquals("yes", nested["ok"])
+    }
+
+    @Test
+    fun dropsTheEventWhenScrubbingThrows() {
+        val event = SentryEvent().apply {
+            setExtra("broken", object : AbstractMap<String, Any?>() {
+                override val entries: Set<Map.Entry<String, Any?>>
+                    get() = throw IllegalStateException("boom")
+            })
+        }
+        assertNull(SentryBootstrapper.scrubOrDrop(event))
+    }
+
+    @Test
     fun leavesOrdinaryTextAlone() {
         val text = "upload batch failed with HTTP 503 after 3 attempts (v0.1.0)"
         assertEquals(text, SentryBootstrapper.scrubText(text))

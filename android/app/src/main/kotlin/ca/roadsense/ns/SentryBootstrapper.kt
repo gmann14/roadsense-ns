@@ -31,7 +31,7 @@ object SentryBootstrapper {
             // the import.
             options.isEnabled = true
             options.beforeSend = io.sentry.SentryOptions.BeforeSendCallback { event, _ ->
-                scrub(event)
+                scrubOrDrop(event)
             }
         }
     }
@@ -47,9 +47,13 @@ object SentryBootstrapper {
     )
 
     private val COORDINATE_PAIR = Regex("""-?\d{1,3}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}""")
+    // Optional quotes cover JSON-style text such as `"lat": "44.6488"`.
     private val NAMED_COORDINATE = Regex(
-        """(?i)\b(lat|lng|lon|latitude|longitude)\b(\s*[=:]\s*)-?\d+(\.\d+)?""",
+        """(?i)\b(lat|lng|lon|latitude|longitude)\b("?\s*[=:]\s*"?)-?\d+(\.\d+)?""",
     )
+    // Any lone number in coordinate range with 4+ decimals (about 11 m of
+    // precision) is treated as a coordinate, whatever surrounds it.
+    private val PRECISE_DECIMAL = Regex("""(?<![\d.])-?\d{1,3}\.\d{4,}(?![\d.])""")
     private val UUID_PATTERN = Regex(
         """(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b""",
     )
@@ -64,22 +68,29 @@ object SentryBootstrapper {
         .replace(UUID_PATTERN, "[uuid]")
         .replace(COORDINATE_PAIR, "[coords]")
         .replace(NAMED_COORDINATE) { "${it.groupValues[1]}${it.groupValues[2]}[redacted]" }
+        .replace(PRECISE_DECIMAL, "[number]")
 
     private fun isSensitiveKey(key: String): Boolean =
         key.lowercase().replace("_", "").replace("-", "") in SENSITIVE_KEYS
 
-    /** Removes sensitive keys and scrubs string values, recursing into
-     *  nested maps (Sentry contexts are maps of maps). */
-    @Suppress("UNCHECKED_CAST")
-    private fun scrubMap(map: MutableMap<String, Any?>) {
-        map.keys.filter(::isSensitiveKey).forEach { map.remove(it) }
-        map.entries.forEach { entry ->
-            when (val value = entry.value) {
-                is String -> entry.setValue(scrubText(value))
-                is MutableMap<*, *> -> scrubMap(value as MutableMap<String, Any?>)
-                else -> Unit
-            }
+    /** Returns a scrubbed copy: sensitive keys dropped, strings scrubbed,
+     *  nested maps copied recursively. Copies rather than mutates, because
+     *  nested maps from SDK integrations may be read-only. */
+    private fun scrubbedCopy(map: Map<*, *>): MutableMap<String, Any?> {
+        val copy = HashMap<String, Any?>()
+        map.forEach { (rawKey, value) ->
+            val key = rawKey?.toString() ?: return@forEach
+            if (isSensitiveKey(key)) return@forEach
+            copy[key] = scrubValue(value)
         }
+        return copy
+    }
+
+    private fun scrubValue(value: Any?): Any? = when (value) {
+        is String -> scrubText(value)
+        is Map<*, *> -> scrubbedCopy(value)
+        is Collection<*> -> value.map(::scrubValue)
+        else -> value
     }
 
     /**
@@ -92,21 +103,18 @@ object SentryBootstrapper {
     internal fun scrub(event: SentryEvent): SentryEvent {
         event.breadcrumbs?.forEach { crumb ->
             crumb.message = crumb.message?.let(::scrubText)
-            crumb.data?.let { data ->
-                @Suppress("UNCHECKED_CAST")
-                scrubMap(data as MutableMap<String, Any?>)
-            }
+            val data = crumb.data
+            val keys = data.keys.toList()
+            val scrubbed = scrubbedCopy(data)
+            keys.forEach(crumb::removeData)
+            scrubbed.forEach { (key, value) -> if (value != null) crumb.setData(key, value) }
         }
 
         event.extras?.keys?.toList()?.forEach { key ->
             val value = event.getExtra(key)
             when {
                 isSensitiveKey(key) -> event.removeExtra(key)
-                value is String -> event.setExtra(key, scrubText(value))
-                value is MutableMap<*, *> -> {
-                    @Suppress("UNCHECKED_CAST")
-                    scrubMap(value as MutableMap<String, Any?>)
-                }
+                value != null -> scrubValue(value)?.let { event.setExtra(key, it) }
             }
         }
 
@@ -117,11 +125,12 @@ object SentryBootstrapper {
         }
 
         val contexts = event.contexts
-        contexts.keys.filter(::isSensitiveKey).forEach { contexts.remove(it) }
-        contexts.values.forEach { value ->
-            if (value is MutableMap<*, *>) {
-                @Suppress("UNCHECKED_CAST")
-                scrubMap(value as MutableMap<String, Any?>)
+        contexts.keys.toList().forEach { key ->
+            val value = contexts[key]
+            when {
+                isSensitiveKey(key) -> contexts.remove(key)
+                value is Map<*, *> -> contexts[key] = scrubbedCopy(value)
+                value is String -> contexts[key] = scrubText(value)
             }
         }
 
@@ -131,6 +140,7 @@ object SentryBootstrapper {
             message.params = message.params?.map(::scrubText)
         }
 
+        // Sentry flattens chained causes into this list, so causes are covered.
         event.exceptions?.forEach { exception ->
             exception.value = exception.value?.let(::scrubText)
         }
@@ -140,5 +150,14 @@ object SentryBootstrapper {
         event.user = null
         event.request = null
         return event
+    }
+
+    /** Fails closed: if scrubbing throws for any reason, the event is
+     *  dropped rather than sent unscrubbed. */
+    internal fun scrubOrDrop(event: SentryEvent): SentryEvent? = try {
+        scrub(event)
+    } catch (error: Exception) {
+        runCatching { AppLog.warn("dropped a Sentry event the scrubber could not process: ${error.javaClass.simpleName}") }
+        null
     }
 }
