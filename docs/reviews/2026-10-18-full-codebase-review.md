@@ -15,6 +15,47 @@ Seven parallel read-only passes: iOS, Android, Postgres/PostGIS, Deno gateway + 
 
 Static reading suggests the pgTAP suite would fail: `018` plans 38 tests but contains 41 assertions, and three assertions in `008` contradict the final `get_tile`.
 
+## Fix status (2026-11-08)
+
+Fixes for most P0 and P1 items are merged into local `main` (110 commits ahead of `origin/main`). **Nothing is pushed or deployed**, so production still runs the 2026-06-23 code. P0-1 stays open until the deploy in [05-deployment-and-observability.md](../implementation/05-deployment-and-observability.md) is done.
+
+| Item | Status | Where |
+|---|---|---|
+| P0-1 deploy | **Open**: push, then migrations → worker → API → web | owner action |
+| P0-2 Android token | Fixed: UUIDv4 tokens, legacy tokens replaced | `951429e` |
+| P0-3 Android domain | Fixed: `nsroadsense.ca` everywhere, photos off, test guards the ICBC domain | `5c5105d`, `54c2abb` |
+| P0-4 worker bypass | Fixed: `x-origin-auth` shared secret, `REQUIRE_ORIGIN_AUTH`; client IP trusted only with the secret | API merge `3d7d352` |
+| P0-5 k-anonymity | Fixed for tiles, `/segments/{id}` and `/top-potholes` (≥3 contributors, day-rounded dates). **Coverage tiles still show an "emerging" level for 1–2-contributor segments**: owner decision below | `cd066b7`, `7f53dba` |
+| P0-6 retention | Fixed server-side (scheduled sweeps for partitions, unmatched readings, IPs, marks, batches, actions) and on both clients (local sweeps wired, delete-all covers checkpoint and recovered stores). Feedback text and email retention is still an owner decision | `cd066b7`, `6ca003a`, `995de48`, `bc6b30c` |
+| P0-7 iOS privacy manifest and links | Fixed: `PrivacyInfo.xcprivacy` (7 types, CA92.1), Privacy/Terms/Support in Settings and onboarding | `e0f3b85`, `236f81a` |
+| P0-8 Android target SDK | Fixed to SDK 35. SDK 36 needs AGP ≥ 8.9 if Play requires it | `d10ec0d` |
+
+P1 by area, all merged:
+- **Database:** migrations `20261108090000`–`20261108150000`; scheduler on its own pool with advisory locks and a `scheduler_job_runs` ledger.
+- **API and worker:** canonical cache keys, streaming body cap, strict RFC 3339, per-reading rejection, `ATTESTATION_ENABLED` gate, IPv6 /64 limits, request logs, SIGTERM drain.
+- **Web:** KV binding removed, `/privacy` rewritten, `/terms` and `/support` added, SEO, HSTS plus report-only CSP, data-unavailable states.
+- **Ops:** ledgered `migrate-railway.sh`, path-filtered PR CI, SHA-pinned actions, a rewritten production deploy, health monitor. The PostGIS image pin is documented but not yet applied in Railway.
+- **iOS:** zone check before session and checkpoint, Sentry scrubbing, Mapbox telemetry off, passenger confirmation, the Siri "Mark Pothole" intent, background-task fixes, 500-reading batches, magnitude clamp, 401/403/408/413 retry.
+- **Android:** transactional drive sealing, upload parity with iOS, a stationary tracker, a fail-closed Sentry scrubber, a trimmed permission set.
+
+**Test results on merged `main` (2026-11-08):**
+
+| Suite | Result |
+|---|---|
+| Deno API handlers | 332 passed, 3 ignored |
+| Cloudflare worker | 26 passed |
+| Scripts | all passed |
+| pgTAP (21 files) | 474 passed |
+| Web | `tsc` clean; vitest 165 passed |
+| Android unit tests | all passed (0 failures); `assembleProductionRelease` builds |
+| iOS | `swift test` 148 + 9 passed; `xcodebuild test` 198 unit (2 skipped) + 6 UI passed; Production Release simulator build succeeds |
+
+**Open owner decisions:**
+1. Coverage tiles: hide "emerging" (1–2 contributor) segments from the public, or keep them as a coverage hint.
+2. How long to keep feedback text and reply emails.
+3. Public contact address: the site and listing use a personal Gmail. A `@nsroadsense.ca` address is recommended.
+4. Android application ID `ca.roadsense.android` reads as the ICBC domain reversed, and it can't change after the first Play upload.
+
 ---
 
 ## TL;DR
