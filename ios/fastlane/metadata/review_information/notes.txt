@@ -1,0 +1,24 @@
+No account or demo credentials are needed. The app has no sign-in.
+
+WHAT THE APP DOES
+RoadSense NS measures road roughness from the accelerometer and GPS while the user drives in Nova Scotia, Canada, and contributes anonymised, aggregated readings to a public road-quality map (also at https://nsroadsense.ca).
+
+BACKGROUND LOCATION (Guideline 2.5.4)
+Drives are detected automatically, so collection has to keep running after the phone locks: the app uses significant-location-change / motion activity monitoring to notice when a drive starts, then records high-accuracy location only for the duration of the drive and stops when the drive ends. Onboarding first requests "While Using". The "Always" upgrade is requested only from an explanation sheet the user opens (onboarding/Settings), which describes why background drive detection needs it. Location is used only for road-quality measurement; while not driving, the app falls back to low-power significant-change monitoring.
+
+PRIVACY
+- Privacy zones (home, work, etc.) and drive start/end trimming are applied on the device before upload.
+- Uploads use a random rotating device token. There is no account and no advertising identifier.
+- The public map shows a road segment only after at least 3 different contributors have driven it.
+- The privacy policy is linked in the app under Settings, and at https://nsroadsense.ca/privacy
+
+DRIVER SAFETY (Guideline 1.4.5)
+The app is designed to need no interaction while driving. Manual pothole reporting is offered hands-free through Siri / Shortcuts ("Mark a pothole in RoadSense"). When the vehicle is moving, tapping the on-screen pothole button asks the user to confirm they are a passenger or stopped. Photo capture is not available in this version.
+
+HOW TO REVIEW OUTSIDE NOVA SCOTIA
+- Launch the app and complete onboarding (location and motion permissions, optional privacy zone).
+- The map opens on Nova Scotia and shows live public road-quality data. Tap any coloured road for details.
+- Collection runs anywhere, but readings recorded outside Nova Scotia are not added to the public map, so a test drive in California will appear in "Drives" and stats on the device but not on the public map.
+- Settings shows privacy zones, the upload queue, "Delete local data", and the privacy policy, terms, and support links.
+
+Contact for review questions is in the App Review Information section.

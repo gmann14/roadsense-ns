@@ -1,1 +1,1 @@
-Initial RoadSense NS release for public road-quality mapping, passive drive collection, privacy zones, contribution stats, and pothole reporting.
+First public release: automatic drive collection, the Nova Scotia road-quality map, hands-free pothole reports with Siri, privacy zones, and personal contribution stats.

@@ -1,26 +1,34 @@
-RoadSense NS turns everyday drives into a public map of potholes and rough road conditions across Nova Scotia.
+RoadSense NS turns everyday drives into a public map of rough roads and potholes across Nova Scotia.
 
-While you drive, RoadSense measures road roughness using your phone's motion and location sensors. Your readings combine with everyone else's to build a community road-quality map that can help drivers, residents, and decision-makers see which roads need attention.
+While you drive, RoadSense measures how rough the road is using your phone's motion and location sensors. Your readings are combined with other drivers' to build a community road-quality map that helps residents, journalists, and decision-makers see which roads need attention.
 
-No account. No sign-up. Open the app, allow location and motion access, and drive normally.
+No account. No sign-up. No ads. Allow location and motion access, start driving, and RoadSense does the rest.
 
-What you get:
+WHAT YOU GET
 
-- A public road-quality map for Nova Scotia
-- Passive drive collection while your phone is locked or in your pocket
-- One-tap pothole reports, with optional photos while stopped
-- Personal stats showing kilometres mapped and contributions made
-- Privacy controls for places you do not want included
+- A public road-quality map for Nova Scotia, from smooth to very rough
+- Automatic drive detection: collection starts and stops on its own while your phone stays in a mount, cupholder, or pocket
+- Hands-free pothole reports: say "Hey Siri, mark a pothole in RoadSense", or tap the button when you're a passenger or stopped
+- Your own stats: kilometres mapped, drives, and contributions
+- Privacy zones for home, work, or anywhere you don't want included
 
-Privacy you can verify:
+PRIVACY BY DESIGN
 
-- RoadSense trims sensitive trip endpoints before upload
-- You can add privacy zones for home, work, or other frequent stops
-- No account is required
-- Device tokens rotate periodically
-- You can delete local app data from Settings
-- Background location is used only for road-quality collection
+- Privacy zones and drive start/end trimming run on your phone, so readings near the places you protect are never uploaded
+- No account, no name, no email required
+- Uploads use a random device token that rotates regularly and is never tied to your Apple ID
+- The public map only shows a road once at least three different contributors have driven it, and public dates are rounded to the day
+- Raw readings are deleted on a fixed schedule
+- You can delete your local data any time in Settings
 
-Road quality is usually measured with expensive equipment on long cycles. RoadSense puts a lightweight version of that public-interest data collection in every driver's pocket and makes the result visible to the community.
+DRIVE SAFELY
 
-Built in Halifax. Free and ad-free.
+RoadSense is designed to run without any interaction while you drive. Never handle your phone while driving. Use Siri, or leave pothole reporting to a passenger.
+
+WHY
+
+Road condition data is usually collected with specialised vehicles on long cycles. RoadSense puts a lightweight version of that public-interest measurement in every driver's pocket and makes the results visible to everyone at nsroadsense.ca.
+
+Road data © OpenStreetMap contributors (ODbL). Map © Mapbox.
+
+Built in Halifax. Free, with no ads and no in-app purchases.

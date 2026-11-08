@@ -185,6 +185,24 @@ platform :ios do
     )
   end
 
+  desc "Push App Store listing text (and optionally screenshots) to App Store Connect. Never submits for review."
+  lane :upload_metadata do |options|
+    deliver(
+      api_key: asc_api_key,
+      app_identifier: app_identifier,
+      app_version: optional_env("IOS_MARKETING_VERSION") || "1.0",
+      metadata_path: File.join(__dir__, "metadata"),
+      screenshots_path: File.join(__dir__, "screenshots"),
+      skip_binary_upload: true,
+      skip_screenshots: !options[:screenshots],
+      overwrite_screenshots: !!options[:screenshots],
+      submit_for_review: false,
+      automatic_release: false,
+      force: true,
+      run_precheck_before_submit: false
+    )
+  end
+
   desc "Build a signed release IPA and upload it to internal TestFlight."
   lane :internal_testflight do
     build_release
