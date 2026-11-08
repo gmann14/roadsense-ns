@@ -309,7 +309,7 @@ PR CI runs on `pull_request` and on pushes to `main`, filtered by path, and can 
 
 | Workflow | Trigger paths | Jobs |
 |---|---|---|
-| `backend-ci.yml` | `supabase/**`, `scripts/**`, `Dockerfile`, `.dockerignore` | **deno**: `deno check server.ts`, `deno test`, `docker build`. **scripts**: `bash -n`, `shellcheck --severity=error`, `scripts/tests/run.sh`. **railway-migrations**: `migrate-railway.sh` on a plain `postgis/postgis:16-3.7`, a re-run that applies nothing, then `supabase db push --dry-run` must report the database up to date. **database**: `supabase start`, `supabase db reset`, `supabase test db` (pgTAP), `api-smoke.sh`, `seeded-e2e-smoke.sh` against the local stack. |
+| `backend-ci.yml` | `supabase/**`, `scripts/**`, `cloudflare/api-proxy/**`, `Dockerfile`, `.dockerignore` | **deno**: `deno check server.ts`, `deno test` (functions), `deno test -A cloudflare/api-proxy` (Worker), `docker build`. **scripts**: `bash -n`, `shellcheck --severity=error`, `scripts/tests/run.sh`. **railway-migrations**: `migrate-railway.sh` on a plain `postgis/postgis:16-3.7`, a re-run that applies nothing, then `supabase db push --dry-run` must report the database up to date. **database**: `supabase start`, `supabase db reset`, `supabase test db` (pgTAP), `api-smoke.sh`, `seeded-e2e-smoke.sh` against the local stack. |
 | `web-ci.yml` | `apps/web/**` | **web-check**: `npm ci`, `npx tsc --noEmit`, `npm test` (Vitest), `npm run build`. **web-browser** (dispatch only): OpenNext build, Lighthouse, Playwright. |
 | `ios-ci.yml` | `ios/**` | **swift-package**: `xcrun swift test` in `ios/` on macOS. **simulator** (dispatch only): `xcodegen generate` + `xcodebuild test`. |
 | `android-ci.yml` | `android/**` | Fixture parity check, `./gradlew test`, staging debug APK and staging release AAB, and (when `MAPBOX_DOWNLOADS_TOKEN` is set) the Mapbox-typed compile. |
@@ -333,6 +333,7 @@ Run the same checks locally:
 
 ```bash
 deno check supabase/functions/server.ts && deno test -A $(find supabase/functions -name '*_test.ts')
+deno test -A cloudflare/api-proxy
 scripts/tests/run.sh
 supabase start && supabase db reset && supabase test db
 (cd apps/web && npm ci && npx tsc --noEmit && npm test && npm run build)
@@ -350,8 +351,8 @@ Not part of the normal deploy, and not automated. Run `scripts/osm-import.sh` by
 2. osm2pgsql --style scripts/osm2pgsql-style.lua → osm.osm_ways
 3. TRUNCATE road_segments_staging; run scripts/segmentize.sql against staging, not `road_segments`
 4. Require at least OSM_MIN_TAGGED_PERCENT (default 80) of staged rows to have a municipality
-5. In one transaction: `apply_road_segment_refresh()`, then `rematch_readings_after_segment_refresh()` and `nightly_recompute_aggregates(<touched + existing segment ids>)`
-6. REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv
+5. In one transaction: `SELECT * FROM apply_road_segment_refresh();` then `SELECT finalize_road_segment_refresh();` (rematch retained readings, recompute every segment with readings or an aggregate, rebuild contributor marks, re-anchor open potholes)
+6. REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv and public_worst_segments_mv
 ```
 
 Take a database snapshot first.
