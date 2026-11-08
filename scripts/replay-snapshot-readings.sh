@@ -96,6 +96,28 @@ OS_VERSION="iOS replay"
 TOTAL_ACCEPTED=0
 TOTAL_REJECTED=0
 TOTAL_DUPLICATE=0
+FAILED_BATCHES=0
+
+# Print one field of a JSON response file, or nothing if the file is not
+# valid JSON. Never evaluated by the shell.
+json_field() {
+  node -e '
+    try {
+      const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+      const v = r[process.argv[2]];
+      process.stdout.write(v === undefined || v === null ? "" : (typeof v === "object" ? JSON.stringify(v) : String(v)));
+    } catch (_) {}
+  ' "$1" "$2"
+}
+
+# Server output is untrusted: printable characters only, bounded length.
+safe_snippet() {
+  LC_ALL=C tr -cd '[:print:]' < "$1" | head -c 300
+}
+
+is_count() {
+  [[ "$1" =~ ^[0-9]{1,9}$ ]]
+}
 
 for batch_file in "$TMP_DIR"/batch_*; do
   batch_id="$(uuidgen | tr '[:upper:]' '[:lower:]')"
@@ -134,21 +156,30 @@ for batch_file in "$TMP_DIR"/batch_*; do
     "$FUNCTIONS_BASE_URL/upload-readings")"
 
   if [[ "$status" != "200" ]]; then
-    echo "  ✗ batch $batch_id ($count readings) HTTP $status: $(cat "$response_file")"
+    echo "  ✗ batch $batch_id ($count readings) HTTP $status: $(safe_snippet "$response_file")"
+    FAILED_BATCHES=$((FAILED_BATCHES + 1))
     continue
   fi
 
-  accepted="$(node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(String(r.accepted ?? 0));' "$response_file")"
-  rejected="$(node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(String(r.rejected ?? 0));' "$response_file")"
-  duplicate="$(node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(String(r.duplicate ?? false));' "$response_file")"
-  reasons="$(node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(JSON.stringify(r.rejected_reasons ?? {}));' "$response_file")"
+  accepted="$(json_field "$response_file" accepted)"
+  rejected="$(json_field "$response_file" rejected)"
+  duplicate="$(json_field "$response_file" duplicate)"
+  reasons="$(json_field "$response_file" rejected_reasons)"
+
+  # Only validated integers ever reach shell arithmetic: $(( )) evaluates
+  # expressions, so a crafted response could otherwise run commands.
+  if ! is_count "$accepted" || ! is_count "$rejected"; then
+    echo "  ✗ batch $batch_id ($count readings): unexpected response: $(safe_snippet "$response_file")"
+    FAILED_BATCHES=$((FAILED_BATCHES + 1))
+    continue
+  fi
 
   TOTAL_ACCEPTED=$((TOTAL_ACCEPTED + accepted))
   TOTAL_REJECTED=$((TOTAL_REJECTED + rejected))
   if [[ "$duplicate" == "true" ]]; then
     TOTAL_DUPLICATE=$((TOTAL_DUPLICATE + 1))
   fi
-  echo "  ✓ batch $batch_id ($count readings): accepted=$accepted rejected=$rejected reasons=$reasons"
+  echo "  ✓ batch $batch_id ($count readings): accepted=$accepted rejected=$rejected reasons=$(printf '%s' "$reasons" | LC_ALL=C tr -cd '[:print:]' | head -c 300)"
 done
 
 echo ""
@@ -157,3 +188,9 @@ echo "total readings sent: $TOTAL_READINGS"
 echo "accepted:            $TOTAL_ACCEPTED"
 echo "rejected:            $TOTAL_REJECTED"
 echo "duplicate batches:   $TOTAL_DUPLICATE"
+echo "failed batches:      $FAILED_BATCHES"
+
+if [[ "$FAILED_BATCHES" -gt 0 ]]; then
+  echo "$FAILED_BATCHES batch(es) failed; rerun is safe (server dedupes accepted readings)." >&2
+  exit 1
+fi

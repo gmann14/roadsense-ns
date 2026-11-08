@@ -1,9 +1,27 @@
 #!/usr/bin/env bash
+#
+# Seeded end-to-end smoke: inserts a synthetic road segment, uploads three
+# batches against it through the API, and checks aggregates, segment detail,
+# stats and tiles. Cleans up the synthetic rows on exit.
+#
+# It writes fake rows straight into the database, so it only runs against a
+# local stack (DATABASE_URL on localhost / Docker). A remote, non-production
+# environment (a future staging) needs --allow-remote-non-production; known
+# production API hosts are always refused.
+#
+# Usage:
+#   DATABASE_URL=postgres://...@127.0.0.1:54322/postgres \
+#   SUPABASE_ANON_KEY=... (or PUBLIC_API_KEY=...) FUNCTIONS_BASE_URL=http://127.0.0.1:54321/functions/v1 \
+#   scripts/seeded-e2e-smoke.sh [--allow-remote-non-production]
+
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/pg-env.sh
+source "${SCRIPT_DIR}/lib/pg-env.sh"
+
 FUNCTIONS_BASE_URL="${FUNCTIONS_BASE_URL:-http://127.0.0.1:54321/functions/v1}"
-DATABASE_URL="${DATABASE_URL:-}"
-SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
+SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${PUBLIC_API_KEY:-}}"
 PSQL_BIN="${PSQL_BIN:-psql}"
 
 SEGMENT_ID="11111111-2222-4333-8444-555555555555"
@@ -12,14 +30,42 @@ SEGMENT_LAT="44.6488"
 SEGMENT_LNG="-63.5752"
 ZOOM_LEVEL="14"
 
-if [[ -z "${DATABASE_URL}" ]]; then
+ALLOW_REMOTE=0
+for arg in "$@"; do
+  case "${arg}" in
+    --allow-remote-non-production) ALLOW_REMOTE=1 ;;
+    *)
+      echo "Unknown argument: ${arg}" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "${DATABASE_URL:-}" ]]; then
   echo "DATABASE_URL is required." >&2
   exit 1
 fi
 
 if [[ -z "${SUPABASE_ANON_KEY}" ]]; then
-  echo "SUPABASE_ANON_KEY is required." >&2
+  echo "SUPABASE_ANON_KEY or PUBLIC_API_KEY is required." >&2
   exit 1
+fi
+
+if roadsense_is_production_api_url "${FUNCTIONS_BASE_URL}"; then
+  echo "Refusing to run seeded-e2e-smoke.sh against production (${FUNCTIONS_BASE_URL})." >&2
+  echo "It inserts synthetic segments and readings. Use scripts/api-smoke.sh for production." >&2
+  exit 1
+fi
+
+# Credentials reach psql through PG* variables, never argv.
+roadsense_pg_env_from_database_url
+
+if ! roadsense_is_local_host "${PGHOST}"; then
+  if [[ "${ALLOW_REMOTE}" -ne 1 ]]; then
+    echo "Refusing to run seeded-e2e-smoke.sh against non-local database host ${PGHOST}." >&2
+    echo "Pass --allow-remote-non-production for a real staging environment; never for production." >&2
+    exit 1
+  fi
 fi
 
 if ! command -v "${PSQL_BIN}" >/dev/null 2>&1; then
@@ -37,13 +83,15 @@ tmpdir="$(mktemp -d)"
 # Delete the synthetic segment and everything derived from it. Runs both as
 # a defensive pre-clean (in case a previous run died before its own EXIT
 # trap fired) and, via the trap below, at the end of every run — success or
-# failure — so this script never leaves fake data sitting in prod.
+# failure — so this script never leaves fake data in the target database.
+# segment_contributor_marks rows go with the segment (ON DELETE CASCADE).
 cleanup_synthetic_segment() {
-  "${PSQL_BIN}" "${DATABASE_URL}" -v ON_ERROR_STOP=1 <<SQL
+  "${PSQL_BIN}" -X -v ON_ERROR_STOP=1 <<SQL
 DELETE FROM readings WHERE segment_id = '${SEGMENT_ID}';
 DELETE FROM segment_aggregates WHERE segment_id = '${SEGMENT_ID}';
 DELETE FROM pothole_reports WHERE segment_id = '${SEGMENT_ID}';
 DELETE FROM road_segments WHERE id = '${SEGMENT_ID}' OR osm_way_id = ${OSM_WAY_ID};
+DELETE FROM processed_batches WHERE client_app_version LIKE 'seeded-smoke (%)';
 SQL
 }
 
@@ -92,7 +140,7 @@ http_request() {
 }
 
 db() {
-  "${PSQL_BIN}" "${DATABASE_URL}" -v ON_ERROR_STOP=1 "$@"
+  "${PSQL_BIN}" -X -v ON_ERROR_STOP=1 "$@"
 }
 
 echo "→ Seeding synthetic road segment"

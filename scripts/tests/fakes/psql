@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+#
+# Fake psql for scripts/tests. Emulates just enough of psql + a database for
+# migrate-railway.sh: a migration ledger, a "schema exists" flag, and file
+# execution that can be told to fail.
+#
+# State lives in $FAKE_PSQL_STATE:
+#   ledger_table   present when supabase_migrations.schema_migrations exists
+#   ledger         one applied version per line
+#   schema         present when public.road_segments exists
+#   executed       basename of every migration file "run", in order
+#   argv           every invocation's argv, one line per call
+#   env            PGHOST/PGPASSWORD seen by each call
+#
+# FAKE_PSQL_FAIL_FILE=<basename> makes running that file exit 3 (rolled back).
+
+set -euo pipefail
+
+state="${FAKE_PSQL_STATE:?FAKE_PSQL_STATE must be set}"
+mkdir -p "$state"
+touch "$state/ledger" "$state/executed"
+
+printf '%s\n' "$*" >> "$state/argv"
+printf 'PGHOST=%s PGPASSWORD=%s DATABASE_URL=%s\n' \
+    "${PGHOST:-}" "${PGPASSWORD:-}" "${DATABASE_URL:-}" >> "$state/env"
+
+command_sql=""
+files=()
+version=""
+rows=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -c)
+            command_sql="$2"
+            shift
+            ;;
+        -f)
+            files+=("$2")
+            shift
+            ;;
+        -v)
+            case "$2" in
+                version=*) version="${2#version=}" ;;
+                rows=*) rows="${2#rows=}" ;;
+            esac
+            shift
+            ;;
+        postgres://*|postgresql://*)
+            echo "fake psql: connection URL passed on argv" >&2
+            exit 99
+            ;;
+    esac
+    shift
+done
+
+handle_sql() {
+    local sql="$1"
+    if [[ "$sql" == *"CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations"* ]]; then
+        touch "$state/ledger_table"
+    fi
+    if [[ "$sql" == *"INSERT INTO supabase_migrations.schema_migrations"* ]]; then
+        if [[ ! -e "$state/ledger_table" ]]; then
+            echo 'ERROR:  relation "supabase_migrations.schema_migrations" does not exist' >&2
+            exit 3
+        fi
+        if [[ -n "$rows" ]]; then
+            local spec
+            IFS=',' read -r -a specs <<< "$rows"
+            for spec in "${specs[@]}"; do
+                grep -Fxq -- "${spec%%:*}" "$state/ledger" || printf '%s\n' "${spec%%:*}" >> "$state/pending_ledger"
+            done
+        elif [[ -n "$version" ]]; then
+            if grep -Fxq -- "$version" "$state/ledger"; then
+                echo "ERROR:  duplicate key value violates unique constraint" >&2
+                exit 3
+            fi
+            printf '%s\n' "$version" >> "$state/pending_ledger"
+        fi
+    fi
+}
+
+if [[ -n "$command_sql" ]]; then
+    case "$command_sql" in
+        *"to_regclass('supabase_migrations.schema_migrations')"*)
+            [[ -e "$state/ledger_table" ]] && echo t || echo f
+            ;;
+        *"to_regclass('public.road_segments')"*)
+            [[ -e "$state/schema" ]] && echo t || echo f
+            ;;
+        *"SELECT version FROM supabase_migrations.schema_migrations"*)
+            sort "$state/ledger"
+            ;;
+        *"pg_available_extensions"*)
+            echo f
+            ;;
+    esac
+    exit 0
+fi
+
+rm -f "$state/pending_ledger" "$state/pending_executed"
+
+if [[ "${#files[@]}" -eq 0 ]]; then
+    handle_sql "$(cat)"
+    if [[ -e "$state/pending_ledger" ]]; then
+        cat "$state/pending_ledger" >> "$state/ledger"
+    fi
+    exit 0
+fi
+
+# Transactional: only commit ledger/executed changes if every file succeeds.
+for file in "${files[@]}"; do
+    if [[ "$file" == "-" ]]; then
+        handle_sql "$(cat)"
+        continue
+    fi
+    if [[ -n "${FAKE_PSQL_FAIL_FILE:-}" && "$(basename "$file")" == "$FAKE_PSQL_FAIL_FILE" ]]; then
+        echo "psql:$file:1: ERROR:  simulated failure" >&2
+        rm -f "$state/pending_ledger" "$state/pending_executed"
+        exit 3
+    fi
+    basename "$file" >> "$state/pending_executed"
+    handle_sql "$(cat "$file")"
+done
+
+[[ -e "$state/pending_ledger" ]] && cat "$state/pending_ledger" >> "$state/ledger"
+[[ -e "$state/pending_executed" ]] && cat "$state/pending_executed" >> "$state/executed"
+rm -f "$state/pending_ledger" "$state/pending_executed"
+exit 0

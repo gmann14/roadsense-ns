@@ -1,17 +1,39 @@
 #!/usr/bin/env bash
+#
+# Read-mostly API smoke for any environment, including production:
+#   /health, /health/deep, /stats, /top-potholes contracts, plus one
+#   upload-readings round trip and its duplicate replay.
+#
+# Leaves no public data behind: the uploaded reading is deliberately
+# low-quality (speed below the 15 km/h ingest floor), so ingest_reading_batch
+# soft-rejects it. No readings, aggregates, contributor marks or potholes are
+# written; only the batch's processed_batches row (needed for the duplicate
+# check) and the per-device rate-limit counter. When DATABASE_URL is set
+# (local runs), the processed_batches row is deleted on exit.
+#
+# Usage:
+#   FUNCTIONS_BASE_URL=https://api.nsroadsense.ca/functions/v1 \
+#   PUBLIC_API_KEY=... [EXPECTED_COMMIT=<git sha>] scripts/api-smoke.sh
+#
+# EXPECTED_COMMIT, when set, must match the `commit` field of /health.
+# DEEP_HEALTH_WAIT_SECONDS (default 180) bounds how long a 503 "degraded"
+# /health/deep is re-polled after a deploy; see the comment at that check.
+#
+# Point it at https://api.nsroadsense.ca/functions/v1, never the Railway
+# origin: with REQUIRE_ORIGIN_AUTH=true the origin answers 403 except /health.
+
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 FUNCTIONS_BASE_URL="${FUNCTIONS_BASE_URL:-http://127.0.0.1:54321/functions/v1}"
 SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
 PUBLIC_API_KEY="${PUBLIC_API_KEY:-}"
 API_KEY="${PUBLIC_API_KEY:-$SUPABASE_ANON_KEY}"
+EXPECTED_COMMIT="${EXPECTED_COMMIT:-}"
 
-# Stable, clearly-synthetic device token reused by every smoke run. Using a
-# fresh random token per run would register a brand new "unique contributor"
-# on the matched segment every single time this script executes, permanently
-# inflating public contributor counts. Reusing this fixed value means repeat
-# runs are treated as the same (synthetic) contributor. Must be a valid
-# UUIDv4 (server-side validation requires it).
+# Stable, clearly-synthetic device token reused by every smoke run, so the
+# smoke can never register a new "unique contributor". Must be a UUIDv4.
 SMOKE_DEVICE_TOKEN="${SMOKE_DEVICE_TOKEN:-00000000-0000-4000-8000-000000000000}"
 
 if [[ -z "${API_KEY}" ]]; then
@@ -27,33 +49,32 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+HAS_DB=0
+PSQL_BIN="${PSQL_BIN:-psql}"
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  # shellcheck source=scripts/lib/pg-env.sh
+  source "${SCRIPT_DIR}/lib/pg-env.sh"
+  # Credentials reach psql through PG* variables, never argv.
+  roadsense_pg_env_from_database_url
+  if command -v "${PSQL_BIN}" >/dev/null 2>&1; then
+    HAS_DB=1
+  fi
+fi
+
 tmpdir="$(mktemp -d)"
 
-# Best-effort cleanup of the synthetic reading this script uploads below
-# (P1-o2). DATABASE_URL is optional here — local/dev invocations without it
-# just skip the DB cleanup and rely on SMOKE_DEVICE_TOKEN's stable value to
-# avoid unbounded contributor-count inflation, but a real reading row is
-# still left behind in that case. When DATABASE_URL is set (as it is in the
-# deploy workflows, which already export it for the smoke-check step),
-# delete the uploaded reading row and its processed_batches record so this
-# script leaves no reading behind, matching seeded-e2e-smoke.sh's
-# cleanup-trap pattern.
-#
-# Known residual gap: this does NOT re-fold segment_aggregates, so the
-# matched segment's roughness average/contributor count briefly includes
-# this reading's contribution until the next real upload or nightly
-# recompute touches that segment (update_segment_aggregates_from_batch has
-# no inverse/"unfold" operation). Given SMOKE_DEVICE_TOKEN is stable, this is
-# a one-time, self-correcting skew per segment rather than an unbounded one.
-PSQL_BIN="${PSQL_BIN:-psql}"
 cleanup() {
   local exit_code=$?
-  if [[ -n "${DATABASE_URL:-}" && -n "${SMOKE_BATCH_ID:-}" ]] && command -v "${PSQL_BIN}" >/dev/null 2>&1; then
-    echo "→ Cleaning up synthetic smoke reading (batch ${SMOKE_BATCH_ID})"
-    "${PSQL_BIN}" "${DATABASE_URL}" -v ON_ERROR_STOP=1 -v batch_id="${SMOKE_BATCH_ID}" <<'SQL' || echo "  warning: cleanup query failed; synthetic reading may still be present" >&2
+  if [[ "${HAS_DB}" -eq 1 && -n "${SMOKE_BATCH_ID:-}" ]]; then
+    echo "→ Removing smoke batch ${SMOKE_BATCH_ID} from processed_batches"
+    if ! "${PSQL_BIN}" -X -q -v ON_ERROR_STOP=1 -v batch_id="${SMOKE_BATCH_ID}" <<'SQL'
 DELETE FROM readings WHERE batch_id = :'batch_id'::UUID;
 DELETE FROM processed_batches WHERE batch_id = :'batch_id'::UUID;
 SQL
+    then
+      echo "  cleanup query failed; the smoke batch row may remain" >&2
+      exit_code=1
+    fi
   fi
   rm -rf "${tmpdir}"
   exit "${exit_code}"
@@ -110,14 +131,16 @@ payload = {
     "batch_id": sys.argv[2],
     "device_token": sys.argv[1],
     "client_sent_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    "client_app_version": "smoke-script (local)",
+    "client_app_version": "api-smoke",
     "client_os_version": "macOS",
     "readings": [
         {
             "lat": 44.6488,
             "lng": -63.5752,
             "roughness_rms": 0.47,
-            "speed_kmh": 52.0,
+            # Below the 15 km/h ingest floor: soft-rejected as low_quality,
+            # so nothing public is written.
+            "speed_kmh": 5.0,
             "heading": 184.5,
             "gps_accuracy_m": 6.5,
             "recorded_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -137,7 +160,7 @@ if [[ "${health_status}" != "200" ]]; then
   exit 1
 fi
 
-python3 - "${tmpdir}/health.json" <<'PY'
+python3 - "${tmpdir}/health.json" "${EXPECTED_COMMIT}" <<'PY'
 import json
 import sys
 
@@ -147,25 +170,73 @@ with open(sys.argv[1], "r", encoding="utf-8") as fh:
 # /health is the lite liveness probe — process is up, no DB roundtrip.
 # Use /health/deep for the DB check below.
 assert payload["status"] == "ok", payload
+
+expected_commit = sys.argv[2]
+if expected_commit:
+    assert payload.get("commit") == expected_commit, (
+        "deployed commit %r != expected %r" % (payload.get("commit"), expected_commit)
+    )
 PY
 
-deep_health_status="$(request GET "${FUNCTIONS_BASE_URL}/health/deep" "" "${tmpdir}/health-deep.json")"
-if [[ "${deep_health_status}" != "200" ]]; then
-  echo "health/deep check failed with HTTP ${deep_health_status}" >&2
-  cat "${tmpdir}/health-deep.json" >&2
-  exit 1
-fi
-
-python3 - "${tmpdir}/health-deep.json" <<'PY'
+# /health/deep answers 503 "degraded" when a scheduler job is stale or failing.
+# Right after a deploy the new process may not have run its jobs yet, so poll
+# for up to DEEP_HEALTH_WAIT_SECONDS. A 503 whose non-ok jobs are all
+# "pending" is accepted at the deadline; stale/failing jobs or an unreachable
+# database fail the smoke.
+classify_deep_health() {
+  python3 - "$1" "$2" <<'PY'
 import json
 import sys
 
-with open(sys.argv[1], "r", encoding="utf-8") as fh:
-    payload = json.load(fh)
-
-assert payload["status"] == "ok", payload
-assert payload["db"] == "reachable", payload
+status_code, path = sys.argv[1], sys.argv[2]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+except (OSError, ValueError):
+    print("bad")
+    sys.exit(0)
+if not isinstance(payload, dict) or payload.get("db") != "reachable":
+    print("bad")
+elif status_code == "200" and payload.get("status") == "ok":
+    print("ok")
+elif status_code == "503" and payload.get("status") == "degraded":
+    scheduler = payload.get("scheduler") or {}
+    jobs = scheduler.get("jobs") or {}
+    statuses = {str((job or {}).get("status")) for job in jobs.values()}
+    if scheduler.get("status") != "unavailable" and statuses <= {"ok", "pending"}:
+        print("pending")
+    else:
+        print("bad")
+else:
+    print("bad")
 PY
+}
+
+DEEP_HEALTH_WAIT_SECONDS="${DEEP_HEALTH_WAIT_SECONDS:-180}"
+if [[ ! "${DEEP_HEALTH_WAIT_SECONDS}" =~ ^[0-9]+$ ]]; then
+  echo "DEEP_HEALTH_WAIT_SECONDS must be whole seconds." >&2
+  exit 1
+fi
+deep_deadline=$((SECONDS + DEEP_HEALTH_WAIT_SECONDS))
+deep_health_note="db reachable"
+while true; do
+  deep_health_status="$(request GET "${FUNCTIONS_BASE_URL}/health/deep" "" "${tmpdir}/health-deep.json")" || deep_health_status="000"
+  deep_state="$(classify_deep_health "${deep_health_status}" "${tmpdir}/health-deep.json")"
+  if [[ "${deep_state}" == "ok" ]]; then
+    break
+  fi
+  if (( SECONDS >= deep_deadline )); then
+    if [[ "${deep_state}" == "pending" ]]; then
+      deep_health_note="db reachable; scheduler jobs still pending after deploy"
+      break
+    fi
+    echo "health/deep check failed with HTTP ${deep_health_status}" >&2
+    cat "${tmpdir}/health-deep.json" >&2
+    exit 1
+  fi
+  echo "  /health/deep: HTTP ${deep_health_status} (${deep_state}); retrying in 15s" >&2
+  sleep 15
+done
 
 stats_status="$(request GET "${FUNCTIONS_BASE_URL}/stats" "" "${tmpdir}/stats.json")"
 if [[ "${stats_status}" != "200" ]]; then
@@ -246,6 +317,10 @@ assert isinstance(response_payload["rejected"], int), response_payload
 assert isinstance(response_payload["duplicate"], bool), response_payload
 assert isinstance(response_payload["rejected_reasons"], dict), response_payload
 assert response_payload["accepted"] + response_payload["rejected"] == len(request_payload["readings"]), response_payload
+# The smoke reading must never be accepted: an accepted reading would
+# change public aggregates.
+assert response_payload["accepted"] == 0, response_payload
+assert response_payload["rejected_reasons"].get("low_quality") == 1, response_payload
 PY
 
 duplicate_status="$(request POST "${FUNCTIONS_BASE_URL}/upload-readings" "${tmpdir}/upload.json" "${tmpdir}/duplicate-response.json")"
@@ -282,8 +357,8 @@ PY
 )"
 
 echo "API smoke passed against ${FUNCTIONS_BASE_URL}"
-echo "  /health: ok (liveness)"
-echo "  /health/deep: ok (db reachable)"
+echo "  /health: ok (liveness${EXPECTED_COMMIT:+, commit ${EXPECTED_COMMIT}})"
+echo "  /health/deep: ok (${deep_health_note})"
 echo "  /stats: contract ok"
 echo "  /top-potholes: contract ok"
 echo "  /upload-readings: ${summary}"

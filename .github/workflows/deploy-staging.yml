@@ -1,7 +1,26 @@
 name: Deploy Staging
 
+# Same steps as deploy-production.yml against a separate staging Railway
+# environment. There is no staging environment yet; this workflow refuses to
+# run until the `staging` GitHub Environment points at one, and refuses any
+# FUNCTIONS_BASE_URL or database that belongs to production.
+#
+# Environment `staging`:
+#   secrets  DATABASE_URL     Postgres URL of the staging database
+#            RAILWAY_TOKEN    Railway project token for the staging environment
+#            PUBLIC_API_KEY   staging public API key
+#   vars     FUNCTIONS_BASE_URL  staging API base, e.g. https://<staging-host>/functions/v1 (required)
+#            RAILWAY_SERVICE     default api
+#            RAILWAY_ENVIRONMENT default staging
+
 on:
   workflow_dispatch:
+    inputs:
+      run_seeded_smoke:
+        description: Also run scripts/seeded-e2e-smoke.sh (writes and then deletes synthetic data)
+        required: true
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-staging
@@ -10,105 +29,114 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  SUPABASE_CLI_VERSION: 2.95.4
+  RAILWAY_CLI_VERSION: 4.59.0
+
 jobs:
   deploy:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     environment: staging
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      RAILWAY_DATABASE_URL: ${{ secrets.RAILWAY_DATABASE_URL }}
-      RAILWAY_DEPLOY_HOOK_URL: ${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}
       FUNCTIONS_BASE_URL: ${{ vars.FUNCTIONS_BASE_URL }}
-      FUNCTIONS_BASE_URL_SECRET: ${{ secrets.FUNCTIONS_BASE_URL }}
-      PUBLIC_API_KEY: ${{ secrets.PUBLIC_API_KEY }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      RAILWAY_SERVICE: ${{ vars.RAILWAY_SERVICE || 'api' }}
+      RAILWAY_ENVIRONMENT: ${{ vars.RAILWAY_ENVIRONMENT || 'staging' }}
+      RUN_SEEDED_SMOKE: ${{ inputs.run_seeded_smoke }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Check required staging secrets
-        id: precheck
+      - name: Check secrets, variables and targets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          PUBLIC_API_KEY: ${{ secrets.PUBLIC_API_KEY }}
         shell: bash
         run: |
-          if [[ -z "${DATABASE_URL}" && -z "${RAILWAY_DATABASE_URL}" ]]; then
-            echo "::error::Staging database deploy is not configured; set DATABASE_URL or RAILWAY_DATABASE_URL."
+          set -uo pipefail
+          errors=()
+          for name in DATABASE_URL RAILWAY_TOKEN PUBLIC_API_KEY FUNCTIONS_BASE_URL; do
+            if [[ -z "${!name:-}" ]]; then
+              errors+=("${name} is not set in the staging environment")
+            fi
+          done
+          if [[ "${RAILWAY_ENVIRONMENT}" == "production" ]]; then
+            errors+=("RAILWAY_ENVIRONMENT must not be production")
+          fi
+          source scripts/lib/pg-env.sh
+          if [[ -n "${FUNCTIONS_BASE_URL:-}" ]] && roadsense_is_production_api_url "${FUNCTIONS_BASE_URL}"; then
+            errors+=("FUNCTIONS_BASE_URL points at production")
+          fi
+          if [[ -n "${DATABASE_URL:-}" ]]; then
+            roadsense_pg_env_from_database_url
+            if [[ "${ROADSENSE_DB_HOST}" == "postgis.railway.internal" ]]; then
+              errors+=("DATABASE_URL uses a Railway private host the runner cannot reach")
+            fi
+          fi
+          if (( ${#errors[@]} > 0 )); then
+            for e in "${errors[@]}"; do echo "::error::${e}"; done
             exit 1
           fi
-          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "Deploying ${GITHUB_SHA} to ${RAILWAY_SERVICE} (${RAILWAY_ENVIRONMENT}); API ${FUNCTIONS_BASE_URL}"
 
       - name: Install postgres client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
 
       - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
         with:
-          version: 2.95.4
+          version: ${{ env.SUPABASE_CLI_VERSION }}
 
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
+      - name: Preview database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        shell: bash
+        run: supabase db push --db-url "${DATABASE_URL}" --dry-run
 
       - name: Push database migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        shell: bash
+        run: supabase db push --db-url "${DATABASE_URL}" --yes
+
+      - name: Install Railway CLI
+        shell: bash
+        run: npm install -g "@railway/cli@${RAILWAY_CLI_VERSION}"
+
+      - name: Deploy the API to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         shell: bash
         run: |
-          db_url="${DATABASE_URL:-${RAILWAY_DATABASE_URL}}"
-          supabase db push --db-url "${db_url}"
+          set -euo pipefail
+          railway variable set "GIT_COMMIT_SHA=${GITHUB_SHA}" "GIT_SHA=${GITHUB_SHA}" \
+            --service "${RAILWAY_SERVICE}" --environment "${RAILWAY_ENVIRONMENT}" --skip-deploys
+          railway up --service "${RAILWAY_SERVICE}" --environment "${RAILWAY_ENVIRONMENT}" \
+            --ci --message "deploy-staging ${GITHUB_SHA} (run ${GITHUB_RUN_ID})"
 
-      - name: Trigger Railway API deploy and wait for readiness
+      - name: Wait for the new deployment
+        env:
+          PUBLIC_API_KEY: ${{ secrets.PUBLIC_API_KEY }}
         shell: bash
-        run: |
-          if [[ -z "${RAILWAY_DEPLOY_HOOK_URL}" ]]; then
-            echo "::error::RAILWAY_DEPLOY_HOOK_URL is not set; cannot deploy or verify the API."
-            exit 1
-          fi
+        run: scripts/wait-for-deploy.sh "${GITHUB_SHA}" 900
 
-          export FUNCTIONS_BASE_URL="${FUNCTIONS_BASE_URL:-${FUNCTIONS_BASE_URL_SECRET}}"
-          export SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${PUBLIC_API_KEY}}"
-          if [[ -z "${FUNCTIONS_BASE_URL}" || -z "${SUPABASE_ANON_KEY}" ]]; then
-            echo "::error::Cannot verify deploy readiness; set FUNCTIONS_BASE_URL and PUBLIC_API_KEY or SUPABASE_ANON_KEY."
-            exit 1
-          fi
-
-          echo "→ Triggering Railway deploy hook (enqueues a build; does not wait for it)"
-          curl -fsS -X POST "${RAILWAY_DEPLOY_HOOK_URL}"
-
-          echo "→ Polling ${FUNCTIONS_BASE_URL}/health for readiness (up to 5 minutes)"
-          # NOTE: /health only confirms *a* deployment is serving traffic, not
-          # specifically the new one — Railway's deploy hook has no built-in
-          # "wait until live" signal and /health doesn't expose the deployed
-          # git SHA yet. A fixed grace-period sleep is layered on top so the
-          # new revision has time to actually take over from the old one.
-          # Follow-up: expose the git SHA in /health and poll for that value
-          # instead of a blind sleep.
-          deadline=$((SECONDS + 300))
-          until curl -fsS -o /dev/null \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            "${FUNCTIONS_BASE_URL}/health"; do
-            if (( SECONDS > deadline )); then
-              echo "::error::Timed out waiting for ${FUNCTIONS_BASE_URL}/health to respond after deploy."
-              exit 1
-            fi
-            echo "  ...not ready yet, retrying in 10s"
-            sleep 10
-          done
-
-          echo "→ /health is responding; giving the new deployment a grace period to fully roll out"
-          sleep 60
-
-      - name: Run staging smoke checks
+      - name: Run staging API smoke
+        env:
+          PUBLIC_API_KEY: ${{ secrets.PUBLIC_API_KEY }}
+          EXPECTED_COMMIT: ${{ github.sha }}
         shell: bash
-        run: |
-          export DATABASE_URL="${DATABASE_URL:-${RAILWAY_DATABASE_URL}}"
-          export FUNCTIONS_BASE_URL="${FUNCTIONS_BASE_URL:-${FUNCTIONS_BASE_URL_SECRET}}"
-          export SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${PUBLIC_API_KEY}}"
-          if [[ -z "${FUNCTIONS_BASE_URL}" || -z "${SUPABASE_ANON_KEY}" ]]; then
-            echo "::error::Cannot run smoke checks; set FUNCTIONS_BASE_URL and PUBLIC_API_KEY or SUPABASE_ANON_KEY."
-            exit 1
-          fi
-          bash -n ./scripts/api-smoke.sh
-          bash -n ./scripts/seeded-e2e-smoke.sh
-          bash ./scripts/api-smoke.sh
-          bash ./scripts/seeded-e2e-smoke.sh
+        run: scripts/api-smoke.sh
+
+      - name: Run seeded end-to-end smoke
+        if: ${{ env.RUN_SEEDED_SMOKE == 'true' }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PUBLIC_API_KEY: ${{ secrets.PUBLIC_API_KEY }}
+        shell: bash
+        run: scripts/seeded-e2e-smoke.sh --allow-remote-non-production

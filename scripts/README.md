@@ -2,7 +2,17 @@
 
 Operational and import scripts for backend maintenance live here.
 
-Current B011 pipeline:
+Database and deploy scripts:
+
+- `migrate-railway.sh` — applies pending `supabase/migrations/*.sql` to a plain Postgres/PostGIS database, once each, recording them in `supabase_migrations.schema_migrations` (the ledger `supabase db push` uses). Each file runs in its own transaction; the first failure stops the run. Flags: `--dry-run`, `--baseline-through VERSION`, `--i-know-this-is-production` (required for any write to a non-local host). Production migrations use `supabase db push`; this script is for bootstrapping an empty database and baselining the ledger. See [doc 05](../docs/implementation/05-deployment-and-observability.md#migration-ledger-baseline).
+- `report-expiring-partitions.sh` — read-only list of `readings_YYYY_MM` partitions the next nightly drop removes, with row counts; `--fail-if-rows` exits 3 if any still hold rows
+- `wait-for-deploy.sh <sha> [timeout]` — polls `/health` until it reports the given commit
+- `lib/pg-env.sh` — shared helpers: turns `DATABASE_URL` into libpq `PG*` variables so credentials never reach a child's argv, and classifies local and production hosts
+- `tests/run.sh` — bash tests for the scripts above, using a fake `psql` (`tests/fakes/psql`); runs in `backend-ci.yml`
+
+Every script that talks to Postgres reads `DATABASE_URL` and passes it to `psql`, `osm2pgsql` and `ogr2ogr` through `PG*` variables, never on the command line.
+
+Import, smoke and report scripts:
 
 - `local-backend-up.sh` — starts local Supabase, revives the edge runtime if it died, and smoke-checks `/functions/v1/health` plus tiles
 - `local-quality-report.sh` — prints the latest processed batches, roughness-score distribution, aggregate coverage, and confidence buckets from the local backend
@@ -11,11 +21,11 @@ Current B011 pipeline:
 - `replay-snapshot-readings.sh` — replays every accepted, non-trimmed reading from a copied iPhone snapshot back through `/functions/v1/upload-readings`. Use after re-running `osm-import.sh` with wider segment coverage to recover drives the server originally rejected as `no_segment_match`. Server-side dedup makes it safe to re-run.
 - `pull-device-store.sh` — pulls the iOS app's data container off a paired iPhone via `xcrun devicectl`, refreshes `.context/device-live-latest`, preserves the snapshot file for the delta, and runs `local-ios-quality-report.sh`. One-shot replacement for the manual offload sequence.
 - `local-web-up.sh` — starts the public Next.js map locally against the local Supabase stack using the existing iOS Mapbox/anon secrets
-- `api-smoke.sh` — contract smoke for `/health`, `/stats`, and duplicate-safe `/upload-readings` against local or staging Edge Functions
-- `seeded-e2e-smoke.sh` — seeded local/staging smoke that inserts a synthetic paved segment, uploads three matching batches, refreshes stats, and verifies segment detail plus tile emission
+- `api-smoke.sh` — contract smoke for `/health`, `/health/deep`, `/stats`, `/top-potholes` and duplicate-safe `/upload-readings`; safe against production (leaves no public rows)
+- `seeded-e2e-smoke.sh` — seeded local smoke that inserts a synthetic paved segment, uploads three matching batches, refreshes stats, verifies segment detail plus tile emission, and deletes everything it wrote; refuses production
 - `canada-region-config.sh` — shared province/territory config for Geofabrik slugs and StatCan `PRUID` filters
 - `load-municipalities.sh` — downloads or imports StatCan CSD boundaries for a selected province/territory and materializes `ref.municipalities`
-- `osm-import.sh` — downloads the selected Geofabrik province/territory snapshot, runs `osm2pgsql`, segmentizes roads, tags municipalities/features, and applies the staged refresh
+- `osm-import.sh` — downloads the selected Geofabrik province/territory snapshot, runs `osm2pgsql`, segmentizes roads, tags municipalities/features, then in one transaction runs `apply_road_segment_refresh()` and `finalize_road_segment_refresh()`, and refreshes both public materialized views
 - `osm2pgsql-style.lua` — flex-output Lua config that keeps only drivable roads plus the node tags used for speed bumps and rail crossings
 - `segmentize.sql` — slices imported OSM ways into ~50m rows in `road_segments_staging`
 - `tag-municipalities.sql` — spatially joins staged segments to `ref.municipalities`
@@ -51,7 +61,7 @@ Prerequisites for `osm-import.sh`:
 - local `curl`, `osm2pgsql`, and `psql`
 - populated `ref.municipalities` table in the target database
 
-The script intentionally fails fast if `ref.municipalities` is missing or empty, because municipality names are part of the public read surface and should not silently degrade to `NULL`.
+The script intentionally fails fast if `ref.municipalities` is missing or empty, because municipality names are part of the public read surface and should not silently degrade to `NULL`. It also checks that every municipality belongs to the requested region, that at least `OSM_MIN_TAGGED_PERCENT` (default 80) of staged segments fall inside one, and, for a non-local database, that `REGION_KEY` equals `ROADSENSE_PRODUCTION_REGION_KEY` (default `nova-scotia`). It asks for a typed `yes` before replacing the live network unless `--confirm` is passed. Take a database snapshot first.
 
 Example:
 
@@ -120,18 +130,20 @@ This exists because `supabase start` can report the stack as running even when t
 
 ```bash
 export FUNCTIONS_BASE_URL=http://127.0.0.1:54321/functions/v1
-export SUPABASE_ANON_KEY=...
+export PUBLIC_API_KEY=...          # or SUPABASE_ANON_KEY
+export EXPECTED_COMMIT=<sha>       # optional: /health must report it
 ./scripts/api-smoke.sh
 ```
 
 What it validates:
 
-- `GET /health` returns `{"status":"ok", ...}`
-- `GET /stats` returns the documented public stats shape
-- `POST /upload-readings` accepts a valid one-reading payload
+- `GET /health` returns `{"status":"ok", ...}` (and `EXPECTED_COMMIT`, when set)
+- `GET /health/deep` reports the database reachable; a 503 `degraded` is re-polled for up to `DEEP_HEALTH_WAIT_SECONDS` (default 180) and accepted only if the remaining non-ok scheduler jobs are `pending`
+- `GET /stats` and `GET /top-potholes` return the documented shapes
+- `POST /upload-readings` soft-rejects one deliberately low-speed reading (`accepted = 0`, `rejected_reasons.low_quality = 1`)
 - reposting the same payload returns `duplicate: true` with the original summary replayed
 
-This is intentionally shape-focused, not acceptance-focused. On a fresh local DB with no imported `road_segments`, the upload may still be 200 with `rejected_reasons.no_segment_match = 1`, and that still counts as a passing smoke because the contract is functioning.
+The upload uses a fixed synthetic device token and a reading below the ingest speed floor, so no reading, aggregate, contributor or pothole is written. When `DATABASE_URL` is also set, the smoke deletes its `processed_batches` row on exit. Against production, use `https://api.nsroadsense.ca/functions/v1`, never the Railway origin.
 
 ## Seeded end-to-end smoke
 
@@ -152,4 +164,4 @@ What it does:
 - refreshes `public_stats_mv`
 - verifies `GET /segments/{id}`, `GET /stats`, and `GET /tiles/{z}/{x}/{y}.mvt`
 
-This is intended for local/staging verification only. It writes synthetic rows into the target database and does not clean them back out after success.
+This is for local verification (and a real staging environment, with `--allow-remote-non-production`). It refuses production API hosts and, without that flag, any non-local database. It deletes the synthetic segment, its readings, aggregates and batches on exit, success or failure.

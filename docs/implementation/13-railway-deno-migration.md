@@ -1,16 +1,18 @@
 # 13 — Railway / Deno Migration (Path C)
 
-*Last updated: 2026-04-28 — **Status: shipped to staging***
+*Last updated: 2026-11-08 — **Status: shipped; this is production***
 
 Covers: migrating the Edge Functions stack off Supabase onto a single Deno service running against a Railway-hosted PostGIS database. Keeps the existing `functions/` handler logic; replaces `supabase-js` with a raw Postgres client; consolidates `/functions/v1/*` routing into one entrypoint.
 
-**Live staging endpoints** (as of 2026-04-28):
+The "staging" deployment this plan built became production. The Railway project has only a `production` environment.
 
-- API: `https://api-production-075e9.up.railway.app/functions/v1`
-- Web: `https://roadsense-web.vercel.app`
+**Live endpoints** (as of 2026-11-08):
+
+- API: `https://api.nsroadsense.ca/functions/v1` (Cloudflare Worker `cloudflare/api-proxy` in front of the Railway origin `https://api-production-075e9.up.railway.app`)
+- Web: `https://nsroadsense.ca` (Cloudflare Workers via OpenNext; the earlier Vercel deploy is retired)
 - DB: Railway PostGIS, 1.74M road segments + 91 NS municipalities loaded
 
-For day-to-day Railway operations, see `05-deployment-and-observability.md` → Railway runbook.
+For day-to-day operations and the deploy order, see `05-deployment-and-observability.md` → Production deploy and Railway runbook.
 
 ## Why this migration
 
@@ -270,7 +272,9 @@ Railway's public TCP proxy uses Let's Encrypt; internal `*.railway.internal` doe
 
 ### 8. Migration order with Railway
 Local supabase migrations run in chronological filename order. Railway is just a Postgres URL — no migrate-up tooling. We use `supabase db push --linked` pointed at Railway? No — that needs a Supabase project. We need a different runner.
-**Mitigation:** add a small shell script `scripts/migrate-railway.sh` that loops through `supabase/migrations/*.sql` and `psql "$DATABASE_URL" -f $each`. Idempotency guaranteed by every migration starting with `CREATE ... IF NOT EXISTS` or `DO $$ ... EXCEPTION ...`.
+**Original mitigation (replaced):** a `psql -f` loop over every file, relying on each migration being idempotent. It re-applied all files on every run, reinstated superseded function bodies mid-run, and kept no ledger (2026-07-02 review P1-o3, 2026-10-18 review "Deploy & ops").
+
+**Current:** `supabase db push --db-url "$DATABASE_URL"` works against any Postgres URL and is the production path. `scripts/migrate-railway.sh` is kept for bootstrapping an empty Railway database (it adds the role, pg_cron and storage stand-ins plain Postgres lacks) and for baselining. Both use the same ledger, `supabase_migrations.schema_migrations`; the script applies each pending file once, in its own transaction with its ledger row, stops at the first failure, and refuses remote writes without `--i-know-this-is-production`. `backend-ci.yml` checks that the two agree.
 
 ### 9. JWT_SECRET drift
 Old iOS builds may still have the local Supabase JWT in their bundle. Hitting the new server with that JWT would fail apikey check.
@@ -334,8 +338,8 @@ Order: `segments`, `segments-worst`. Same pattern.
 ### P7 — Migrations runner
 
 - **RED:** `scripts/migrate-railway.sh --dry-run` lists pending migrations against local Supabase
-- **GREEN:** simple `psql -f` loop with idempotency
-- **Acceptance:** migrations apply cleanly to a fresh Railway Postgres
+- **GREEN:** ledgered runner (see sticking point 8); `scripts/tests/run.sh` covers it with a fake `psql`
+- **Acceptance:** migrations apply cleanly to a fresh Railway Postgres, a re-run applies nothing, and `supabase db push --dry-run` then reports the database up to date (`backend-ci.yml` → `railway-migrations`)
 
 ### P8 — pg_cron compatibility
 
@@ -346,7 +350,7 @@ Order: `segments`, `segments-worst`. Same pattern.
 ### P9 — Dockerfile + local build
 
 - **RED:** `docker build` succeeds and the resulting image starts and serves `/functions/v1/health` against a local Postgres
-- **GREEN:** Dockerfile in `supabase/functions/Dockerfile`
+- **GREEN:** `Dockerfile` at the repo root (`denoland/deno:2.6.6`, runs as the `deno` user)
 - **Acceptance:** local end-to-end via Docker passes api-smoke.sh
 
 ### P10 — Railway deploy
@@ -357,7 +361,7 @@ Order: `segments`, `segments-worst`. Same pattern.
 
 ### P11 — Run migrations + osm-import on Railway
 
-- **GREEN:** point migrate-railway.sh + osm-import.sh at the Railway DATABASE_URL
+- **GREEN:** bootstrap with migrate-railway.sh, then point osm-import.sh at the Railway DATABASE_URL (later migrations: `supabase db push`)
 - **Acceptance:** road_segments populated NS-wide; replay-snapshot-readings.sh successfully replays current snapshot
 
 ### P12 — iOS Staging xcconfig + photo feature flag
@@ -365,9 +369,9 @@ Order: `segments`, `segments-worst`. Same pattern.
 - **GREEN:** Config/RoadSenseNS.Staging.xcconfig set to Railway URL; FeatureFlags adds `isPhotoUploadEnabled` defaulting to false in Staging; PhotoCameraFlowView gates on it
 - **Acceptance:** signed Staging IPA can drive, mark potholes, send feedback against Railway. Photo button is hidden.
 
-### P13 — Vercel deploy of web
+### P13 — Web deploy
 
-- **GREEN:** Vercel project linked to repo, env vars point at Railway
+- **GREEN:** first shipped on Vercel; now deployed to Cloudflare Workers with OpenNext (`npm run deploy:cloudflare` in `apps/web`)
 - **Acceptance:** /privacy-and-counts shows live counts from Railway
 
 ### P14 — Cleanup + docs
@@ -398,7 +402,7 @@ This lets you exercise the full router locally before pushing to Railway.
 | Railway Postgres + PostGIS (~3 GB DB, ~50% CPU) | ~$3-5 |
 | Railway Edge Service (~256 MB RAM, intermittent) | ~$2-5 |
 | **Total Railway** | **$5-10** |
-| Vercel (web) | $0 (free tier) |
+| Cloudflare Workers (web + API proxy) | $0–5 (free or Workers Paid) |
 | **Grand total** | **$5-10/mo** |
 
 vs ~$25 for Supabase Pro, ~$25-40 for self-hosted Supabase template.
