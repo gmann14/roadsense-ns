@@ -7,8 +7,8 @@
 #   FUNCTIONS_BASE_URL=https://api.nsroadsense.ca/functions/v1 PUBLIC_API_KEY=... \
 #     scripts/wait-for-deploy.sh <expected-commit-sha> [timeout-seconds]
 #
-# /health reports the commit from the service's GIT_COMMIT_SHA (or
-# RAILWAY_GIT_COMMIT_SHA / GIT_SHA) variable. Deploys made with `railway up`
+# /health reports the first of RAILWAY_GIT_COMMIT_SHA (GitHub-triggered
+# Railway deploys), GIT_COMMIT_SHA and GIT_SHA. Deploys made with `railway up`
 # must set GIT_COMMIT_SHA first; see
 # docs/implementation/05-deployment-and-observability.md.
 

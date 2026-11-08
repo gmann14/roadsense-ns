@@ -16,6 +16,11 @@
 #   PUBLIC_API_KEY=... [EXPECTED_COMMIT=<git sha>] scripts/api-smoke.sh
 #
 # EXPECTED_COMMIT, when set, must match the `commit` field of /health.
+# DEEP_HEALTH_WAIT_SECONDS (default 180) bounds how long a 503 "degraded"
+# /health/deep is re-polled after a deploy; see the comment at that check.
+#
+# Point it at https://api.nsroadsense.ca/functions/v1, never the Railway
+# origin: with REQUIRE_ORIGIN_AUTH=true the origin answers 403 except /health.
 
 set -euo pipefail
 
@@ -173,23 +178,65 @@ if expected_commit:
     )
 PY
 
-deep_health_status="$(request GET "${FUNCTIONS_BASE_URL}/health/deep" "" "${tmpdir}/health-deep.json")"
-if [[ "${deep_health_status}" != "200" ]]; then
-  echo "health/deep check failed with HTTP ${deep_health_status}" >&2
-  cat "${tmpdir}/health-deep.json" >&2
-  exit 1
-fi
-
-python3 - "${tmpdir}/health-deep.json" <<'PY'
+# /health/deep answers 503 "degraded" when a scheduler job is stale or failing.
+# Right after a deploy the new process may not have run its jobs yet, so poll
+# for up to DEEP_HEALTH_WAIT_SECONDS. A 503 whose non-ok jobs are all
+# "pending" is accepted at the deadline; stale/failing jobs or an unreachable
+# database fail the smoke.
+classify_deep_health() {
+  python3 - "$1" "$2" <<'PY'
 import json
 import sys
 
-with open(sys.argv[1], "r", encoding="utf-8") as fh:
-    payload = json.load(fh)
-
-assert payload["status"] == "ok", payload
-assert payload["db"] == "reachable", payload
+status_code, path = sys.argv[1], sys.argv[2]
+try:
+    with open(path, "r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+except (OSError, ValueError):
+    print("bad")
+    sys.exit(0)
+if not isinstance(payload, dict) or payload.get("db") != "reachable":
+    print("bad")
+elif status_code == "200" and payload.get("status") == "ok":
+    print("ok")
+elif status_code == "503" and payload.get("status") == "degraded":
+    scheduler = payload.get("scheduler") or {}
+    jobs = scheduler.get("jobs") or {}
+    statuses = {str((job or {}).get("status")) for job in jobs.values()}
+    if scheduler.get("status") != "unavailable" and statuses <= {"ok", "pending"}:
+        print("pending")
+    else:
+        print("bad")
+else:
+    print("bad")
 PY
+}
+
+DEEP_HEALTH_WAIT_SECONDS="${DEEP_HEALTH_WAIT_SECONDS:-180}"
+if [[ ! "${DEEP_HEALTH_WAIT_SECONDS}" =~ ^[0-9]+$ ]]; then
+  echo "DEEP_HEALTH_WAIT_SECONDS must be whole seconds." >&2
+  exit 1
+fi
+deep_deadline=$((SECONDS + DEEP_HEALTH_WAIT_SECONDS))
+deep_health_note="db reachable"
+while true; do
+  deep_health_status="$(request GET "${FUNCTIONS_BASE_URL}/health/deep" "" "${tmpdir}/health-deep.json")" || deep_health_status="000"
+  deep_state="$(classify_deep_health "${deep_health_status}" "${tmpdir}/health-deep.json")"
+  if [[ "${deep_state}" == "ok" ]]; then
+    break
+  fi
+  if (( SECONDS >= deep_deadline )); then
+    if [[ "${deep_state}" == "pending" ]]; then
+      deep_health_note="db reachable; scheduler jobs still pending after deploy"
+      break
+    fi
+    echo "health/deep check failed with HTTP ${deep_health_status}" >&2
+    cat "${tmpdir}/health-deep.json" >&2
+    exit 1
+  fi
+  echo "  /health/deep: HTTP ${deep_health_status} (${deep_state}); retrying in 15s" >&2
+  sleep 15
+done
 
 stats_status="$(request GET "${FUNCTIONS_BASE_URL}/stats" "" "${tmpdir}/stats.json")"
 if [[ "${stats_status}" != "200" ]]; then
@@ -311,7 +358,7 @@ PY
 
 echo "API smoke passed against ${FUNCTIONS_BASE_URL}"
 echo "  /health: ok (liveness${EXPECTED_COMMIT:+, commit ${EXPECTED_COMMIT}})"
-echo "  /health/deep: ok (db reachable)"
+echo "  /health/deep: ok (${deep_health_note})"
 echo "  /stats: contract ok"
 echo "  /top-potholes: contract ok"
 echo "  /upload-readings: ${summary}"
