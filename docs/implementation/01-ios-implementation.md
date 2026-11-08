@@ -449,119 +449,55 @@ func start(onChange: @escaping (Bool) -> Void) {
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>RoadSense NS records road quality from accelerometer data while you drive so that public road conditions can be mapped. Location is used to tag readings to road segments.</string>
 <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-<string>Background location lets RoadSense NS keep collecting while your phone is locked or the app is in the background during your drive. Data is filtered before upload and never shared with third parties.</string>
+<string>RoadSense NS detects your drives automatically and records road-quality readings in the background, even when the app is closed. Readings inside your privacy zones never leave your phone.</string>
+<key>NSCameraUsageDescription</key>
+<string>RoadSense NS uses the camera so you can photograph a pothole while you are stopped. A photo is taken only when you tap the shutter.</string>
 <key>NSMotionUsageDescription</key>
 <string>Motion and accelerometer data are the core signal used to score road roughness. Nothing leaves your device until processed into anonymized segment readings.</string>
 ```
+
+`RoadSenseNS/Resources/Info.plist` is the shipping plist (Staging and Production). Local Debug uses `Info-Local.plist`, identical except that it adds `NSLocalNetworkUsageDescription` and `NSAppTransportSecurity`/`NSAllowsLocalNetworking`; a parity test fails if the two drift any other way.
 
 **CRITICAL:** any identifier submitted via `BGTaskScheduler.shared.submit(BGTaskRequest(...))` that isn't in `BGTaskSchedulerPermittedIdentifiers` throws at runtime. Keep this list and the `register(...)` calls in the AppDelegate in lock-step — add a unit test that asserts every registered identifier exists in the bundled Info.plist.
 
 ### Privacy Manifest (PrivacyInfo.xcprivacy) — REQUIRED
 
-Apple enforces Required Reason API declarations via the privacy manifest for all App Store submissions since May 2024. Without a `PrivacyInfo.xcprivacy` file in the app bundle, submission will be rejected. Our app uses several Required Reason APIs transitively:
+Apple enforces Required Reason API declarations via the privacy manifest for all App Store submissions since May 2024. The shipped file is `ios/RoadSenseNS/PrivacyInfo.xcprivacy`; XcodeGen copies it into the app bundle's Resources phase.
 
-```xml
-<!-- RoadSenseNS/PrivacyInfo.xcprivacy -->
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>NSPrivacyTracking</key>
-    <false/>
-    <key>NSPrivacyTrackingDomains</key>
-    <array/>
-    <key>NSPrivacyCollectedDataTypes</key>
-    <array>
-        <!-- Coarse/precise location: linked to device token (a random UUID we rotate monthly;
-             Apple considers rotated random IDs "linked" per their Data Collection guidance) -->
-        <dict>
-            <key>NSPrivacyCollectedDataType</key>
-            <string>NSPrivacyCollectedDataTypePreciseLocation</string>
-            <key>NSPrivacyCollectedDataTypeLinked</key>
-            <true/>
-            <key>NSPrivacyCollectedDataTypeTracking</key>
-            <false/>
-            <key>NSPrivacyCollectedDataTypePurposes</key>
-            <array>
-                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
-            </array>
-        </dict>
-    </array>
-    <key>NSPrivacyAccessedAPITypes</key>
-    <array>
-        <!-- UserDefaults (SwiftData + settings): reason CA92.1 -->
-        <dict>
-            <key>NSPrivacyAccessedAPIType</key>
-            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
-            <key>NSPrivacyAccessedAPITypeReasons</key>
-            <array><string>CA92.1</string></array>
-        </dict>
-        <!-- File timestamp (SwiftData persistence): reason C617.1 -->
-        <dict>
-            <key>NSPrivacyAccessedAPIType</key>
-            <string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
-            <key>NSPrivacyAccessedAPITypeReasons</key>
-            <array><string>C617.1</string></array>
-        </dict>
-        <!-- System boot time (thermal/battery correlation logs): reason 35F9.1 -->
-        <dict>
-            <key>NSPrivacyAccessedAPIType</key>
-            <string>NSPrivacyAccessedAPICategorySystemBootTime</string>
-            <key>NSPrivacyAccessedAPITypeReasons</key>
-            <array><string>35F9.1</string></array>
-        </dict>
-        <!-- Disk space (buffer-to-disk sanity checks): reason E174.1 -->
-        <dict>
-            <key>NSPrivacyAccessedAPIType</key>
-            <string>NSPrivacyAccessedAPICategoryDiskSpace</string>
-            <key>NSPrivacyAccessedAPITypeReasons</key>
-            <array><string>E174.1</string></array>
-        </dict>
-    </array>
-</dict>
-</plist>
-```
+What it declares:
 
-**SDK manifests (Apple requires these transitively):**
-- Mapbox Maps iOS SDK v11+: ships its own `PrivacyInfo.xcprivacy` in the xcframework — verify present in SDK release notes
-- Supabase Swift SDK: verify manifest present (they added one in late 2024)
-- Sentry Cocoa SDK ≥ 8.21.0: ships manifest — pin to that or newer in Package.swift
+- `NSPrivacyTracking = false`, empty `NSPrivacyTrackingDomains`.
+- Collected data types, all `Tracking = false` and purpose `AppFunctionality`, matching the App Store Connect labels in [10-app-store-and-testflight-readiness.md](10-app-store-and-testflight-readiness.md#privacy-labels):
+  - linked: `PreciseLocation`, `DeviceID` (random install token), `EmailAddress` (optional, feedback only), `CustomerSupport` (feedback text), `OtherDataTypes` (road-roughness readings)
+  - not linked: `CrashData`, `PerformanceData` (Sentry)
+  - `PhotosorVideos` is deliberately absent while App Store builds ship with `ENABLE_POTHOLE_PHOTOS = NO`
+- Required-reason APIs: only `NSPrivacyAccessedAPICategoryUserDefaults` with `CA92.1`. The app's own code does not call file-timestamp, system-boot-time or disk-space APIs, so those are not declared; SwiftData, Mapbox and Sentry declare their own.
 
-The aggregate privacy report should therefore show:
-- Precise Location from the app manifest above
-- Diagnostics / performance data from Sentry's SDK manifest
+`ReleaseConfigFilesTests` fails if the manifest's data types or linked flags drift from the labels, or if Photos is declared.
 
-**Before every TestFlight upload:** run `xcrun PrivacyReport` on the archive and confirm the manifest aggregates cleanly — missing reasons fail Beta App Review on external testing.
+**SDK manifests:** Mapbox Maps v11 and Sentry Cocoa 8.x ship their own `PrivacyInfo.xcprivacy`; Xcode merges them into the archive's privacy report.
+
+**Before every TestFlight upload:** generate the privacy report from the archive (Xcode Organizer → Generate Privacy Report) and confirm it aggregates cleanly.
+
+### Third-Party SDK Telemetry
+
+- **Mapbox.** Mapbox Maps v11 sends usage and location telemetry unless the `MGLMapboxMetricsEnabled` user default is `false` (its `EventsManager` registers the default as `true` and observes it). `MapboxTelemetryOptOut.apply()` writes `false` as the first line of `RoadSenseNSApp.init`, before `MapboxOptions` or any map view exists, so no Mapbox telemetry is ever sent. There is no in-app switch to turn it back on.
+- **Sentry.** `SentryBootstrapper` turns off network breadcrumbs, failed-request capture, network tracking, screenshots and view-hierarchy attachments. `beforeBreadcrumb` drops `http`/network breadcrumbs and scrubs coordinate-precision numbers from the rest; `beforeSend` reduces `request.url` to scheme and host, drops query strings, headers, cookies, `extra` and `user`, and scrubs coordinates from the message, exception values and breadcrumbs (`PrivacyRedactor`).
 
 ### Background task registration (required at launch)
 
-`BGTaskScheduler` identifiers must be registered **before** `application(_:didFinishLaunchingWithOptions:)` returns, and must also appear in `Info.plist` under `BGTaskSchedulerPermittedIdentifiers`:
+`BackgroundTaskRegistrar.registerAll` runs from `RoadSenseNSApp.init`, before the first scene, for both identifiers listed in `BGTaskSchedulerPermittedIdentifiers`. Handlers are registered with `using: .main` so they run on the main actor (the SwiftData stores and drain coordinator are main-actor types), and each handler sets the BGTask's `expirationHandler` **before** starting work: `BackgroundUploadDrainExecution` does nothing until `start()`, which is called after the handler is installed.
 
-```swift
-// In AppDelegate.application(_:didFinishLaunchingWithOptions:) — before UI setup
-BGTaskScheduler.shared.register(
-    forTaskWithIdentifier: "ca.roadsense.ios.nightly-cleanup",
-    using: nil
-) { task in
-    NightlyCleanupTask().run(task as! BGProcessingTask)
-}
-BGTaskScheduler.shared.register(
-    forTaskWithIdentifier: "ca.roadsense.ios.upload-drain",
-    using: nil
-) { task in
-    UploadDrainTask().run(task as! BGAppRefreshTask)
-}
-```
-
-Tasks are **submitted** via `BGTaskScheduler.shared.submit()` from the places that want them (e.g., after a successful drive ends, submit an upload drain for 15 minutes from now). iOS ultimately decides whether/when to actually run them based on power, network, and usage patterns.
+- `ca.roadsense.ios.upload-drain` — `BGAppRefreshTaskRequest`. Submitted 15 minutes after a drive ends, and whenever the app backgrounds with any pending work (no minimum count). Reschedules itself after each run.
+- `ca.roadsense.ios.nightly-cleanup` — `BGProcessingTaskRequest`, submitted at launch for ~24 h later and rescheduled after every run. Runs the retention sweep below. Because it is a processing task, `UIBackgroundModes` keeps `processing` (alongside `location` and `fetch`).
 
 ### Crash-safe buffering
 
-**Buffer-to-disk every 60s.** `ReadingBuilder` persists its in-progress state to a small `SensorCheckpoint.json` file. On crash, we lose at most 60s of data.
+**Buffer-to-disk every 60s.** `ReadingBuilder` persists its in-progress state to a small `SensorCheckpoint.json` file. On crash, we lose at most 60s of data. The file is written with `.completeFileProtectionUntilFirstUserAuthentication` and never holds an in-zone coordinate: while the latest fix is inside a privacy zone, `latestLocation` and the recent-pothole list are cleared before any checkpoint write. "Delete local data" deletes the checkpoint and every `RecoveredStores/` backup next to the SwiftData store.
 
 ### Task IDs used
 
-- `ca.roadsense.ios.nightly-cleanup` — `BGProcessingTask`, prune readings, battery-history bookkeeping
+- `ca.roadsense.ios.nightly-cleanup` — `BGProcessingTask`, 30-day retention sweep
 - `ca.roadsense.ios.upload-drain` — `BGAppRefreshTask`, attempt upload queue drain
 
 ## SwiftData Schema (client)
@@ -866,7 +802,14 @@ Settings → Uploads wording:
 
 ### Retention & Cleanup
 
-Already specified above: prune uploaded `ReadingRecord` after 30 days, enforced by the `nightly-cleanup` `BGProcessingTask`. The task handler is real but the pruning SQL is stubbed — tracked as a separate backlog item.
+`LocalRetentionSweeper` applies `RetentionPolicy` (30 days) on launch and on every foreground, throttled to once per 6 hours through a `UserDefaults` timestamp, and unthrottled from the `nightly-cleanup` task. One sweep:
+
+- deletes uploaded readings whose `uploadedAt` is older than 30 days
+- deletes privacy-zone and endpoint-trimmed readings (never uploadable) recorded more than 30 days ago
+- deletes `succeeded` / `failedPermanent` upload batches older than 30 days
+- deletes sealed drives older than 30 days that have no readings left
+- never deletes a reading that is still waiting to upload
+- zeroes any legacy privacy-zone row that still carries a coordinate (builds before the count-only change stored them)
 
 ## Endpoint Trimming And Privacy Zones
 
@@ -933,6 +876,15 @@ func shouldDrop(_ reading: ReadingWindow, zones: [PrivacyZone]) -> Bool {
 ```
 
 Run on **every single GPS sample** inside `ReadingBuilder`, not just at window close. If any sample inside the window falls in a zone, drop the entire window. Set `droppedByPrivacyZone = true` locally for user-visible stats ("73 readings filtered by privacy zones this month").
+
+The zone check is the first thing `SensorCoordinator` does with a fix. An in-zone fix:
+
+- is stored only as a count row: latitude/longitude, speed, heading and accuracy are written as zero / unknown
+- never becomes `latestLocation`, a drive session's start or end point, or checkpoint content
+- never opens a drive session; a drive that starts at home opens its session at the first fix outside the zone, which then adopts the earlier count rows
+- pauses pothole detection and motion processing until the next out-of-zone fix
+
+Drive mini-maps frame only upload-eligible points (not privacy-zone, not endpoint-trimmed) and are omitted when a drive has none; the session's start/end coordinates are never used as a fallback.
 
 Order of operations for a completed drive:
 
