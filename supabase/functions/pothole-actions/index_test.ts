@@ -559,3 +559,19 @@ Deno.test("validatePotholeActionPayload bounds accuracy_m to [0, 500]", () => {
         assertEquals(validatePotholeActionPayload({ ...validPayload, accuracy_m }).ok, true, String(accuracy_m));
     }
 });
+
+Deno.test("createPotholeActionRateLimitChecker keys IPv6 clients on their /64", async () => {
+    const keys: unknown[] = [];
+    const checker = createPotholeActionRateLimitChecker(
+        async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
+            keys.push(params.p_key);
+            return { data: true as T, error: null };
+        },
+        () => new Date("2026-11-08T15:30:00Z"),
+    );
+
+    await checker("deadbeef", "2001:db8:abcd:12:1111:2222:3333:4444");
+    await checker("deadbeef", "2001:db8:abcd:12::9");
+
+    assertEquals(keys.filter((key) => key === "pothole-action-ip:2001:db8:abcd:12::/64").length, 2);
+});

@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { createPotholeActionsHandler, type PotholeActionPayload, type PotholeActionResult, type RateLimitResult } from "./handler.ts";
+import { createPotholeActionsHandler, type PotholeActionPayload, type PotholeActionResult } from "./handler.ts";
 import { createPotholeActionRateLimitChecker } from "./runtime.ts";
 import { hashDeviceToken, requireEnv, type RpcResponse } from "../upload-readings/runtime.ts";
 
@@ -45,7 +45,7 @@ async function invokeRpc<T>(fn: string, params: Record<string, unknown>): Promis
 Deno.serve(
     createPotholeActionsHandler({
         hashDeviceToken,
-        checkRateLimit: createPotholeActionRateLimitChecker(invokeRpc) as (tokenHashHex: string, ip: string) => Promise<RateLimitResult>,
+        checkRateLimit: createPotholeActionRateLimitChecker(invokeRpc),
         applyAction: createApplyAction(invokeRpc),
     }),
 );

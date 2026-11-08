@@ -1,6 +1,7 @@
 import { errorResponse, jsonResponse, requestIdFrom } from "../_shared/http.ts";
 import { readBodyWithLimit } from "../_shared/body.ts";
 import { extractClientIp } from "../_shared/clientIp.ts";
+import type { RateLimitResult } from "../_shared/rateLimit.ts";
 
 export { extractClientIp };
 
@@ -53,9 +54,7 @@ export type ValidationResult =
     | { ok: true; payload: FeedbackPayload }
     | { ok: false; fieldErrors: Record<string, string> };
 
-export type RateLimitResult =
-    | { ok: true; retryAfterSeconds: 0 }
-    | { ok: false; retryAfterSeconds: number };
+export type { RateLimitResult };
 
 export type FeedbackHandlerDeps = {
     checkRateLimit: (ip: string) => Promise<RateLimitResult>;

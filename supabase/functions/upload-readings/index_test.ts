@@ -790,3 +790,19 @@ Deno.test("upload handler aborts a chunked body with no Content-Length once it p
     // handful of chunks instead of being drained (10,000 chunks = ~160 MB).
     assertEquals(pulls() < 40, true);
 });
+
+Deno.test("createRateLimitChecker keys IPv6 clients on their /64", async () => {
+    const keys: unknown[] = [];
+    const checker = createRateLimitChecker(
+        async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
+            keys.push(params.p_key);
+            return { data: true as T, error: null };
+        },
+        () => new Date("2026-11-08T15:30:00Z"),
+    );
+
+    await checker("deadbeef", "2001:db8:abcd:12:1111:2222:3333:4444");
+    await checker("deadbeef", "2001:db8:abcd:12::9");
+
+    assertEquals(keys.filter((key) => key === "ip:2001:db8:abcd:12::/64").length, 2);
+});
