@@ -2,7 +2,7 @@
 #
 # Refresh the road network from an OSM snapshot:
 #   download PBF → osm2pgsql → road_segments_staging → sanity checks →
-#   apply_road_segment_refresh() → rematch readings → recompute aggregates.
+#   apply_road_segment_refresh() → finalize_road_segment_refresh() → refresh views.
 #
 # Usage:
 #   DATABASE_URL=postgres://... REGION_KEY=nova-scotia scripts/osm-import.sh [--confirm]
@@ -20,8 +20,9 @@
 #   * apply_road_segment_refresh() itself refuses an empty or >50%-smaller
 #     staging table (migration 20260702121000).
 #
-# The refresh, the rematch and the aggregate recompute run in one transaction:
-# if any step fails, the live network is left unchanged.
+# The refresh and finalize_road_segment_refresh() (rematch, full recompute,
+# contributor marks, pothole re-anchoring) run in one transaction: if any step
+# fails, the live network is left unchanged.
 
 set -euo pipefail
 
@@ -188,36 +189,19 @@ if (( tagged_percent < OSM_MIN_TAGGED_PERCENT )); then
     exit 1
 fi
 
-echo "→ Applying staged refresh, rematching readings, recomputing aggregates (one transaction)"
-# post_osm_refresh_maintenance(), when a migration provides it, owns the
-# post-refresh steps. Otherwise rematch retained readings onto the new
-# segments and recompute every touched or previously-scored segment.
+echo "→ Applying staged refresh and finalizing it (one transaction)"
+# finalize_road_segment_refresh() (migration 20261108090000) rematches retained
+# readings, recomputes every segment with readings or an aggregate, rebuilds
+# contributor marks and re-anchors open potholes. It must run in the same
+# transaction as the merge, or public scores stay on the wrong pavement.
 db --single-transaction <<'SQL'
-SELECT apply_road_segment_refresh();
-
-DO $$
-BEGIN
-    IF to_regprocedure('post_osm_refresh_maintenance()') IS NOT NULL THEN
-        RAISE NOTICE 'running post_osm_refresh_maintenance()';
-        PERFORM post_osm_refresh_maintenance();
-    ELSE
-        RAISE NOTICE 'running rematch_readings_after_segment_refresh() + nightly_recompute_aggregates()';
-        PERFORM nightly_recompute_aggregates(
-            ARRAY(
-                SELECT touched
-                FROM unnest(rematch_readings_after_segment_refresh()) AS touched
-                WHERE touched IS NOT NULL
-                UNION
-                SELECT segment_id FROM segment_aggregates
-            )
-        );
-    END IF;
-END
-$$;
+SELECT * FROM apply_road_segment_refresh();
+SELECT finalize_road_segment_refresh();
 SQL
 
-echo "→ Refreshing public stats"
+echo "→ Refreshing public materialized views"
 db -c "REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv;"
+db -c "REFRESH MATERIALIZED VIEW CONCURRENTLY public_worst_segments_mv;"
 
 echo "→ Refresh complete. Segment count:"
 db -c "SELECT count(*) AS segment_count FROM road_segments;"
