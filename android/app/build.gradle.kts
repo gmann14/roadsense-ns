@@ -93,7 +93,7 @@ android {
             buildConfigField(
                 "boolean",
                 "ENABLE_POTHOLE_PHOTOS",
-                (props.getProperty("ENABLE_POTHOLE_PHOTOS") ?: "true"),
+                (props.getProperty("ENABLE_POTHOLE_PHOTOS") ?: "false"),
             )
             resValue("string", "app_name", props.getProperty("APP_DISPLAY_NAME") ?: "RoadSense NS")
         }
