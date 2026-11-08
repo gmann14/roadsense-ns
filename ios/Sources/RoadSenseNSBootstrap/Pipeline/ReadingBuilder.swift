@@ -23,6 +23,52 @@ public struct LocationSample: Equatable, Sendable, Codable {
         self.speedKmh = speedKmh
         self.headingDegrees = headingDegrees
     }
+
+    /// CoreLocation reports `course < 0` when the heading is unknown (low
+    /// speed, poor fix). Unknown headings are carried as a negative value
+    /// and must never be treated as due north.
+    public var hasValidHeading: Bool {
+        headingDegrees >= 0 && headingDegrees.isFinite
+    }
+
+    /// Sentinel stored for an unknown heading (CoreLocation's convention).
+    public static let unknownHeading: Double = -1
+
+    /// Builds a sample from raw CoreLocation values. Returns `nil` for a fix
+    /// that must be rejected outright: negative horizontal accuracy (CoreLocation's
+    /// "invalid fix" marker) or non-finite coordinates. An invalid course maps
+    /// to `unknownHeading`; an invalid speed (`< 0`) maps to 0.
+    public static func fromCoreLocation(
+        timestamp: TimeInterval,
+        latitude: Double,
+        longitude: Double,
+        horizontalAccuracy: Double,
+        speedMetersPerSecond: Double,
+        courseDegrees: Double
+    ) -> LocationSample? {
+        guard horizontalAccuracy >= 0,
+              horizontalAccuracy.isFinite,
+              latitude.isFinite,
+              longitude.isFinite,
+              (-90...90).contains(latitude),
+              (-180...180).contains(longitude) else {
+            return nil
+        }
+
+        let speedKmh = speedMetersPerSecond.isFinite ? max(speedMetersPerSecond, 0) * 3.6 : 0
+        let heading = courseDegrees.isFinite && courseDegrees >= 0 && courseDegrees < 360
+            ? courseDegrees
+            : unknownHeading
+
+        return LocationSample(
+            timestamp: timestamp,
+            latitude: latitude,
+            longitude: longitude,
+            horizontalAccuracyMeters: horizontalAccuracy,
+            speedKmh: speedKmh,
+            headingDegrees: heading
+        )
+    }
 }
 
 public struct ReadingWindow: Equatable, Sendable, Codable {
@@ -264,7 +310,14 @@ public struct ReadingBuilder: Sendable {
         return earthRadiusMeters * c
     }
 
-    private func weightedHeading(for samples: [LocationSample]) -> Double {
+    /// Speed-weighted circular mean over samples with a known heading.
+    /// Returns `LocationSample.unknownHeading` when no sample has one, so the
+    /// window uploads `heading: null` instead of a fabricated north.
+    private func weightedHeading(for allSamples: [LocationSample]) -> Double {
+        let samples = allSamples.filter(\.hasValidHeading)
+        guard !samples.isEmpty else {
+            return LocationSample.unknownHeading
+        }
         let weights = samples.map { max($0.speedKmh, 0.1) }
         let x = zip(samples, weights).reduce(0.0) { partialResult, pair in
             partialResult + cos(pair.0.headingDegrees * .pi / 180) * pair.1
@@ -277,7 +330,13 @@ public struct ReadingBuilder: Sendable {
         return angle >= 0 ? angle : angle + 360
     }
 
-    private func headingVarianceDegrees(for samples: [LocationSample]) -> Double {
+    /// Unknown-heading samples are excluded: they carry no direction, so they
+    /// can neither prove nor disprove a turn.
+    private func headingVarianceDegrees(for allSamples: [LocationSample]) -> Double {
+        let samples = allSamples.filter(\.hasValidHeading)
+        guard !samples.isEmpty else {
+            return 0
+        }
         let mean = weightedHeading(for: samples)
 
         return samples.reduce(0.0) { partialResult, sample in

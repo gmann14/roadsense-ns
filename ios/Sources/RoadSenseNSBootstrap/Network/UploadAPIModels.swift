@@ -5,7 +5,9 @@ public struct UploadReadingPayload: Codable, Equatable, Sendable {
     public let lng: Double
     public let roughnessRms: Double
     public let speedKmh: Double
-    public let heading: Double
+    /// `nil` when the heading is unknown; always encoded (as JSON `null`)
+    /// because the gateway requires the key to be present.
+    public let heading: Double?
     public let gpsAccuracyM: Double
     public let isPothole: Bool
     public let potholeMagnitude: Double?
@@ -16,7 +18,7 @@ public struct UploadReadingPayload: Codable, Equatable, Sendable {
         lng: Double,
         roughnessRms: Double,
         speedKmh: Double,
-        heading: Double,
+        heading: Double?,
         gpsAccuracyM: Double,
         isPothole: Bool,
         potholeMagnitude: Double?,
@@ -26,7 +28,14 @@ public struct UploadReadingPayload: Codable, Equatable, Sendable {
         self.lng = lng
         self.roughnessRms = roughnessRms
         self.speedKmh = speedKmh
-        self.heading = heading
+        // Negative / out-of-range values are CoreLocation's "unknown course"
+        // sentinel; send null rather than a heading the server would reject
+        // or, worse, read as due north.
+        if let heading, heading.isFinite, heading >= 0, heading < 360 {
+            self.heading = heading
+        } else {
+            self.heading = nil
+        }
         self.gpsAccuracyM = gpsAccuracyM
         self.isPothole = isPothole
         self.potholeMagnitude = potholeMagnitude
@@ -43,6 +52,40 @@ public struct UploadReadingPayload: Codable, Equatable, Sendable {
         case isPothole = "is_pothole"
         case potholeMagnitude = "pothole_magnitude"
         case recordedAt = "recorded_at"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            lat: try container.decode(Double.self, forKey: .lat),
+            lng: try container.decode(Double.self, forKey: .lng),
+            roughnessRms: try container.decode(Double.self, forKey: .roughnessRms),
+            speedKmh: try container.decode(Double.self, forKey: .speedKmh),
+            heading: try container.decodeIfPresent(Double.self, forKey: .heading),
+            gpsAccuracyM: try container.decode(Double.self, forKey: .gpsAccuracyM),
+            isPothole: try container.decode(Bool.self, forKey: .isPothole),
+            potholeMagnitude: try container.decodeIfPresent(Double.self, forKey: .potholeMagnitude),
+            recordedAt: try container.decode(Date.self, forKey: .recordedAt)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(lat, forKey: .lat)
+        try container.encode(lng, forKey: .lng)
+        try container.encode(roughnessRms, forKey: .roughnessRms)
+        try container.encode(speedKmh, forKey: .speedKmh)
+        // Explicit null: the gateway accepts `heading: null` but rejects a
+        // missing key.
+        if let heading {
+            try container.encode(heading, forKey: .heading)
+        } else {
+            try container.encodeNil(forKey: .heading)
+        }
+        try container.encode(gpsAccuracyM, forKey: .gpsAccuracyM)
+        try container.encode(isPothole, forKey: .isPothole)
+        try container.encodeIfPresent(potholeMagnitude, forKey: .potholeMagnitude)
+        try container.encode(recordedAt, forKey: .recordedAt)
     }
 }
 

@@ -140,17 +140,19 @@ final class LocationService: NSObject, LocationServicing {
 
 extension LocationService: @preconcurrency CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        for location in locations where location.horizontalAccuracy >= 0 {
-            let speedKmh = max(location.speed, 0) * 3.6
-            let heading = location.course >= 0 ? location.course : 0
-            let sample = LocationSample(
+        for location in locations {
+            // Rejects invalid fixes (negative horizontal accuracy) and maps an
+            // invalid course to "unknown" instead of due north (P1-4).
+            guard let sample = LocationSample.fromCoreLocation(
                 timestamp: location.timestamp.timeIntervalSince1970,
                 latitude: location.coordinate.latitude,
                 longitude: location.coordinate.longitude,
-                horizontalAccuracyMeters: location.horizontalAccuracy,
-                speedKmh: speedKmh,
-                headingDegrees: heading
-            )
+                horizontalAccuracy: location.horizontalAccuracy,
+                speedMetersPerSecond: location.speed,
+                courseDegrees: location.course
+            ) else {
+                continue
+            }
             bufferedSamples.append(sample)
             bufferedSamples = prunedBufferedSamples(referenceTime: sample.timestamp)
             continuation?.yield(sample)
