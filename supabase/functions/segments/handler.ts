@@ -1,4 +1,5 @@
 import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_SHORT, requestIdFrom } from "../_shared/http.ts";
+import { logHandlerError } from "../_shared/log.ts";
 
 export type SegmentAggregate = {
     avg_roughness_score: number;
@@ -78,7 +79,8 @@ export function createSegmentsHandler(
                 { "cache-control": PUBLIC_JSON_CACHE_CONTROL_SHORT },
                 requestId,
             );
-        } catch {
+        } catch (error) {
+            logHandlerError("segments", requestId, error);
             return errorResponse(
                 "service_unavailable",
                 "Segment lookup failed.",

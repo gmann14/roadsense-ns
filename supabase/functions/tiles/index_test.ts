@@ -98,3 +98,28 @@ Deno.test("tile handler returns 500 when the RPC fails", async () => {
     assertEquals(response.status, 500);
     assertEquals(response.headers.get("x-request-id"), "req-fail");
 });
+
+Deno.test("tile handler logs RPC errors before answering 500", async () => {
+    const handler = createTileHandler({
+        rpcGetTile: async () => ({ data: null, error: { message: "get_tile failed" } }),
+    });
+    const logged: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => logged.push(args.map(String).join(" "));
+    let response: Response;
+    try {
+        response = await handler(
+            new Request("http://localhost/functions/v1/tiles/10/330/370.mvt", { headers: { "x-request-id": "req-tile" } }),
+        );
+    } finally {
+        console.error = originalError;
+    }
+
+    assertEquals(response.status, 500);
+    await response.body?.cancel();
+    assertEquals(logged.length, 1);
+    const entry = JSON.parse(logged[0]);
+    assertEquals(entry.route, "tiles");
+    assertEquals(entry.request_id, "req-tile");
+    assertEquals(entry.error_message, "get_tile failed");
+});

@@ -37,6 +37,20 @@ export function jsonResponse(
     });
 }
 
+// Every 503 tells the client when to come back (review 2026-10-18: "503s
+// without Retry-After"). Handlers with a better estimate (rate-limit window,
+// feature gates) pass their own header; everything else gets this default.
+export const DEFAULT_SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS = 30;
+
+/// Adds the default Retry-After to a 503 that lacks one. Returns the headers
+/// unchanged for any other status.
+export function withServiceUnavailableRetryAfter(status: number, headers: Headers): Headers {
+    if (status === 503 && !headers.has("retry-after")) {
+        headers.set("Retry-After", String(DEFAULT_SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));
+    }
+    return headers;
+}
+
 export function errorResponse(
     error: string,
     message: string,
@@ -53,7 +67,7 @@ export function errorResponse(
             ...extraBody,
         },
         status,
-        extraHeaders,
+        withServiceUnavailableRetryAfter(status, new Headers(extraHeaders)),
         requestId,
     );
 }

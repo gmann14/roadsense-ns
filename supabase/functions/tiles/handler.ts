@@ -1,4 +1,5 @@
 import { requestIdFrom } from "../_shared/http.ts";
+import { logHandlerError } from "../_shared/log.ts";
 
 export const TILE_CONTENT_TYPE = "application/vnd.mapbox-vector-tile";
 export const TILE_CACHE_CONTROL = "public, max-age=3600, s-maxage=3600";
@@ -137,6 +138,7 @@ export function createTileHandler(deps: { rpcGetTile: TileRpc }) {
 
         const { data, error } = await deps.rpcGetTile(tileParams);
         if (error) {
+            logHandlerError("tiles", requestId, error);
             return new Response("error", {
                 status: 500,
                 headers: { "x-request-id": requestId },

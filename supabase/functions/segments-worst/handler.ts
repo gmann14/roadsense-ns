@@ -1,4 +1,5 @@
 import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_MEDIUM, requestIdFrom } from "../_shared/http.ts";
+import { logHandlerError } from "../_shared/log.ts";
 
 export type WorstSegmentRow = {
     rank: number;
@@ -89,7 +90,8 @@ export function createSegmentsWorstHandler(
                 { "cache-control": PUBLIC_JSON_CACHE_CONTROL_MEDIUM },
                 requestId,
             );
-        } catch {
+        } catch (error) {
+            logHandlerError("segments-worst", requestId, error);
             return errorResponse(
                 "service_unavailable",
                 "Worst-segments lookup failed.",

@@ -1,5 +1,6 @@
 import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_MEDIUM, requestIdFrom } from "../_shared/http.ts";
 import type { PotholeRow } from "../potholes/handler.ts";
+import { logHandlerError } from "../_shared/log.ts";
 
 export type { PotholeRow };
 
@@ -43,7 +44,8 @@ export function createTopPotholesHandler(
         try {
             const potholes = await deps.fetchTopPotholes(limit);
             return jsonResponse({ potholes }, 200, { "cache-control": PUBLIC_JSON_CACHE_CONTROL_MEDIUM }, requestId);
-        } catch {
+        } catch (error) {
+            logHandlerError("top-potholes", requestId, error);
             return errorResponse(
                 "service_unavailable",
                 "Top potholes lookup failed.",
