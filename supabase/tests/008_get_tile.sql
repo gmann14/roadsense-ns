@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgtap;
 
-SELECT plan(10);
+SELECT plan(12);
 
 DELETE FROM pothole_reports
 WHERE id = '00000000-0000-0000-0000-000000001801'::UUID;
@@ -9,11 +9,12 @@ DELETE FROM segment_aggregates
 WHERE segment_id IN (
     '00000000-0000-0000-0000-000000001701'::UUID,
     '00000000-0000-0000-0000-000000001702'::UUID,
-    '00000000-0000-0000-0000-000000001703'::UUID
+    '00000000-0000-0000-0000-000000001703'::UUID,
+    '00000000-0000-0000-0000-000000001704'::UUID
 );
 
 DELETE FROM road_segments
-WHERE osm_way_id IN (980001, 980002, 980003);
+WHERE osm_way_id IN (980001, 980002, 980003, 980004);
 
 INSERT INTO road_segments (
     id,
@@ -74,6 +75,21 @@ INSERT INTO road_segments (
         FALSE,
         FALSE,
         90.00
+    ),
+    (
+        '00000000-0000-0000-0000-000000001704',
+        980004,
+        0,
+        ST_GeomFromText('LINESTRING(-63.3006 44.9000,-63.2994 44.9000)', 4326),
+        95.0,
+        'Tile Two Contributor Road',
+        'primary',
+        'asphalt',
+        'Halifax',
+        FALSE,
+        FALSE,
+        FALSE,
+        90.00
     );
 
 INSERT INTO segment_aggregates (
@@ -106,8 +122,8 @@ INSERT INTO segment_aggregates (
         '00000000-0000-0000-0000-000000001702',
         0.920,
         'rough',
-        2,
-        2,
+        3,
+        3,
         'low',
         now() - INTERVAL '2 hours',
         0,
@@ -127,6 +143,19 @@ INSERT INTO segment_aggregates (
         'stable',
         0.700,
         0.690
+    ),
+    (
+        '00000000-0000-0000-0000-000000001704',
+        0.650,
+        'rough',
+        5,
+        2,
+        'low',
+        now() - INTERVAL '3 hours',
+        0,
+        'stable',
+        0.640,
+        0.630
     );
 
 INSERT INTO pothole_reports (
@@ -174,20 +203,43 @@ SELECT cmp_ok(
     octet_length(get_tile(14, 5320, 5912)),
     '>',
     0,
-    'tile containing only low-confidence segments is still emitted for bootstrap visibility'
+    'a low-confidence segment with three distinct contributors is still emitted'
+);
+
+-- P0-5 (2026-10-18 review): the k-anonymity floor is back in get_tile. A
+-- segment driven by fewer than three distinct devices is never published,
+-- whatever its confidence tier or zoom.
+SELECT is(
+    octet_length(get_tile(14, 5311, 5900)),
+    0,
+    'a segment with only two distinct contributors is not published'
 );
 
 SELECT is(
-    octet_length(get_tile(7, 41, 46)),
+    octet_length(get_tile(14, 5263, 5933)),
     0,
-    'zoom levels below 8 return an empty tile'
+    'a single-contributor residential segment is not published even at street zoom'
 );
 
+-- Zoom rules (20260424213000 onward): z < 6 is empty, z 6-11 shows the
+-- arterial network only.
 SELECT cmp_ok(
-    octet_length(get_tile(10, 328, 370)),
+    octet_length(get_tile(7, 41, 46)),
     '>',
     0,
-    'default-zoom tiles include scored local roads'
+    'province-scale z7 tiles include scored arterial segments'
+);
+
+SELECT is(
+    octet_length(get_tile(5, 10, 11)),
+    0,
+    'zoom levels below 6 return an empty tile'
+);
+
+SELECT is(
+    octet_length(get_tile(10, 328, 370)),
+    0,
+    'default-zoom tiles leave out local roads (and sub-k segments)'
 );
 
 SELECT ok(
@@ -201,14 +253,9 @@ SELECT ok(
 );
 
 SELECT ok(
-    position('sa.confidence != ''low''' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) = 0
-    AND position('sa.unique_contributors >= 3' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) = 0,
-    'get_tile no longer suppresses low-confidence bootstrap segments in-function'
-);
-
-SELECT ok(
-    position('quality_corridors' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) > 0,
-    'get_tile emits a continuous corridor layer beneath scored samples'
+    position('sa.unique_contributors >= 3' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) > 0
+    AND position('sa.confidence != ''low''' IN pg_get_functiondef('public.get_tile(integer,integer,integer)'::regprocedure)) = 0,
+    'get_tile enforces the contributor floor in-function but not a confidence floor'
 );
 
 SELECT * FROM finish();
