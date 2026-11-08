@@ -12,6 +12,8 @@ Source of truth for RoadSense NS project work. Keep this public-safe: no secrets
 
 ## Active
 
+- [ ] Work through `docs/reviews/2026-10-18-full-codebase-review.md`, starting with Phase 0: fix the deploy hazards (worker→origin secret, scheduler connection, attestation flag, web KV/queue), then push the 30 unpushed commits and deploy in the documented order. Do not run `migrate-railway.sh` against prod. Next: Android P0s (UUID device token, `nsroadsense.ca` base URL, targetSdk 35+) and privacy P0s (tile k≥3 floor, retention jobs).
+
 - [ ] Reconcile the historical implementation backlog in `docs/implementation/08-implementation-backlog.md` with the current beta/live-web state.
 - [ ] Keep deployment docs and workflows aligned with the current Railway Postgres/PostGIS + Cloudflare/OpenNext stack.
 - [ ] Track beta/TestFlight issues here once external testers start reporting problems.
