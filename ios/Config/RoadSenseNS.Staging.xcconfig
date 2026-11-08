@@ -3,7 +3,10 @@ APP_DISPLAY_NAME = RoadSense NS
 API_BASE_URL = https:/$()/api.nsroadsense.ca
 ROAD_SENSE_APP_BUNDLE_IDENTIFIER = ca.roadsense.ios
 MAPBOX_ACCESS_TOKEN = pk.placeholder.staging
-SUPABASE_ANON_KEY = hwJJrdunK0YQVGIBYzV6LUfosME9ZN9cg7AbE0PJgyYM69eb
+// The real public API key is never committed. Local Staging builds read it
+// from RoadSenseNS.Staging.secrets.xcconfig (see Templates/); CI writes that
+// file from the ROAD_SENSE_PUBLIC_API_KEY secret via fastlane.
+SUPABASE_ANON_KEY = anon.placeholder.staging
 SENTRY_DSN =
 ENABLE_SENTRY = NO
 APP_GROUP_IDENTIFIER = group.ca.roadsense.ios.staging
