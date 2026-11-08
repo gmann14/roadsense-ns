@@ -1,6 +1,6 @@
 # 06 — Security & Privacy
 
-*Last updated: 2026-07-02 (B160 device attestation: threat-model rows, PIPEDA table, deletion policy, and privacy-policy outline updated per [17-device-attestation-and-trust.md](17-device-attestation-and-trust.md))*
+*Last updated: 2026-11-08 (retention schedule, k-anonymity floor and day-granular public timestamps per migrations 20261108100000 and 20261108150000; previous: 2026-07-02 B160 device attestation)*
 
 Covers: PIPEDA compliance checklist, threat model, abuse mitigation, App Store privacy labels, and incident response for privacy-impacting issues.
 
@@ -26,7 +26,7 @@ PIPEDA's 10 Principles, mapped to our implementation:
 | 2. Identifying purposes | App onboarding + privacy policy explicitly state: collect accelerometer + GPS to map road quality; aggregate publicly. |
 | 3. Consent | Opt-in via iOS permission prompts, explicit onboarding screen. Uploads happen automatically on any available network because data volume is small and this is stated up front. |
 | 4. Limiting collection | No PII fields collected. Default endpoint trimming suppresses likely private trip endpoints; GPS inside optional privacy zones is discarded even for explicit pothole actions and photos; device token is pseudonymous and rotated monthly. As of B160, the current token is bound to an anonymous hardware-attested key; past tokens are not linkable — attestation proves "this is a real, undamaged device" once per rotation, not device or user identity, and `attested_devices` never accumulates a rotation history. |
-| 5. Limiting use, disclosure, retention | Raw readings kept 6 months, then deleted (partition drop). Aggregates kept indefinitely. No data sold to third parties at MVP. |
+| 5. Limiting use, disclosure, retention | Raw readings kept 6 months, then deleted (daily purge plus monthly partition drop); a segment whose readings have all aged out loses its public score. Every other table that holds a device hash, a location or an IP has its own limit (see [Retention schedule](#retention-schedule)). Aggregates of still-retained readings are kept. No data sold to third parties at MVP. |
 | 6. Accuracy | Quality filters reject bad GPS; crowdsourced averaging improves over time. "Report repair" path (post-MVP) lets users correct stale data. |
 | 7. Safeguards | TLS for all API calls. Server-side hashing with pepper. Supabase-managed DB with RLS. No service-role keys on client. |
 | 8. Openness | Privacy policy at public URL; open-source repo after launch. |
@@ -44,7 +44,32 @@ What we *can* do if a user asks:
 - Bulk-delete readings from a specific device_token_hash going forward — if the user gives us their current hash we can blacklist it
 - Delete aggregates derived from a single user: impossible by design, but because aggregates are means over many contributors, a single person's contribution is already privacy-diffuse
 
-The 6-month readings partition drop is an automatic, recurring deletion — so every reading a user has ever contributed is deleted within 6 months without any action required.
+The 6-month readings purge is an automatic, recurring deletion — so every reading a user has ever contributed is deleted within 6 months without any action required.
+
+### Retention schedule
+
+What the backend actually deletes, and when (`run_retention_sweeps()`, `purge_expired_readings()` and `drop_old_readings_partitions()` in 20261108150000 / 20260702140000). On Railway the in-process scheduler (`supabase/functions/_shared/scheduler.ts`) runs them; on pg_cron deployments the `cron.job` entries do.
+
+| Data | Holds | Kept for | Job (daily unless noted) |
+|---|---|---|---|
+| `readings` | device token hash, point, time | 6 months by `recorded_at` | `purge-expired-readings` deletes rows past the line and recomputes (or clears) the affected segments; `drop-old-readings-partitions` (monthly on pg_cron) drops whole partitions |
+| `unmatched_readings` | device token hash, point, time | 90 days after receipt, and never past the 6-month reading line | `retention-sweeps` (also purged by `replay-unmatched-readings`) |
+| `pothole_actions` | device token hash, exact point | 6 months by server receive time (`created_at`) | `retention-sweeps` |
+| `pothole_reporter_marks`, `segment_contributor_marks` | device token hash per pothole / segment | 6 months | `retention-sweeps` |
+| `processed_batches` | device token hash, batch id, counts | 180 days | `retention-sweeps` (uploads older than 7 days are rejected anyway, so an older batch id can never be retried) |
+| `token_challenges` | challenge hash, client IP | until 1 hour after expiry (challenges live 5 minutes); hard cap 30 days | `retention-sweeps` |
+| `feedback_submissions.client_ip` | IP of the submitter | 30 days, then set to NULL | `retention-sweeps` |
+| `feedback_submissions` (message, optional reply email) | what the person chose to send | not automatically deleted (owner decision pending) | — |
+| `rate_limits` | per-key request counters | 2 days (the widest window is 24 h) | `retention-sweeps` |
+| `segment_aggregates` | per-segment means and counts | as long as the segment has retained readings; cleared once they all age out | `nightly-aggregate-recompute`, `purge-expired-readings` |
+
+Every run is recorded in `scheduler_job_runs` and `/health/deep` reports the service degraded (HTTP 503) when a job has not succeeded within two intervals plus its timeout, or has failed three times in a row. A failed run is retried after at most 15 minutes.
+
+### Public granularity rules
+
+- **k-anonymity floor.** A segment is never published (vector tiles, worst-segments list, stats bounding boxes, `data_updated_at`) until at least three distinct devices have driven it (`unique_contributors >= 3`). Low *confidence* is presentation only and stays visible above the floor. Aggregate all-province totals (`total_km_mapped`, `total_readings`, `segments_scored`) count every scored segment; they are not attributable to a single trip.
+- **Day-granular timestamps.** Public pothole timestamps (`first_reported_at`, `last_confirmed_at` from `get_potholes_in_bbox` / `get_top_potholes`), `public_worst_segments_mv.last_reading_at` and `/stats` `data_updated_at` are truncated to the UTC day. Coverage tiles no longer carry an `updated_at` attribute. A to-the-second timestamp on a low-traffic road lets an observer time a specific person's drive.
+- **Known remaining exposure.** The coverage tile still has an `emerging` level for segments with one or two contributors (it says "someone drove here recently", without a score). Whether to keep it is an owner decision; until then it is the one public surface below the k floor.
 
 Explain all of the above plainly in the privacy policy and onboarding — don't hide behind "we can't". The honest story is: "we designed it so there's almost nothing to delete, and what exists is automatically deleted within 6 months."
 
@@ -257,6 +282,6 @@ Contact form at `https://nsroadsense.ca/privacy#contact` (or a simple `mailto:`)
 ## Security / Privacy Policy Decisions
 
 - **No certificate pinning in MVP.** Standard TLS is enough for launch; pinning can be added later if the threat model changes.
-- **Always show freshness context in human-readable UI, not per tile.** Segment detail, trust strips, and report pages should expose "updated" timing; vector-tile attributes do not need to carry user-facing disclaimer copy.
+- **Always show freshness context in human-readable UI, not per tile.** Segment detail, trust strips, and report pages should expose "updated" timing at day granularity; vector-tile attributes do not carry timestamps.
 - **Open-data licensing stays deferred until post-launch.** Decide once there is enough real data volume to make the policy concrete.
 - **Write a lightweight PIPEDA privacy impact assessment before any municipal partnership discussion, not as an MVP launch blocker.**
