@@ -15,8 +15,9 @@ export function createPgFetchTopPotholes(sqlOverride?: DB): (limit: number) => P
                     ST_X(geom) AS lng,
                     magnitude,
                     confirmation_count,
-                    first_reported_at,
-                    last_confirmed_at,
+                    -- Public timestamps are day-granular (2026-10-18 review P0-5).
+                    date_trunc('day', first_reported_at) AS first_reported_at,
+                    date_trunc('day', last_confirmed_at) AS last_confirmed_at,
                     status,
                     segment_id
                 FROM pothole_reports
@@ -24,7 +25,7 @@ export function createPgFetchTopPotholes(sqlOverride?: DB): (limit: number) => P
                 ORDER BY
                     confirmation_count DESC,
                     magnitude DESC,
-                    last_confirmed_at DESC
+                    pothole_reports.last_confirmed_at DESC
                 LIMIT LEAST(GREATEST(${limit}::INTEGER, 1), 100)
             ) ranked_potholes
         `) as DbPotholeRow[];

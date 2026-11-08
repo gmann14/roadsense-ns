@@ -334,6 +334,31 @@ Deno.test("pothole action handler maps stale_target to 409", async () => {
     assertEquals((await response.json()).error, "stale_target");
 });
 
+Deno.test("pothole action handler maps SQL recorded_at_out_of_window to 400", async () => {
+    const handler = createPotholeActionsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        applyAction: async () => {
+            throw new Error("recorded_at_out_of_window");
+        },
+    });
+
+    const response = await handler(
+        new Request("http://localhost/functions/v1/pothole-actions", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                ...validPayload,
+                action_type: "confirm_present",
+                pothole_report_id: "123e4567-e89b-12d3-a456-426614174000",
+            }),
+        }),
+    );
+
+    assertEquals(response.status, 400);
+    assertEquals((await response.json()).error, "validation_failed");
+});
+
 // ── P0-2: body-size cap + field whitelisting ──
 
 Deno.test("pothole action handler rejects a payload with declared content-length over the limit before reading body", async () => {

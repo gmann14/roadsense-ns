@@ -40,6 +40,9 @@ type PotholeRow = {
     last_confirmed_at: Date | string;
 };
 
+/** Public k-anonymity floor, kept in step with get_tile (20261108100000). */
+export const MIN_PUBLIC_CONTRIBUTORS = 3;
+
 export function createPgFetchSegmentDetail(sqlOverride?: DB) {
     return async (segmentId: string): Promise<SegmentDetail | null> => {
         const sql = sqlOverride ?? db();
@@ -58,9 +61,14 @@ export function createPgFetchSegmentDetail(sqlOverride?: DB) {
         const aggregates = (await sql`
             SELECT avg_roughness_score, roughness_category, confidence,
                    total_readings, unique_contributors, pothole_count, trend,
-                   score_last_30d, score_30_60d, last_reading_at, updated_at
+                   score_last_30d, score_30_60d,
+                   date_trunc('day', last_reading_at) AS last_reading_at,
+                   date_trunc('day', updated_at) AS updated_at
             FROM segment_aggregates
             WHERE segment_id = ${segmentId}::uuid
+              -- Same k-anonymity floor as get_tile (20261108100000): a segment
+              -- driven by fewer than 3 contributors is not public.
+              AND unique_contributors >= ${MIN_PUBLIC_CONTRIBUTORS}
             LIMIT 1
         `) as AggregateRow[];
 
@@ -69,11 +77,12 @@ export function createPgFetchSegmentDetail(sqlOverride?: DB) {
 
         const potholes = (await sql`
             SELECT id, status, ST_AsGeoJSON(geom)::jsonb AS geom,
-                   confirmation_count, unique_reporters, last_confirmed_at
+                   confirmation_count, unique_reporters,
+                   date_trunc('day', last_confirmed_at) AS last_confirmed_at
             FROM pothole_reports
             WHERE segment_id = ${segmentId}::uuid
               AND status IN ('active', 'resolved')
-            ORDER BY last_confirmed_at DESC
+            ORDER BY pothole_reports.last_confirmed_at DESC
             LIMIT 6
         `) as PotholeRow[];
 

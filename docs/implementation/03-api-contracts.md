@@ -494,9 +494,13 @@ Public global stats for the stats card on the home screen.
     "segments_scored": 28743,
     "active_potholes": 213,
     "municipalities_covered": 4,
+    "data_updated_at": "2026-04-16",
     "generated_at": "2026-04-17T14:00:00Z"
 }
 ```
+
+- `data_updated_at` is a `YYYY-MM-DD` date, or `null`. It is the most recent day any *public* segment (≥3 contributors) received a reading. Use it for "data freshness" UI.
+- `generated_at` is only the time the materialized view was last refreshed, which happens every 5 minutes. It says nothing about how fresh the data is.
 
 Cache-Control: `public, max-age=300`. Computed from a materialized view refreshed every 5 minutes by pg_cron locally/Supabase or by the Railway Deno scheduler in hosted staging/production.
 
@@ -519,6 +523,23 @@ Liveness + basic readiness.
 ```
 
 Unauthenticated. Used by uptime monitoring.
+
+- `commit` comes from `RAILWAY_GIT_COMMIT_SHA`, falling back to `GIT_COMMIT_SHA` and then `GIT_SHA`.
+- `version` comes from `APP_VERSION`.
+- Deploy checks poll `commit` until it equals the deployed git SHA.
+
+### `GET /health/deep`
+
+This is the readiness check. It requires the public API key, and returns `200 {"status":"ok", ...}` or `503 {"status":"degraded", ...}`.
+
+The response includes a `scheduler` block with one entry per job in `scheduler_job_runs`. Each entry's `status` is one of:
+
+- `ok`
+- `pending`: no success yet, but the scheduler has only just started
+- `stale`: the last success is older than the job's allowed interval
+- `failing`: 3 or more consecutive failures
+
+The endpoint returns 503 when any job is `stale` or `failing`, or when the run table can't be read. The scheduled uptime workflow alerts on that 503.
 
 ---
 

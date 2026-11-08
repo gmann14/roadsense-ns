@@ -312,6 +312,18 @@ export function createPotholeActionsHandler(deps: PotholeActionHandlerDeps) {
                 return jsonResponse(result, 200, {}, requestId);
             } catch (error) {
                 const message = error instanceof Error ? error.message : "unknown_error";
+                if (message === "recorded_at_out_of_window") {
+                    // SQL-side guard (20261108130000) for clients whose clock
+                    // drifted past the gateway's own window check.
+                    return errorResponse(
+                        "validation_failed",
+                        "recorded_at is outside the accepted window.",
+                        400,
+                        requestId,
+                        { field_errors: { recorded_at: "must be within 30 days in the past and 5 minutes in the future" } },
+                    );
+                }
+
                 if (message === "stale_target") {
                     return errorResponse(
                         "stale_target",
