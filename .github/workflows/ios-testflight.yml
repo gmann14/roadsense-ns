@@ -108,10 +108,18 @@ jobs:
           chmod 600 "${key_path}"
           echo "APPLE_ASC_API_PRIVATE_KEY_PATH=${key_path}" >> "${GITHUB_ENV}"
 
+      - name: Generate ephemeral keychain password
+        id: keychain_password
+        shell: bash
+        run: |
+          password="$(openssl rand -base64 32)"
+          echo "::add-mask::${password}"
+          echo "password=${password}" >> "$GITHUB_OUTPUT"
+
       - name: Install Apple signing assets
         shell: bash
         env:
-          SIGNING_KEYCHAIN_PASSWORD: ${{ runner.temp }}-${{ github.run_id }}
+          SIGNING_KEYCHAIN_PASSWORD: ${{ steps.keychain_password.outputs.password }}
         run: |
           keychain_path="${RUNNER_TEMP}/roadsense-signing.keychain-db"
           certificate_path="${RUNNER_TEMP}/distribution.p12"
