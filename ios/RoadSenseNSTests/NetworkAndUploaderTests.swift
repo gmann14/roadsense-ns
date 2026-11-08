@@ -256,6 +256,51 @@ final class NetworkAndUploaderTests: XCTestCase {
         }
     }
 
+    // Regression test for the P0 fix: DeviceTokenStore.currentToken used to
+    // insert a DeviceTokenRecord into the caller's ModelContext without
+    // calling save(), so the record never reached disk. Every Uploader call
+    // site creates its own throwaway ModelContext(container) with autosave
+    // off, so a missing save meant every upload minted a brand new random
+    // token — breaking server-side dedupe and the two-device pothole
+    // corroboration gate. This test simulates that exact scenario: two
+    // separate ModelContext instances backed by the same container, as if
+    // two separate upload calls each grabbed their own throwaway context.
+    @MainActor
+    func testDeviceTokenStorePersistsTokenAcrossSeparateModelContexts() throws {
+        let container = try makeInMemoryContainer()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+
+        let firstContext = ModelContext(container)
+        let firstToken = try DeviceTokenStore.currentToken(
+            in: firstContext,
+            now: now,
+            makeUUID: { "first-call-token" }
+        )
+
+        let secondContext = ModelContext(container)
+        let secondToken = try DeviceTokenStore.currentToken(
+            in: secondContext,
+            now: now.addingTimeInterval(5),
+            makeUUID: { "second-call-token" }
+        )
+
+        XCTAssertEqual(firstToken.token, "first-call-token")
+        XCTAssertEqual(
+            secondToken.token,
+            "first-call-token",
+            "the token minted by the first context must have been persisted and reused by the second"
+        )
+        XCTAssertEqual(secondToken.issuedAt, firstToken.issuedAt)
+
+        // A third, independent context must also see exactly one persisted
+        // record — proving the insert was actually saved to the container's
+        // backing store rather than living only in an in-memory context.
+        let thirdContext = ModelContext(container)
+        let allTokens = try thirdContext.fetch(FetchDescriptor<DeviceTokenRecord>())
+        XCTAssertEqual(allTokens.count, 1)
+        XCTAssertEqual(allTokens.first?.token, "first-call-token")
+    }
+
     @MainActor
     func testUploaderDrainOnceMarksBatchSucceeded() async throws {
         let container = try makeInMemoryContainer()
@@ -604,6 +649,83 @@ final class NetworkAndUploaderTests: XCTestCase {
         XCTAssertEqual(batches.first?.attemptCount, 1)
         XCTAssertEqual(batches.first?.firstErrorMessage, URLError(.notConnectedToInternet).localizedDescription)
         XCTAssertEqual(batches.first?.nextAttemptAt, now.addingTimeInterval(1))
+    }
+
+    // Regression test for P1-i1 (docs/reviews/2026-07-02-full-codebase-review.md):
+    // a cancelled URLSession call surfaces as URLError(.cancelled), not
+    // CancellationError, from URLSession.data(for:). Before the fix, only
+    // `catch is CancellationError` was special-cased, so a background-task
+    // expiration mid-upload fell into the generic network-error path,
+    // recording a failed attempt and inflating exponential backoff (up to
+    // 1h) for what was really just the OS reclaiming background time — not a
+    // real network failure. This asserts URLError(.cancelled) is treated the
+    // same as CancellationError: no attempt recorded, no backoff applied,
+    // batch left exactly as markBatchInFlight left it.
+    @MainActor
+    func testUploaderDrainTreatsURLErrorCancelledAsCancellationNotFailure() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        _ = try DeviceTokenStore.currentToken(
+            in: context,
+            now: Date(timeIntervalSince1970: 1_713_000_000),
+            makeUUID: { "device-token" }
+        )
+
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6488,
+                longitude: -63.5752,
+                roughnessRMS: 1.1,
+                speedKMH: 50,
+                heading: 180,
+                gpsAccuracyM: 5,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_713_000_010)
+            )
+        )
+        try context.save()
+
+        let session = makeMockSession()
+        MockURLProtocol.requestHandler = { _ in
+            throw URLError(.cancelled)
+        }
+
+        let endpoints = Endpoints(
+            config: AppConfig(
+                environment: .local,
+                apiBaseURL: URL(string: "http://127.0.0.1:54321")!,
+                mapboxAccessToken: "pk.test",
+                supabaseAnonKey: "anon.test"
+            )
+        )
+        let uploader = Uploader(
+            container: container,
+            potholeActionStore: PotholeActionStore(container: container),
+            potholePhotoStore: PotholePhotoStore(container: container),
+            queueStore: UploadQueueStore(container: container),
+            client: APIClient(endpoints: endpoints, session: session),
+            logger: .upload
+        )
+
+        let now = Date(timeIntervalSince1970: 1_713_000_100)
+        // drainOnce swallows the rethrown CancellationError at the top level
+        // (see Uploader.drainOnce's catch-and-log), so this must not throw
+        // and must not hang.
+        await uploader.drainOnce(now: now)
+
+        let updatedContext = ModelContext(container)
+        let batches = try updatedContext.fetch(FetchDescriptor<UploadBatch>())
+
+        XCTAssertEqual(batches.count, 1)
+        // markBatchInFlight ran before the request; applyFailure must NOT
+        // have run afterward, so the batch stays inFlight with zero attempts
+        // recorded and no backoff/error message written — proving the
+        // cancellation path was taken instead of the network-error path.
+        XCTAssertEqual(batches.first?.status, .inFlight)
+        XCTAssertEqual(batches.first?.attemptCount, 0)
+        XCTAssertNil(batches.first?.firstErrorMessage)
+        XCTAssertNil(batches.first?.nextAttemptAt)
     }
 
     // Regression tests for P0-6 (docs/reviews/2026-06-11-ios-prelaunch-review.md):
@@ -1477,6 +1599,199 @@ final class NetworkAndUploaderTests: XCTestCase {
         )
     }
 
+    // Regression test for the P1 fix: repairFragmentedDriveSessions used to
+    // null out uploadBatchID for every non-uploaded reading in a fragmented
+    // group, including readings already assigned to a pending/inFlight
+    // UploadBatch. That races a suspended drain — if the server responds 200
+    // after repair clears the ID, UploadQueueStore.applySuccess (which looks
+    // readings up by uploadBatchID) finds nothing to mark uploaded, so the
+    // reading silently gets re-batched and re-uploaded (duplication). This
+    // test asserts readings tied to a non-terminal batch are left untouched
+    // by repair while other eligible readings in the same fragmented group
+    // are still recovered normally.
+    @MainActor
+    func testReadingStoreRepairFragmentedDriveSessionsSkipsReadingsInNonTerminalBatch() throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let trimmedAt = Date(timeIntervalSince1970: 2_000)
+        let repairedAt = Date(timeIntervalSince1970: 2_500)
+
+        let session1 = UUID()
+        context.insert(
+            DriveSessionRecord(
+                id: session1,
+                startedAt: Date(timeIntervalSince1970: 1_000),
+                endedAt: Date(timeIntervalSince1970: 1_060),
+                startLatitude: 44.6488,
+                startLongitude: -63.5752,
+                endLatitude: 44.6555,
+                endLongitude: -63.5820,
+                isSealed: true
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6490,
+                longitude: -63.5753,
+                roughnessRMS: 1.0,
+                speedKMH: 42,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_030),
+                driveSessionID: session1,
+                endpointTrimmedAt: trimmedAt
+            )
+        )
+
+        let session2 = UUID()
+        context.insert(
+            DriveSessionRecord(
+                id: session2,
+                startedAt: Date(timeIntervalSince1970: 1_065),
+                endedAt: Date(timeIntervalSince1970: 1_125),
+                startLatitude: 44.6557,
+                startLongitude: -63.5822,
+                endLatitude: 44.6648,
+                endLongitude: -63.5915,
+                isSealed: true
+            )
+        )
+
+        // This reading is in the recoverable "eligible middle" window, but it
+        // is already assigned to an in-flight batch — repair must leave it
+        // completely untouched.
+        let inFlightBatchID = UUID()
+        context.insert(
+            UploadBatch(
+                id: inFlightBatchID,
+                createdAt: Date(timeIntervalSince1970: 1_900),
+                status: .inFlight,
+                readingCount: 1
+            )
+        )
+        let inFlightReadingID = UUID()
+        context.insert(
+            ReadingRecord(
+                id: inFlightReadingID,
+                latitude: 44.6600,
+                longitude: -63.5865,
+                roughnessRMS: 1.1,
+                speedKMH: 48,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_085),
+                driveSessionID: session2,
+                uploadBatchID: inFlightBatchID,
+                endpointTrimmedAt: trimmedAt
+            )
+        )
+
+        // This reading is in the same eligible window but has no batch
+        // assignment — repair should recover it as usual.
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6625,
+                longitude: -63.5892,
+                roughnessRMS: 1.2,
+                speedKMH: 50,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_100),
+                driveSessionID: session2,
+                endpointTrimmedAt: trimmedAt
+            )
+        )
+
+        let session3 = UUID()
+        context.insert(
+            DriveSessionRecord(
+                id: session3,
+                startedAt: Date(timeIntervalSince1970: 1_130),
+                endedAt: Date(timeIntervalSince1970: 1_190),
+                startLatitude: 44.6649,
+                startLongitude: -63.5916,
+                endLatitude: 44.6718,
+                endLongitude: -63.5988,
+                isSealed: true
+            )
+        )
+        context.insert(
+            ReadingRecord(
+                latitude: 44.6716,
+                longitude: -63.5986,
+                roughnessRMS: 0.9,
+                speedKMH: 39,
+                heading: 180,
+                gpsAccuracyM: 4,
+                isPothole: false,
+                potholeMagnitude: nil,
+                recordedAt: Date(timeIntervalSince1970: 1_160),
+                driveSessionID: session3,
+                endpointTrimmedAt: trimmedAt
+            )
+        )
+        try context.save()
+
+        let store = ReadingStore(container: container)
+        let summary = try store.repairFragmentedDriveSessions(
+            now: repairedAt,
+            maximumGapSeconds: 10
+        )
+
+        // Only the untouched reading (44.6625) counts toward eligible/recovered;
+        // the in-flight reading is skipped entirely and must not be counted.
+        XCTAssertEqual(summary.fragmentedGroupCount, 1)
+        XCTAssertEqual(summary.recoveredEligibleReadingCount, 1)
+        XCTAssertEqual(summary.eligibleReadingCount, 1)
+        XCTAssertEqual(summary.trimmedReadingCount, 2)
+
+        let updatedContext = ModelContext(container)
+        let inFlightReading = try XCTUnwrap(
+            try updatedContext.fetch(
+                FetchDescriptor<ReadingRecord>(
+                    predicate: #Predicate { $0.id == inFlightReadingID }
+                )
+            ).first
+        )
+
+        // Untouched: still trimmed, still tied to the in-flight batch, no
+        // uploadReadyAt — repair must not have mutated this reading at all.
+        XCTAssertEqual(inFlightReading.endpointTrimmedAt, trimmedAt)
+        XCTAssertNil(inFlightReading.uploadReadyAt)
+        XCTAssertEqual(inFlightReading.uploadBatchID, inFlightBatchID)
+
+        let recoveredReading = try XCTUnwrap(
+            try updatedContext.fetch(
+                FetchDescriptor<ReadingRecord>(
+                    predicate: #Predicate { $0.latitude == 44.6625 }
+                )
+            ).first
+        )
+        XCTAssertNil(recoveredReading.endpointTrimmedAt)
+        XCTAssertEqual(recoveredReading.uploadReadyAt, repairedAt)
+        XCTAssertNil(recoveredReading.uploadBatchID)
+
+        // The in-flight reading must not appear in pendingUploadCoordinates
+        // either, since it still carries a live uploadBatchID... but that
+        // query only filters on uploadedAt, so assert directly on the model
+        // above is the authoritative check. This also confirms the batch
+        // itself is untouched by repair.
+        let batch = try XCTUnwrap(
+            try updatedContext.fetch(
+                FetchDescriptor<UploadBatch>(
+                    predicate: #Predicate { $0.id == inFlightBatchID }
+                )
+            ).first
+        )
+        XCTAssertEqual(batch.status, .inFlight)
+    }
+
     @MainActor
     func testSensorCoordinatorIgnoresBriefDrivingFalseBlip() async throws {
         let container = try makeInMemoryContainer()
@@ -1727,6 +2042,169 @@ final class NetworkAndUploaderTests: XCTestCase {
         XCTAssertEqual(locationService.stopCount, 1)
         XCTAssertEqual(motionService.stopCount, 1)
         XCTAssertEqual(scheduledDates, [now.addingTimeInterval(15 * 60)])
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    // Regression test for the P2 fix: stopCollection (triggered e.g. by the
+    // driving-false grace period elapsing while parked) used to leave the
+    // last-written checkpoint on disk with wasCollecting: true, because only
+    // stopMonitoring cleared it. If the app were killed and relaunched within
+    // the checkpoint's restore window, the stale checkpoint would resume
+    // full-power GPS + 50Hz motion collection while stationary, needlessly
+    // draining battery. This asserts the checkpoint file is gone as soon as
+    // collection legitimately stops, without waiting for stopMonitoring.
+    @MainActor
+    func testSensorCoordinatorClearsCheckpointWhenCollectionStopsWithoutFullMonitoringStop() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        // A privacy zone force-persists a checkpoint on every sample inside
+        // it (see handleLocationSample), which gives a deterministic way to
+        // seed a checkpoint on disk without waiting on reading-window timing.
+        let zoneLatitude = 44.6488
+        let zoneLongitude = -63.5752
+        context.insert(
+            PrivacyZoneRecord(
+                label: "Home",
+                latitude: zoneLatitude,
+                longitude: zoneLongitude,
+                radiusM: 300,
+                createdAt: Date(timeIntervalSince1970: 1_713_000_000)
+            )
+        )
+        try context.save()
+
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let drivingDetector = StreamDrivingDetector()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+
+        let uploadDrainScheduled = expectation(description: "upload drain scheduled")
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            stopCollectionGracePeriod: .milliseconds(20),
+            nowProvider: { now },
+            scheduleUploadDrain: { _ in uploadDrainScheduled.fulfill() }
+        )
+
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(10))
+        XCTAssertTrue(coordinator.monitoringState.isCollecting)
+
+        // Sample sits inside the privacy zone, forcing a checkpoint write —
+        // simulating the periodic in-drive checkpoint that would otherwise
+        // exist by the time driving stops.
+        locationService.send(
+            LocationSample(
+                timestamp: now.timeIntervalSince1970,
+                latitude: zoneLatitude,
+                longitude: zoneLongitude,
+                horizontalAccuracyMeters: 8,
+                speedKmh: 15,
+                headingDegrees: 180
+            )
+        )
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertNotNil(try checkpointStore.load(maxAge: 30 * 60, now: now))
+
+        // Driving stops; after the grace period, stopCollection runs without
+        // stopMonitoring ever being called.
+        drivingDetector.send(false)
+        await fulfillment(of: [uploadDrainScheduled], timeout: 1.0)
+
+        XCTAssertFalse(coordinator.monitoringState.isCollecting)
+        XCTAssertTrue(coordinator.monitoringState.isMonitoring, "monitoring itself should still be active")
+        XCTAssertNil(
+            try checkpointStore.load(maxAge: 30 * 60, now: now),
+            "stopCollection must clear the checkpoint so a killed-while-parked app does not resume full-power collection on relaunch"
+        )
+
+        coordinator.stopMonitoring()
+        try? checkpointStore.clear()
+    }
+
+    // Regression test for the P2 fix: handleLocationSample set latestLocation
+    // to the raw sample before the privacy-zone check ran, and the
+    // force-persisted checkpoint on a privacy-zone drop could therefore
+    // contain an in-zone (home/work) coordinate written to plain JSON on
+    // disk. Privacy zones are processed on-device and the server must never
+    // see readings near a protected zone — the on-disk checkpoint is a leak
+    // vector the review flagged. This asserts the persisted checkpoint's
+    // latestLocation is nil after a privacy-zone-dropped sample.
+    @MainActor
+    func testSensorCoordinatorRedactsLocationInCheckpointAfterPrivacyZoneDrop() async throws {
+        let container = try makeInMemoryContainer()
+        let context = ModelContext(container)
+        let zoneLatitude = 44.6488
+        let zoneLongitude = -63.5752
+        context.insert(
+            PrivacyZoneRecord(
+                label: "Home",
+                latitude: zoneLatitude,
+                longitude: zoneLongitude,
+                radiusM: 300,
+                createdAt: Date(timeIntervalSince1970: 1_713_000_000)
+            )
+        )
+        try context.save()
+
+        let locationService = CountingLocationService()
+        let motionService = CountingMotionService()
+        let drivingDetector = StreamDrivingDetector()
+        let checkpointStore = try makeIsolatedCheckpointStore()
+        let now = Date(timeIntervalSince1970: 1_713_000_000)
+
+        let coordinator = SensorCoordinator(
+            locationService: locationService,
+            motionService: motionService,
+            drivingDetector: drivingDetector,
+            thermalMonitor: StubThermalMonitor(),
+            privacyZoneStore: PrivacyZoneStore(container: container),
+            readingStore: ReadingStore(container: container),
+            logger: .app,
+            checkpointStore: checkpointStore,
+            nowProvider: { now },
+            scheduleUploadDrain: { _ in }
+        )
+
+        coordinator.startMonitoring()
+        try? await Task.sleep(for: .milliseconds(10))
+        drivingDetector.send(true)
+        try? await Task.sleep(for: .milliseconds(10))
+        XCTAssertTrue(coordinator.monitoringState.isCollecting)
+
+        // Sample sits inside the privacy zone radius, so it must be dropped
+        // and the checkpoint force-persisted with a redacted location.
+        locationService.send(
+            LocationSample(
+                timestamp: now.timeIntervalSince1970,
+                latitude: zoneLatitude,
+                longitude: zoneLongitude,
+                horizontalAccuracyMeters: 8,
+                speedKmh: 15,
+                headingDegrees: 180
+            )
+        )
+        try? await Task.sleep(for: .milliseconds(20))
+
+        let checkpoint = try checkpointStore.load(maxAge: 30 * 60, now: now)
+        XCTAssertNotNil(checkpoint, "a checkpoint should still be written after the privacy-zone drop")
+        XCTAssertNil(
+            checkpoint?.latestLocation,
+            "the in-zone coordinate must never be persisted to the on-disk checkpoint"
+        )
 
         coordinator.stopMonitoring()
         try? checkpointStore.clear()

@@ -29,6 +29,21 @@ struct PotholeDetectorTests {
         #expect(detector.ingest(verticalAccelerationG: 2.3, currentLocation: loc)?.magnitudeG == 2.3)
     }
 
+    @Test("ignores implausible spikes above the gateway's 8G cap (dropped phone)")
+    func ignoresDropImpactSpikes() {
+        var detector = PotholeDetector()
+        let loc = Self.location()
+
+        for _ in 0..<45 {
+            #expect(detector.ingest(verticalAccelerationG: 0.1, currentLocation: loc) == nil)
+        }
+
+        // Free-fall reads as a deep dip, the floor impact as a huge spike.
+        #expect(detector.ingest(verticalAccelerationG: -1.0, currentLocation: loc) == nil)
+        #expect(detector.ingest(verticalAccelerationG: 12.0, currentLocation: loc) == nil)
+        #expect(detector.ingest(verticalAccelerationG: PotholeDetector.maxPlausibleSpikeG, currentLocation: loc)?.magnitudeG == PotholeDetector.maxPlausibleSpikeG)
+    }
+
     @Test("emits a candidate for a moderate hit (1.2G after a -0.4G dip)")
     func emitsCandidateForModerateHit() {
         // Reflects what a typical NS pothole strike at 60 km/h looks like

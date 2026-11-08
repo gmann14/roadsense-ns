@@ -43,6 +43,13 @@ enum DeviceTokenStore {
             expiresAt: resolved.expiresAt
         )
         context.insert(record)
+
+        // Every caller passes in a throwaway ModelContext (autosave off), so
+        // without an explicit save the inserted/rotated record never reaches
+        // disk — the next call in a fresh context re-mints a new token every
+        // time, breaking server-side dedupe and the two-device pothole
+        // corroboration gate (see docs/reviews prelaunch review P0).
+        try context.save()
         return record
     }
 }

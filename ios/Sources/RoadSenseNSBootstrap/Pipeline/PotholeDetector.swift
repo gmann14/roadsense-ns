@@ -50,6 +50,12 @@ public struct PotholeDetector: Sendable {
     public var dipThresholdG: Double = -0.3
     public var historyWindowSize: Int = 50
     public var dipLookbackSampleCount: Int = 5
+    /// Spikes above this are physically implausible for a tyre strike and
+    /// almost always mean the phone was dropped or knocked off its mount
+    /// (free-fall reads as the "dip", the impact as the "spike"). It matches
+    /// the gateway's `POTHOLE_MAGNITUDE_MAX_G`, which rejects the whole batch
+    /// with a permanent 400 for any reading above it.
+    public static let maxPlausibleSpikeG: Double = 8.0
 
     private var history: [Double] = []
 
@@ -73,7 +79,8 @@ public struct PotholeDetector: Sendable {
             history.removeFirst(history.count - historyWindowSize)
         }
 
-        guard verticalAccelerationG > spikeThresholdG else {
+        guard verticalAccelerationG > spikeThresholdG,
+              verticalAccelerationG <= Self.maxPlausibleSpikeG else {
             return nil
         }
 

@@ -104,6 +104,12 @@ public enum QueuePreparationDecision: Equatable, Sendable {
 }
 
 public enum UploadQueueCore {
+    /// Readings per batch. The gateway accepts up to 1,000 readings and a
+    /// 256 KiB body, but a full-precision 1,000-reading batch measures
+    /// ~237 KB — too close to the byte cap. 500 keeps every batch at roughly
+    /// half the cap, so a 413 can only mean a server/proxy misconfiguration.
+    public static let maxReadingsPerBatch = 500
+
     public static func prepareNextBatch(
         pendingReadings: [QueueReadingRecord],
         existingBatch: QueueUploadBatch?,
@@ -134,7 +140,7 @@ public enum UploadQueueCore {
             return .none
         }
 
-        let selectedIDs = Set(unassigned.prefix(1_000).map(\.id))
+        let selectedIDs = Set(unassigned.prefix(maxReadingsPerBatch).map(\.id))
         let batchID = makeBatchID()
         let updatedReadings = pendingReadings.map { reading in
             selectedIDs.contains(reading.id) ? reading.assigning(batchID: batchID) : reading

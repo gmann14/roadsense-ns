@@ -5,7 +5,7 @@ import Testing
 
 @Suite("Upload queue core")
 struct UploadQueueCoreTests {
-    @Test("creates a new batch from at most 1000 pending readings")
+    @Test("creates a new batch from at most maxReadingsPerBatch pending readings")
     func createsBatchWithLimit() {
         let now = Date(timeIntervalSince1970: 1_000)
         let readings = (0..<1_200).map { _ in QueueReadingRecord() }
@@ -26,9 +26,10 @@ struct UploadQueueCoreTests {
         let unassignedCount = updatedReadings.filter { $0.uploadBatchID == nil }.count
 
         #expect(batch.id.uuidString == "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")
-        #expect(batch.readingCount == 1_000)
-        #expect(assignedCount == 1_000)
-        #expect(unassignedCount == 200)
+        #expect(UploadQueueCore.maxReadingsPerBatch == 500)
+        #expect(batch.readingCount == UploadQueueCore.maxReadingsPerBatch)
+        #expect(assignedCount == UploadQueueCore.maxReadingsPerBatch)
+        #expect(unassignedCount == 1_200 - UploadQueueCore.maxReadingsPerBatch)
     }
 
     @Test("reuses an existing retry batch instead of minting a new id")

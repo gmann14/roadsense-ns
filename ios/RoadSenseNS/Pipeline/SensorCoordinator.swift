@@ -294,6 +294,15 @@ final class SensorCoordinator {
         sealCurrentDriveSessionIfNeeded()
         lastCollectionStoppedAt = nowProvider()
         stopServicesAndReset()
+        // Without this, a checkpoint written with wasCollecting: true survives
+        // on disk after collection legitimately stops (e.g. driving-false
+        // grace period elapses while parked). If the app is then killed and
+        // relaunched within the checkpoint's restore window, restoreCheckpointIfAvailable
+        // reads the stale wasCollecting: true and resumes full-power GPS +
+        // 50Hz motion collection while stationary, draining battery for no
+        // reason. stopMonitoring already clears the checkpoint on its path;
+        // this mirrors that for the stopCollection-only path.
+        try? checkpointStore.clear()
         logger.info("sensor collection stopped")
         scheduleUploadDrain(nowProvider().addingTimeInterval(15 * 60))
     }
@@ -341,7 +350,7 @@ final class SensorCoordinator {
             readingBuilder = ReadingBuilder()
             potholeDetector = PotholeDetector()
             recentPotholes = []
-            persistCheckpointIfNeeded(force: true)
+            persistCheckpointIfNeeded(force: true, redactLocation: true)
             return
         }
 
@@ -450,16 +459,21 @@ final class SensorCoordinator {
         }
     }
 
-    private func persistCheckpointIfNeeded(force: Bool) {
+    private func persistCheckpointIfNeeded(force: Bool, redactLocation: Bool = false) {
         let now = nowProvider()
         if !force, let lastCheckpointAt, now.timeIntervalSince(lastCheckpointAt) < 60 {
             return
         }
 
+        // Privacy zones are processed on-device and the server must never see
+        // readings near a protected zone (home/work). The checkpoint file is
+        // plain JSON on disk, so an in-zone coordinate must never be written
+        // to it even though `latestLocation` itself stays populated in memory
+        // for pothole-candidate geofencing during the current run.
         let checkpoint = SensorCheckpoint(
             savedAt: now,
             wasCollecting: isCollecting,
-            latestLocation: latestLocation,
+            latestLocation: redactLocation ? nil : latestLocation,
             recentPotholes: recentPotholes,
             readingBuilder: readingBuilder.snapshot(),
             potholeDetector: potholeDetector.snapshot()

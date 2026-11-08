@@ -35,6 +35,59 @@ struct UploadPolicyTests {
         #expect(fifth == .retry(afterSeconds: 16))
     }
 
+    // Regression tests for the P2 fix: 401/403/408/413 used to fall through
+    // to the `default: .failedPermanent` case, stranding a batch behind the
+    // manual retry button on what is often a transient gateway misconfig
+    // (e.g. commit 8e6de8b, where the production gateway required an apikey
+    // header on /health) rather than a genuine per-device rejection.
+    @Test("401 retries instead of failing permanently")
+    func unauthorizedRetries() {
+        let first = UploadPolicy.evaluate(.http(statusCode: 401, retryAfterSeconds: nil), attemptNumber: 1)
+        let third = UploadPolicy.evaluate(.http(statusCode: 401, retryAfterSeconds: nil), attemptNumber: 3)
+
+        #expect(first == .retry(afterSeconds: 1))
+        #expect(third == .retry(afterSeconds: 4))
+    }
+
+    @Test("403 retries instead of failing permanently")
+    func forbiddenRetries() {
+        let disposition = UploadPolicy.evaluate(.http(statusCode: 403, retryAfterSeconds: nil), attemptNumber: 1)
+
+        #expect(disposition == .retry(afterSeconds: 1))
+    }
+
+    @Test("408 retries instead of failing permanently")
+    func requestTimeoutRetries() {
+        let disposition = UploadPolicy.evaluate(.http(statusCode: 408, retryAfterSeconds: nil), attemptNumber: 1)
+
+        #expect(disposition == .retry(afterSeconds: 1))
+    }
+
+    @Test("413 retries instead of failing permanently")
+    func payloadTooLargeRetries() {
+        let disposition = UploadPolicy.evaluate(.http(statusCode: 413, retryAfterSeconds: nil), attemptNumber: 1)
+
+        #expect(disposition == .retry(afterSeconds: 1))
+    }
+
+    @Test("401/403/408/413 never become permanent even after many attempts")
+    func gatewayAndTransportStatusCodesNeverBecomePermanent() {
+        for statusCode in [401, 403, 408, 413] {
+            let disposition = UploadPolicy.evaluate(
+                .http(statusCode: statusCode, retryAfterSeconds: nil),
+                attemptNumber: 50
+            )
+            #expect(disposition == .retry(afterSeconds: UploadPolicy.maxRetryDelaySeconds))
+        }
+    }
+
+    @Test("422 still fails permanently as a genuine validation rejection")
+    func unprocessableEntityStillFailsPermanently() {
+        let disposition = UploadPolicy.evaluate(.http(statusCode: 422, retryAfterSeconds: nil), attemptNumber: 1)
+
+        #expect(disposition == .failedPermanent)
+    }
+
     @Test("429 respects Retry-After when present")
     func rateLimitUsesRetryAfter() {
         let disposition = UploadPolicy.evaluate(.http(statusCode: 429, retryAfterSeconds: 3600), attemptNumber: 2)

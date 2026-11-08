@@ -304,6 +304,23 @@ final class ReadingStore {
             )
         )
 
+        // Readings currently assigned to a batch that is still pending or
+        // in flight must be left untouched. Clearing uploadBatchID out from
+        // under an in-flight upload races UploadQueueStore.applySuccess
+        // (which looks readings up by uploadBatchID): if the server responds
+        // 200 after repair has already cleared the ID, applySuccess finds no
+        // matching readings, they never get marked uploaded, and they get
+        // silently re-batched and re-uploaded — duplicating data server-side.
+        let nonTerminalBatchIDs = Set(
+            try context.fetch(
+                FetchDescriptor<UploadBatch>(
+                    predicate: #Predicate {
+                        $0.statusRawValue == "pending" || $0.statusRawValue == "inFlight"
+                    }
+                )
+            ).map(\.id)
+        )
+
         var recoveredEligibleCount = 0
         var eligibleCount = 0
         var trimmedCount = 0
@@ -323,6 +340,11 @@ final class ReadingStore {
             for reading in readings where reading.droppedByPrivacyZone == false {
                 guard let driveSessionID = reading.driveSessionID,
                       sessionIDs.contains(driveSessionID) else {
+                    continue
+                }
+
+                if let uploadBatchID = reading.uploadBatchID,
+                   nonTerminalBatchIDs.contains(uploadBatchID) {
                     continue
                 }
 

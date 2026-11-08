@@ -33,6 +33,20 @@ public enum UploadPolicy {
         case let .http(statusCode, _) where statusCode == 404:
             return .retry(afterSeconds: backoffDelay(attemptNumber: attemptNumber))
 
+        // 401/403 are frequently a transient gateway/apikey misconfiguration
+        // rather than a genuine per-device rejection (see commit 8e6de8b,
+        // where the production gateway required an apikey header on every
+        // route including /health) — stranding the batch behind the manual
+        // retry button would silently drop data until a human notices. 408
+        // (request timeout) is transport-level. 413 can only be a
+        // server/proxy limit misconfiguration because client batches are
+        // capped at `UploadQueueCore.maxReadingsPerBatch` (about half the
+        // gateway's 256 KiB body cap), so it retries with capped backoff and
+        // self-heals once the server is fixed. Only genuine validation 4xx
+        // (400, 422, etc.) stay permanent.
+        case let .http(statusCode, _) where [401, 403, 408, 413].contains(statusCode):
+            return .retry(afterSeconds: backoffDelay(attemptNumber: attemptNumber))
+
         case let .http(statusCode, retryAfterSeconds) where statusCode == 429:
             return .retry(afterSeconds: retryAfterSeconds ?? 60)
 

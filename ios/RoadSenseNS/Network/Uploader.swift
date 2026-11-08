@@ -3,6 +3,22 @@ import SwiftData
 
 private let uploaderNowProvider: @Sendable () -> Date = { Date() }
 
+/// Background task expiration (e.g. BGTask expiration via
+/// BackgroundTaskRegistrar) cancels the in-flight `URLSession` task, which
+/// surfaces as `URLError(.cancelled)` — NOT `CancellationError` — from
+/// `URLSession.data(for:)`. Treating that as a generic network failure would
+/// call `applyFailure`, permanently inflating a batch's exponential backoff
+/// every time a background task simply ran out of time mid-upload.
+private func isCancellation(_ error: Error) -> Bool {
+    if error is CancellationError {
+        return true
+    }
+    if let urlError = error as? URLError, urlError.code == .cancelled {
+        return true
+    }
+    return Task.isCancelled
+}
+
 @MainActor
 final class Uploader: UploadDrainPerforming {
     private let container: ModelContainer
@@ -98,7 +114,7 @@ final class Uploader: UploadDrainPerforming {
                 heading: $0.heading,
                 gpsAccuracyM: $0.gpsAccuracyM,
                 isPothole: $0.isPothole,
-                potholeMagnitude: $0.potholeMagnitude,
+                potholeMagnitude: $0.potholeMagnitude.map { min($0, PotholeDetector.maxPlausibleSpikeG) },
                 recordedAt: $0.recordedAt
             )
         }
@@ -110,9 +126,10 @@ final class Uploader: UploadDrainPerforming {
                 deviceToken: deviceToken,
                 readings: readings
             )
-        } catch is CancellationError {
-            throw CancellationError()
         } catch {
+            if isCancellation(error) {
+                throw CancellationError()
+            }
             let now = nowProvider()
             let attemptResult = UploadAttemptResult.networkError
             let disposition = UploadPolicy.evaluate(attemptResult, attemptNumber: batch.attemptCount + 1)
@@ -168,9 +185,10 @@ final class Uploader: UploadDrainPerforming {
                 deviceToken: deviceToken,
                 now: nowProvider()
             )
-        } catch is CancellationError {
-            throw CancellationError()
         } catch {
+            if isCancellation(error) {
+                throw CancellationError()
+            }
             let now = nowProvider()
             let attemptResult = UploadAttemptResult.networkError
             let disposition = UploadPolicy.evaluate(attemptResult, attemptNumber: action.uploadAttemptCount + 1)
@@ -223,9 +241,10 @@ final class Uploader: UploadDrainPerforming {
                 deviceToken: deviceToken,
                 now: nowProvider()
             )
-        } catch is CancellationError {
-            throw CancellationError()
         } catch {
+            if isCancellation(error) {
+                throw CancellationError()
+            }
             let now = nowProvider()
             let attemptResult = UploadAttemptResult.networkError
             let disposition = UploadPolicy.evaluate(attemptResult, attemptNumber: report.uploadAttemptCount + 1)
@@ -248,9 +267,10 @@ final class Uploader: UploadDrainPerforming {
                     fileURL: report.photoFileURL,
                     uploadURL: response.uploadURL
                 )
-            } catch is CancellationError {
-                throw CancellationError()
             } catch {
+                if isCancellation(error) {
+                    throw CancellationError()
+                }
                 let now = nowProvider()
                 let attemptResult = UploadAttemptResult.networkError
                 let disposition = UploadPolicy.evaluate(attemptResult, attemptNumber: report.uploadAttemptCount + 1)
