@@ -32,9 +32,19 @@ export function createFakeVerifyAttestation(): VerifyAttestation {
             return { ok: false, reason: "malformed_attestation" };
         }
 
+        // The handler already restricts key_id to base64/base64url, but the
+        // verifier contract says "don't throw for expected failures", so a
+        // value btoa() can't encode is a verification failure, not a 503.
+        let publicKey: string;
+        try {
+            publicKey = btoa(`fake-public-key:${params.keyId}`);
+        } catch {
+            return { ok: false, reason: "malformed_key_id" };
+        }
+
         return {
             ok: true,
-            publicKey: btoa(`fake-public-key:${params.keyId}`),
+            publicKey,
             signCount: 0,
             trustTier: "unverified",
         };

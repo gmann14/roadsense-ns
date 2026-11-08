@@ -51,11 +51,11 @@ import {
 } from "./segments-worst/pgRuntime.ts";
 
 import {
+    attestationGate,
     createDeviceTokenChallengeHandler,
     createDeviceTokenRedeemHandler,
-    type RateLimitResult as DeviceTokenChallengeRateLimitResult,
 } from "./device-tokens/handler.ts";
-import { createChallengeRateLimitChecker } from "./device-tokens/runtime.ts";
+import { createChallengeRateLimitChecker, createRedeemRateLimitChecker } from "./device-tokens/runtime.ts";
 import {
     createPgIssueChallenge,
     createPgIssueDeviceToken,
@@ -130,29 +130,32 @@ export const ROUTES = [
     // Device attestation (B160): challenge issuance + token redemption. Real
     // attestation verification is stubbed (createFakeVerifyAttestation) until
     // B161 (App Attest) / B163 (Play Integrity) supply real implementations
-    // -- see docs/implementation/17-device-attestation-and-trust.md.
+    // -- see docs/implementation/17-device-attestation-and-trust.md. Both
+    // routes answer 503 attestation_disabled unless ATTESTATION_ENABLED=true
+    // so the fake verifier can't mint tokens in production by default.
     // More specific path first per the routing convention documented in
     // _shared/routes.ts (matters for URLPattern ordering elsewhere; harmless
     // here since these are disjoint literal paths, but kept consistent).
     route(
         "/functions/v1/device-tokens/challenge",
-        lazy(() => {
+        attestationGate(lazy(() => {
             const rpc = createPgRpc();
             return createDeviceTokenChallengeHandler({
-                checkRateLimit: createChallengeRateLimitChecker(rpc) as (ip: string) => Promise<DeviceTokenChallengeRateLimitResult>,
+                checkRateLimit: createChallengeRateLimitChecker(rpc),
                 issueChallenge: createPgIssueChallenge(),
             });
-        }),
+        })),
     ),
     route(
         "/functions/v1/device-tokens",
-        lazy(() =>
+        attestationGate(lazy(() =>
             createDeviceTokenRedeemHandler({
+                checkRateLimit: createRedeemRateLimitChecker(createPgRpc()),
                 verifyAttestation: createFakeVerifyAttestation(),
                 redeemChallenge: createPgRedeemChallenge(),
                 issueDeviceToken: createPgIssueDeviceToken(),
             })
-        ),
+        )),
     ),
     route("/functions/v1/stats", lazy(() => createStatsHandler({ fetchStats: createPgFetchStats() }))),
     route(

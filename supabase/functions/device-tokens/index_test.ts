@@ -1,5 +1,7 @@
 import { assertEquals, assertObjectMatch } from "jsr:@std/assert";
 import {
+    ATTESTATION_DISABLED_RETRY_AFTER_SECONDS,
+    attestationGate,
     createDeviceTokenChallengeHandler,
     createDeviceTokenRedeemHandler,
     MAX_PAYLOAD_BYTES,
@@ -7,7 +9,9 @@ import {
     type AttestationVerification,
     type RedeemChallengeResult,
 } from "./handler.ts";
-import { createChallengeRateLimitChecker } from "./runtime.ts";
+import { createChallengeRateLimitChecker, createRedeemRateLimitChecker } from "./runtime.ts";
+import { createFakeVerifyAttestation } from "./fakeVerifier.ts";
+import type { RateLimitResult } from "../_shared/rateLimit.ts";
 import type { RpcResponse } from "../upload-readings/runtime.ts";
 import { endlessChunkedPost, unexpectedCall } from "../_shared/test_helpers.ts";
 
@@ -188,6 +192,7 @@ Deno.test("createChallengeRateLimitChecker uses the device-token-challenge-ip pr
 // ── POST /functions/v1/device-tokens (redeem) ───────────────────────────
 
 function makeRedeemHandler(overrides: {
+    checkRateLimit?: (ip: string) => Promise<RateLimitResult>;
     verifyAttestation?: (
         platform: string,
         params: { keyId: string; attestationObject: string; challenge: string },
@@ -202,6 +207,7 @@ function makeRedeemHandler(overrides: {
     }) => Promise<{ device_token: string; expires_at: string }>;
 } = {}) {
     return createDeviceTokenRedeemHandler({
+        checkRateLimit: overrides.checkRateLimit ?? (async () => ({ ok: true, retryAfterSeconds: 0 })),
         verifyAttestation: overrides.verifyAttestation ?? (async () => ({
             ok: true,
             publicKey: "dGVzdC1wdWJsaWMta2V5",
@@ -488,6 +494,7 @@ Deno.test("guard: attested_devices upsert always supplies a hashed key_id_hash, 
 
 Deno.test("device-tokens redeem handler aborts a chunked body with no Content-Length once it passes the byte cap", async () => {
     const handler = createDeviceTokenRedeemHandler({
+        checkRateLimit: unexpectedCall("checkRateLimit"),
         verifyAttestation: unexpectedCall("verifyAttestation"),
         redeemChallenge: unexpectedCall("redeemChallenge"),
         issueDeviceToken: unexpectedCall("issueDeviceToken"),
@@ -502,3 +509,132 @@ Deno.test("device-tokens redeem handler aborts a chunked body with no Content-Le
     // handful of chunks instead of being drained (10,000 chunks = ~160 MB).
     assertEquals(pulls() < 40, true);
 });
+
+// ── Review 2026-10-18: attestation gate, redeem rate limit, key_id charset ──
+
+function redeemRequest(payload: Record<string, unknown>, headers: Record<string, string> = {}): Request {
+    return new Request("http://localhost/functions/v1/device-tokens", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify(payload),
+    });
+}
+
+Deno.test("redeem handler rejects a non-Latin-1 key_id with 400 before consuming the challenge", async () => {
+    let challengeConsumed = false;
+    const handler = createDeviceTokenRedeemHandler({
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        verifyAttestation: createFakeVerifyAttestation(),
+        redeemChallenge: async () => {
+            challengeConsumed = true;
+            return { ok: true };
+        },
+        issueDeviceToken: unexpectedCall("issueDeviceToken"),
+    });
+
+    const response = await handler(redeemRequest({ ...validRedeemPayload, key_id: "ключ-🔑" }));
+
+    assertEquals(response.status, 400);
+    const body = await response.json();
+    assertEquals(body.error, "validation_failed");
+    assertEquals(typeof body.field_errors.key_id, "string");
+    assertEquals(challengeConsumed, false);
+});
+
+Deno.test("validateDeviceTokenRedeemPayload bounds key_id and challenge to base64-style strings", () => {
+    for (
+        const [field, value] of [
+            ["key_id", "not base64!"],
+            ["key_id", "a".repeat(513)],
+            ["challenge", "has+plus"],
+            ["challenge", "a".repeat(129)],
+        ] as const
+    ) {
+        const result = validateDeviceTokenRedeemPayload({ ...validRedeemPayload, [field]: value });
+        assertEquals(result.ok, false, `${field}=${value.slice(0, 20)}`);
+    }
+    assertEquals(validateDeviceTokenRedeemPayload({ ...validRedeemPayload, key_id: "ab+/cd==" }).ok, true);
+});
+
+Deno.test("fake verifier reports an unencodable key id as a failure instead of throwing", async () => {
+    const verify = createFakeVerifyAttestation();
+    const result = await verify("ios", { keyId: "ключ", attestationObject: "YQ", challenge: "Yw" });
+    assertEquals(result, { ok: false, reason: "malformed_key_id" });
+});
+
+Deno.test("redeem handler returns 429 with Retry-After and never touches the challenge when IP-limited", async () => {
+    let seenIp = "";
+    const handler = makeRedeemHandler({
+        checkRateLimit: async (ip) => {
+            seenIp = ip;
+            return { ok: false, retryAfterSeconds: 1200 };
+        },
+        redeemChallenge: unexpectedCall("redeemChallenge"),
+        verifyAttestation: unexpectedCall("verifyAttestation"),
+    });
+
+    const response = await handler(redeemRequest(validRedeemPayload, { "x-forwarded-for": "203.0.113.44" }));
+
+    assertEquals(response.status, 429);
+    assertEquals(response.headers.get("Retry-After"), "1200");
+    assertEquals((await response.json()).error, "rate_limited");
+    assertEquals(seenIp, "203.0.113.44");
+});
+
+Deno.test("createRedeemRateLimitChecker uses the device-token-redeem-ip prefix and 30/hr limit", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const checker = createRedeemRateLimitChecker(
+        async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
+            calls.push(params);
+            return { data: true as T, error: null };
+        },
+        () => new Date("2026-07-02T18:00:00Z"),
+    );
+
+    assertEquals(await checker("203.0.113.30"), { ok: true, retryAfterSeconds: 0 });
+    assertEquals(calls[0].p_key, "device-token-redeem-ip:203.0.113.30");
+    assertEquals(calls[0].p_limit, 30);
+});
+
+function withAttestationEnv(value: string | undefined, body: () => Promise<void>): Promise<void> {
+    const previous = Deno.env.get("ATTESTATION_ENABLED");
+    if (value === undefined) Deno.env.delete("ATTESTATION_ENABLED");
+    else Deno.env.set("ATTESTATION_ENABLED", value);
+    return body().finally(() => {
+        if (previous === undefined) Deno.env.delete("ATTESTATION_ENABLED");
+        else Deno.env.set("ATTESTATION_ENABLED", previous);
+    });
+}
+
+Deno.test("attestationGate answers 503 attestation_disabled with Retry-After by default", () =>
+    withAttestationEnv(undefined, async () => {
+        const gated = attestationGate(unexpectedCall("enabled handler"));
+        const response = await gated(
+            new Request("http://localhost/functions/v1/device-tokens/challenge", {
+                method: "POST",
+                headers: { "x-request-id": "req-gate" },
+            }),
+            {},
+        );
+        assertEquals(response.status, 503);
+        assertEquals(response.headers.get("Retry-After"), String(ATTESTATION_DISABLED_RETRY_AFTER_SECONDS));
+        assertEquals(response.headers.get("x-request-id"), "req-gate");
+        const body = await response.json();
+        assertEquals(body.error, "attestation_disabled");
+        assertEquals(body.retry_after_s, ATTESTATION_DISABLED_RETRY_AFTER_SECONDS);
+    }));
+
+Deno.test("attestationGate dispatches to the real handler when ATTESTATION_ENABLED=true", () =>
+    withAttestationEnv("true", async () => {
+        const gated = attestationGate(() => Promise.resolve(new Response("enabled", { status: 200 })));
+        const response = await gated(new Request("http://localhost/x", { method: "POST" }), {});
+        assertEquals(response.status, 200);
+        assertEquals(await response.text(), "enabled");
+    }));
+
+Deno.test("attestationGate stays closed for values other than true", () =>
+    withAttestationEnv("1", async () => {
+        const gated = attestationGate(unexpectedCall("enabled handler"));
+        const response = await gated(new Request("http://localhost/x", { method: "POST" }), {});
+        assertEquals(response.status, 503);
+    }));

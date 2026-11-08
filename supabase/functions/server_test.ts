@@ -238,11 +238,32 @@ Deno.test("handleRequest routes top-potholes through the Deno API surface", asyn
     }
 });
 
+Deno.test("handleRequest gates device-tokens/challenge behind ATTESTATION_ENABLED by default", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, ATTESTATION_ENABLED: undefined }, async () => {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/device-tokens/challenge", { method: "POST" }),
+        );
+        assertEquals(res.status, 503);
+        assertEquals(res.headers.get("Retry-After") !== null, true);
+        assertEquals((await res.json()).error, "attestation_disabled");
+    }));
+
+Deno.test("handleRequest gates device-tokens (redeem) behind ATTESTATION_ENABLED by default", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, ATTESTATION_ENABLED: undefined }, async () => {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/device-tokens", { method: "POST", body: "{}" }),
+        );
+        assertEquals(res.status, 503);
+        assertEquals((await res.json()).error, "attestation_disabled");
+    }));
+
 Deno.test("handleRequest routes device-tokens/challenge through the Deno API surface", async () => {
     const previousKey = Deno.env.get("PUBLIC_API_KEY");
     const previousDatabaseUrl = Deno.env.get("DATABASE_URL");
+    const previousAttestation = Deno.env.get("ATTESTATION_ENABLED");
     Deno.env.delete("PUBLIC_API_KEY");
     Deno.env.delete("DATABASE_URL");
+    Deno.env.set("ATTESTATION_ENABLED", "true");
     try {
         const res = await handleRequest(
             new Request("http://localhost/functions/v1/device-tokens/challenge", { method: "POST" }),
@@ -254,6 +275,8 @@ Deno.test("handleRequest routes device-tokens/challenge through the Deno API sur
         assertEquals(res.status, 503);
         assertEquals((await res.json()).error, "service_unavailable");
     } finally {
+        if (previousAttestation === undefined) Deno.env.delete("ATTESTATION_ENABLED");
+        else Deno.env.set("ATTESTATION_ENABLED", previousAttestation);
         if (previousKey === undefined) Deno.env.delete("PUBLIC_API_KEY");
         else Deno.env.set("PUBLIC_API_KEY", previousKey);
         if (previousDatabaseUrl === undefined) Deno.env.delete("DATABASE_URL");
@@ -264,8 +287,10 @@ Deno.test("handleRequest routes device-tokens/challenge through the Deno API sur
 Deno.test("handleRequest routes device-tokens (redeem) through the Deno API surface", async () => {
     const previousKey = Deno.env.get("PUBLIC_API_KEY");
     const previousDatabaseUrl = Deno.env.get("DATABASE_URL");
+    const previousAttestation = Deno.env.get("ATTESTATION_ENABLED");
     Deno.env.delete("PUBLIC_API_KEY");
     Deno.env.delete("DATABASE_URL");
+    Deno.env.set("ATTESTATION_ENABLED", "true");
     try {
         const res = await handleRequest(
             new Request("http://localhost/functions/v1/device-tokens", {
@@ -287,6 +312,8 @@ Deno.test("handleRequest routes device-tokens (redeem) through the Deno API surf
         assertEquals(res.status, 503);
         assertEquals((await res.json()).error, "service_unavailable");
     } finally {
+        if (previousAttestation === undefined) Deno.env.delete("ATTESTATION_ENABLED");
+        else Deno.env.set("ATTESTATION_ENABLED", previousAttestation);
         if (previousKey === undefined) Deno.env.delete("PUBLIC_API_KEY");
         else Deno.env.set("PUBLIC_API_KEY", previousKey);
         if (previousDatabaseUrl === undefined) Deno.env.delete("DATABASE_URL");
