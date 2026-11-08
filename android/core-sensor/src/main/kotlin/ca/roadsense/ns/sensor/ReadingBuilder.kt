@@ -29,6 +29,16 @@ class ReadingBuilder(
     var maxHeadingVarianceDegrees: Double = 60.0,
     var minimumSampleCount: Int = 30,
     var roughnessScorer: RoughnessScorer = RoughnessScorer(),
+    /**
+     * Hard cap on buffered motion samples (iOS parity:
+     * `ReadingBuilder.maxBufferedMotionSamples = 2_000`). A valid window lasts
+     * at most [maxDurationSeconds] at 50 Hz (~750 samples), so the cap never
+     * affects a window that can still be emitted. It keeps memory bounded when
+     * GPS fixes stop arriving (parked phone behind a distance filter, tunnel,
+     * revoked permission) while motion keeps streaming; oldest samples drop
+     * first.
+     */
+    var maxBufferedMotionSamples: Int = 2_000,
 ) {
     data class Snapshot(
         val targetDistanceMeters: Double,
@@ -41,7 +51,10 @@ class ReadingBuilder(
     )
 
     private val locationSamples: MutableList<LocationSample> = mutableListOf()
-    private val motionSamples: MutableList<MotionSample> = mutableListOf()
+    private val motionSamples: ArrayDeque<MotionSample> = ArrayDeque()
+
+    /** Number of motion samples currently buffered (bounded by [maxBufferedMotionSamples]). */
+    val bufferedMotionSampleCount: Int get() = motionSamples.size
 
     constructor(snapshot: Snapshot) : this(
         targetDistanceMeters = snapshot.targetDistanceMeters,
@@ -52,10 +65,19 @@ class ReadingBuilder(
     ) {
         locationSamples.addAll(snapshot.locationSamples)
         motionSamples.addAll(snapshot.motionSamples)
+        trimMotionSamplesIfNeeded()
     }
 
     fun addMotionSample(sample: MotionSample) {
-        motionSamples.add(sample)
+        motionSamples.addLast(sample)
+        trimMotionSamplesIfNeeded()
+    }
+
+    private fun trimMotionSamplesIfNeeded() {
+        val cap = maxOf(maxBufferedMotionSamples, 0)
+        while (motionSamples.size > cap) {
+            motionSamples.removeFirst()
+        }
     }
 
     fun addLocationSample(sample: LocationSample): ReadingWindow? {

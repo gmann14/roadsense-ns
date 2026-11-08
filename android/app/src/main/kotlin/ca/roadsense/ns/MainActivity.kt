@@ -1,13 +1,9 @@
 package ca.roadsense.ns
 
-import android.Manifest
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
@@ -22,9 +18,13 @@ import ca.roadsense.ns.ui.BottomTab
 import ca.roadsense.ns.ui.theme.RoadSenseTheme
 
 /**
- * Compose-hosted launcher activity. Owns the permission launchers (which
+ * Compose-hosted launcher activity. Owns the permission launcher (which
  * MUST be registered in `onCreate`, before the activity is in STARTED) and
  * forwards everything else to [AppViewModel].
+ *
+ * Android 15 (targetSdk 35) draws every activity edge-to-edge; we opt in
+ * explicitly on all versions with [enableEdgeToEdge] and the Compose
+ * surfaces pad themselves with window insets (see `AppShell`).
  */
 class MainActivity : ComponentActivity() {
     private val viewModel: AppViewModel by viewModels()
@@ -34,12 +34,8 @@ class MainActivity : ComponentActivity() {
             viewModel.onPermissionsChanged()
         }
 
-    private val backgroundLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-            viewModel.onPermissionsChanged()
-        }
-
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
             RoadSenseTheme {
@@ -50,7 +46,6 @@ class MainActivity : ComponentActivity() {
                     selectedTab = selectedTab,
                     onSelectTab = { selectedTab = it },
                     onRequestForegroundPermissions = ::requestForegroundPermissions,
-                    onRequestBackgroundPermission = ::requestBackgroundPermission,
                     onStart = viewModel::startRecording,
                     onStop = viewModel::stopRecording,
                     onUploadNow = viewModel::enqueueDrain,
@@ -65,31 +60,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        viewModel.startLocationUpdates()
+    }
+
     override fun onResume() {
         super.onResume()
         viewModel.refresh()
     }
 
-    private fun requestForegroundPermissions() {
-        val ladder = PermissionState.foregroundLadder()
-        if (ladder.isEmpty()) {
-            viewModel.onPermissionsChanged()
-            return
-        }
-        foregroundLauncher.launch(ladder)
+    override fun onStop() {
+        viewModel.stopLocationUpdates()
+        super.onStop()
     }
 
-    private fun requestBackgroundPermission() {
-        val permission = PermissionState.backgroundLocationPermission() ?: return
-        if (PermissionState.mustRouteBackgroundToSettings()) {
-            startActivity(
-                Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.fromParts("package", packageName, null),
-                ),
-            )
-        } else {
-            backgroundLauncher.launch(permission)
-        }
+    private fun requestForegroundPermissions() {
+        foregroundLauncher.launch(PermissionState.foregroundLadder())
     }
 }

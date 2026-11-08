@@ -2,6 +2,9 @@ package ca.roadsense.ns.feedback
 
 import ca.roadsense.ns.api.FeedbackSubmissionPayload
 import ca.roadsense.ns.api.FeedbackSubmissionResult
+import ca.roadsense.ns.api.UploadAttemptResult
+import ca.roadsense.ns.api.UploadDisposition
+import ca.roadsense.ns.api.UploadPolicy
 import ca.roadsense.ns.data.room.FeedbackDao
 import ca.roadsense.ns.data.room.FeedbackEntity
 import ca.roadsense.ns.data.room.FeedbackUploadState
@@ -156,32 +159,56 @@ class FeedbackQueueDrainer(
                 Outcome.Retry(entry.id, nextAttemptAt)
             }
 
-            is FeedbackSubmissionResult.ServerError, is FeedbackSubmissionResult.NetworkError -> {
-                val backoffSeconds = (1 shl minOf(attempt - 1, 6)).toLong().coerceAtLeast(1)
-                val nextAttemptAt = now.plus(Duration.ofSeconds(backoffSeconds))
-                if (attempt > 5) {
-                    dao.update(
-                        entry.copy(
-                            uploadState = FeedbackUploadState.FAILED_PERMANENT.wireValue,
-                            uploadAttemptCount = attempt,
-                            lastAttemptAt = now,
-                            nextAttemptAt = null,
-                            lastRequestId = (result as? FeedbackSubmissionResult.ServerError)?.requestId,
-                        )
-                    )
-                    Outcome.FailedPermanent(entry.id)
-                } else {
-                    dao.update(
-                        entry.copy(
-                            uploadAttemptCount = attempt,
-                            lastAttemptAt = now,
-                            nextAttemptAt = nextAttemptAt,
-                            lastRequestId = (result as? FeedbackSubmissionResult.ServerError)?.requestId,
-                        )
-                    )
-                    Outcome.Retry(entry.id, nextAttemptAt)
-                }
-            }
+            // Same rules as readings and pothole actions (`UploadPolicy`):
+            // being offline, or a 5xx/401/403/408, never throws away a
+            // message the user typed — it waits with capped backoff (max 1 h)
+            // until the network or server recovers. Only a status the policy
+            // calls a genuine rejection ends it.
+            is FeedbackSubmissionResult.NetworkError ->
+                scheduleRetryOrFail(entry, attempt, now, UploadAttemptResult.NetworkError, requestId = null)
+
+            is FeedbackSubmissionResult.ServerError ->
+                scheduleRetryOrFail(
+                    entry,
+                    attempt,
+                    now,
+                    UploadAttemptResult.Http(result.statusCode, retryAfterSeconds = null),
+                    requestId = result.requestId,
+                )
+        }
+    }
+
+    private suspend fun scheduleRetryOrFail(
+        entry: FeedbackEntity,
+        attempt: Int,
+        now: Instant,
+        attemptResult: UploadAttemptResult,
+        requestId: String?,
+    ): Outcome = when (val disposition = UploadPolicy.evaluate(attemptResult, attempt)) {
+        is UploadDisposition.Retry -> {
+            val nextAttemptAt = now.plus(Duration.ofMillis((disposition.afterSeconds * 1000).toLong()))
+            dao.update(
+                entry.copy(
+                    uploadAttemptCount = attempt,
+                    lastAttemptAt = now,
+                    nextAttemptAt = nextAttemptAt,
+                    lastRequestId = requestId,
+                )
+            )
+            Outcome.Retry(entry.id, nextAttemptAt)
+        }
+
+        UploadDisposition.FailedPermanent, UploadDisposition.Succeeded -> {
+            dao.update(
+                entry.copy(
+                    uploadState = FeedbackUploadState.FAILED_PERMANENT.wireValue,
+                    uploadAttemptCount = attempt,
+                    lastAttemptAt = now,
+                    nextAttemptAt = null,
+                    lastRequestId = requestId,
+                )
+            )
+            Outcome.FailedPermanent(entry.id)
         }
     }
 }

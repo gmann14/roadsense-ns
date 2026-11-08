@@ -54,6 +54,21 @@ interface PotholeActionDao {
 
     @Query("DELETE FROM pothole_actions")
     suspend fun deleteAll(): Int
+
+    /** Submitted / permanently failed actions carry a precise coordinate; keep
+     *  them only for the local retention window. */
+    @Query(
+        """
+        DELETE FROM pothole_actions
+        WHERE upload_state IN (:terminalStates)
+          AND COALESCE(last_attempt_at, created_at) < :cutoff
+        """,
+    )
+    suspend fun pruneFinishedBefore(terminalStates: List<String>, cutoff: Instant): Int
+
+    /** "Upload now": make every queued action due immediately. */
+    @Query("UPDATE pothole_actions SET next_attempt_at = NULL WHERE upload_state = :pendingUpload")
+    suspend fun clearBackoff(pendingUpload: String): Int
 }
 
 @Dao
@@ -79,6 +94,11 @@ interface PotholePhotoDao {
 
     @Query("DELETE FROM pothole_photos WHERE id = :id")
     suspend fun delete(id: UUID): Int
+
+    /** Paths of every photo file Room knows about ("Delete local data"
+     *  removes the files, not just the rows). */
+    @Query("SELECT photo_file_path FROM pothole_photos")
+    suspend fun allFilePaths(): List<String>
 
     @Query("DELETE FROM pothole_photos")
     suspend fun deleteAll(): Int

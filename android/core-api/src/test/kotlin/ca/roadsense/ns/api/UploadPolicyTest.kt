@@ -109,4 +109,36 @@ class UploadPolicyTest {
         val retry = assertIs<UploadDisposition.Retry>(late)
         assertEquals(UploadPolicy.MAX_RETRY_DELAY_SECONDS, retry.afterSeconds)
     }
+
+    @Test
+    fun `401 403 408 413 retry with backoff like iOS instead of stranding the batch`() {
+        listOf(401, 403, 408, 413).forEach { status ->
+            val first = UploadPolicy.evaluate(
+                UploadAttemptResult.Http(statusCode = status, retryAfterSeconds = null),
+                attemptNumber = 1,
+            )
+            assertEquals(UploadDisposition.Retry(1.0), first, "status $status attempt 1")
+
+            val late = UploadPolicy.evaluate(
+                UploadAttemptResult.Http(statusCode = status, retryAfterSeconds = null),
+                attemptNumber = 30,
+            )
+            assertEquals(
+                UploadDisposition.Retry(UploadPolicy.MAX_RETRY_DELAY_SECONDS),
+                late,
+                "status $status never goes permanent",
+            )
+        }
+    }
+
+    @Test
+    fun `other validation 4xx stay permanent`() {
+        listOf(400, 409, 422).forEach { status ->
+            assertEquals(
+                UploadDisposition.FailedPermanent,
+                UploadPolicy.evaluate(UploadAttemptResult.Http(status, null), attemptNumber = 1),
+                "status $status",
+            )
+        }
+    }
 }

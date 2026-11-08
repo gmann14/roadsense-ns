@@ -18,6 +18,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import ca.roadsense.ns.BuildConfig
 import ca.roadsense.ns.RoadSenseContainer
 import ca.roadsense.ns.api.Endpoints
+import ca.roadsense.ns.api.PublicLinks
 
 /**
  * Compose host for the road-quality map shell.
@@ -28,7 +29,7 @@ import ca.roadsense.ns.api.Endpoints
  *     when the project synced with `MAPBOX_DOWNLOADS_TOKEN` set (see
  *     `android/settings.gradle.kts`); the no-Mapbox build sees only the
  *     `MapboxBridge` stub, which reports `isAvailable = false`.
- *   - **WebView fallback** — points at `https://roadsense.ca` so the in-app
+ *   - **WebView fallback** — loads [PublicLinks.WEB_MAP] so the in-app
  *     preview still shows the public map on CI/public-clone builds that
  *     have not provisioned the Mapbox SDK. Production builds always take
  *     the native path once the token is provisioned and a real
@@ -59,9 +60,9 @@ fun MapHost(modifier: Modifier = Modifier) {
                                 accessToken = accessToken,
                             ),
                         )
-                    }.getOrElse { fallbackWebView(ctx, endpoints) }
+                    }.getOrElse { fallbackWebView(ctx) }
                 } else {
-                    fallbackWebView(ctx, endpoints)
+                    fallbackWebView(ctx)
                 }
             },
         )
@@ -81,20 +82,14 @@ fun MapHost(modifier: Modifier = Modifier) {
 }
 
 @SuppressLint("SetJavaScriptEnabled")
-private fun fallbackWebView(
-    context: android.content.Context,
-    endpoints: Endpoints,
-): WebView {
+private fun fallbackWebView(context: android.content.Context): WebView {
     val webView = WebView(context)
     val settings: WebSettings = webView.settings
     settings.javaScriptEnabled = true
     settings.domStorageEnabled = true
     settings.cacheMode = WebSettings.LOAD_DEFAULT
-    val envQuery = when (endpoints.config.environment.name) {
-        "STAGING" -> "?staging"
-        "LOCAL" -> "?local"
-        else -> ""
-    }
-    webView.loadUrl("https://roadsense.ca/$envQuery")
+    // Every flavor talks to the same public backend today, so the public
+    // web map is the right preview for all of them.
+    webView.loadUrl(PublicLinks.WEB_MAP)
     return webView
 }

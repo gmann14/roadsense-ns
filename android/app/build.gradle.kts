@@ -50,7 +50,7 @@ fun resolveUploadSigning(): UploadSigning? {
 
 android {
     namespace = "ca.roadsense.ns"
-    compileSdk = 34
+    compileSdk = 35
 
     buildFeatures {
         buildConfig = true
@@ -60,15 +60,14 @@ android {
     defaultConfig {
         applicationId = "ca.roadsense.android"
         minSdk = 33
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Echo versionName into BuildConfig so `clientAppVersion` headers can
-        // mirror the Info.plist-derived string iOS sends.
-        buildConfigField("String", "APP_VERSION_NAME", "\"0.1.0\"")
-        buildConfigField("int", "APP_VERSION_CODE", "1")
+        // `clientAppVersion` and the Sentry release read the generated
+        // BuildConfig.VERSION_NAME / VERSION_CODE, so bumping the two values
+        // above is the only edit a release needs.
         // True only when Mapbox's private Maven was reachable at sync time.
         // The Compose `MapHost` reads this to decide whether to inflate a real
         // MapView or the WebView-based public-map fallback.
@@ -93,7 +92,7 @@ android {
             buildConfigField(
                 "boolean",
                 "ENABLE_POTHOLE_PHOTOS",
-                (props.getProperty("ENABLE_POTHOLE_PHOTOS") ?: "true"),
+                (props.getProperty("ENABLE_POTHOLE_PHOTOS") ?: "false"),
             )
             resValue("string", "app_name", props.getProperty("APP_DISPLAY_NAME") ?: "RoadSense NS")
         }

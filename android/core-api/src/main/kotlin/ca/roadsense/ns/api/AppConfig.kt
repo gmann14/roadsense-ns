@@ -19,7 +19,9 @@ data class AppConfig(
     val mapboxAccessToken: String,
     val supabaseAnonKey: String,
     val sentryDSN: String? = null,
-    val enablePotholePhotos: Boolean = true,
+    /** Off unless explicitly enabled: the backend answers the photo routes
+     *  with 503 `photos_disabled` and there is no capture UI yet. */
+    val enablePotholePhotos: Boolean = false,
 ) {
     init {
         require(apiBaseURL.startsWith("http://") || apiBaseURL.startsWith("https://")) {
@@ -46,6 +48,7 @@ data class AppConfig(
                 mapboxAccessToken = mapboxAccessToken,
                 supabaseAnonKey = supabaseAnonKey,
                 sentryDSN = values["SENTRY_DSN"]?.takeIf { it.isNotBlank() },
+                enablePotholePhotos = values["ENABLE_POTHOLE_PHOTOS"]?.trim()?.lowercase() == "true",
             )
         }
     }

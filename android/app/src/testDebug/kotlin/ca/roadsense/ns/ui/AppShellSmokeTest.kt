@@ -48,7 +48,6 @@ class AppShellSmokeTest {
                 selectedTab = BottomTab.Stats,
                 onSelectTab = {},
                 onRequestForegroundPermissions = {},
-                onRequestBackgroundPermission = {},
                 onStart = {},
                 onStop = {},
                 onUploadNow = {},
@@ -79,7 +78,6 @@ class AppShellSmokeTest {
                 selectedTab = BottomTab.Settings,
                 onSelectTab = {},
                 onRequestForegroundPermissions = {},
-                onRequestBackgroundPermission = {},
                 onStart = {},
                 onStop = {},
                 onUploadNow = {},
@@ -101,6 +99,11 @@ class AppShellSmokeTest {
         composeRule.onNodeWithText("Permissions").assertIsDisplayed()
         composeRule.onNodeWithText("Send feedback").assertExists()
         composeRule.onNodeWithText("Delete all local data").assertExists()
+        composeRule.onNodeWithText("Precise location").assertExists()
+        composeRule.onNodeWithText("Terms of use").assertExists()
+        composeRule.onNodeWithText("Support").assertExists()
+        // Play policy: no background-location ask anywhere in the shell.
+        composeRule.onNodeWithText("Background", substring = true).assertDoesNotExist()
     }
 
     private fun sampleState() = HomeState(
@@ -119,10 +122,8 @@ class AppShellSmokeTest {
         ),
         permissions = PermissionState(
             fineLocation = true,
-            backgroundLocation = false,
-            activityRecognition = true,
+            coarseLocation = true,
             notifications = true,
-            camera = false,
         ),
         environment = AppEnvironment.STAGING,
         appVersion = "0.1.0 (1)",

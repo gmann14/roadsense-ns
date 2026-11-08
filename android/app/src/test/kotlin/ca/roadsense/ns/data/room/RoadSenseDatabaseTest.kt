@@ -39,14 +39,18 @@ class RoadSenseDatabaseTest {
 
     private val now: Instant = Instant.parse("2026-05-01T12:00:00Z")
 
+    /** Readings default to a sealed drive (session id + upload-ready), the
+     *  only shape `pendingForUpload` returns. */
+    private val sealedSessionId: UUID = UUID.randomUUID()
+
     private fun reading(
         id: UUID = UUID.randomUUID(),
         recordedAt: Instant = now,
         droppedByPrivacyZone: Boolean = false,
         endpointTrimmedAt: Instant? = null,
         uploadedAt: Instant? = null,
-        driveSessionId: UUID? = null,
-        uploadReadyAt: Instant? = null,
+        driveSessionId: UUID? = sealedSessionId,
+        uploadReadyAt: Instant? = now,
     ) = ReadingEntity(
         id = id,
         latitude = 44.6488,
@@ -110,13 +114,17 @@ class RoadSenseDatabaseTest {
         val sessionId = UUID.randomUUID()
         val unsealedReading = reading(driveSessionId = sessionId, uploadReadyAt = null)
         val sealedReading = reading(driveSessionId = sessionId, uploadReadyAt = now)
-        val unattached = reading()
+        // A reading without a drive session was never endpoint-trimmed, so it
+        // must never upload, even if something marked it upload-ready.
+        val unattached = reading(driveSessionId = null, uploadReadyAt = now)
         db.readingDao().insertAll(listOf(unsealedReading, sealedReading, unattached))
 
         val pending = db.readingDao().pendingForUpload(limit = 100).map { it.id }.toSet()
         assertTrue(unsealedReading.id !in pending)
         assertTrue(sealedReading.id in pending)
-        assertTrue(unattached.id in pending)
+        assertTrue(unattached.id !in pending)
+        assertEquals(1, db.readingDao().readyForUploadCount())
+        assertTrue(!unattached.isReadyForUpload)
     }
 
     @Test

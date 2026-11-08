@@ -1,6 +1,6 @@
 # 12 — Android Implementation Plan
 
-*Last updated: 2026-05-08*
+*Last updated: 2026-11-08*
 
 Covers: Kotlin/Compose project layout, sensor pipeline port, foreground-service collection, Room persistence, upload pipeline, privacy zones, Mapbox Android, permissions/onboarding, shared-fixture testing, distribution.
 
@@ -13,7 +13,8 @@ The repo now contains an `android/` project with:
 - pure Kotlin `core-sensor` fixture replay against the same CSV corpus used by iOS
 - pure Kotlin `core-api` upload DTOs, endpoint helpers, retention, eligibility, retry policy, plus the `pothole-actions` and `feedback` request/response shapes with iOS JSON parity tests
 - Android `:app` module with Room persistence (9 entities), Retrofit/OkHttp `BackendClient` covering `upload-readings` + `pothole-actions` + `feedback`, foreground collection service, **production Compose Material 3 shell** (Map / Stats / Settings tabs, drive controls, manual pothole flow with 8s undo, in-app feedback queue, Settings → Delete local data, permissions ladder), unified `UploadDrainWorker` that drains readings + pothole actions + feedback on the same heartbeat, and backup disabled for local data
-- production permission ladder via `PermissionState` (fine location → activity recognition → notifications → background location), with API 30+ background routed to system Settings (Play Store policy)
+- production permission ladder via `PermissionState`: one request for `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` + `POST_NOTIFICATIONS`. No background location, activity recognition or camera permission (see "Permissions + onboarding")
+- drive-session lifecycle (2026-11 hardening, review P0-2/P0-3/P0-8): every reading belongs to a drive session; sessions open on an accurate (≤ 20 m) moving GPS fix outside every privacy zone, end on Stop or automatically after 5 minutes parked, and are sealed in one Room transaction (endpoint trim + privacy-zone re-check). Sessions a crash left open are sealed on the next app or service start. Readings without a session never upload
 - optional release signing wired from `ANDROID_UPLOAD_*` env vars so a release machine can produce a Play-acceptable signed AAB without committing a keystore; CI keeps building without the env vars
 - CI entrypoint at `.github/workflows/android-ci.yml` (now also runs `:app:bundleStagingRelease` to catch signing-config + minification regressions) plus `scripts/check-android-fixture-parity.sh`
 - manual Play Internal Testing publish workflow at `.github/workflows/android-internal.yml` (gated on the `ANDROID_PUBLISH_ENABLED` repo variable so it never auto-uploads)
@@ -23,7 +24,7 @@ The implementation is ready for **internal Android collection beta validation**,
 
 - real-device Pixel/Samsung drives, battery evidence, foreground-service survivability evidence, plus exercising the new manual pothole + feedback + delete-local-data flows. Concrete step-by-step checklist now lives in [15-google-play-readiness.md](15-google-play-readiness.md) → "Real-device validation checklist"
 - native Mapbox vector-tile + pothole overlay rendering. The Compose `MapHost` delegates to `MapboxBridge` (`android/app/src/mapboxMain/kotlin/MapboxBridge.kt`), which is compiled in automatically when `MAPBOX_DOWNLOADS_TOKEN` is provisioned at sync time. That bridge registers the same `segment_aggregates` + `potholes` source-layers iOS uses, points at the configured `tiles/{z}/{x}/{y}.mvt?apikey=…` endpoint, and applies the road-quality ramp from `RoadQualityStyle` (hex bodies pinned to `DesignTokens.Palette` via a JVM parity test). Until the token is provisioned the host falls back to a WebView pointing at the public web map so CI builds keep working without a private Maven credential
-- pothole *photo* CameraX capture UI. Backend half landed: wire DTOs match iOS (`PotholePhotoUploadRequest`/`Response`, parity test `PotholePhotoRequestJsonTest`), `BackendClient.beginPotholePhotoUpload` + signed-URL PUT, and `PotholePhotoCoordinator` is wired into the unified `UploadDrainWorker` heartbeat. Photos that land in `pothole_photos` with state `pending_metadata` will drain on the next heartbeat. The remaining piece is the Compose CameraX capture flow that produces those rows — sequence behind first Pixel/Samsung field cycle
+- pothole *photo* CameraX capture UI. Backend half landed: wire DTOs match iOS (`PotholePhotoUploadRequest`/`Response`, parity test `PotholePhotoRequestJsonTest`), `BackendClient.beginPotholePhotoUpload` + signed-URL PUT, and `PotholePhotoCoordinator` is wired into the unified `UploadDrainWorker` heartbeat. The worker only drains `pothole_photos` when `ENABLE_POTHOLE_PHOTOS` is true, which it is in no committed environment. The remaining pieces are the Compose CameraX capture flow that produces those rows, the `CAMERA` permission, and the Play Data Safety answers for photos — sequence behind first Pixel/Samsung field cycle
 - Play Console developer account + upload keystore offline-generated; the build wiring is done, only the operational steps remain
 
 ## Goals
@@ -43,15 +44,15 @@ The implementation is ready for **internal Android collection beta validation**,
 
 ## Tech stack
 
-- **Minimum Android:** API 33 (Android 13). API 34 (Android 14) requires the `FOREGROUND_SERVICE_LOCATION` permission for our background pattern, so we target API 34 baseline and accept that API 33 users get the same code path with the older runtime grants.
+- **Minimum Android:** API 33 (Android 13). **Target/compile SDK: 35** (Android 15), the Play floor for new apps and updates since 31 Aug 2025. Android 15 forces edge-to-edge, so `MainActivity` calls `enableEdgeToEdge()` and the Compose shell pads for system bars and the keyboard. AGP 8.7 cannot compile against 36; moving to 36 (Play's expected 2026 floor) needs an AGP 8.9+ upgrade.
 - **Language/toolchain:** Kotlin 2.x, JDK 21, Android Studio Ladybug+, Android Gradle Plugin latest stable.
 - **UI:** Jetpack Compose (Material 3). No XML view system except where Mapbox forces it.
 - **Persistence:** Room 2.6+ with SQLCipher disabled (we don't store user secrets). Migrations land alongside their feature.
 - **Background:** A single foreground `Service` per drive with a persistent notification + WorkManager for upload retries.
 - **Networking:** Retrofit 2 + OkHttp 5 (logging interceptor in debug only). Single `BackendClient` mirrors iOS `APIClient`.
 - **Maps:** Mapbox Maps SDK for Android, same vector tile source as iOS.
-- **Sensors:** `Sensor.TYPE_LINEAR_ACCELERATION` (preferred — gravity already removed by HAL); fallback to `TYPE_ACCELEROMETER` + `TYPE_GRAVITY` with on-device gravity subtraction when LINEAR_ACCELERATION isn't reported. Fused location via Google Play Services `FusedLocationProviderClient`.
-- **DI:** Hilt. Manual wiring works at this scale, but Hilt is the documented Jetpack default and the team can onboard against it.
+- **Sensors:** `Sensor.TYPE_LINEAR_ACCELERATION` (preferred — gravity already removed by HAL); fallback to `TYPE_ACCELEROMETER` + `TYPE_GRAVITY` with on-device gravity subtraction when LINEAR_ACCELERATION isn't reported. Location comes from the platform `LocationManager` **GPS provider only** (1 s / 5 m); network fixes are too coarse for a session start point or a reading window, and skipping Play Services keeps the app working on de-Googled devices.
+- **DI:** manual wiring through `RoadSenseContainer` (built once in `RoadSenseApp`). Hilt was the original plan; at this scale a hand-written container is simpler and keeps Robolectric tests free of generated components. Revisit only if the graph grows past one container.
 - **Crash + perf:** Sentry Android SDK (matches iOS choice), `sendDefaultPii=false`, coordinate scrubbing in `beforeSend`.
 
 ## Project layout
@@ -64,7 +65,7 @@ android/
 ├── app/                              # main Android app module
 │   ├── src/main/AndroidManifest.xml
 │   ├── src/main/kotlin/ca/roadsense/ns/
-│   │   ├── App.kt                    # @HiltAndroidApp
+│   │   ├── RoadSenseApp.kt           # Application: Sentry, orphan-drive sweep, upload heartbeat; RoadSenseContainer.kt holds the manual DI graph
 │   │   ├── ui/                       # Compose screens (Map, Settings, Drives, Feedback, Onboarding)
 │   │   ├── data/
 │   │   │   ├── room/                 # @Database, DAOs
@@ -130,11 +131,13 @@ The math after that is identical. The shared-fixture CSV format in `ios/Tests/Ro
 
 iOS uses `BGTaskScheduler` + `significantLocationChange` to wake the app and resume collection. Android forbids that pattern. The Android equivalent:
 
-- A single foreground `CollectionService` runs while a drive is in progress. It owns the sensor listeners + GPS.
-- `FOREGROUND_SERVICE_LOCATION` declared in `AndroidManifest.xml`. Android 14+ requires this.
-- A persistent notification (a `NotificationChannel` of `IMPORTANCE_LOW`) shows "Recording road quality — tap to stop". Cannot be dismissed without stopping collection.
-- WorkManager handles upload retries with backoff (`Constraints.NetworkType.CONNECTED`). Mirrors iOS `BGAppRefreshTaskRequest` semantics.
-- We do **not** use `BroadcastReceiver` to wake on motion. Android dropped that for power reasons; equivalent behavior comes from `ActivityRecognitionApi` + starting the service manually.
+- A single foreground `CollectionService` (`foregroundServiceType="location"`) runs while a drive is in progress. It owns the sensor listeners + GPS. The user starts it with **Start drive** while the app is visible; a location foreground service started that way keeps receiving location with the screen off or the phone locked, so `ACCESS_BACKGROUND_LOCATION` is not needed and not requested.
+- `FOREGROUND_SERVICE_LOCATION` declared in `AndroidManifest.xml`. Android 14+ requires this, plus a granted location runtime permission at `startForeground()` time — the service checks it first and never calls `startForeground()` on the Stop path (Stop uses `stopService`).
+- `START_NOT_STICKY`: Android 14+ won't let a background restart start a location foreground service, so a killed drive stays stopped and the orphan sweep seals it at the next launch.
+- The drive ends on **Stop**, or automatically after **5 minutes parked** (no fix ≥ 5 km/h or ≥ 50 m from the last moving fix; a 30 s tick catches a parked phone that stops delivering fixes). The next movement opens a new session, so "drive to work, park all day, drive home" is two trimmed drives.
+- A persistent notification (a `NotificationChannel` of `IMPORTANCE_LOW`) shows "Recording road quality". Cannot be dismissed without stopping collection.
+- WorkManager handles upload retries with backoff (`Constraints.NetworkType.CONNECTED`). Mirrors iOS `BGAppRefreshTaskRequest` semantics. A one-shot drain is queued (REPLACE) whenever a drive is sealed and on "Upload now"; the 15-minute heartbeat also prunes local data past the 30-day retention window.
+- We do **not** auto-start drives on motion. That would need activity recognition plus a background start, which Android 14+ restricts for location services and Play treats as background location. Collection is always user-started.
 
 User-facing copy will need to acknowledge the persistent notification more directly than iOS does — Android users expect a "why is this in my notification shade?" answer.
 
@@ -188,14 +191,21 @@ The pothole + drive-overlay sources are JSON arrays the iOS `LocalDriveOverlaySt
 
 | Permission | When asked | What happens if denied |
 |---|---|---|
-| `ACCESS_FINE_LOCATION` | Onboarding step 1 | Cannot collect — show onboarding's "permissions needed" state, same as iOS |
-| `ACCESS_BACKGROUND_LOCATION` | After first drive, like iOS Always upgrade | Continues working when app is foregrounded; passive monitoring doesn't run |
-| `ACTIVITY_RECOGNITION` | Onboarding step 2 | Falls back to GPS-only driving detection (same as iOS Motion permission denial) |
-| `POST_NOTIFICATIONS` (API 33+) | Just before the first drive | Silent foreground service still runs but the persistent notification is hidden; warn the user this is unusual |
-| `CAMERA` | When user taps "Add photo" | Same as iOS: graceful empty state, no auto-prompt at app launch |
-| `FOREGROUND_SERVICE_LOCATION` (API 34+) | Manifest-declared, granted at install | Without it, the foreground service crashes on first start; we surface a "reinstall required" message rather than degrading |
+The manifest declares exactly: `INTERNET`, `ACCESS_NETWORK_STATE`, `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`. `ManifestPermissionsTest` locks that list; changing it needs a Play Data Safety / declaration update in [15-google-play-readiness.md](15-google-play-readiness.md) first.
 
-The onboarding flow mirrors iOS: brand mark + privacy framing + permission requests + "you'll be asked for one more thing after your first drive" copy. Compose lets us share the BrandVoice strings via a generated Kotlin object from the same source spreadsheet (or just hand-port the strings — quantity is small).
+| Permission | When asked | What happens if denied |
+|---|---|---|
+| `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` | One runtime request from the Map tab callout or Settings → Request permissions (Android 12+ needs both in the same request) | Cannot collect — the Start button stays disabled. If the user picks "Approximate", the callout sends them to app settings to allow precise location; readings need ≤ 20 m accuracy |
+| `POST_NOTIFICATIONS` (API 33+) | Same request | The foreground service still runs, but the "Recording road quality" notification is hidden; Settings shows it as missing |
+| `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_LOCATION` | Install-time | — |
+
+Not requested, on purpose:
+
+- `ACCESS_BACKGROUND_LOCATION` — the user-started `location` foreground service covers screen-off driving. Requesting it would need Play's background-location declaration and review for no benefit.
+- `ACTIVITY_RECOGNITION` — drives are user-started and end on the stationary rule, so nothing reads activity transitions.
+- `CAMERA` — there is no photo capture UI, and `ENABLE_POTHOLE_PHOTOS=false` in every environment. Add it (with a Data Safety update) only alongside the CameraX flow.
+
+The onboarding flow mirrors iOS: brand mark + privacy framing + one permission request. There is no later "upgrade to Always" ask on Android. Compose lets us share the BrandVoice strings via a generated Kotlin object from the same source spreadsheet (or just hand-port the strings — quantity is small).
 
 ## Distribution
 
@@ -238,8 +248,8 @@ Mapping to the existing TDD pattern (RED tests first, GREEN code second). Each p
 ### A12-4 — Map UI + manual pothole + photo capture
 
 - **RED**: Compose screen smokes for Map, Drive list, Settings; UI tests for `Mark pothole` happy path + GPS-stale rejection
-- **GREEN**: Mapbox `AndroidView` integration, manual pothole flow, photo capture
-- **Acceptance**: the user can drive, mark, photograph, and the result lands on the same public map iOS contributes to
+- **GREEN**: Mapbox `AndroidView` integration, manual pothole flow. Photo capture is deferred: `ENABLE_POTHOLE_PHOTOS=false` everywhere and no `CAMERA` permission until the CameraX flow and its Data Safety answers land together
+- **Acceptance**: the user can drive and mark a pothole, and the result lands on the same public map iOS contributes to (photo acceptance moves with the deferred capture flow)
 
 ### A12-5 — Feedback path + privacy & counts surface (in-app)
 

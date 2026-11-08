@@ -22,7 +22,7 @@ What exists:
 - `core-api` (pure Kotlin/JVM) — wire-format DTOs + upload eligibility/backoff/retention policies, plus pothole-actions + feedback parity tests
 - `core-fixtures/` — byte-for-byte mirror of iOS test fixtures, parity-checked
 - `:app` Android module — AGP 8.7, Jetpack Compose Material 3 shell, AndroidX, Room schema (9 entities + DAOs), Retrofit `BackendClient` over `core-api` DTOs, OkHttp auth interceptor, foreground collection service, unified `UploadDrainWorker` (readings + pothole actions + feedback), backup disabled with explicit Room excludes
-- Production permission ladder via `PermissionState` (fine location → activity recognition → notifications → background location), with API 30+ background routed to Settings per Play policy
+- Production permission ladder via `PermissionState`: one request for precise + approximate location and notifications. No background location, activity recognition or camera: drives run in a `location` foreground service started from the visible app, which keeps working with the screen off, and end on their own after 5 minutes parked
 - Manual pothole action flow with PENDING_UNDO → PENDING_UPLOAD state machine and an 8-second in-app undo window
 - Persistent in-app feedback queue with backend submission, validation-failed → permanent + rate-limited → reschedule semantics
 - Settings → Delete all local data (clears every Room table including the rotating device token)
@@ -40,7 +40,7 @@ What does **not** exist yet:
 ## Prerequisites
 
 - **JDK 21** (`brew install openjdk@21`). Set `JAVA_HOME` to `/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
-- **Android SDK** — Platform 34, Build-Tools 34, Platform-Tools. Install via `brew install --cask android-commandlinetools`, then `sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"`. Set `ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`.
+- **Android SDK** — Platform 35 (`compileSdk`/`targetSdk` 35), Build-Tools 34+, Platform-Tools. Install via `brew install --cask android-commandlinetools`, then `sdkmanager "platforms;android-35" "build-tools;34.0.0" "platform-tools"`. Set `ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`. AGP 8.7 tops out at API 35; moving to 36 needs an AGP 8.9+ upgrade.
 - **Android Studio** (Ladybug 2024.1+ recommended) — `brew install --cask android-studio`. Required only for UI work and instrumentation tests; CLI builds and JVM/Robolectric tests work without it.
 - **Emulator + system image** (only for instrumentation tests) — `sdkmanager "emulator" "system-images;android-34;google_apis_playstore;arm64-v8a"` on Apple Silicon.
 
@@ -110,11 +110,11 @@ Each environment has a properties file in `android/config/`:
 
 Committed values:
 
-- `API_BASE_URL` — local: `http://10.0.2.2:54321` (emulator → host loopback); staging: the Railway URL iOS uses; production: `https://roadsense.ca`
+- `API_BASE_URL` — local: `http://10.0.2.2:54321` (emulator → host loopback); staging and production: `https://api.nsroadsense.ca`, the Cloudflare proxy (never the raw Railway origin). The app appends `/functions/v1`, like iOS. Public web links (map, privacy, terms, support) live in `core-api` `PublicLinks` on `https://nsroadsense.ca`.
 - `SUPABASE_ANON_KEY` — staging is the same key committed in iOS (anon keys are public by design); local + production have placeholders for now
 - `MAPBOX_ACCESS_TOKEN` — placeholder in every committed file. Override per environment in the secrets file.
 - `SENTRY_DSN` — empty in committed files; goes in secrets if you want crash reports.
-- `ENABLE_POTHOLE_PHOTOS` — matches iOS (false in staging, true elsewhere).
+- `ENABLE_POTHOLE_PHOTOS` — `false` in every committed environment. There is no capture UI and the Play Data Safety answers don't cover photos; the upload worker skips the photo queue while it is off.
 
 To run a real local build with your real Mapbox token:
 

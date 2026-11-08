@@ -41,4 +41,19 @@ interface FeedbackDao {
 
     @Query("DELETE FROM feedback_queue")
     suspend fun deleteAll(): Int
+
+    /** Submitted or permanently failed messages (message text + optional
+     *  email) are not kept past the local retention window. */
+    @Query(
+        """
+        DELETE FROM feedback_queue
+        WHERE upload_state != :pending
+          AND COALESCE(last_attempt_at, created_at) < :cutoff
+        """,
+    )
+    suspend fun pruneFinishedBefore(pending: String, cutoff: Instant): Int
+
+    /** "Upload now": make every pending message due immediately. */
+    @Query("UPDATE feedback_queue SET next_attempt_at = NULL WHERE upload_state = :pending")
+    suspend fun clearBackoff(pending: String): Int
 }

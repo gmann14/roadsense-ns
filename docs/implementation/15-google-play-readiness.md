@@ -1,6 +1,6 @@
 # 15 — Google Play Readiness
 
-*Last updated: 2026-05-03*
+*Last updated: 2026-11-08 (permissions trimmed to foreground-only location, target SDK 35, Data Safety and foreground-service declaration rewritten, production hosts moved to `nsroadsense.ca`)*
 
 Covers: the release-ops source of truth for Google Play Console approval, store listing fields, Data Safety form, App Content questionnaires, reviewer notes, screenshots/feature graphic, and the first internal/closed testing cycles.
 
@@ -14,8 +14,10 @@ This doc is the Android twin of [10-app-store-and-testflight-readiness.md](10-ap
 - No Android signing keys exist. Sideload (Phase 1 of doc 12) uses a debug-style keystore at `android/keystores/dev.keystore` (gitignored). Play distribution (Phase 2) uses Google Play App Signing — we hold an **upload key**, Google holds the app-signing key.
 - Build wiring for the upload key is in place: `android/app/build.gradle.kts` registers a `signingConfigs.upload` block iff `ANDROID_UPLOAD_KEYSTORE_PATH` + `ANDROID_UPLOAD_KEYSTORE_PASSWORD` + `ANDROID_UPLOAD_KEY_ALIAS` + `ANDROID_UPLOAD_KEY_PASSWORD` are exported. CI deliberately runs without those env vars so PR builds keep working without the upload key.
 - `.github/workflows/android-internal.yml` exists as the manually-dispatched workflow that builds the production-flavor AAB and (when the `ANDROID_PUBLISH_ENABLED` repo variable is `true`) uploads it to Internal Testing via the Play Developer API. It is dormant until the secrets below are populated.
-- `https://roadsense.ca/privacy` already covers the iOS app and is acceptable for Android too. Confirm the page mentions Android by name before the first Closed Testing submission.
-- `apps/web` is the host for the privacy policy + (optional) support page. No Android-specific marketing site is required.
+- The project's domain is **`nsroadsense.ca`** (API: `https://api.nsroadsense.ca`, web: `https://nsroadsense.ca`). The similarly named domain without `ns` belongs to an unrelated third party — never put it in a listing field, a declaration or the app.
+- `https://nsroadsense.ca/privacy` covers the iOS app and is acceptable for Android too. Confirm the page mentions Android by name, and describes the deletion-request path used in the Data Safety answers below, before the first Closed Testing submission.
+- `apps/web` hosts the privacy policy. The app's Settings screen also links `https://nsroadsense.ca/terms` and `https://nsroadsense.ca/support`; both pages must exist before the first Play upload. No Android-specific marketing site is required.
+- Permissions are foreground-only (see "Permissions the AAB declares"). There is **no** background-location permission and therefore no background-location declaration; the only sensitive declaration is the foreground-service (location) declaration.
 
 ## Real-device validation checklist (unverified — no field evidence yet)
 
@@ -24,28 +26,29 @@ These steps are blocked on access to physical Android devices and an active Play
 Foreground collection + permission ladder (Pixel-class device):
 
 - [ ] install the latest staging-debug APK (`./gradlew :app:installStagingDebug`)
-- [ ] grant fine location, activity recognition, and notifications when prompted at first launch
+- [ ] grant precise location and notifications when prompted (one system dialog; there is no "Allow all the time" step)
+- [ ] choose "Approximate" once on a second install; confirm the Map tab says precise location is needed and the button opens app settings
 - [ ] confirm the persistent "Recording road quality" notification appears within 2 seconds of tapping Start
 - [ ] confirm the notification cannot be dismissed without tapping Stop
 - [ ] drive ≥10 minutes, screen on; confirm GPS fix card updates at ≥1 Hz cadence and the recording indicator stays green
-- [ ] drive ≥10 minutes, screen off (locked); confirm the foreground service is still running on return — task manager + adb shell `dumpsys activity services ca.roadsense.android.staging | head` shows `running=true`
-- [ ] tap Stop; confirm pending readings count drops to 0 within one heartbeat tick (≤15 min) and the upload result card surfaces no errors
+- [ ] drive ≥10 minutes, screen off (locked); confirm the foreground service is still running on return — task manager + adb shell `dumpsys activity services ca.roadsense.android.staging | head` shows `running=true`, and readings kept arriving (Stats → Local pending grows)
+- [ ] tap Stop; confirm pending readings count drops to 0 within a few minutes (a one-shot upload is queued at drive end) and the upload result card surfaces no errors
 
-Background collection upgrade:
+Auto drive end:
 
-- [ ] from the in-app "Open Android settings" affordance, switch the location permission to "Allow all the time"
-- [ ] start a drive, walk into a Faraday-y building / put the phone face-down on the desk for ≥5 minutes, return — confirm the drive is still recording
+- [ ] start a drive, park and leave the phone still for ≥6 minutes; confirm the drive's readings become uploadable (pending count drains) without tapping Stop, and that driving off again starts a new drive
+- [ ] force-stop the app mid-drive (`adb shell am force-stop ca.roadsense.android.staging`), reopen it; confirm the "Recording" state is cleared and the interrupted drive's readings upload
 
 Manual pothole + feedback + delete flows:
 
 - [ ] tap "Mark pothole here" while stopped; confirm the 8-second undo appears and clears on its own
 - [ ] tap "Mark pothole here" then "Undo last report" within 8 seconds; confirm no upload happens
 - [ ] submit a feedback message offline (airplane mode), enable network, confirm it drains on the next heartbeat
-- [ ] Settings → Delete all local data; confirm pending counts read 0 and the drive control card returns to "Grant permissions to start" state until permissions are re-requested
+- [ ] Settings → Delete all local data, during an active drive and again with location permission revoked; confirm no crash, pending counts read 0, and recording is stopped
 
 Upload acceptance against staging backend:
 
-- [ ] after the first clean ≥10 minute drive, hit `https://roadsense.ca/?staging` (or the staging web URL) and confirm the segments the device covered show up in the public map within ~15 minutes
+- [ ] after the first clean ≥10 minute drive, open the public map at `https://nsroadsense.ca` and confirm the segments the device covered show up within ~15 minutes
 - [ ] verify the `x-request-id` of an `upload-readings` 200 response lands in the staging logs (Railway dashboard) with `accepted > 0`
 
 Native Mapbox map shell (requires `MAPBOX_DOWNLOADS_TOKEN` + real `MAPBOX_ACCESS_TOKEN`):
@@ -128,7 +131,7 @@ The four `ANDROID_UPLOAD_*` env vars (already covered later in this doc) are not
 ## What To Finish Before Play Console Submission
 
 1. Register the Google Play developer account; verify identity (current Play policy requires government ID).
-2. Reserve the application id `ca.roadsense.android` (mirror of `ca.roadsense.ios`).
+2. Reserve the application id. The build currently uses `ca.roadsense.android` (mirror of `ca.roadsense.ios`). An application id can never change after the first upload, and its reverse-DNS reads as the third-party `roadsense` .ca domain; decide whether to keep it or switch to an id under `nsroadsense.ca` (for example `ca.nsroadsense.android`) **before** the first upload.
 3. Create an `upload-key.jks` upload keystore offline; store the password and key alias in 1Password and as GitHub Actions secrets (`ANDROID_UPLOAD_KEYSTORE`, `ANDROID_UPLOAD_KEYSTORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`, `ANDROID_UPLOAD_KEY_PASSWORD`). The keystore itself stays out of git.
 4. Confirm the privacy policy URL is live and explicitly names Android collection in the same terms as iOS.
 5. Build one signed Android App Bundle (`.aab`) locally and verify `bundletool build-apks` produces an installable APK on a real Pixel before any Play upload. App Bundle is mandatory; standalone APKs are not accepted for Play distribution.
@@ -144,14 +147,15 @@ Fields that should not drift:
 | App name | `RoadSense NS` |
 | Application id | `ca.roadsense.android` |
 | Default language | `en-CA` |
-| Privacy policy URL | `https://roadsense.ca/privacy` |
+| Privacy policy URL | `https://nsroadsense.ca/privacy` |
+| Website | `https://nsroadsense.ca` |
 | Contact email | `graham.mann14@gmail.com` |
 | Developer name | `RoadSense NS` (or `Graham Mann` until a developer entity exists) |
 | App category | `Maps & Navigation` |
 | Content rating | `Everyone` (driven by the IARC questionnaire below) |
 | Account requirement | none |
 | Demo credentials | N/A |
-| Target SDK | API 34 (Android 14). Play policy moves the floor each year — check before each release. |
+| Target SDK | API 35 (Android 15) in the build today. Play's rule: new apps and updates must target within one year of the latest major Android release, enforced each 31 August (API 35 from 31 Aug 2025; API 36 is expected from 31 Aug 2026). **Check Play Console → Policy status before the first upload**; if the floor is 36, upgrade AGP to 8.9+ and set `compileSdk`/`targetSdk` 36 first. |
 | Min SDK | API 33 (Android 13) |
 
 Fields that still need human product judgment:
@@ -168,7 +172,7 @@ Play Console requires every entry below before Production. Most can be answered 
 
 | Declaration | Expected answer | Notes |
 |---|---|---|
-| Privacy policy | `https://roadsense.ca/privacy` | Must load over HTTPS, no auth wall |
+| Privacy policy | `https://nsroadsense.ca/privacy` | Must load over HTTPS, no auth wall |
 | App access | "All functionality available without restrictions" | No login |
 | Ads | "No ads" | Matches design principle 4 in [06-security-and-privacy.md](06-security-and-privacy.md) |
 | Content rating (IARC) | Everyone | Answer "no" to violence, sexual, gambling, profanity, drug/alcohol, user-generated content sharing |
@@ -179,42 +183,64 @@ Play Console requires every entry below before Production. Most can be answered 
 | Government app | No | |
 | Financial features | No | |
 | Health | No | |
-| Permissions: background location | Declared with use-case justification | See "Background Location Declaration" below |
+| Foreground service permissions | `FOREGROUND_SERVICE_LOCATION`, declared with use case + video | See "Foreground Service (Location) Declaration" below |
+| Location permissions (background) | Not applicable — the app does not request `ACCESS_BACKGROUND_LOCATION` | Play only shows this form when the permission is in the manifest; `ManifestPermissionsTest` keeps it out |
+
+## Permissions the AAB declares
+
+The merged manifest must contain exactly these (`ManifestPermissionsTest` fails the unit-test run on any drift; re-check with `bundletool dump manifest` on the signed AAB):
+
+| Permission | Why |
+|---|---|
+| `INTERNET`, `ACCESS_NETWORK_STATE` | Upload readings; WorkManager's "connected" constraint |
+| `ACCESS_FINE_LOCATION` | GPS fixes during a drive the user started |
+| `ACCESS_COARSE_LOCATION` | Android 12+ rejects a fine-only request; the app needs precise and asks the user to upgrade if they choose "Approximate" |
+| `POST_NOTIFICATIONS` | The persistent "Recording road quality" notification (Android 13+) |
+| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION` | The `location`-type foreground service that keeps a user-started drive recording with the screen off |
+
+Not requested, on purpose: `ACCESS_BACKGROUND_LOCATION` (a drive is always started from the app's own screen, so the foreground service has location access without it), `ACTIVITY_RECOGNITION` (no automatic drive detection — drives end after 5 minutes parked or on Stop), `CAMERA` (pothole photos are off in every build; re-adding it needs a Data Safety and privacy-policy update first).
 
 ## Data Safety Form (Play equivalent of iOS Privacy Labels)
 
-The Play Data Safety form is *more granular* than App Store Connect. The answer set below matches the privacy labels in [06-security-and-privacy.md](06-security-and-privacy.md):
+The Play Data Safety form is *more granular* than App Store Connect. Answer it from what the shipped build actually sends:
 
-| Data type | Collected? | Shared? | Optional? | Purpose | Encrypted in transit? | User can request deletion? |
-|---|---|---|---|---|---|---|
-| Approximate location | No | — | — | — | — | — |
-| Precise location | Yes | No | No (required for app function) | App functionality, Analytics (road quality only) | Yes (TLS) | Yes — by clearing local data and rotating device token monthly; aggregate readings auto-delete at the 6-month partition drop |
-| Personal info (name, email, address, phone, identifiers) | No | — | — | — | — | — |
-| Financial info | No | — | — | — | — | — |
-| Health and fitness | No | — | — | — | — | — |
-| Messages | No | — | — | — | — | — |
-| Photos | Yes (only if user attaches a pothole photo) | No | Yes | App functionality | Yes (TLS) | Yes — local delete; server image bound to anonymous reading |
-| Audio | No | — | — | — | — | — |
-| Files and docs | No | — | — | — | — | — |
-| Calendar | No | — | — | — | — | — |
-| Contacts | No | — | — | — | — | — |
-| App activity (in-app actions) | No | — | — | — | — | — |
-| Web browsing | No | — | — | — | — | — |
-| App info and performance | Yes (crash logs, perf diagnostics) | No | No | App functionality, Diagnostics | Yes (TLS) | No (anonymous) |
-| Device or other identifiers | Yes (rotating anonymous device token) | No | No | App functionality, Fraud prevention | Yes (TLS) | Yes — token rotates monthly and is hashed server-side |
+**Overview questions**
 
-If any answer drifts from this table, [06-security-and-privacy.md](06-security-and-privacy.md) must be updated in the same PR.
+- Does the app collect or share any of the required user data types? **Yes**
+- Is all of the user data collected by the app encrypted in transit? **Yes** (staging and production API, Sentry and Mapbox are all HTTPS; the manifest sets no cleartext override, so Android blocks plain HTTP at target SDK 35)
+- Do you provide a way for users to request that their data be deleted? **Yes** — Settings → "Delete all local data" removes everything on the device immediately; for server-side data, users email the contact address in the privacy policy (graham.mann14@gmail.com) with their request, and all raw readings are deleted automatically within 6 months by the partition drop. The privacy policy must describe this path.
+- Is data shared with third parties? **No** for every type below. Sentry (crash reporting) and the hosting providers act as service providers processing data on the developer's behalf, which Play does not count as sharing. Nothing is sold.
 
-## Background Location Declaration
+**Data types**
 
-Play requires a separate "Permissions Declaration" for `ACCESS_BACKGROUND_LOCATION`. This is reviewed by a human and is the most common reason for Play rejections in this app's category. Include all of:
+| Data type | Collected? | Shared? | Required or optional | Purpose | Notes |
+|---|---|---|---|---|---|
+| Location → Precise location | Yes | No | Required | App functionality | GPS points with motion roughness, only while a user-started drive is recording, after on-device privacy-zone filtering and start/end trimming. Not tied to an account. |
+| Location → Approximate location | No | — | — | — | `ACCESS_COARSE_LOCATION` is declared only because Android requires it alongside fine; no approximate location is sent |
+| Personal info → Email address | Yes | No | Optional | Developer communications | Only if the user types a reply address into the in-app feedback form |
+| Personal info → name, address, phone, race, religion, other info | No | — | — | — | — |
+| Messages → Other in-app messages | Yes | No | Optional | Developer communications, App functionality | The text of in-app feedback the user chooses to send |
+| Photos and videos | No | — | — | — | Pothole photos are disabled in every Android build. If they are ever enabled, add Photos (optional, app functionality) and `CAMERA` in the same release |
+| Financial info, Health and fitness, Audio, Files and docs, Calendar, Contacts, Web browsing | No | — | — | — | — |
+| App activity | No | — | — | — | No analytics SDK; pothole reports are part of the location readings above |
+| App info and performance → Crash logs | Yes | No | Required | Analytics (stability) | Sentry crash reports; coordinates, tokens, emails and feedback text are scrubbed before send (`SentryBootstrapper.scrub`) |
+| App info and performance → Diagnostics | Yes | No | Required | Analytics (stability) | Sentry device/OS/app-version context attached to crash reports; no performance tracing |
+| Device or other IDs | Yes | No | Required | App functionality, Fraud prevention | Random UUID device token, rotated every 30 days, hashed server-side; not an advertising ID or hardware ID |
 
-- **Feature description**: "RoadSense NS measures road roughness while a user drives so it can publish aggregate road-quality maps. Background location is required so a measurement drive survives lock-screen and screen-off transitions; without it, drives end whenever the screen turns off, which is unacceptable for the core use case."
-- **Use cases selected**: "Other" → describe the foreground-service-bound passive measurement model. Do NOT select "Asset tracking" (implies fleet/B2B), "Family location sharing", or "Fitness/health".
-- **Demo video**: a 30–60s screen recording showing onboarding → permission grant → the persistent foreground notification appearing → driving with the screen off → the map updating after the drive ends. Hosted on YouTube unlisted; URL in the declaration.
-- **Justification of why foreground-only is insufficient**: the foreground-service approach we ship already minimizes footprint — collection only runs while the persistent notification is visible. Background location is still required because Android's foreground service alone does not grant location access in the background; the runtime permission is independent.
+**Deletion answers**: data is not deleted automatically when the app is uninstalled from the server's side, so describe the 6-month automatic deletion plus the email request path; on-device data is removed on uninstall or via Settings.
 
-If Play rejects, the most likely fix is sharpening the demo video — not changing the architecture.
+[06-security-and-privacy.md](06-security-and-privacy.md) is still the canonical privacy source. It currently says the app collects no email; the optional feedback reply address above must be added there (and to the privacy policy) before this form is submitted. If any answer drifts from the shipped build, update this table, doc 06 and the privacy policy together.
+
+## Foreground Service (Location) Declaration
+
+Apps targeting API 34+ that declare `FOREGROUND_SERVICE_LOCATION` must complete Play Console → App content → **Foreground service permissions**. This is the only sensitive-permission declaration the app needs; there is no background-location declaration because `ACCESS_BACKGROUND_LOCATION` is not requested.
+
+- **Foreground service type**: Location.
+- **Task / use case**: user-initiated, user-visible recording of a drive. Suggested description: "RoadSense NS measures road roughness while the user drives and publishes an aggregate road-quality map. The user taps Start on the app's main screen before driving; a location foreground service with a persistent notification keeps measuring GPS position and phone motion while the screen is off, and stops when the user taps Stop or after 5 minutes parked. Collection never starts on its own."
+- **Why it can't be deferred or interrupted**: the measurement only has value while the car is moving; WorkManager or a deferred job would miss the drive, and stopping when the screen turns off would end every drive in a phone mount.
+- **Demo video** (30–60 s, YouTube unlisted, URL in the declaration). Show, in order: opening the app → granting precise location and notifications → tapping Start → the persistent "Recording road quality" notification → locking the screen during a drive (passenger-held phone or simulated route) → unlocking to show recording continued → tapping Stop (or waiting out the 5-minute parked auto-end) and the notification disappearing. Record on a staging build with no home address or private route visible; redo the video whenever the Start/Stop flow or notification text changes.
+
+If Play rejects, the most likely fix is sharpening the demo video so the user-initiated start and the visible notification are unmistakable — not adding permissions.
 
 ## Internal Testing Metadata
 
@@ -225,24 +251,25 @@ Recommended `What's new` copy for the first Internal Testing release:
 Recommended tester notes (in the optional release notes field):
 
 - no account is required
-- background location is expected during an active drive
+- tap Start before each drive; recording continues with the screen off and ends on Stop or after 5 minutes parked
+- the app only asks for location "while using the app" — testers should never see an "Allow all the time" prompt; report it if they do
 - the persistent "Recording road quality" notification cannot be dismissed without stopping the drive — that is intentional
-- manual pothole/photo interactions must only happen while stopped
+- manual pothole reports must only happen while stopped (photos are off in this build)
 - bugs should include time, route context, OEM (Pixel/Samsung/etc.), and whether the screen was on or off
 
 ## Closed Testing Review Notes
 
 Recommended reviewer note for the closed-testing application (the one that unlocks Production after 14 days):
 
-> RoadSense NS measures road roughness while a user drives so it can publish aggregate road-quality maps. The app uses motion and location data together, including background location during an active drive, so collection can continue when the screen is off or the app is backgrounded. A persistent foreground-service notification is shown while a drive is active. No account or sign-in is required. Users can pause collection, define optional privacy zones, and delete all local data from Settings. Aggregate server-side data auto-deletes within 6 months via partition drop.
+> RoadSense NS measures road roughness while a user drives so it can publish aggregate road-quality maps. The user starts each drive by tapping Start in the app; a location foreground service with a persistent notification then keeps measuring while the screen is off, and stops when the user taps Stop or after 5 minutes parked. The app does not request background location or activity recognition and never starts collecting on its own. No account or sign-in is required. Users can define optional privacy zones and delete all local data from Settings. Raw server-side readings auto-delete within 6 months via partition drop.
 
-If Play asks why background location is necessary:
+If Play asks about location use:
 
-- the core function is passive drive measurement, not turn-by-turn navigation
-- drives must survive screen-off and app-backgrounded transitions to produce usable data
+- the core function is user-started drive measurement, not turn-by-turn navigation or tracking
+- location is only used while the user-started foreground service runs, with its notification visible
+- no `ACCESS_BACKGROUND_LOCATION` is requested; the foreground service type is `location`
 - collection is limited to the documented road-quality use case
-- users can pause collection, define privacy zones, and delete all local data
-- the foreground-service notification is always shown when collection is running
+- users can define privacy zones and delete all local data
 
 ## Asset Shot List
 
@@ -255,7 +282,7 @@ Capture from a signed AAB on a real device once UI is stable. Play requires more
 | Phone screenshots (≥2, ≤8) | 16:9 or 9:16, min 320 px, max 3840 px | Pixel 7 device |
 | 7" tablet screenshots (optional but recommended) | 16:9 or 9:16 | Emulator OK |
 | 10" tablet screenshots (optional) | 16:9 or 9:16 | Emulator OK |
-| Promo video (optional) | YouTube URL | Same recording as the background-location declaration video, or a higher-quality cut |
+| Promo video (optional) | YouTube URL | Same recording as the foreground-service declaration video, or a higher-quality cut |
 
 Required phone screenshot subjects (mirror iOS shot list 1–5 from doc 10):
 
@@ -271,7 +298,7 @@ Rules:
 - do not use lorem ipsum or broken placeholder states
 - avoid screenshots that expose a home address or private route
 - keep all on-screen copy aligned with the privacy policy and Data Safety answers
-- screenshot 6 (notification) is what Play reviewers look for to confirm background-location use is transparent — do not omit it
+- screenshot 6 (notification) is what Play reviewers look for to confirm the location foreground service is user-visible — do not omit it
 
 ## Pre-launch Verification
 
@@ -283,8 +310,8 @@ Before the first Internal Testing AAB upload:
 4. enable upload and confirm the build appears in Play Console → Internal Testing
 5. run a Firebase Test Lab pre-launch report against that build and resolve any flagged crashes
 6. install via Play Internal Testing tester link on a real Pixel and complete one drive end-to-end
-7. verify `targetSdkVersion` matches current Play policy (API 34 floor as of 2026)
-8. verify the AAB includes the privacy-policy-aligned set of `<uses-permission>` entries — no extras (especially nothing in the [Sensitive Permissions list](https://support.google.com/googleplay/android-developer/answer/9888170))
+7. verify `targetSdkVersion` meets current Play policy: the build targets API 35; if Play Console shows a 36 requirement, upgrade AGP to 8.9+ and target 36 before uploading
+8. verify the AAB's `<uses-permission>` entries are exactly the list in "Permissions the AAB declares" — no extras (especially nothing in the [Sensitive Permissions list](https://support.google.com/googleplay/android-developer/answer/9888170))
 
 ## First Internal Build Checklist
 
@@ -294,7 +321,7 @@ Before uploading a build to Internal Testing:
 2. privacy policy is published and explicitly names Android
 3. Play Console record exists with the final application id
 4. Data Safety answers match [06-security-and-privacy.md](06-security-and-privacy.md)
-5. background-location permissions declaration includes the demo-video URL
+5. foreground-service (location) declaration includes the demo-video URL
 6. `What's new` text is filled in
 7. no sign-in/demo credentials are declared
 8. one signed AAB has been installed locally on a Pixel via `bundletool` and opened successfully
@@ -308,7 +335,7 @@ Before promoting from Internal to Closed Testing (which starts the 14-day produc
 2. crash and log review show no forbidden PII leakage
 3. privacy policy URL is live and matches the in-app story
 4. screenshots are current (including the persistent-notification screenshot)
-5. background-location permissions declaration video is live and accurately reflects current onboarding
+5. foreground-service (location) declaration video is live and accurately reflects the current Start/Stop flow and notification
 6. ≥12 closed-testing volunteers have opted in via the Play tester link
 7. internal field-test evidence exists in the shape described by [09-internal-field-test-pack.md](09-internal-field-test-pack.md), with at least one Android-specific drive logged
 8. Firebase Test Lab pre-launch report shows zero blocking issues
@@ -347,7 +374,7 @@ These are not worth front-loading before Internal Testing:
 `Go` for promotion to Closed Testing when:
 
 - Internal Testing has produced at least one full clean drive
-- background-location permissions declaration with demo video is submitted
+- foreground-service (location) declaration with demo video is submitted
 - ≥12 testers are queued and ready to opt in
 
 `Go` for promotion to Production when:
@@ -360,7 +387,9 @@ These are not worth front-loading before Internal Testing:
 
 - privacy policy URL missing, stale, or doesn't name Android
 - Data Safety answers differ from [06-security-and-privacy.md](06-security-and-privacy.md)
-- background-location permissions declaration rejected or with a stale demo video
+- foreground-service (location) declaration rejected or with a stale demo video
+- `/terms` or `/support` pages linked from Settings still missing on `nsroadsense.ca`
+- application-id decision not made
 - signed AAB not yet validated on a real Pixel and at least one Samsung
 - Sentry Android wiring untested
 - Closed Testing volunteer count below 12 or window shorter than 14 continuous days

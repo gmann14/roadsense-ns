@@ -60,6 +60,11 @@ interface UploadBatchDao {
     @Query("DELETE FROM upload_batches WHERE state = :state AND last_attempt_at < :cutoff")
     suspend fun pruneTerminalBefore(state: UploadBatchState, cutoff: Instant): Int
 
+    /** "Upload now": make every pending batch due immediately instead of
+     *  waiting out its stored backoff. */
+    @Query("UPDATE upload_batches SET next_attempt_at = NULL WHERE state = :pendingState")
+    suspend fun clearBackoff(pendingState: UploadBatchState): Int
+
     @Query("DELETE FROM upload_batches")
     suspend fun deleteAll(): Int
 }
