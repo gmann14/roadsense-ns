@@ -41,6 +41,7 @@ Deno.test("potholes handler returns 200 with rows", async () => {
 
     assertEquals(response.status, 200);
     assertEquals(response.headers.get("x-request-id"), "req-potholes");
+    assertEquals(response.headers.get("cache-control"), "public, max-age=60, s-maxage=60");
     assertEquals((await response.json()).potholes.length, 1);
 });
 
@@ -70,4 +71,35 @@ Deno.test("potholes handler returns 503 when lookup fails upstream", async () =>
 
     assertEquals(response.status, 503);
     assertEquals((await response.json()).error, "service_unavailable");
+});
+
+Deno.test("potholes handler logs upstream failures with request id and route but no bbox", async () => {
+    const handler = createPotholesHandler({
+        fetchPotholes: async () => {
+            throw new Error("db down");
+        },
+    });
+    const logged: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => logged.push(args.map(String).join(" "));
+    let response: Response;
+    try {
+        response = await handler(
+            new Request("http://localhost/functions/v1/potholes?bbox=-63.60,44.64,-63.55,44.68", {
+                headers: { "x-request-id": "req-log-1" },
+            }),
+        );
+    } finally {
+        console.error = originalError;
+    }
+
+    assertEquals(response.status, 503);
+    assertEquals(response.headers.get("Retry-After"), "30");
+    await response.body?.cancel();
+    assertEquals(logged.length, 1);
+    const entry = JSON.parse(logged[0]);
+    assertEquals(entry.route, "potholes");
+    assertEquals(entry.request_id, "req-log-1");
+    assertEquals(entry.error_message, "db down");
+    assertEquals(logged[0].includes("44.64"), false);
 });

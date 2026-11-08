@@ -1,5 +1,8 @@
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, requestIdFrom } from "../_shared/http.ts";
+import { readBodyWithLimit } from "../_shared/body.ts";
 import { extractClientIp } from "../_shared/clientIp.ts";
+import { isRfc3339Timestamp } from "../_shared/validation.ts";
+import type { RateLimitResult } from "../_shared/rateLimit.ts";
 
 export { extractClientIp };
 
@@ -23,6 +26,20 @@ export const LAT_MIN = -90;
 export const LAT_MAX = 90;
 export const LNG_MIN = -180;
 export const LNG_MAX = 180;
+
+// Action-time window (review 2026-10-18 N1). A `confirm_present` with
+// recorded_at=2099 used to set last_confirmed_at=2099, making the pothole
+// permanent and unresolvable, and back-dated actions slipped past the 24 h
+// dedupe. Five minutes of future skew covers client clock drift; 30 days
+// covers an action that sat in an offline queue for a long time.
+export const RECORDED_AT_MAX_FUTURE_MS = 5 * 60 * 1000;
+export const RECORDED_AT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+// pothole_actions.accuracy_m is NUMERIC(5,2) (max 999.99), so larger values
+// used to fail the cast and surface as 502. A manual report from a fix worse
+// than 500 m can't be placed on a road anyway.
+export const ACCURACY_M_MIN = 0;
+export const ACCURACY_M_MAX = 500;
 
 export type PotholeActionPayload = {
     action_id: string;
@@ -50,7 +67,7 @@ export type ValidationResult =
     | { ok: true; payload: PotholeActionPayload }
     | { ok: false; fieldErrors: Record<string, string> };
 
-export type RateLimitResult = { ok: true; retryAfterSeconds: 0 } | { ok: false; retryAfterSeconds: number };
+export type { RateLimitResult };
 
 export type PotholeActionHandlerDeps = {
     hashDeviceToken: (deviceToken: string) => Promise<string>;
@@ -65,11 +82,20 @@ function isFiniteNumber(value: unknown): value is number {
     return typeof value === "number" && Number.isFinite(value);
 }
 
-function isIsoTimestamp(value: unknown): value is string {
-    return typeof value === "string" && !Number.isNaN(Date.parse(value));
+// Null when the timestamp is inside the accepted window, otherwise the
+// field-error message.
+function recordedAtWindowError(value: string, now: Date): string | null {
+    const at = Date.parse(value);
+    if (at > now.getTime() + RECORDED_AT_MAX_FUTURE_MS) {
+        return "must not be more than 5 minutes in the future";
+    }
+    if (at < now.getTime() - RECORDED_AT_MAX_AGE_MS) {
+        return "must not be more than 30 days old";
+    }
+    return null;
 }
 
-export function validatePotholeActionPayload(payload: unknown): ValidationResult {
+export function validatePotholeActionPayload(payload: unknown, now: Date = new Date()): ValidationResult {
     if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
         return {
             ok: false,
@@ -89,7 +115,7 @@ export function validatePotholeActionPayload(payload: unknown): ValidationResult
         fieldErrors.device_token = "must be a UUIDv4 string";
     }
 
-    if (!isIsoTimestamp(input.client_sent_at)) {
+    if (!isRfc3339Timestamp(input.client_sent_at)) {
         fieldErrors.client_sent_at = "must be an RFC3339 timestamp";
     }
 
@@ -129,10 +155,18 @@ export function validatePotholeActionPayload(payload: unknown): ValidationResult
 
     if (!(input.accuracy_m === null || input.accuracy_m === undefined || isFiniteNumber(input.accuracy_m))) {
         fieldErrors.accuracy_m = "must be numeric or null";
+    } else if (
+        isFiniteNumber(input.accuracy_m) &&
+        (input.accuracy_m < ACCURACY_M_MIN || input.accuracy_m > ACCURACY_M_MAX)
+    ) {
+        fieldErrors.accuracy_m = `must be between ${ACCURACY_M_MIN} and ${ACCURACY_M_MAX}`;
     }
 
-    if (!isIsoTimestamp(input.recorded_at)) {
+    if (!isRfc3339Timestamp(input.recorded_at)) {
         fieldErrors.recorded_at = "must be an RFC3339 timestamp";
+    } else {
+        const windowError = recordedAtWindowError(input.recorded_at, now);
+        if (windowError) fieldErrors.recorded_at = windowError;
     }
 
     const sensorBackedMagnitude = input.sensor_backed_magnitude_g;
@@ -146,8 +180,13 @@ export function validatePotholeActionPayload(payload: unknown): ValidationResult
         }
     }
 
-    if (hasSensorBackedAt && !isIsoTimestamp(sensorBackedAt)) {
-        fieldErrors.sensor_backed_at = "must be an RFC3339 timestamp";
+    if (hasSensorBackedAt) {
+        if (!isRfc3339Timestamp(sensorBackedAt)) {
+            fieldErrors.sensor_backed_at = "must be an RFC3339 timestamp";
+        } else {
+            const windowError = recordedAtWindowError(sensorBackedAt, now);
+            if (windowError) fieldErrors.sensor_backed_at = windowError;
+        }
     }
 
     if (hasSensorBackedMagnitude !== hasSensorBackedAt) {
@@ -195,7 +234,7 @@ export function validatePotholeActionPayload(payload: unknown): ValidationResult
 
 export function createPotholeActionsHandler(deps: PotholeActionHandlerDeps) {
     return async function handlePotholeActions(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "POST") {
             return new Response(null, {
@@ -204,10 +243,11 @@ export function createPotholeActionsHandler(deps: PotholeActionHandlerDeps) {
             });
         }
 
-        const contentLengthHeader = req.headers.get("content-length");
-        if (contentLengthHeader) {
-            const declaredLength = Number(contentLengthHeader);
-            if (Number.isFinite(declaredLength) && declaredLength > MAX_PAYLOAD_BYTES) {
+        // Streamed with a byte counter so a chunked body (no Content-Length)
+        // or an understated one can't be buffered whole before the cap runs.
+        const body = await readBodyWithLimit(req, MAX_PAYLOAD_BYTES);
+        if (!body.ok) {
+            if (body.reason === "too_large") {
                 return errorResponse(
                     "payload_too_large",
                     "Pothole action payload is too large.",
@@ -215,12 +255,6 @@ export function createPotholeActionsHandler(deps: PotholeActionHandlerDeps) {
                     requestId,
                 );
             }
-        }
-
-        let rawText: string;
-        try {
-            rawText = await req.text();
-        } catch {
             return errorResponse(
                 "validation_failed",
                 "Payload is malformed.",
@@ -229,15 +263,7 @@ export function createPotholeActionsHandler(deps: PotholeActionHandlerDeps) {
                 { field_errors: { payload: "must be readable" } },
             );
         }
-
-        if (rawText.length > MAX_PAYLOAD_BYTES) {
-            return errorResponse(
-                "payload_too_large",
-                "Pothole action payload is too large.",
-                413,
-                requestId,
-            );
-        }
+        const rawText = body.text;
 
         let rawPayload: unknown;
         try {

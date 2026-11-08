@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { createUploadReadingsHandler, type RateLimitResult, type UploadPayload, type UploadResult } from "./handler.ts";
+import { createUploadReadingsHandler, type UploadPayload, type UploadResult } from "./handler.ts";
 import { createRateLimitChecker, hashDeviceToken, requireEnv, type RpcResponse } from "./runtime.ts";
 
 function createIngestBatch(
@@ -36,7 +36,7 @@ async function invokeRpc<T>(fn: string, params: Record<string, unknown>): Promis
 Deno.serve(
     createUploadReadingsHandler({
         hashDeviceToken,
-        checkRateLimit: createRateLimitChecker(invokeRpc) as (tokenHashHex: string, ip: string) => Promise<RateLimitResult>,
+        checkRateLimit: createRateLimitChecker(invokeRpc),
         ingestBatch: createIngestBatch(invokeRpc),
     }),
 );

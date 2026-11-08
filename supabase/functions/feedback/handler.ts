@@ -1,5 +1,7 @@
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, requestIdFrom } from "../_shared/http.ts";
+import { readBodyWithLimit } from "../_shared/body.ts";
 import { extractClientIp } from "../_shared/clientIp.ts";
+import type { RateLimitResult } from "../_shared/rateLimit.ts";
 
 export { extractClientIp };
 
@@ -52,9 +54,7 @@ export type ValidationResult =
     | { ok: true; payload: FeedbackPayload }
     | { ok: false; fieldErrors: Record<string, string> };
 
-export type RateLimitResult =
-    | { ok: true; retryAfterSeconds: 0 }
-    | { ok: false; retryAfterSeconds: number };
+export type { RateLimitResult };
 
 export type FeedbackHandlerDeps = {
     checkRateLimit: (ip: string) => Promise<RateLimitResult>;
@@ -151,7 +151,7 @@ export function validateFeedbackPayload(payload: unknown): ValidationResult {
 
 export function createFeedbackHandler(deps: FeedbackHandlerDeps) {
     return async function handleFeedback(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "POST") {
             return new Response(null, {
@@ -160,10 +160,11 @@ export function createFeedbackHandler(deps: FeedbackHandlerDeps) {
             });
         }
 
-        const contentLengthHeader = req.headers.get("content-length");
-        if (contentLengthHeader) {
-            const declaredLength = Number(contentLengthHeader);
-            if (Number.isFinite(declaredLength) && declaredLength > MAX_PAYLOAD_BYTES) {
+        // Streamed with a byte counter so a chunked body (no Content-Length)
+        // or an understated one can't be buffered whole before the cap runs.
+        const body = await readBodyWithLimit(req, MAX_PAYLOAD_BYTES);
+        if (!body.ok) {
+            if (body.reason === "too_large") {
                 return errorResponse(
                     "payload_too_large",
                     "Feedback payload is too large.",
@@ -171,12 +172,6 @@ export function createFeedbackHandler(deps: FeedbackHandlerDeps) {
                     requestId,
                 );
             }
-        }
-
-        let rawText: string;
-        try {
-            rawText = await req.text();
-        } catch {
             return errorResponse(
                 "validation_failed",
                 "Payload is malformed.",
@@ -185,15 +180,7 @@ export function createFeedbackHandler(deps: FeedbackHandlerDeps) {
                 { field_errors: { payload: "must be readable" } },
             );
         }
-
-        if (rawText.length > MAX_PAYLOAD_BYTES) {
-            return errorResponse(
-                "payload_too_large",
-                "Feedback payload is too large.",
-                413,
-                requestId,
-            );
-        }
+        const rawText = body.text;
 
         let rawPayload: unknown;
         try {

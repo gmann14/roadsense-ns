@@ -8,6 +8,7 @@ import {
 } from "./handler.ts";
 import { createFeedbackRateLimitChecker } from "./runtime.ts";
 import type { RpcResponse } from "../upload-readings/runtime.ts";
+import { endlessChunkedPost, unexpectedCall } from "../_shared/test_helpers.ts";
 
 const validPayload = {
     source: "ios",
@@ -75,12 +76,15 @@ Deno.test("extractClientIp uses the last public forwarded hop before fallback he
     assertEquals(extractClientIp(new Headers()), "unknown");
 });
 
-Deno.test("extractClientIp prefers the worker-trusted x-client-ip over x-forwarded-for", () => {
+Deno.test("extractClientIp prefers x-client-ip over x-forwarded-for only with valid origin auth", () => {
     const headers = new Headers({
         "x-client-ip": "1.2.3.4",
+        "x-origin-auth": "worker-secret",
         "x-forwarded-for": "203.0.113.7, 198.51.100.99",
     });
-    assertEquals(extractClientIp(headers), "1.2.3.4");
+    assertEquals(extractClientIp(headers, "worker-secret"), "1.2.3.4");
+    // Same headers, no secret configured on the gateway: x-client-ip is spoofable, so ignored.
+    assertEquals(extractClientIp(headers, ""), "198.51.100.99");
 });
 
 Deno.test("validateFeedbackPayload rejects unknown source/category and short message", () => {
@@ -465,4 +469,36 @@ Deno.test("createFeedbackRateLimitChecker hits IP bucket and returns retry secon
     }
     assertEquals(calls[0].p_key, "feedback-ip:203.0.113.10");
     assertEquals(calls[0].p_limit, 10);
+});
+
+Deno.test("feedback handler aborts a chunked body with no Content-Length once it passes the byte cap", async () => {
+    const handler = createFeedbackHandler({
+        checkRateLimit: unexpectedCall("checkRateLimit"),
+        insertFeedback: unexpectedCall("insertFeedback"),
+    });
+    const { request, pulls } = endlessChunkedPost("http://localhost/functions/v1/feedback");
+
+    const response = await handler(request);
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+    // 16 KiB chunks against a <= 256 KiB cap: the stream is cancelled after a
+    // handful of chunks instead of being drained (10,000 chunks = ~160 MB).
+    assertEquals(pulls() < 40, true);
+});
+
+Deno.test("createFeedbackRateLimitChecker keys IPv6 clients on their /64", async () => {
+    const keys: unknown[] = [];
+    const checker = createFeedbackRateLimitChecker(
+        async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
+            keys.push(params.p_key);
+            return { data: true as T, error: null };
+        },
+        () => new Date("2026-11-08T15:30:00Z"),
+    );
+
+    await checker("2001:db8:abcd:12:1111:2222:3333:4444");
+    await checker("2001:db8:abcd:12::9");
+
+    assertEquals(keys.filter((key) => key === "feedback-ip:2001:db8:abcd:12::/64").length, 2);
 });

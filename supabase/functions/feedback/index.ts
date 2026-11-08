@@ -3,7 +3,6 @@ import {
     createFeedbackHandler,
     type FeedbackInsertResult,
     type FeedbackPayload,
-    type RateLimitResult,
 } from "./handler.ts";
 import { createFeedbackRateLimitChecker } from "./runtime.ts";
 import { requireEnv, type RpcResponse } from "../upload-readings/runtime.ts";
@@ -52,7 +51,7 @@ async function insertFeedback(params: {
 
 Deno.serve(
     createFeedbackHandler({
-        checkRateLimit: createFeedbackRateLimitChecker(invokeRpc) as (ip: string) => Promise<RateLimitResult>,
+        checkRateLimit: createFeedbackRateLimitChecker(invokeRpc),
         insertFeedback,
     }),
 );

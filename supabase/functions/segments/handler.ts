@@ -1,4 +1,5 @@
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_SHORT, requestIdFrom } from "../_shared/http.ts";
+import { logHandlerError } from "../_shared/log.ts";
 
 export type SegmentAggregate = {
     avg_roughness_score: number;
@@ -48,7 +49,7 @@ export function createSegmentsHandler(
     deps: { fetchSegmentDetail: (segmentId: string) => Promise<SegmentDetail | null> },
 ) {
     return async function handleSegmentsRequest(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "GET" && req.method !== "HEAD") {
             return new Response(null, {
@@ -75,10 +76,11 @@ export function createSegmentsHandler(
                     neighbors: null,
                 },
                 200,
-                {},
+                { "cache-control": PUBLIC_JSON_CACHE_CONTROL_SHORT },
                 requestId,
             );
-        } catch {
+        } catch (error) {
+            logHandlerError("segments", requestId, error);
             return errorResponse(
                 "service_unavailable",
                 "Segment lookup failed.",

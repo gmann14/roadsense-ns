@@ -1,4 +1,5 @@
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, PUBLIC_JSON_CACHE_CONTROL_MEDIUM, requestIdFrom } from "../_shared/http.ts";
+import { logHandlerError } from "../_shared/log.ts";
 
 export type WorstSegmentRow = {
     rank: number;
@@ -39,6 +40,42 @@ export function parseWorstSegmentsQuery(url: URL): WorstSegmentsQuery | null {
     return { municipality, limit };
 }
 
+// The municipality allowlist is a DISTINCT over road_segments, which only
+// changes when the road network is re-imported. Without a cache every
+// filtered request ran that scan (review 2026-10-18 P2), so it is held
+// in-process for ten minutes.
+export const MUNICIPALITY_CACHE_TTL_MS = 10 * 60 * 1000;
+
+/// Wraps the allowlist query with an in-process TTL cache. Concurrent callers
+/// share one in-flight query; a failed query is not cached, so the next
+/// request retries.
+export function createCachedMunicipalityLookup(
+    fetchKnownMunicipalities: () => Promise<string[]>,
+    options: { ttlMs?: number; now?: () => number } = {},
+): () => Promise<string[]> {
+    const ttlMs = options.ttlMs ?? MUNICIPALITY_CACHE_TTL_MS;
+    const now = options.now ?? (() => Date.now());
+    let cached: { value: string[]; expiresAt: number } | null = null;
+    let inFlight: Promise<string[]> | null = null;
+
+    return () => {
+        if (cached && now() < cached.expiresAt) {
+            return Promise.resolve(cached.value);
+        }
+        if (!inFlight) {
+            inFlight = fetchKnownMunicipalities()
+                .then((value) => {
+                    cached = { value, expiresAt: now() + ttlMs };
+                    return value;
+                })
+                .finally(() => {
+                    inFlight = null;
+                });
+        }
+        return inFlight;
+    };
+}
+
 export function createSegmentsWorstHandler(
     deps: {
         fetchKnownMunicipalities: () => Promise<string[]>;
@@ -46,7 +83,7 @@ export function createSegmentsWorstHandler(
     },
 ) {
     return async function handleSegmentsWorstRequest(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "GET" && req.method !== "HEAD") {
             return new Response(null, {
@@ -86,10 +123,11 @@ export function createSegmentsWorstHandler(
                     rows: result.rows,
                 },
                 200,
-                { "cache-control": "public, max-age=900, s-maxage=900" },
+                { "cache-control": PUBLIC_JSON_CACHE_CONTROL_MEDIUM },
                 requestId,
             );
-        } catch {
+        } catch (error) {
+            logHandlerError("segments-worst", requestId, error);
             return errorResponse(
                 "service_unavailable",
                 "Worst-segments lookup failed.",

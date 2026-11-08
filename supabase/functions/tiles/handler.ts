@@ -1,3 +1,6 @@
+import { requestIdFrom } from "../_shared/http.ts";
+import { logHandlerError } from "../_shared/log.ts";
+
 export const TILE_CONTENT_TYPE = "application/vnd.mapbox-vector-tile";
 export const TILE_CACHE_CONTROL = "public, max-age=3600, s-maxage=3600";
 
@@ -116,7 +119,7 @@ export function normalizeTilePayload(data: unknown): Uint8Array | null {
 
 export function createTileHandler(deps: { rpcGetTile: TileRpc }) {
     return async function handleTileRequest(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "GET" && req.method !== "HEAD") {
             return new Response(null, {
@@ -135,6 +138,7 @@ export function createTileHandler(deps: { rpcGetTile: TileRpc }) {
 
         const { data, error } = await deps.rpcGetTile(tileParams);
         if (error) {
+            logHandlerError("tiles", requestId, error);
             return new Response("error", {
                 status: 500,
                 headers: { "x-request-id": requestId },

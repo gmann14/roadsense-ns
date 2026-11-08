@@ -4,9 +4,12 @@ import {
     extractClientIp,
     MAX_PAYLOAD_BYTES,
     maxPotholeReadingsForBatch,
+    mergeGatewayRejections,
     validateUploadPayload,
 } from "./handler.ts";
 import { createRateLimitChecker, type RpcResponse } from "./runtime.ts";
+import { createPgFindProcessedBatch } from "./pgRuntime.ts";
+import { endlessChunkedPost, unexpectedCall } from "../_shared/test_helpers.ts";
 
 const validPayload = {
     batch_id: "b5f6a3c2-8e10-4d1f-9a7b-0e2c6d4f8a31",
@@ -51,26 +54,30 @@ Deno.test("extractClientIp prefers the worker-trusted x-client-ip over x-forward
     // Regression for the shared-egress-IP bug: through the Cloudflare worker,
     // the rightmost public entry in x-forwarded-for is Cloudflare's own egress
     // IP, not the real client. x-client-ip is set by our worker from its own
-    // cf-connecting-ip and must win.
+    // cf-connecting-ip and must win -- but only when the request also proves
+    // it came through the worker (x-origin-auth, review P0-4).
     const headers = new Headers({
         "x-client-ip": "1.2.3.4",
+        "x-origin-auth": "worker-secret",
         "x-forwarded-for": "203.0.113.7, 198.51.100.99",
     });
-    assertEquals(extractClientIp(headers), "1.2.3.4");
+    assertEquals(extractClientIp(headers, "worker-secret"), "1.2.3.4");
 });
 
 Deno.test("extractClientIp ignores a private/malformed x-client-ip and falls back", () => {
     const privateIp = new Headers({
         "x-client-ip": "10.0.0.5",
+        "x-origin-auth": "worker-secret",
         "x-forwarded-for": "203.0.113.7, 10.0.0.1",
     });
-    assertEquals(extractClientIp(privateIp), "203.0.113.7");
+    assertEquals(extractClientIp(privateIp, "worker-secret"), "203.0.113.7");
 
     const malformed = new Headers({
         "x-client-ip": "not-an-ip",
+        "x-origin-auth": "worker-secret",
         "x-real-ip": "198.51.100.10",
     });
-    assertEquals(extractClientIp(malformed), "198.51.100.10");
+    assertEquals(extractClientIp(malformed, "worker-secret"), "198.51.100.10");
 });
 
 Deno.test("validateUploadPayload rejects malformed payloads", () => {
@@ -94,70 +101,119 @@ Deno.test("validateUploadPayload rejects malformed payloads", () => {
     }
 });
 
-Deno.test("validateUploadPayload rejects forged out-of-range pothole_magnitude", () => {
-    const result = validateUploadPayload({
+// Per-reading value problems are rejected individually (counted in
+// gatewayRejectedReasons and merged into rejected_reasons), never by failing
+// the whole batch (review 2026-10-18 theme 3 / N8).
+function okResult(result: ReturnType<typeof validateUploadPayload>) {
+    if (!result.ok) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+    return result;
+}
+
+Deno.test("validateUploadPayload drops forged out-of-range pothole_magnitude readings, keeping the rest", () => {
+    const result = okResult(validateUploadPayload({
         ...validPayload,
         readings: [
             { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 50 },
             { ...validPayload.readings[0], is_pothole: false, pothole_magnitude: -0.5 },
+            validPayload.readings[0],
         ],
-    });
+    }));
 
-    assertEquals(result.ok, false);
-    if (!result.ok && result.error === "validation_failed") {
-        assertObjectMatch(result.fieldErrors ?? {}, {
-            "readings[0].pothole_magnitude": "must be between 0 and 8",
-            "readings[1].pothole_magnitude": "must be between 0 and 8",
-        });
-    }
+    assertEquals(result.payload.readings.length, 1);
+    assertEquals(result.gatewayRejectedReasons, { invalid_pothole_magnitude: 2 });
 });
 
-Deno.test("validateUploadPayload rejects physically impossible speeds", () => {
-    const result = validateUploadPayload({
+Deno.test("validateUploadPayload drops physically impossible speeds as invalid_speed", () => {
+    const result = okResult(validateUploadPayload({
         ...validPayload,
         readings: [
             { ...validPayload.readings[0], speed_kmh: 300 },
             { ...validPayload.readings[0], speed_kmh: -5 },
         ],
+    }));
+
+    assertEquals(result.payload.readings, []);
+    assertEquals(result.gatewayRejectedReasons, { invalid_speed: 2 });
+});
+
+Deno.test("validateUploadPayload drops is_pothole=true readings below the detector spike threshold", () => {
+    const result = okResult(validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 0.4 },
+            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: null },
+        ],
+    }));
+
+    assertEquals(result.payload.readings, []);
+    assertEquals(result.gatewayRejectedReasons, { invalid_pothole_magnitude: 2 });
+});
+
+Deno.test("validateUploadPayload drops negative or absurd gps_accuracy_m as invalid_gps_accuracy", () => {
+    const result = okResult(validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], gps_accuracy_m: -1 },
+            { ...validPayload.readings[0], gps_accuracy_m: 1000.5 },
+            { ...validPayload.readings[0], gps_accuracy_m: 0 },
+            { ...validPayload.readings[0], gps_accuracy_m: 1000 },
+        ],
+    }));
+
+    assertEquals(result.payload.readings.map((r) => r.gps_accuracy_m), [0, 1000]);
+    assertEquals(result.gatewayRejectedReasons, { invalid_gps_accuracy: 2 });
+});
+
+Deno.test("validateUploadPayload stores a heading outside [0, 360) as null instead of rejecting", () => {
+    const result = okResult(validateUploadPayload({
+        ...validPayload,
+        readings: [-1, 0, 359.9, 360, 10000].map((heading) => ({ ...validPayload.readings[0], heading })),
+    }));
+
+    assertEquals(result.payload.readings.map((r) => r.heading), [null, 0, 359.9, null, null]);
+    assertEquals(result.gatewayRejectedReasons, {});
+});
+
+Deno.test("validateUploadPayload still 400s structurally wrong reading fields", () => {
+    const result = validateUploadPayload({
+        ...validPayload,
+        readings: [
+            { ...validPayload.readings[0], heading: "north" },
+            { ...validPayload.readings[0], gps_accuracy_m: null },
+            { ...validPayload.readings[0], recorded_at: "0" },
+        ],
     });
 
     assertEquals(result.ok, false);
     if (!result.ok && result.error === "validation_failed") {
         assertObjectMatch(result.fieldErrors ?? {}, {
-            "readings[0].speed_kmh": "must be between 0 and 220",
-            "readings[1].speed_kmh": "must be between 0 and 220",
+            "readings[0].heading": "must be numeric or null",
+            "readings[1].gps_accuracy_m": "must be numeric",
+            "readings[2].recorded_at": "must be an RFC3339 timestamp",
         });
     }
 });
 
-Deno.test("validateUploadPayload rejects is_pothole=true below the detector spike threshold", () => {
-    const belowThreshold = validateUploadPayload({
-        ...validPayload,
-        readings: [
-            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 0.4 },
-        ],
-    });
-
-    assertEquals(belowThreshold.ok, false);
-    if (!belowThreshold.ok && belowThreshold.error === "validation_failed") {
-        assertObjectMatch(belowThreshold.fieldErrors ?? {}, {
-            "readings[0].pothole_magnitude": "must be at least 1 when is_pothole is true",
-        });
+Deno.test("validateUploadPayload rejects non-RFC3339 client_sent_at that Date.parse accepts", () => {
+    for (const client_sent_at of ["0", "2026-04-17", "April 17 2026", "2026-02-30T00:00:00Z"]) {
+        const result = validateUploadPayload({ ...validPayload, client_sent_at });
+        assertEquals(result.ok, false, client_sent_at);
     }
+});
 
-    const missingMagnitude = validateUploadPayload({
-        ...validPayload,
-        readings: [
-            { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: null },
-        ],
-    });
-
-    assertEquals(missingMagnitude.ok, false);
-    if (!missingMagnitude.ok && missingMagnitude.error === "validation_failed") {
-        assertObjectMatch(missingMagnitude.fieldErrors ?? {}, {
-            "readings[0].pothole_magnitude": "must be numeric when is_pothole is true",
-        });
-    }
+Deno.test("mergeGatewayRejections adds gateway counts to the SQL result", () => {
+    assertEquals(
+        mergeGatewayRejections(
+            { accepted: 3, rejected: 2, duplicate: false, rejected_reasons: { low_quality: 1, out_of_bounds: 1 } },
+            { out_of_bounds: 2, invalid_speed: 1 },
+        ),
+        {
+            accepted: 3,
+            rejected: 5,
+            duplicate: false,
+            rejected_reasons: { low_quality: 1, out_of_bounds: 3, invalid_speed: 1 },
+        },
+    );
 });
 
 Deno.test("validateUploadPayload rejects an all-pothole batch", () => {
@@ -231,12 +287,59 @@ Deno.test("upload handler rejects a forged max-severity batch end to end", async
         }),
     );
 
+    // The pothole-fraction cap is a batch-level forgery signal, so it still
+    // fails the whole batch.
     assertEquals(response.status, 400);
     const body = await response.json();
     assertEquals(body.error, "validation_failed");
-    assertMatch(body.field_errors["readings[0].pothole_magnitude"], /between 0 and 8/);
     assertMatch(body.field_errors.readings, /too many pothole-flagged readings/);
     assertEquals(ingestCalled, false);
+});
+
+Deno.test("upload handler soft-rejects bad readings and merges them into the response counts", async () => {
+    let ingestedReadings: unknown[] = [];
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+        ingestBatch: async ({ payload }) => {
+            ingestedReadings = payload.readings;
+            return {
+                accepted: payload.readings.length - 1,
+                rejected: 1,
+                duplicate: false,
+                rejected_reasons: { low_quality: 1 },
+            };
+        },
+    });
+
+    const readings = [
+        validPayload.readings[0],
+        validPayload.readings[0],
+        { ...validPayload.readings[0], heading: 10000 },
+        { ...validPayload.readings[0], gps_accuracy_m: -1 },
+        { ...validPayload.readings[0], is_pothole: true, pothole_magnitude: 9.5 },
+        { ...validPayload.readings[0], lat: 95 },
+    ];
+    const response = await handler(
+        new Request("http://localhost/functions/v1/upload-readings", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...validPayload, readings }),
+        }),
+    );
+
+    assertEquals(response.status, 200);
+    const body = await response.json();
+    assertEquals(ingestedReadings.length, 3);
+    assertEquals(body.accepted, 2);
+    assertEquals(body.rejected, 4);
+    assertEquals(body.accepted + body.rejected, readings.length);
+    assertEquals(body.rejected_reasons, {
+        low_quality: 1,
+        invalid_gps_accuracy: 1,
+        invalid_pothole_magnitude: 1,
+        out_of_bounds: 1,
+    });
 });
 
 Deno.test("validateUploadPayload returns batch_too_large for >1000 readings", () => {
@@ -645,25 +748,19 @@ Deno.test("validateUploadPayload rejects overlong client_app_version/client_os_v
 
 // ── P1-7: world-bounds validation ──
 
-Deno.test("validateUploadPayload rejects out-of-range lat/lng", () => {
-    const result = validateUploadPayload({
+Deno.test("validateUploadPayload drops out-of-range lat/lng readings as out_of_bounds", () => {
+    const result = okResult(validateUploadPayload({
         ...validPayload,
         readings: [
             { ...validPayload.readings[0], lat: 91, lng: -63.5752 },
             { ...validPayload.readings[0], lat: 44.6488, lng: 181 },
             { ...validPayload.readings[0], lat: -91, lng: -181 },
+            validPayload.readings[0],
         ],
-    });
+    }));
 
-    assertEquals(result.ok, false);
-    if (!result.ok && result.error === "validation_failed") {
-        assertObjectMatch(result.fieldErrors ?? {}, {
-            "readings[0].lat": "must be between -90 and 90",
-            "readings[1].lng": "must be between -180 and 180",
-            "readings[2].lat": "must be between -90 and 90",
-            "readings[2].lng": "must be between -180 and 180",
-        });
-    }
+    assertEquals(result.payload.readings.length, 1);
+    assertEquals(result.gatewayRejectedReasons, { out_of_bounds: 3 });
 });
 
 Deno.test("validateUploadPayload accepts boundary lat/lng values", () => {
@@ -676,4 +773,157 @@ Deno.test("validateUploadPayload accepts boundary lat/lng values", () => {
     });
 
     assertEquals(result.ok, true);
+});
+
+Deno.test("upload handler aborts a chunked body with no Content-Length once it passes the byte cap", async () => {
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: unexpectedCall("hashDeviceToken"),
+        checkRateLimit: unexpectedCall("checkRateLimit"),
+        ingestBatch: unexpectedCall("ingestBatch"),
+    });
+    const { request, pulls } = endlessChunkedPost("http://localhost/functions/v1/upload-readings");
+
+    const response = await handler(request);
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+    // 16 KiB chunks against a <= 256 KiB cap: the stream is cancelled after a
+    // handful of chunks instead of being drained (10,000 chunks = ~160 MB).
+    assertEquals(pulls() < 40, true);
+});
+
+Deno.test("createRateLimitChecker keys IPv6 clients on their /64", async () => {
+    const keys: unknown[] = [];
+    const checker = createRateLimitChecker(
+        async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
+            keys.push(params.p_key);
+            return { data: true as T, error: null };
+        },
+        () => new Date("2026-11-08T15:30:00Z"),
+    );
+
+    await checker("deadbeef", "2001:db8:abcd:12:1111:2222:3333:4444");
+    await checker("deadbeef", "2001:db8:abcd:12::9");
+
+    assertEquals(keys.filter((key) => key === "ip:2001:db8:abcd:12::/64").length, 2);
+});
+
+// ── Already-processed batches skip the quota (review 2026-10-18 P2) ──
+
+function uploadRequest(body: unknown): Request {
+    return new Request("http://localhost/functions/v1/upload-readings", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.10" },
+        body: JSON.stringify(body),
+    });
+}
+
+Deno.test("upload handler answers a retried batch from the stored outcome without spending quota", async () => {
+    const lookups: Array<{ batchId: string; tokenHashHex: string }> = [];
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: unexpectedCall("checkRateLimit"),
+        ingestBatch: unexpectedCall("ingestBatch"),
+        findProcessedBatch: async (params) => {
+            lookups.push(params);
+            return { accepted: 1, rejected: 0, duplicate: true, rejected_reasons: {} };
+        },
+    });
+
+    const response = await handler(uploadRequest(validPayload));
+
+    assertEquals(response.status, 200);
+    const body = await response.json();
+    assertEquals(body.duplicate, true);
+    assertEquals(body.accepted, 1);
+    assertEquals(body.batch_id, validPayload.batch_id);
+    assertEquals(lookups, [{ batchId: validPayload.batch_id, tokenHashHex: "deadbeef" }]);
+});
+
+Deno.test("upload handler spends quota and ingests when the batch is new", async () => {
+    let rateLimited = 0;
+    let ingested = 0;
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => {
+            rateLimited += 1;
+            return { ok: true, retryAfterSeconds: 0 };
+        },
+        ingestBatch: async () => {
+            ingested += 1;
+            return { accepted: 1, rejected: 0, duplicate: false, rejected_reasons: {} };
+        },
+        findProcessedBatch: async () => null,
+    });
+
+    const response = await handler(uploadRequest(validPayload));
+
+    assertEquals(response.status, 200);
+    assertEquals((await response.json()).duplicate, false);
+    assertEquals([rateLimited, ingested], [1, 1]);
+});
+
+Deno.test("upload handler falls back to the rate-limited path when the duplicate lookup fails", async () => {
+    let ingested = 0;
+    const logged: string[] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => logged.push(args.map(String).join(" "));
+    let response: Response;
+    try {
+        const handler = createUploadReadingsHandler({
+            hashDeviceToken: async () => "deadbeef",
+            checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
+            ingestBatch: async () => {
+                ingested += 1;
+                return { accepted: 1, rejected: 0, duplicate: false, rejected_reasons: {} };
+            },
+            findProcessedBatch: async () => {
+                throw new Error("lookup timeout");
+            },
+        });
+        response = await handler(uploadRequest(validPayload));
+    } finally {
+        console.error = originalError;
+    }
+
+    assertEquals(response.status, 200);
+    await response.body?.cancel();
+    assertEquals(ingested, 1);
+    assertEquals(logged.length, 1);
+    assertEquals(logged[0].includes("deadbeef"), false);
+});
+
+Deno.test("upload handler still rate-limits a retried batch when it is IP-limited and not yet processed", async () => {
+    const handler = createUploadReadingsHandler({
+        hashDeviceToken: async () => "deadbeef",
+        checkRateLimit: async () => ({ ok: false, retryAfterSeconds: 120 }),
+        ingestBatch: unexpectedCall("ingestBatch"),
+        findProcessedBatch: async () => null,
+    });
+
+    const response = await handler(uploadRequest(validPayload));
+    assertEquals(response.status, 429);
+    await response.body?.cancel();
+});
+
+Deno.test("createPgFindProcessedBatch maps the stored row and scopes the lookup to the device", async () => {
+    const queries: string[] = [];
+    const values: unknown[][] = [];
+    const sql = (strings: TemplateStringsArray, ...params: unknown[]) => {
+        queries.push(strings.join("?"));
+        values.push(params);
+        return Promise.resolve([{ accepted_count: "7", rejected_count: 2, rejected_reasons: { out_of_bounds: "2", bogus: "x" } }]);
+    };
+
+    const result = await createPgFindProcessedBatch(sql as never)({ batchId: "b-1", tokenHashHex: "deadbeef" });
+
+    assertEquals(result, { accepted: 7, rejected: 2, duplicate: true, rejected_reasons: { out_of_bounds: 2 } });
+    assertMatch(queries[0], /FROM processed_batches/);
+    assertMatch(queries[0], /device_token_hash/);
+    assertEquals(values[0], ["b-1", "deadbeef"]);
+});
+
+Deno.test("createPgFindProcessedBatch returns null for an unknown batch", async () => {
+    const sql = () => Promise.resolve([]);
+    assertEquals(await createPgFindProcessedBatch(sql as never)({ batchId: "b-2", tokenHashHex: "00" }), null);
 });

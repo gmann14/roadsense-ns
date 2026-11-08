@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert";
-import { dispatch, route } from "./_shared/routes.ts";
+import { dispatch, matchRoute, route } from "./_shared/routes.ts";
 import { assertApiKeyConfiguredForEnvironment, verifyApiKey } from "./_shared/apikey.ts";
 import { createPgRpc } from "./_shared/pgRpc.ts";
 import {
@@ -12,7 +12,7 @@ import {
 import { isRailwayInternalUrl } from "./db.ts";
 import { isValidTileCoord, MAX_TILE_ZOOM, parseTilePath } from "./tiles/handler.ts";
 import { parseCoverageTilePath } from "./tiles-coverage/handler.ts";
-import { handleRequest } from "./server.ts";
+import { createShutdownHandler, handleRequest, ROUTES } from "./server.ts";
 
 Deno.test("dispatch returns 404 for an unmatched URL", async () => {
     const routes = [
@@ -238,11 +238,32 @@ Deno.test("handleRequest routes top-potholes through the Deno API surface", asyn
     }
 });
 
+Deno.test("handleRequest gates device-tokens/challenge behind ATTESTATION_ENABLED by default", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, ATTESTATION_ENABLED: undefined }, async () => {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/device-tokens/challenge", { method: "POST" }),
+        );
+        assertEquals(res.status, 503);
+        assertEquals(res.headers.get("Retry-After") !== null, true);
+        assertEquals((await res.json()).error, "attestation_disabled");
+    }));
+
+Deno.test("handleRequest gates device-tokens (redeem) behind ATTESTATION_ENABLED by default", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, ATTESTATION_ENABLED: undefined }, async () => {
+        const res = await handleRequest(
+            new Request("http://localhost/functions/v1/device-tokens", { method: "POST", body: "{}" }),
+        );
+        assertEquals(res.status, 503);
+        assertEquals((await res.json()).error, "attestation_disabled");
+    }));
+
 Deno.test("handleRequest routes device-tokens/challenge through the Deno API surface", async () => {
     const previousKey = Deno.env.get("PUBLIC_API_KEY");
     const previousDatabaseUrl = Deno.env.get("DATABASE_URL");
+    const previousAttestation = Deno.env.get("ATTESTATION_ENABLED");
     Deno.env.delete("PUBLIC_API_KEY");
     Deno.env.delete("DATABASE_URL");
+    Deno.env.set("ATTESTATION_ENABLED", "true");
     try {
         const res = await handleRequest(
             new Request("http://localhost/functions/v1/device-tokens/challenge", { method: "POST" }),
@@ -254,6 +275,8 @@ Deno.test("handleRequest routes device-tokens/challenge through the Deno API sur
         assertEquals(res.status, 503);
         assertEquals((await res.json()).error, "service_unavailable");
     } finally {
+        if (previousAttestation === undefined) Deno.env.delete("ATTESTATION_ENABLED");
+        else Deno.env.set("ATTESTATION_ENABLED", previousAttestation);
         if (previousKey === undefined) Deno.env.delete("PUBLIC_API_KEY");
         else Deno.env.set("PUBLIC_API_KEY", previousKey);
         if (previousDatabaseUrl === undefined) Deno.env.delete("DATABASE_URL");
@@ -264,8 +287,10 @@ Deno.test("handleRequest routes device-tokens/challenge through the Deno API sur
 Deno.test("handleRequest routes device-tokens (redeem) through the Deno API surface", async () => {
     const previousKey = Deno.env.get("PUBLIC_API_KEY");
     const previousDatabaseUrl = Deno.env.get("DATABASE_URL");
+    const previousAttestation = Deno.env.get("ATTESTATION_ENABLED");
     Deno.env.delete("PUBLIC_API_KEY");
     Deno.env.delete("DATABASE_URL");
+    Deno.env.set("ATTESTATION_ENABLED", "true");
     try {
         const res = await handleRequest(
             new Request("http://localhost/functions/v1/device-tokens", {
@@ -287,6 +312,8 @@ Deno.test("handleRequest routes device-tokens (redeem) through the Deno API surf
         assertEquals(res.status, 503);
         assertEquals((await res.json()).error, "service_unavailable");
     } finally {
+        if (previousAttestation === undefined) Deno.env.delete("ATTESTATION_ENABLED");
+        else Deno.env.set("ATTESTATION_ENABLED", previousAttestation);
         if (previousKey === undefined) Deno.env.delete("PUBLIC_API_KEY");
         else Deno.env.set("PUBLIC_API_KEY", previousKey);
         if (previousDatabaseUrl === undefined) Deno.env.delete("DATABASE_URL");
@@ -563,4 +590,143 @@ Deno.test("createPgRpc accepts safe identifiers (rejection is the only thing tes
     } finally {
         if (previous !== undefined) Deno.env.set("DATABASE_URL", previous);
     }
+});
+
+// ── Request logging, request ids, Retry-After, shutdown (review 2026-10-18) ──
+
+async function captureConsoleLog<T>(body: () => Promise<T>): Promise<{ result: T; lines: string[] }> {
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (...args: unknown[]) => lines.push(args.map(String).join(" "));
+    try {
+        return { result: await body(), lines };
+    } finally {
+        console.log = original;
+    }
+}
+
+function requestLogEntries(lines: string[]): Array<Record<string, unknown>> {
+    return lines
+        .filter((line) => line.startsWith("{"))
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .filter((entry) => entry.event === "request");
+}
+
+Deno.test("matchRoute returns the declared path template and params", () => {
+    const match = matchRoute(ROUTES, "http://localhost/functions/v1/segments/abc-123?x=1");
+    assertEquals(match?.route.path, "/functions/v1/segments/:id");
+    assertEquals(match?.params, { id: "abc-123" });
+    assertEquals(matchRoute(ROUTES, "http://localhost/nope"), null);
+});
+
+Deno.test("handleRequest logs one line with method, route template, status, duration and request id", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, REQUIRE_ORIGIN_AUTH: undefined }, async () => {
+        const { result: res, lines } = await captureConsoleLog(() =>
+            handleRequest(
+                new Request("http://localhost/functions/v1/tiles/99/1/1.mvt?v=secret-token", {
+                    headers: {
+                        "x-request-id": "req-access-1",
+                        "x-forwarded-for": "198.51.100.77",
+                        authorization: "Bearer should-not-log",
+                    },
+                }),
+            )
+        );
+        await res.body?.cancel();
+        const entries = requestLogEntries(lines);
+        assertEquals(entries.length, 1);
+        const entry = entries[0];
+        assertEquals(entry.method, "GET");
+        assertEquals(entry.route, "/functions/v1/tiles/:z/:x/:y.mvt");
+        assertEquals(entry.status, res.status);
+        assertEquals(entry.request_id, "req-access-1");
+        assertEquals(typeof entry.duration_ms, "number");
+        const raw = lines.join("\n");
+        for (const forbidden of ["198.51.100.77", "should-not-log", "secret-token", "/99/1/1"]) {
+            assertEquals(raw.includes(forbidden), false, forbidden);
+        }
+    }));
+
+Deno.test("handleRequest logs unmatched paths as 'unmatched'", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, REQUIRE_ORIGIN_AUTH: undefined }, async () => {
+        const { result: res, lines } = await captureConsoleLog(() =>
+            handleRequest(new Request("http://localhost/functions/v1/does-not-exist/12345"))
+        );
+        assertEquals(res.status, 404);
+        await res.body?.cancel();
+        const entries = requestLogEntries(lines);
+        assertEquals(entries.map((e) => e.route), ["unmatched"]);
+        assertEquals(lines.join("\n").includes("12345"), false);
+    }));
+
+Deno.test("handleRequest replaces an unsafe x-request-id and echoes the bounded one", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, REQUIRE_ORIGIN_AUTH: undefined }, async () => {
+        const { result: res, lines } = await captureConsoleLog(() =>
+            handleRequest(
+                new Request("http://localhost/functions/v1/health", { headers: { "x-request-id": "x".repeat(500) } }),
+            )
+        );
+        await res.body?.cancel();
+        const echoed = res.headers.get("x-request-id") ?? "";
+        assertEquals(echoed.length, 36);
+        assertEquals(requestLogEntries(lines)[0]?.request_id, echoed);
+    }));
+
+Deno.test("handleRequest adds x-request-id to responses that lack one", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, REQUIRE_ORIGIN_AUTH: undefined }, async () => {
+        const { result: res } = await captureConsoleLog(() =>
+            handleRequest(new Request("http://localhost/nope", { headers: { "x-request-id": "req-404" } }))
+        );
+        await res.body?.cancel();
+        assertEquals(res.headers.get("x-request-id"), "req-404");
+    }));
+
+Deno.test("handleRequest gives gateway 503s a Retry-After", () =>
+    withEnv({ PUBLIC_API_KEY: undefined, REQUIRE_ORIGIN_AUTH: undefined, ATTESTATION_ENABLED: undefined }, async () => {
+        const { result: res } = await captureConsoleLog(() =>
+            handleRequest(new Request("http://localhost/functions/v1/device-tokens/challenge", { method: "POST" }))
+        );
+        await res.body?.cancel();
+        assertEquals(res.status, 503);
+        assertEquals(res.headers.get("Retry-After") !== null, true);
+    }));
+
+Deno.test("createShutdownHandler stops the scheduler, drains the server, and runs once", async () => {
+    const calls: string[] = [];
+    const shutdown = createShutdownHandler(
+        { shutdown: () => { calls.push("server.shutdown"); return Promise.resolve(); } },
+        { stop: () => calls.push("scheduler.stop") },
+        () => {},
+    );
+    await Promise.all([shutdown("SIGTERM"), shutdown("SIGINT")]);
+    await shutdown("SIGTERM");
+    assertEquals(calls, ["scheduler.stop", "server.shutdown"]);
+});
+
+Deno.test("createShutdownHandler still drains the server when stopping the scheduler throws", async () => {
+    const calls: string[] = [];
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+        const shutdown = createShutdownHandler(
+            { shutdown: () => { calls.push("server.shutdown"); return Promise.resolve(); } },
+            { stop: () => { throw new Error("already stopped"); } },
+            () => {},
+        );
+        await shutdown("SIGTERM");
+    } finally {
+        console.error = originalError;
+    }
+    assertEquals(calls, ["server.shutdown"]);
+});
+
+Deno.test("createShutdownHandler works without a scheduler", async () => {
+    let drained = false;
+    const shutdown = createShutdownHandler(
+        { shutdown: () => { drained = true; return Promise.resolve(); } },
+        null,
+        () => {},
+    );
+    await shutdown("SIGTERM");
+    assertEquals(drained, true);
 });

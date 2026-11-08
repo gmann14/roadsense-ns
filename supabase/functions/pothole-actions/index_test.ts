@@ -7,6 +7,12 @@ import {
 } from "./handler.ts";
 import { createPotholeActionRateLimitChecker } from "./runtime.ts";
 import type { RpcResponse } from "../upload-readings/runtime.ts";
+import { endlessChunkedPost, unexpectedCall } from "../_shared/test_helpers.ts";
+
+// Relative to the real clock: validation now bounds recorded_at to
+// [now - 30 days, now + 5 minutes] (review N1).
+const RECORDED_AT = new Date(Date.now() - 60_000).toISOString();
+const SENSOR_BACKED_AT = new Date(Date.now() - 63_000).toISOString();
 
 const validPayload = {
     action_id: "d89fe2a5-6b3f-4207-a592-5fe67bb4b6ff",
@@ -19,7 +25,7 @@ const validPayload = {
     lat: 44.6488,
     lng: -63.5752,
     accuracy_m: 6.8,
-    recorded_at: "2026-04-21T18:22:00Z",
+    recorded_at: RECORDED_AT,
 } as const;
 
 Deno.test("extractClientIp uses the last public forwarded hop before fallback headers", () => {
@@ -40,12 +46,15 @@ Deno.test("extractClientIp uses the last public forwarded hop before fallback he
     assertEquals(extractClientIp(realIpHeaders), "198.51.100.10");
 });
 
-Deno.test("extractClientIp prefers the worker-trusted x-client-ip over x-forwarded-for", () => {
+Deno.test("extractClientIp prefers x-client-ip over x-forwarded-for only with valid origin auth", () => {
     const headers = new Headers({
         "x-client-ip": "1.2.3.4",
+        "x-origin-auth": "worker-secret",
         "x-forwarded-for": "203.0.113.7, 198.51.100.99",
     });
-    assertEquals(extractClientIp(headers), "1.2.3.4");
+    assertEquals(extractClientIp(headers, "worker-secret"), "1.2.3.4");
+    // Same headers, no secret configured on the gateway: x-client-ip is spoofable, so ignored.
+    assertEquals(extractClientIp(headers, ""), "198.51.100.99");
 });
 
 Deno.test("validatePotholeActionPayload rejects malformed payloads", () => {
@@ -81,13 +90,13 @@ Deno.test("validatePotholeActionPayload accepts sensor-backed manual severity", 
     const result = validatePotholeActionPayload({
         ...validPayload,
         sensor_backed_magnitude_g: 2.6,
-        sensor_backed_at: "2026-04-21T18:21:57Z",
+        sensor_backed_at: SENSOR_BACKED_AT,
     });
 
     assertEquals(result.ok, true);
     if (result.ok) {
         assertEquals(result.payload.sensor_backed_magnitude_g, 2.6);
-        assertEquals(result.payload.sensor_backed_at, "2026-04-21T18:21:57Z");
+        assertEquals(result.payload.sensor_backed_at, SENSOR_BACKED_AT);
     }
 });
 
@@ -109,7 +118,7 @@ Deno.test("validatePotholeActionPayload rejects sensor-backed severity for follo
         action_type: "confirm_present",
         pothole_report_id: "123e4567-e89b-12d3-a456-426614174000",
         sensor_backed_magnitude_g: 2.6,
-        sensor_backed_at: "2026-04-21T18:21:57Z",
+        sensor_backed_at: SENSOR_BACKED_AT,
     });
 
     assertEquals(result.ok, false);
@@ -253,7 +262,7 @@ Deno.test("pothole action handler passes sensor-backed severity to applyAction",
         checkRateLimit: async () => ({ ok: true, retryAfterSeconds: 0 }),
         applyAction: async ({ payload }) => {
             assertEquals(payload.sensor_backed_magnitude_g, 2.6);
-            assertEquals(payload.sensor_backed_at, "2026-04-21T18:21:57Z");
+            assertEquals(payload.sensor_backed_at, SENSOR_BACKED_AT);
             return {
                 action_id: payload.action_id,
                 pothole_report_id: "00000000-0000-0000-0000-000000001234",
@@ -269,7 +278,7 @@ Deno.test("pothole action handler passes sensor-backed severity to applyAction",
             body: JSON.stringify({
                 ...validPayload,
                 sensor_backed_magnitude_g: 2.6,
-                sensor_backed_at: "2026-04-21T18:21:57Z",
+                sensor_backed_at: SENSOR_BACKED_AT,
             }),
         }),
     );
@@ -458,4 +467,111 @@ Deno.test("validatePotholeActionPayload accepts boundary lat/lng values", () => 
     });
 
     assertEquals(result.ok, true);
+});
+
+Deno.test("pothole-actions handler aborts a chunked body with no Content-Length once it passes the byte cap", async () => {
+    const handler = createPotholeActionsHandler({
+        hashDeviceToken: unexpectedCall("hashDeviceToken"),
+        checkRateLimit: unexpectedCall("checkRateLimit"),
+        applyAction: unexpectedCall("applyAction"),
+    });
+    const { request, pulls } = endlessChunkedPost("http://localhost/functions/v1/pothole-actions");
+
+    const response = await handler(request);
+
+    assertEquals(response.status, 413);
+    assertEquals((await response.json()).error, "payload_too_large");
+    // 16 KiB chunks against a <= 256 KiB cap: the stream is cancelled after a
+    // handful of chunks instead of being drained (10,000 chunks = ~160 MB).
+    assertEquals(pulls() < 40, true);
+});
+
+// ── Review N1: recorded_at window and accuracy bounds ──
+
+Deno.test("validatePotholeActionPayload rejects recorded_at more than 5 minutes in the future", () => {
+    const now = new Date("2026-11-08T12:00:00Z");
+    const tooFar = validatePotholeActionPayload(
+        { ...validPayload, recorded_at: "2099-01-01T00:00:00Z" },
+        now,
+    );
+    assertEquals(tooFar.ok, false);
+    if (!tooFar.ok) {
+        assertEquals(tooFar.fieldErrors.recorded_at, "must not be more than 5 minutes in the future");
+    }
+
+    const justInside = validatePotholeActionPayload(
+        { ...validPayload, recorded_at: "2026-11-08T12:04:59Z" },
+        now,
+    );
+    assertEquals(justInside.ok, true);
+});
+
+Deno.test("validatePotholeActionPayload rejects recorded_at older than 30 days", () => {
+    const now = new Date("2026-11-08T12:00:00Z");
+    const stale = validatePotholeActionPayload(
+        { ...validPayload, recorded_at: "2026-10-09T11:59:59Z" },
+        now,
+    );
+    assertEquals(stale.ok, false);
+    if (!stale.ok) {
+        assertEquals(stale.fieldErrors.recorded_at, "must not be more than 30 days old");
+    }
+
+    const inside = validatePotholeActionPayload(
+        { ...validPayload, recorded_at: "2026-10-10T12:00:00Z" },
+        now,
+    );
+    assertEquals(inside.ok, true);
+});
+
+Deno.test("validatePotholeActionPayload applies the same window to sensor_backed_at", () => {
+    const now = new Date("2026-11-08T12:00:00Z");
+    const result = validatePotholeActionPayload(
+        {
+            ...validPayload,
+            recorded_at: "2026-11-08T11:59:00Z",
+            sensor_backed_magnitude_g: 2.1,
+            sensor_backed_at: "2099-01-01T00:00:00Z",
+        },
+        now,
+    );
+    assertEquals(result.ok, false);
+    if (!result.ok) {
+        assertEquals(result.fieldErrors.sensor_backed_at, "must not be more than 5 minutes in the future");
+    }
+});
+
+Deno.test("validatePotholeActionPayload rejects lenient timestamps Date.parse would accept", () => {
+    for (const recorded_at of ["0", "2026-11-08", "Nov 8 2026"]) {
+        const result = validatePotholeActionPayload({ ...validPayload, recorded_at });
+        assertEquals(result.ok, false, recorded_at);
+        if (!result.ok) assertEquals(result.fieldErrors.recorded_at, "must be an RFC3339 timestamp");
+    }
+});
+
+Deno.test("validatePotholeActionPayload bounds accuracy_m to [0, 500]", () => {
+    for (const accuracy_m of [-1, 500.01, 5000]) {
+        const result = validatePotholeActionPayload({ ...validPayload, accuracy_m });
+        assertEquals(result.ok, false, String(accuracy_m));
+        if (!result.ok) assertEquals(result.fieldErrors.accuracy_m, "must be between 0 and 500");
+    }
+    for (const accuracy_m of [0, 500, null]) {
+        assertEquals(validatePotholeActionPayload({ ...validPayload, accuracy_m }).ok, true, String(accuracy_m));
+    }
+});
+
+Deno.test("createPotholeActionRateLimitChecker keys IPv6 clients on their /64", async () => {
+    const keys: unknown[] = [];
+    const checker = createPotholeActionRateLimitChecker(
+        async <T>(_fn: string, params: Record<string, unknown>): Promise<RpcResponse<T>> => {
+            keys.push(params.p_key);
+            return { data: true as T, error: null };
+        },
+        () => new Date("2026-11-08T15:30:00Z"),
+    );
+
+    await checker("deadbeef", "2001:db8:abcd:12:1111:2222:3333:4444");
+    await checker("deadbeef", "2001:db8:abcd:12::9");
+
+    assertEquals(keys.filter((key) => key === "pothole-action-ip:2001:db8:abcd:12::/64").length, 2);
 });

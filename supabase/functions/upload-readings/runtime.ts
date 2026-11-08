@@ -1,3 +1,5 @@
+import { RATE_LIMIT_OK, rateLimitIpKey, type RateLimitResult, type RateLimitRpc } from "../_shared/rateLimit.ts";
+
 export type RpcResponse<T> = { data: T | null; error: { message?: string } | null };
 
 let localEnvCache: Map<string, string> | null = null;
@@ -83,10 +85,10 @@ export function secondsUntilNextUtcHour(now: Date): number {
 }
 
 export function createRateLimitChecker(
-    rpc: <T>(fn: string, params: Record<string, unknown>) => Promise<RpcResponse<T>>,
+    rpc: RateLimitRpc,
     nowFactory: () => Date = () => new Date(),
-) {
-    return async (tokenHashHex: string, ip: string) => {
+): (tokenHashHex: string, ip: string) => Promise<RateLimitResult> {
+    return async (tokenHashHex: string, ip: string): Promise<RateLimitResult> => {
         const now = nowFactory();
         const dayBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
         const hourBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
@@ -99,7 +101,8 @@ export function createRateLimitChecker(
         // rotating device tokens. Checking IP first means a client that's
         // already IP-limited never reaches the device bump at all.
         const ipResult = await rpc<boolean>("check_and_bump_rate_limit", {
-            p_key: `ip:${ip}`,
+            // IPv6 clients are keyed on their /64 (see _shared/rateLimit.ts).
+            p_key: `ip:${rateLimitIpKey(ip)}`,
             p_bucket_start: hourBucket.toISOString(),
             p_limit: 10,
         });
@@ -107,10 +110,7 @@ export function createRateLimitChecker(
             throw new Error(ipResult.error.message ?? "ip rate limit RPC failed");
         }
         if (!ipResult.data) {
-            return {
-                ok: false as const,
-                retryAfterSeconds: secondsUntilNextUtcHour(now),
-            };
+            return { ok: false, retryAfterSeconds: secondsUntilNextUtcHour(now) };
         }
 
         const deviceResult = await rpc<boolean>("check_and_bump_rate_limit", {
@@ -122,15 +122,9 @@ export function createRateLimitChecker(
             throw new Error(deviceResult.error.message ?? "device rate limit RPC failed");
         }
         if (!deviceResult.data) {
-            return {
-                ok: false as const,
-                retryAfterSeconds: secondsUntilNextUtcDay(now),
-            };
+            return { ok: false, retryAfterSeconds: secondsUntilNextUtcDay(now) };
         }
 
-        return {
-            ok: true as const,
-            retryAfterSeconds: 0,
-        };
+        return RATE_LIMIT_OK;
     };
 }

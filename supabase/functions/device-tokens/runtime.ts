@@ -1,4 +1,5 @@
-import { requireEnv, secondsUntilNextUtcHour, sha256Hex, type RpcResponse } from "../upload-readings/runtime.ts";
+import { requireEnv, sha256Hex } from "../upload-readings/runtime.ts";
+import { createHourlyIpRateLimitChecker, type RateLimitResult, type RateLimitRpc } from "../_shared/rateLimit.ts";
 
 // Per-IP rate limit for challenge issuance, using the existing
 // check_and_bump_rate_limit SQL pattern (see upload-readings/runtime.ts and
@@ -14,34 +15,31 @@ import { requireEnv, secondsUntilNextUtcHour, sha256Hex, type RpcResponse } from
 // abuse can't mint thousands of challenges for free.
 const CHALLENGE_IP_LIMIT_PER_HOUR = 30;
 
+// Redemption is the expensive half (challenge lookup + attestation verify +
+// upsert), and it had no limit at all (review 2026-10-18). Same budget as
+// challenge issuance: every legitimate redemption needs one challenge.
+const REDEEM_IP_LIMIT_PER_HOUR = 30;
+
 export function createChallengeRateLimitChecker(
-    rpc: <T>(fn: string, params: Record<string, unknown>) => Promise<RpcResponse<T>>,
+    rpc: RateLimitRpc,
     nowFactory: () => Date = () => new Date(),
-) {
-    return async (ip: string) => {
-        const now = nowFactory();
-        const hourBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
+): (ip: string) => Promise<RateLimitResult> {
+    return createHourlyIpRateLimitChecker(rpc, {
+        keyPrefix: "device-token-challenge-ip",
+        limitPerHour: CHALLENGE_IP_LIMIT_PER_HOUR,
+        nowFactory,
+    });
+}
 
-        const ipResult = await rpc<boolean>("check_and_bump_rate_limit", {
-            p_key: `device-token-challenge-ip:${ip}`,
-            p_bucket_start: hourBucket.toISOString(),
-            p_limit: CHALLENGE_IP_LIMIT_PER_HOUR,
-        });
-        if (ipResult.error) {
-            throw new Error(ipResult.error.message ?? "device token challenge ip rate limit RPC failed");
-        }
-        if (!ipResult.data) {
-            return {
-                ok: false as const,
-                retryAfterSeconds: secondsUntilNextUtcHour(now),
-            };
-        }
-
-        return {
-            ok: true as const,
-            retryAfterSeconds: 0,
-        };
-    };
+export function createRedeemRateLimitChecker(
+    rpc: RateLimitRpc,
+    nowFactory: () => Date = () => new Date(),
+): (ip: string) => Promise<RateLimitResult> {
+    return createHourlyIpRateLimitChecker(rpc, {
+        keyPrefix: "device-token-redeem-ip",
+        limitPerHour: REDEEM_IP_LIMIT_PER_HOUR,
+        nowFactory,
+    });
 }
 
 // Same pepper-hashing posture as hashDeviceToken in upload-readings/runtime.ts:

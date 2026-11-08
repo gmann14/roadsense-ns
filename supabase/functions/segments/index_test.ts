@@ -55,6 +55,7 @@ Deno.test("segments handler returns 200 with history and neighbors stubs", async
 
     assertEquals(response.status, 200);
     assertEquals(response.headers.get("x-request-id"), "req-segment");
+    assertEquals(response.headers.get("cache-control"), "public, max-age=60, s-maxage=60");
 
     const body = await response.json();
     assertEquals(body.history, []);

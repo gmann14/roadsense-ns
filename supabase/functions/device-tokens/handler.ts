@@ -12,10 +12,14 @@
 // VerifyAttestation type below for the exact interface B161/B163 must
 // implement.
 
-import { errorResponse, jsonResponse } from "../_shared/http.ts";
+import { errorResponse, jsonResponse, requestIdFrom } from "../_shared/http.ts";
+import { readBodyWithLimit } from "../_shared/body.ts";
 import { extractClientIp } from "../_shared/clientIp.ts";
+import type { RateLimitResult } from "../_shared/rateLimit.ts";
+import type { RouteHandler } from "../_shared/routes.ts";
 
 export { extractClientIp };
+export type { RateLimitResult };
 
 // Body-size cap (matches the P0-2 pattern used by every other handler:
 // upload-readings, pothole-actions, feedback). These are small fixed-shape
@@ -26,14 +30,55 @@ export const MAX_VERSION_STRING_LENGTH = 100;
 
 export const SUPPORTED_PLATFORMS = new Set(["ios", "android"]);
 
+// key_id is documented as base64url (App Attest key ids are base64); the
+// challenge is the base64url string this service issued. Checking the
+// charset up front turns junk (including non-Latin-1 text, which made the
+// fake verifier's btoa() throw and surface as 503) into a 400 *before* the
+// single-use challenge is consumed.
+const BASE64ISH_RE = /^[A-Za-z0-9+/_-]+={0,2}$/;
+const BASE64URL_RE = /^[A-Za-z0-9_-]+$/;
+export const MAX_KEY_ID_LENGTH = 512;
+export const MAX_CHALLENGE_LENGTH = 128;
+
+// ── Feature gate ────────────────────────────────────────────────────────
+//
+// Real attestation verification (B161 App Attest / B163 Play Integrity) has
+// not landed, and the only verifier wired in server.ts is the fake one, so
+// both device-token routes stay off unless ATTESTATION_ENABLED=true (review
+// 2026-10-18: "Fake attestation verifier wired into production"). Disabled
+// routes answer like the photo gate: a stable 503 code plus Retry-After, so
+// clients back off instead of treating it as a hard failure.
+
+export const ATTESTATION_DISABLED_ERROR_CODE = "attestation_disabled";
+export const ATTESTATION_DISABLED_RETRY_AFTER_SECONDS = 21_600;
+
+/// Read per request so an env change (or a test) takes effect immediately.
+export function attestationEnabled(): boolean {
+    return (Deno.env.get("ATTESTATION_ENABLED") ?? "").trim().toLowerCase() === "true";
+}
+
+export function attestationGate(enabled: RouteHandler): RouteHandler {
+    return (req, params) => {
+        if (attestationEnabled()) {
+            return enabled(req, params);
+        }
+        return Promise.resolve(errorResponse(
+            ATTESTATION_DISABLED_ERROR_CODE,
+            "Device attestation is not enabled yet.",
+            503,
+            requestIdFrom(req),
+            { retry_after_s: ATTESTATION_DISABLED_RETRY_AFTER_SECONDS },
+            { "Retry-After": String(ATTESTATION_DISABLED_RETRY_AFTER_SECONDS) },
+        ));
+    };
+}
+
 // ── Challenge issuance ──────────────────────────────────────────────────
 
 export type ChallengeResult = {
     challenge: string; // base64url-encoded 32 random bytes
     expires_at: string;
 };
-
-export type RateLimitResult = { ok: true; retryAfterSeconds: 0 } | { ok: false; retryAfterSeconds: number };
 
 export type ChallengeHandlerDeps = {
     checkRateLimit: (ip: string) => Promise<RateLimitResult>;
@@ -42,7 +87,7 @@ export type ChallengeHandlerDeps = {
 
 export function createDeviceTokenChallengeHandler(deps: ChallengeHandlerDeps) {
     return async function handleDeviceTokenChallenge(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "POST") {
             return new Response(null, {
@@ -122,6 +167,8 @@ export function validateDeviceTokenRedeemPayload(payload: unknown): ValidationRe
 
     if (!isNonEmptyString(input.key_id)) {
         fieldErrors.key_id = "must be a non-empty string";
+    } else if (input.key_id.length > MAX_KEY_ID_LENGTH || !BASE64ISH_RE.test(input.key_id)) {
+        fieldErrors.key_id = `must be a base64 or base64url string of at most ${MAX_KEY_ID_LENGTH} characters`;
     }
 
     if (!isNonEmptyString(input.attestation_object)) {
@@ -130,6 +177,8 @@ export function validateDeviceTokenRedeemPayload(payload: unknown): ValidationRe
 
     if (!isNonEmptyString(input.challenge)) {
         fieldErrors.challenge = "must be a non-empty string";
+    } else if (input.challenge.length > MAX_CHALLENGE_LENGTH || !BASE64URL_RE.test(input.challenge)) {
+        fieldErrors.challenge = `must be a base64url string of at most ${MAX_CHALLENGE_LENGTH} characters`;
     }
 
     if (
@@ -208,6 +257,9 @@ export type RedeemChallengeResult =
     | { ok: false; reason: "missing" | "expired" };
 
 export type DeviceTokenRedeemHandlerDeps = {
+    // Per-IP limit on redemption attempts, checked after validation and
+    // before the challenge is consumed or the verifier runs.
+    checkRateLimit: (ip: string) => Promise<RateLimitResult>;
     verifyAttestation: VerifyAttestation;
     redeemChallenge: (challenge: string) => Promise<RedeemChallengeResult>;
     issueDeviceToken: (params: {
@@ -221,7 +273,7 @@ export type DeviceTokenRedeemHandlerDeps = {
 
 export function createDeviceTokenRedeemHandler(deps: DeviceTokenRedeemHandlerDeps) {
     return async function handleDeviceTokenRedeem(req: Request): Promise<Response> {
-        const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+        const requestId = requestIdFrom(req);
 
         if (req.method !== "POST") {
             return new Response(null, {
@@ -230,10 +282,11 @@ export function createDeviceTokenRedeemHandler(deps: DeviceTokenRedeemHandlerDep
             });
         }
 
-        const contentLengthHeader = req.headers.get("content-length");
-        if (contentLengthHeader) {
-            const declaredLength = Number(contentLengthHeader);
-            if (Number.isFinite(declaredLength) && declaredLength > MAX_PAYLOAD_BYTES) {
+        // Streamed with a byte counter so a chunked body (no Content-Length)
+        // or an understated one can't be buffered whole before the cap runs.
+        const body = await readBodyWithLimit(req, MAX_PAYLOAD_BYTES);
+        if (!body.ok) {
+            if (body.reason === "too_large") {
                 return errorResponse(
                     "payload_too_large",
                     "Device token payload is too large.",
@@ -241,12 +294,6 @@ export function createDeviceTokenRedeemHandler(deps: DeviceTokenRedeemHandlerDep
                     requestId,
                 );
             }
-        }
-
-        let rawText: string;
-        try {
-            rawText = await req.text();
-        } catch {
             return errorResponse(
                 "validation_failed",
                 "Payload is malformed.",
@@ -255,15 +302,7 @@ export function createDeviceTokenRedeemHandler(deps: DeviceTokenRedeemHandlerDep
                 { field_errors: { payload: "must be readable" } },
             );
         }
-
-        if (rawText.length > MAX_PAYLOAD_BYTES) {
-            return errorResponse(
-                "payload_too_large",
-                "Device token payload is too large.",
-                413,
-                requestId,
-            );
-        }
+        const rawText = body.text;
 
         let rawPayload: unknown;
         try {
@@ -296,6 +335,18 @@ export function createDeviceTokenRedeemHandler(deps: DeviceTokenRedeemHandlerDep
         // of truth so this can't drift.
 
         try {
+            const rateLimit = await deps.checkRateLimit(extractClientIp(req.headers));
+            if (!rateLimit.ok) {
+                return errorResponse(
+                    "rate_limited",
+                    "Too many device token requests from this IP.",
+                    429,
+                    requestId,
+                    { retry_after_s: rateLimit.retryAfterSeconds },
+                    { "Retry-After": String(rateLimit.retryAfterSeconds) },
+                );
+            }
+
             const redemption = await deps.redeemChallenge(payload.challenge);
             if (!redemption.ok) {
                 if (redemption.reason === "expired") {
