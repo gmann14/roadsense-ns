@@ -2,6 +2,43 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 
 SELECT plan(13);
 
+-- Fixture timestamps were authored around 2026-06-15. Every fixture time is
+-- shifted by the same whole number of days so that 2026-06-15 lands on
+-- yesterday (UTC): ordering, time of day and the gaps between fixtures are
+-- unchanged, but the data stays inside the ingest freshness, action-window
+-- and 6-month retention rules and inside the monthly readings partitions
+-- that exist at test time.
+CREATE OR REPLACE FUNCTION pg_temp.fixture_ts(p_value TEXT)
+RETURNS TIMESTAMPTZ
+LANGUAGE sql
+STABLE
+AS $fixture$
+    SELECT p_value::TIMESTAMPTZ
+        + (((now() AT TIME ZONE 'UTC')::DATE - 1) - DATE '2026-06-15') * INTERVAL '1 day'
+$fixture$;
+
+CREATE OR REPLACE FUNCTION pg_temp.fixture_jsonb(p_value TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $fixture$
+DECLARE
+    v_match TEXT;
+    v_result TEXT := p_value;
+BEGIN
+    FOR v_match IN
+        SELECT DISTINCT (regexp_matches(p_value, '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', 'g'))[1]
+    LOOP
+        v_result := replace(
+            v_result,
+            v_match,
+            to_char(pg_temp.fixture_ts(v_match) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        );
+    END LOOP;
+    RETURN v_result::JSONB;
+END;
+$fixture$;
+
 DELETE FROM readings
 WHERE batch_id IN (
     '00000000-0000-0000-0000-00000000a401'::UUID,
@@ -100,7 +137,7 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.5994 44.6500)', 4326),
-        '2026-06-15T12:00:00Z'::TIMESTAMPTZ
+        pg_temp.fixture_ts('2026-06-15T12:00:00Z')
     ),
     (
         '00000000-0000-0000-0000-00000000c002',
@@ -114,7 +151,7 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.6194 44.6600)', 4326),
-        '2026-06-15T12:10:00Z'::TIMESTAMPTZ
+        pg_temp.fixture_ts('2026-06-15T12:10:00Z')
     ),
     (
         '00000000-0000-0000-0000-00000000c003',
@@ -128,7 +165,7 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.6394 44.6700)', 4326),
-        '2026-06-15T12:20:00Z'::TIMESTAMPTZ
+        pg_temp.fixture_ts('2026-06-15T12:20:00Z')
     ),
     (
         '00000000-0000-0000-0000-00000000c004',
@@ -142,11 +179,11 @@ INSERT INTO readings (
         FALSE,
         NULL,
         ST_GeomFromText('POINT(-63.5994 44.6500)', 4326),
-        '2026-06-13T12:00:00Z'::TIMESTAMPTZ
+        pg_temp.fixture_ts('2026-06-13T12:00:00Z')
     );
 
 CREATE TEMP TABLE tmp_rematch_result AS
-SELECT unnest(rematch_readings_after_segment_refresh('2026-06-14T00:00:00Z'::TIMESTAMPTZ)) AS touched_segment_id;
+SELECT unnest(rematch_readings_after_segment_refresh(pg_temp.fixture_ts('2026-06-14T00:00:00Z'))) AS touched_segment_id;
 
 SELECT is(
     (SELECT segment_id::TEXT FROM readings WHERE id = '00000000-0000-0000-0000-00000000c001'),
@@ -225,13 +262,13 @@ SELECT ok(
 );
 
 SELECT lives_ok(
-    $$SELECT rematch_readings_after_segment_refresh('2026-06-14T00:00:00Z'::TIMESTAMPTZ)$$,
+    $$SELECT rematch_readings_after_segment_refresh(pg_temp.fixture_ts('2026-06-14T00:00:00Z'))$$,
     'rematch_readings_after_segment_refresh is idempotent after the first rewrite'
 );
 
 SELECT is(
     (SELECT count(*)::INTEGER FROM (
-        SELECT unnest(rematch_readings_after_segment_refresh('2026-06-14T00:00:00Z'::TIMESTAMPTZ))
+        SELECT unnest(rematch_readings_after_segment_refresh(pg_temp.fixture_ts('2026-06-14T00:00:00Z')))
     ) rerun),
     0,
     'second rematch pass returns no touched segments once the data is reconciled'

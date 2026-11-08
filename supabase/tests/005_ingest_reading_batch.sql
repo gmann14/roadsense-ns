@@ -2,6 +2,43 @@ CREATE EXTENSION IF NOT EXISTS pgtap;
 
 SELECT plan(25);
 
+-- Fixture timestamps were authored around 2026-04-25. Every fixture time is
+-- shifted by the same whole number of days so that 2026-04-25 lands on
+-- yesterday (UTC): ordering, time of day and the gaps between fixtures are
+-- unchanged, but the data stays inside the ingest freshness, action-window
+-- and 6-month retention rules and inside the monthly readings partitions
+-- that exist at test time.
+CREATE OR REPLACE FUNCTION pg_temp.fixture_ts(p_value TEXT)
+RETURNS TIMESTAMPTZ
+LANGUAGE sql
+STABLE
+AS $fixture$
+    SELECT p_value::TIMESTAMPTZ
+        + (((now() AT TIME ZONE 'UTC')::DATE - 1) - DATE '2026-04-25') * INTERVAL '1 day'
+$fixture$;
+
+CREATE OR REPLACE FUNCTION pg_temp.fixture_jsonb(p_value TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+AS $fixture$
+DECLARE
+    v_match TEXT;
+    v_result TEXT := p_value;
+BEGIN
+    FOR v_match IN
+        SELECT DISTINCT (regexp_matches(p_value, '\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z', 'g'))[1]
+    LOOP
+        v_result := replace(
+            v_result,
+            v_match,
+            to_char(pg_temp.fixture_ts(v_match) AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+        );
+    END LOOP;
+    RETURN v_result::JSONB;
+END;
+$fixture$;
+
 DELETE FROM readings
 WHERE batch_id IN (
     '00000000-0000-0000-0000-00000000e501'::UUID,
@@ -69,7 +106,7 @@ CREATE TEMP TABLE tmp_ingest_result AS
 SELECT ingest_reading_batch(
     '00000000-0000-0000-0000-00000000e501'::UUID,
     decode('aa', 'hex'),
-    '[
+    pg_temp.fixture_jsonb('[
         {
             "lat": 44.6490,
             "lng": -63.5794,
@@ -136,8 +173,8 @@ SELECT ingest_reading_batch(
             "is_pothole": false,
             "pothole_magnitude": null
         }
-    ]'::JSONB,
-    '2026-04-25T13:10:00Z'::TIMESTAMPTZ,
+    ]'),
+    pg_temp.fixture_ts('2026-04-25T13:10:00Z'),
     '0.1.0 (1)',
     'iOS 18.0'
 ) AS payload;
@@ -252,7 +289,7 @@ SELECT ingest_reading_batch(
     '00000000-0000-0000-0000-00000000e501'::UUID,
     decode('aa', 'hex'),
     '[]'::JSONB,
-    '2026-04-25T13:10:00Z'::TIMESTAMPTZ,
+    pg_temp.fixture_ts('2026-04-25T13:10:00Z'),
     '0.1.0 (1)',
     'iOS 18.0'
 ) AS payload;
@@ -279,7 +316,7 @@ CREATE TEMP TABLE tmp_cross_batch_duplicate_result AS
 SELECT ingest_reading_batch(
     '00000000-0000-0000-0000-00000000e503'::UUID,
     decode('aa', 'hex'),
-    '[
+    pg_temp.fixture_jsonb('[
         {
             "lat": 44.6490,
             "lng": -63.5794,
@@ -291,8 +328,8 @@ SELECT ingest_reading_batch(
             "is_pothole": false,
             "pothole_magnitude": null
         }
-    ]'::JSONB,
-    '2026-04-25T13:10:00Z'::TIMESTAMPTZ,
+    ]'),
+    pg_temp.fixture_ts('2026-04-25T13:10:00Z'),
     '0.1.0 (1)',
     'iOS 18.0'
 ) AS payload;
@@ -310,7 +347,7 @@ SELECT is(
 );
 
 SELECT is(
-    (SELECT COUNT(*)::INTEGER FROM readings WHERE device_token_hash = decode('aa', 'hex') AND recorded_at = '2026-04-25T13:00:00Z'::TIMESTAMPTZ),
+    (SELECT COUNT(*)::INTEGER FROM readings WHERE device_token_hash = decode('aa', 'hex') AND recorded_at = pg_temp.fixture_ts('2026-04-25T13:00:00Z')),
     1,
     'cross-batch duplicate suppression prevents extra reading rows'
 );
@@ -330,7 +367,7 @@ SELECT throws_ok(
         '00000000-0000-0000-0000-00000000e502'::UUID,
         decode('bb', 'hex'),
         '{"not":"an-array"}'::JSONB,
-        '2026-04-25T13:10:00Z'::TIMESTAMPTZ,
+        pg_temp.fixture_ts('2026-04-25T13:10:00Z'),
         '0.1.0 (1)',
         'iOS 18.0'
     )$$,
