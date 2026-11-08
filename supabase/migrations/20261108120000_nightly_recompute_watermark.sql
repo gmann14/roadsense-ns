@@ -23,6 +23,9 @@
 --    finalize, the bike cleanup pattern).
 -- 4. The UPSERT and marks insert run in segment_id order (deadlock fix,
 --    same as update_segment_aggregates_from_readings).
+-- 5. Targets are limited to segments that still exist in road_segments, so
+--    readings orphaned by a segment refresh (before the rematch) cannot
+--    abort the run on segment_aggregates' foreign key.
 
 CREATE TABLE IF NOT EXISTS aggregate_recompute_state (
     singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
@@ -79,12 +82,18 @@ BEGIN
             FROM segment_aggregates sa
             WHERE sa.last_reading_at IS NOT NULL
               AND sa.last_reading_at <= v_retention_edge
-        ) s;
+        ) s
+        -- readings.segment_id has no FK (partitioned table): a reading can
+        -- still point at a segment a refresh deleted until the rematch runs.
+        -- Upserting an aggregate for it would violate segment_aggregates' FK
+        -- and abort the whole run.
+        WHERE EXISTS (SELECT 1 FROM road_segments rs WHERE rs.id = s.segment_id);
     ELSE
         SELECT COALESCE(array_agg(DISTINCT sid ORDER BY sid), ARRAY[]::UUID[])
         INTO v_targets
         FROM unnest(p_segment_ids) AS sid
-        WHERE sid IS NOT NULL;
+        WHERE sid IS NOT NULL
+          AND EXISTS (SELECT 1 FROM road_segments rs WHERE rs.id = sid);
     END IF;
 
     IF cardinality(v_targets) > 0 THEN
