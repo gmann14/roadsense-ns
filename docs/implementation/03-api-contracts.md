@@ -1,6 +1,6 @@
 # 03 — API Contracts
 
-*Last updated: 2026-07-02 (B160: added `POST /device-tokens/challenge` and `POST /device-tokens`)*
+*Last updated: 2026-11-08 (review 2026-10-18 gateway/worker fixes: worker→origin auth, edge caching, per-reading rejection, strict RFC 3339, bounded request ids, `attestation_disabled`, 503 `Retry-After`, IPv6 /64 rate-limit keys, duplicate-batch fast path)*
 
 Authoritative request/response shapes for all endpoints. **Lock this doc by end of week 2** so iOS and backend can work in parallel without churn.
 
@@ -12,7 +12,8 @@ Authoritative request/response shapes for all endpoints. **Lock this doc by end 
 - Content-Type: `application/json` for JSON endpoints, `application/vnd.mapbox-vector-tile` for tiles
 - Auth: send the environment public API key in `Authorization: Bearer <key>` and/or `apikey: <key>` for all requests except `GET /health`, which is intentionally unauthenticated for uptime monitoring. The Cloudflare API proxy preserves this Supabase-compatible header shape. No custom auth headers — app version / OS version live in the JSON body on upload endpoints where they're relevant.
 - The `ingest_reading_batch` RPC is `SECURITY DEFINER` with `EXECUTE` granted only to privileged backend roles; the public key cannot invoke it directly. Uploads MUST go through `/functions/v1/upload-readings`, which enforces validation and rate limits before dispatching.
-- All timestamps are RFC 3339 / ISO 8601 with timezone (`2026-04-17T14:30:00Z`)
+- All timestamps are strict RFC 3339 with an explicit offset (`2026-04-17T14:30:00Z`, `2026-04-17T11:30:00.250-03:00`). The gateway rejects anything else with `validation_failed`: a missing offset, a space or lowercase `t` instead of `T`, a lowercase `z`, more than 9 fractional digits, or an impossible calendar date or time (for example `2026-02-30`, hour 24, second 60). `Date.parse`-only formats such as `2026-04-17` or `April 17, 2026` are no longer accepted.
+- Request bodies are capped in bytes while streaming, whether or not `Content-Length` is sent. A body over the cap gets `413 payload_too_large`. The caps are 256 KiB for `upload-readings`, `pothole-actions` and `device-tokens`, and 16 KiB for `feedback`.
 - All coordinates are WGS84 (EPSG:4326), `lng` then `lat` where ordered, but JSON fields are named explicitly (`lat`, `lng`) to avoid ambiguity
 - UUIDs are lowercase v4 strings with hyphens
 - Sizes in meters; speeds in km/h; no mixed units anywhere
@@ -43,13 +44,55 @@ Standard error codes:
 | `validation_failed` | 400 | Payload shape or values invalid. `message` enumerates violations. |
 | `batch_too_large` | 400 | `readings` exceeded 1000. |
 | `unauthorized` | 401 | Missing/invalid anon key. |
-| `forbidden` | 403 | Using wrong key (e.g., trying to hit a service-role endpoint). |
+| `forbidden` | 403 | The request reached the Railway origin directly instead of through `api.nsroadsense.ca`, and origin auth is enforced (see "Worker → origin trust" below). |
 | `not_found` | 404 | Segment/pothole/etc. doesn't exist. |
-| `rate_limited` | 429 | Per-device or per-IP limit hit. |
+| `payload_too_large` | 413 | The request body exceeded the endpoint's byte cap. |
+| `rate_limited` | 429 | Per-device or per-IP limit hit. Always carries `Retry-After`. |
+| `internal_error` | 500 | An unexpected gateway error. Transient; client should retry. |
 | `processing_failed` | 502 | Stored procedure errored. Transient; client should retry. |
+| `upstream_unavailable` | 502 | Returned by the Cloudflare worker when it cannot reach the Railway origin. The body is JSON with CORS headers and `Cache-Control: no-store`. Transient; client should retry. |
 | `service_unavailable` | 503 | Maintenance / upstream issue. |
+| `attestation_disabled` | 503 | The device-token routes are switched off (`ATTESTATION_ENABLED` is not `true`). Carries `Retry-After: 21600`. |
+| `photos_disabled` | 503 | The photo routes are switched off until R2 is provisioned. Carries `Retry-After: 21600`. |
 
-Every response includes `x-request-id` header for support/debugging. Client logs this on failure.
+**Every 503 carries a `Retry-After` header.** Gate codes (`attestation_disabled`, `photos_disabled`) use their own longer value. Every other 503 defaults to `Retry-After: 30`. Clients should honor the header the same way they do for 429.
+
+**`x-request-id`.** Every response includes an `x-request-id` header for support and debugging, and clients log it on failure. A client may send its own `x-request-id`. The gateway keeps it only if it is 1–64 characters from `[A-Za-z0-9._:-]`, and otherwise replaces it with a fresh UUID. The value that comes back on the response is the one used in server logs and stored with feedback rows.
+
+### Worker → origin trust
+
+Production traffic enters through the Cloudflare worker at `api.nsroadsense.ca`, which proxies to the Railway origin.
+
+- The worker always strips any client-supplied `x-origin-auth` and `x-client-ip`.
+- It then sets `x-origin-auth: <ORIGIN_SHARED_SECRET>` and sets `x-client-ip` from Cloudflare's `cf-connecting-ip`.
+- The gateway trusts `x-client-ip` for rate limiting only when `x-origin-auth` matches its own `ORIGIN_SHARED_SECRET`, using a constant-time comparison. Otherwise it falls back to the proxy-chain headers.
+- When the gateway has `ORIGIN_SHARED_SECRET` set and `REQUIRE_ORIGIN_AUTH=true`, it answers `403 forbidden` to every request that lacks a valid `x-origin-auth`. `GET /health` is exempt so Railway health checks keep working. `GET /health/deep` is not exempt.
+- With either variable unset (the default), the gateway behaves as before and serves direct origin requests.
+
+**Rate-limit keys.** IPv4 clients are keyed on the full address. IPv6 clients are keyed on their /64 prefix, so rotating the interface identifier does not create a fresh bucket. IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`) are keyed as the IPv4 address.
+
+### Edge caching (Cloudflare worker)
+
+The worker edge-caches these public GETs. The cache key is the canonical origin URL, and responses are cached by status:
+
+- 2xx responses are cached for the route TTL.
+- 404 responses are cached for 60 s.
+- Any other 4xx or 5xx response is never cached.
+
+| Route | Edge TTL | Query params kept in the cache key |
+|---|---|---|
+| `/tiles/{z}/{x}/{y}.mvt`, `/tiles/coverage/{z}/{x}/{y}.mvt` | 3600 s | none |
+| `/stats` | 300 s | none |
+| `/segments-worst` | 300 s | `limit` (integer), `municipality` (trimmed) |
+| `/top-potholes` | 300 s | `limit` (integer) |
+| `/potholes` | 60 s | `bbox` (four numbers, canonicalized) |
+| `/segments/{uuid}` | 60 s | none; path lowercased |
+
+Notes on the cache key:
+
+- Unknown query params are dropped from the key and are not forwarded to the origin.
+- For tiles, `z`, `x` and `y` must be plain integers (`z ≤ 22`, `x` and `y` < 2^z). Anything else gets an edge `404 not_found` without reaching the origin.
+- The tile `?v=` cache-buster is ignored at the edge. A daily `v` bump does not refresh the edge copy, which expires on its 1-hour TTL.
 
 ## Endpoints
 
@@ -84,11 +127,23 @@ Batch upload of processed point readings.
 
 **Notes**
 
-- `batch_id` must be UUIDv4, generated on client. Server uses it for idempotency — retried uploads with the same `batch_id` replay the original `{accepted, rejected, duplicate, rejected_reasons}` result.
+- `batch_id` must be UUIDv4, generated on client. Server uses it for idempotency — retried uploads with the same `batch_id` replay the original `{accepted, rejected, duplicate, rejected_reasons}` result. If the same device token already uploaded that `batch_id`, the gateway answers from `processed_batches` without spending upload quota, so a retry after a lost response never earns a 429. A `batch_id` that belongs to a different device still goes through the normal rate-limited path.
 - Cross-batch replays of the same physical reading from the same device are also suppressed. These return 200 with `duplicate: false` for the new batch and count the suppressed row under `rejected_reasons.duplicate_reading`; this prevents manual field-test replay or local queue retry from double-counting public aggregates.
 - `device_token` is a UUIDv4 generated on client, rotated monthly. It is sent over TLS to the Edge Function, hashed there with a server-side pepper, and discarded. The raw token is never persisted.
 - `readings.length ≤ 1000`. Larger → `batch_too_large` error; client must split.
-- Hard 400s are only for malformed payloads: missing required fields, non-UUID `batch_id` / `device_token`, non-numeric scalar fields, or `batch_too_large`.
+- Hard 400s are only for structural problems. These are:
+  - missing required fields
+  - non-UUID `batch_id` / `device_token`
+  - non-numeric scalar fields
+  - a `recorded_at` or `client_sent_at` that is not strict RFC 3339
+  - `batch_too_large`
+  - a batch in which too many readings are pothole-flagged (a forgery signal, so it fails the whole batch)
+- Out-of-range values in a single reading never fail the batch. The gateway drops that reading and counts it in `rejected_reasons`, and the rest of the batch is ingested. These are:
+  - `out_of_bounds` — `lat` outside [-90, 90] or `lng` outside [-180, 180]
+  - `invalid_speed` — `speed_kmh` outside [0, 220]
+  - `invalid_gps_accuracy` — `gps_accuracy_m` < 0 (iOS sends -1 for an invalid fix) or > 1000
+  - `invalid_pothole_magnitude` — `pothole_magnitude` outside [0, 8] G, or `is_pothole: true` without a magnitude of at least 1.0 G
+- `heading` outside [0, 360), such as the -1 that iOS sends for an invalid course, is stored as `null`. The reading is not rejected.
 - Domain-level bad readings are soft-rejected and counted in `rejected_reasons` with a 200 response. That includes stale/future timestamps, out-of-bounds coordinates, low-quality readings, unpaved matches, no-match cases, and duplicate physical readings already accepted from the same device.
 
 **Response — 200 OK**
@@ -107,10 +162,11 @@ Batch upload of processed point readings.
 ```
 
 - `accepted`: number of readings persisted to `readings` table
-- `rejected`: `readings.length - accepted`
+- `rejected`: `readings.length - accepted`. This includes readings the gateway dropped before ingest.
 - `duplicate`: `true` if this `batch_id` was already processed (no-op retry)
-- `rejected_reasons`: counts by reason code. Only codes the server actually emits are listed — clients must tolerate unknown keys for forward-compat. MVP-emitted enum:
-  - `out_of_bounds` — lat/lng outside NS bbox
+- `rejected_reasons`: counts by reason code, merging gateway and SQL rejections. Only codes the server actually emits are listed — clients must tolerate unknown keys for forward-compat. Emitted codes:
+  - `out_of_bounds` — lat/lng outside NS bbox (SQL) or outside world bounds (gateway)
+  - `invalid_speed`, `invalid_gps_accuracy`, `invalid_pothole_magnitude` — gateway per-reading bounds (see Notes above)
   - `no_segment_match` — no road segment within the road-class-tiered radius (45m for motorway/trunk/primary/_link, 25m for secondary/tertiary/_link, 20m for everything else) and heading window
   - `low_quality` — server-visible quality gates failed (`gps_accuracy_m > 20`, `speed_kmh < 15`, `speed_kmh > 160`, or `roughness_rms` outside `[0, 15]`). Client-only gates such as `duration_s > 15` and `sample_count < 30` should have been dropped before upload and never reach the backend.
   - `future_timestamp` — `recorded_at` in the future by > 60s
@@ -119,7 +175,7 @@ Batch upload of processed point readings.
   - `duplicate_reading` — same device hash, same timestamp, and near-identical coordinate already exists from a prior batch
 
 **Intentionally removed from MVP:**
-- `invalid_value` — a full-batch `validation_failed` is returned instead; there is no per-reading "accepted-but-flagged" path.
+- `invalid_value` — replaced by the specific per-reading gateway codes above. There is still no "accepted-but-flagged" path: a reading is either ingested or rejected.
 - `privacy_zone` — privacy zones live only on-device. Server has no knowledge of any user's zones and so cannot emit this code. Defense-in-depth here would require a separate mechanism (e.g., client attestation of a canonical public-zone list) and is deferred.
 
 **Response — 400 validation_failed**
@@ -154,6 +210,17 @@ Also sets `Retry-After: 3600` header.
 ### `POST /device-tokens/challenge`
 
 Issues a one-time attestation challenge. First step of the server-issued device token exchange (B160, [17-device-attestation-and-trust.md](17-device-attestation-and-trust.md)). No request body. Rate-limited per IP using the same `check_and_bump_rate_limit` pattern as every other bucketed endpoint (30 requests / IP / hour).
+
+**Feature gate (both device-token routes).** Real attestation verification (B161 App Attest, B163 Play Integrity) has not landed, and only a fake verifier is wired in. So both `POST /device-tokens/challenge` and `POST /device-tokens` answer `503 attestation_disabled` unless the gateway has `ATTESTATION_ENABLED=true`. The response carries `Retry-After: 21600` and `retry_after_s: 21600`. Clients must treat this as temporary: keep using their locally generated token and try again later.
+
+```json
+{
+    "error": "attestation_disabled",
+    "message": "Device attestation is not enabled yet.",
+    "retry_after_s": 21600,
+    "request_id": "01H9Z..."
+}
+```
 
 **Request**
 
@@ -206,6 +273,8 @@ Redeems a challenge plus a platform attestation payload for a server-issued devi
 
 - `platform` must be `ios` or `android`. Any other value is a `validation_failed` 400, not a distinct code — the platform enum is closed and doesn't warrant its own error family.
 - `key_id` is the raw, client-generated attestation key identifier (App Attest key id / Play Integrity equivalent). The server hashes it with the same pepper used for device tokens before persisting; the raw value is never stored or logged. See `attested_devices.key_id_hash`.
+- `key_id` must be base64 or base64url (`[A-Za-z0-9+/_-]`, up to two trailing `=`), at most 512 characters. `challenge` must be base64url (`[A-Za-z0-9_-]`), at most 128 characters. Anything else is `400 validation_failed`, returned before the challenge is consumed. A client that sends a malformed value can therefore retry with the same challenge.
+- Redemption is rate-limited per IP: 30 requests / IP / hour, in its own bucket separate from challenge issuance. Over the limit gets `429 rate_limited` with `Retry-After`, and the challenge is not consumed.
 - `attestation_object` is the platform-native attestation payload (CBOR for App Attest, an integrity token for Play Integrity), base64-encoded. **B160 does not verify this payload cryptographically** — verification is a stubbed dependency (`verifyAttestation`) that B161 (App Attest) and B163 (Play Integrity) implement for real. Until then, only a fake/test verifier is wired in.
 - `challenge` is the exact value returned by `POST /device-tokens/challenge`, unmodified.
 - On success, the server upserts the device's row in `attested_devices` (overwriting `public_key`, `sign_count`, `current_token_hash`, `last_rotated_at` in place — no history is kept across rotations, by design) and returns a fresh device token.
@@ -223,7 +292,7 @@ Redeems a challenge plus a platform attestation payload for a server-issued devi
 
 **Response — 400 validation_failed**
 
-Malformed payload or an unrecognized `platform` value (`field_errors.platform`).
+Malformed payload, an unrecognized `platform` value (`field_errors.platform`), or a `key_id` / `challenge` outside the allowed charset or length.
 
 **Response — 400 challenge_expired**
 
@@ -271,7 +340,7 @@ Vector tile with road quality overlays and pothole markers.
 **Request**
 
 - URL params: `z` (zoom), `x` (tile col), `y` (tile row)
-- Optional query: `?v=<int>` for cache-busting (daily rotation)
+- Optional query: `?v=<int>` for cache-busting (daily rotation). This refreshes the client's HTTP cache only, because the Cloudflare edge ignores `v` (see "Edge caching").
 - Headers: `apikey`, `Authorization`
 
 **Response — 200 OK**
@@ -352,6 +421,8 @@ Post-MVP plan:
 
 **Response — 404 not_found** if no aggregate exists for this segment yet.
 
+`Cache-Control: public, max-age=60, s-maxage=60` on 200.
+
 ---
 
 ### `GET /potholes?bbox=<minLng>,<minLat>,<maxLng>,<maxLat>`
@@ -378,7 +449,7 @@ List active potholes in a bounding box. Used for the pothole marker overlay when
 }
 ```
 
-Bbox limited to ~10km × 10km; larger requests return 400.
+Bbox limited to ~10km × 10km; larger requests return 400. `Cache-Control: public, max-age=60, s-maxage=60` on 200.
 
 ---
 
@@ -406,7 +477,7 @@ List the highest-priority active potholes for public reports and municipality pa
 }
 ```
 
-Default limit is 20. Missing data is a valid empty list; malformed or out-of-range limits return 400.
+Default limit is 20. Missing data is a valid empty list; malformed or out-of-range limits return 400. `Cache-Control: public, max-age=300, s-maxage=300` on 200.
 
 ---
 
@@ -494,13 +565,13 @@ Use this instead of the normal quality tile when the UI is answering: "where do 
 
 ---
 
-### `GET /segments/worst?municipality=<name>&limit=<n>`
+### `GET /segments-worst?municipality=<name>&limit=<n>`
 
-Top-N roughest published segments for the web `Worst Roads` report.
+Top-N roughest published segments for the web `Worst Roads` report. The gateway route is `/functions/v1/segments-worst`. Older drafts of this doc wrote it as `/segments/worst`, which is not mounted.
 
 **Request**
 
-- `municipality` optional exact municipality display name
+- `municipality` optional exact municipality display name, checked against the known municipalities. The gateway caches that allowlist in-process for 10 minutes, so a newly imported municipality can take up to 10 minutes to become valid.
 - `limit` required integer, `1 <= limit <= 100`
 
 **Ranking semantics**
@@ -538,6 +609,8 @@ Top-N roughest published segments for the web `Worst Roads` report.
 }
 ```
 
+`Cache-Control: public, max-age=300, s-maxage=300` on 200. This was 900 s before 2026-11-08 and now matches the 5-minute edge TTL.
+
 **Response — 400 validation_failed**
 
 - invalid municipality name
@@ -547,7 +620,7 @@ Top-N roughest published segments for the web `Worst Roads` report.
 
 ### Upload Retry
 
-- Network error or 5xx: exponential backoff 1s, 2s, 4s, 8s, 16s, max 5 attempts
+- Network error or 5xx: exponential backoff 1s, 2s, 4s, 8s, 16s, max 5 attempts. When a 503 carries `Retry-After` (every gateway 503 does), wait at least that long.
 - 429: respect `Retry-After` header (fallback to 60s if missing)
 - 400 `validation_failed`: do NOT retry. Mark batch as `failed_permanent` in local queue and surface in Settings. Log fields.
 - 200: mark batch `succeeded`; on next queue tick, delete readings older than 30 days
@@ -609,6 +682,8 @@ One-tap pothole report endpoint plus follow-up actions against existing pothole 
 - `pothole_report_id` is required for `confirm_present` and `confirm_fixed`, omitted for `manual_report`.
 - `lat` / `lng` are the precise client coordinates after privacy-zone filtering. Do not randomize them.
 - `sensor_backed_magnitude_g` and `sensor_backed_at` are optional and valid only for `manual_report`; provide both or neither. They represent a local accelerometer pothole candidate matched to the explicit tap and are omitted for follow-up actions.
+- `recorded_at` and `sensor_backed_at` must be strict RFC 3339, no more than 5 minutes in the future, and no more than 30 days old. Outside that window gets `400 validation_failed`.
+- `accuracy_m` must be within [0, 500]. Outside that range gets `400 validation_failed`.
 - repeating the same action type from the same device against the same pothole within 24 hours may return `200` without incrementing public counters again
 
 **Response — 200 OK**
