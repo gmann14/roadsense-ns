@@ -24,9 +24,10 @@ import java.time.Instant
  *     → on 400 validation_failed: `failed_permanent`
  *     → on 429 / 5xx / network error: bump backoff, stay `pending_metadata`
  *
- * The bytes step never produces a permanent failure on its own — if the
- * signed URL expires (`upload_expires_at < now`) we re-issue from the
- * metadata endpoint per the contract in
+ * The bytes step never produces a permanent failure on its own: any PUT
+ * failure (network, 400 expired URL, 401/403 bad signature, 5xx) backs off
+ * and stays `pending_metadata`, so the next pass re-issues a signed URL from
+ * the metadata endpoint per the contract in
  * `docs/implementation/03-api-contracts.md` → `POST /pothole-photos`.
  */
 fun interface PotholePhotoMetadataRpc {
@@ -226,17 +227,34 @@ class PotholePhotoCoordinator(
         }
     }
 
+    /**
+     * Any failure of the bytes PUT is retried with backoff and the row stays
+     * `pending_metadata`, so the next pass asks the metadata endpoint for a
+     * fresh signed URL. Storage answers 400 for an expired or already-used
+     * signed URL and 401/403 for a bad signature, which are exactly the
+     * cases a new URL fixes; treating them as permanent (as the shared
+     * `UploadPolicy` would for 400) would strand a photo the server is still
+     * waiting for.
+     */
     private suspend fun recordBytesRetry(
         photo: PotholePhotoEntity,
         attemptNumber: Int,
         attemptedAt: Instant,
         statusCode: Int?,
-    ): Outcome = recordRetry(
-        photo = photo,
-        attemptNumber = attemptNumber,
-        attemptedAt = attemptedAt,
-        statusCode = statusCode,
-        retryAfterSeconds = null,
-        requestId = null,
-    )
+    ): Outcome {
+        val disposition = UploadPolicy.evaluate(UploadAttemptResult.NetworkError, attemptNumber)
+        val delaySeconds = (disposition as? UploadDisposition.Retry)?.afterSeconds
+            ?: UploadPolicy.MAX_RETRY_DELAY_SECONDS
+        val nextAttempt = attemptedAt.plus(Duration.ofMillis((delaySeconds * 1000).toLong()))
+        dao.update(
+            photo.copy(
+                uploadState = PhotoUploadState.PENDING_METADATA.wireValue,
+                uploadAttemptCount = attemptNumber,
+                lastAttemptAt = attemptedAt,
+                nextAttemptAt = nextAttempt,
+                lastHttpStatusCode = statusCode,
+            ),
+        )
+        return Outcome.Retry(photo.id, nextAttempt)
+    }
 }

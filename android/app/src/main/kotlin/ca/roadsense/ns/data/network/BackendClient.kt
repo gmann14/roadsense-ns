@@ -88,11 +88,11 @@ object HttpClientFactory {
             .writeTimeout(30, TimeUnit.SECONDS)
 
         if (debug) {
-            // Body-level logging only in debug. Production is HEADERS at most
-            // because reading payloads contain coarse coordinates we don't
-            // want sitting in adb logcat unredacted.
+            // Method, URL, status and timing only. Never HEADERS or BODY: the
+            // headers carry the anon key and the bodies carry coordinates,
+            // device tokens and feedback text, none of which belong in logcat.
             builder.addInterceptor(HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
+                level = HttpLoggingInterceptor.Level.BASIC
             })
         }
         return builder.build()

@@ -10,6 +10,7 @@ import ca.roadsense.ns.data.room.ReadingEntity
 import ca.roadsense.ns.data.room.RoadSenseDatabase
 import ca.roadsense.ns.data.room.UploadBatchEntity
 import ca.roadsense.ns.data.room.UploadBatchState
+import ca.roadsense.ns.sensor.PrivacyZone
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -33,6 +34,7 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
@@ -62,9 +64,16 @@ class UploadDrainCoordinatorTest {
     private val online = NetworkPathSnapshot(NetworkPathStatus.SATISFIED, isExpensive = false)
     private val offline = NetworkPathSnapshot(NetworkPathStatus.UNSATISFIED, isExpensive = false)
 
-    private fun reading(id: UUID = UUID.randomUUID()) = ReadingEntity(
+    private val sessionId = UUID.randomUUID()
+
+    /** A reading from a sealed drive: the only shape that may upload. */
+    private fun reading(
+        id: UUID = UUID.randomUUID(),
+        latitude: Double = 44.6488,
+        driveSessionId: UUID? = sessionId,
+    ) = ReadingEntity(
         id = id,
-        latitude = 44.6488,
+        latitude = latitude,
         longitude = -63.5752,
         roughnessRMS = 0.5,
         speedKMH = 50.0,
@@ -73,16 +82,132 @@ class UploadDrainCoordinatorTest {
         isPothole = false,
         potholeMagnitude = null,
         recordedAt = now,
+        driveSessionId = driveSessionId,
+        uploadReadyAt = now,
     )
 
-    private fun coordinator(rpc: UploadReadingsRpc) = UploadDrainCoordinator(
+    private fun coordinator(
+        zones: List<PrivacyZone> = emptyList(),
+        rpc: UploadReadingsRpc,
+    ) = UploadDrainCoordinator(
         database = db,
         readingDao = db.readingDao(),
         batchDao = db.uploadBatchDao(),
         uploadReadingsRpc = rpc,
         deviceTokenProvider = { "test-token" },
         clock = fixedClock,
+        clientAppVersion = "1.2.3 (45)",
+        clientOSVersion = "Android 15",
+        privacyZones = { zones },
     )
+
+    @Test
+    fun `batches are capped at 500 readings and drainAll sends them all in one run`() = runTest {
+        db.readingDao().insertAll((1..1_200).map { reading() })
+        val sizes = mutableListOf<Int>()
+        val outcomes = coordinator { request ->
+            sizes += request.readings.size
+            successResponse()
+        }.drainAll(online)
+
+        assertEquals(listOf(500, 500, 200), sizes)
+        assertEquals(3, outcomes.count { it is UploadDrainCoordinator.Outcome.BatchSucceeded })
+        assertTrue(outcomes.last() is UploadDrainCoordinator.Outcome.NothingToDo)
+        assertEquals(0, db.readingDao().readyForUploadCount())
+    }
+
+    @Test
+    fun `drainAll stops at the first retry and respects maxBatches`() = runTest {
+        db.readingDao().insertAll((1..1_200).map { reading() })
+        var calls = 0
+        val retryOutcomes = coordinator {
+            calls++
+            errorResponse(503)
+        }.drainAll(online)
+        assertEquals(1, calls)
+        assertTrue(retryOutcomes.single() is UploadDrainCoordinator.Outcome.BatchRetry)
+
+        db.readingDao().deleteAll()
+        db.readingDao().insertAll((1..1_200).map { reading() })
+        val capped = coordinator { successResponse() }.drainAll(online, maxBatches = 1)
+        assertEquals(1, capped.size)
+    }
+
+    @Test
+    fun `request carries the app and OS version from the build`() = runTest {
+        db.readingDao().insert(reading())
+        var sent: UploadReadingsRequest? = null
+        coordinator { request ->
+            sent = request
+            successResponse()
+        }.drainOnce(online)
+
+        assertEquals("1.2.3 (45)", sent!!.clientAppVersion)
+        assertEquals("Android 15", sent!!.clientOSVersion)
+    }
+
+    @Test
+    fun `readings without a drive session never upload`() = runTest {
+        db.readingDao().insert(reading(driveSessionId = null))
+        var called = false
+        val outcome = coordinator {
+            called = true
+            successResponse()
+        }.drainOnce(online)
+
+        assertTrue(outcome is UploadDrainCoordinator.Outcome.NothingToDo)
+        assertTrue(!called)
+    }
+
+    @Test
+    fun `a zone added before upload drops the readings inside it, even from a retried batch`() = runTest {
+        val home = reading(latitude = 44.6488)
+        val away = reading(latitude = 44.70)
+        db.readingDao().insertAll(listOf(home, away))
+        // First attempt fails, so both readings sit in a pending batch.
+        val first = coordinator { errorResponse(503) }.drainOnce(online)
+        val batchId = (first as UploadDrainCoordinator.Outcome.BatchRetry).batchId
+        val batch = db.uploadBatchDao().findById(batchId)!!
+        db.uploadBatchDao().update(batch.copy(nextAttemptAt = null))
+
+        // The user adds a zone around home, then the retry runs.
+        val zone = PrivacyZone(latitude = 44.6488, longitude = -63.5752, radiusMeters = 250.0)
+        var sent: UploadReadingsRequest? = null
+        val outcome = coordinator(zones = listOf(zone)) { request ->
+            sent = request
+            successResponse()
+        }.drainOnce(online)
+
+        assertTrue(outcome is UploadDrainCoordinator.Outcome.BatchSucceeded)
+        assertEquals(listOf(44.70), sent!!.readings.map { it.lat })
+        val dropped = db.readingDao().findById(home.id)!!
+        assertTrue(dropped.droppedByPrivacyZone)
+        assertNull(dropped.uploadBatchId)
+        assertNull(dropped.uploadedAt)
+    }
+
+    @Test
+    fun `a batch entirely inside a zone is not sent`() = runTest {
+        db.readingDao().insert(reading(latitude = 44.6488))
+        val zone = PrivacyZone(latitude = 44.6488, longitude = -63.5752, radiusMeters = 250.0)
+        var called = false
+        val outcome = coordinator(zones = listOf(zone)) {
+            called = true
+            successResponse()
+        }.drainOnce(online)
+
+        assertTrue(outcome is UploadDrainCoordinator.Outcome.BatchEmptiedByPrivacyZone)
+        assertTrue(!called)
+    }
+
+    @Test
+    fun `401 and 413 retry instead of stranding the batch`() = runTest {
+        db.readingDao().insert(reading())
+        assertTrue(coordinator { errorResponse(401) }.drainOnce(online) is UploadDrainCoordinator.Outcome.BatchRetry)
+        db.readingDao().deleteAll()
+        db.readingDao().insert(reading())
+        assertTrue(coordinator { errorResponse(413) }.drainOnce(online) is UploadDrainCoordinator.Outcome.BatchRetry)
+    }
 
     private fun successResponse(): Response<UploadReadingsResponse> =
         Response.success(

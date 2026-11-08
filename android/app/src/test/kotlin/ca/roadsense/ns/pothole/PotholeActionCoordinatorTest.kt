@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import ca.roadsense.ns.api.PotholeActionUploadResponse
 import ca.roadsense.ns.data.room.PotholeActionUploadState
 import ca.roadsense.ns.data.room.RoadSenseDatabase
+import ca.roadsense.ns.sensor.PrivacyZone
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -173,5 +174,48 @@ class PotholeActionCoordinatorTest {
         val row = db.potholeActionDao().findById(id)!!
         assertEquals(PotholeActionUploadState.PENDING_UPLOAD.wireValue, row.uploadState)
         assertNotNull(row.nextAttemptAt)
+    }
+
+    @Test
+    fun `an unexpected exception retries instead of crashing the worker`() = runTest {
+        val repo = PotholeActionRepository(db.potholeActionDao(), clock)
+        val id = repo.reportPothole(PotholeLocation(44.65, -63.58, 5.0))
+        PotholeActionRepository(db.potholeActionDao(), { now.plusSeconds(20) })
+            .promoteExpiredUndos()
+
+        val outcomes = buildCoordinator { throw IllegalStateException("decode failure") }.drain()
+
+        assertTrue(outcomes.first() is PotholeActionCoordinator.Outcome.Retry)
+        assertEquals(PotholeActionUploadState.PENDING_UPLOAD.wireValue, db.potholeActionDao().findById(id)!!.uploadState)
+    }
+
+    @Test
+    fun `a queued report inside a zone added later is deleted, never sent`() = runTest {
+        val repo = PotholeActionRepository(db.potholeActionDao(), clock)
+        val atHome = repo.reportPothole(PotholeLocation(44.6488, -63.5752, 5.0))
+        val elsewhere = repo.reportPothole(PotholeLocation(44.70, -63.62, 5.0))
+        PotholeActionRepository(db.potholeActionDao(), { now.plusSeconds(20) })
+            .promoteExpiredUndos()
+        val sent = mutableListOf<UUID>()
+        val coordinator = PotholeActionCoordinator(
+            dao = db.potholeActionDao(),
+            rpc = { request ->
+                sent += request.actionId
+                successResponse(request.actionId)
+            },
+            deviceTokenProvider = { "test-token" },
+            clientAppVersion = "0.1.0 (1)",
+            clientOSVersion = "Android 15",
+            clock = clock,
+            privacyZones = {
+                listOf(PrivacyZone(latitude = 44.6488, longitude = -63.5752, radiusMeters = 250.0))
+            },
+        )
+
+        val outcomes = coordinator.drain()
+
+        assertEquals(listOf(elsewhere), sent)
+        assertTrue(outcomes.any { it == PotholeActionCoordinator.Outcome.DroppedByPrivacyZone(atHome) })
+        assertNull(db.potholeActionDao().findById(atHome))
     }
 }

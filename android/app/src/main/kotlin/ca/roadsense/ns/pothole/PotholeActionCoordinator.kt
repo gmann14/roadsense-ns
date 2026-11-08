@@ -1,5 +1,6 @@
 package ca.roadsense.ns.pothole
 
+import ca.roadsense.ns.AppLog
 import ca.roadsense.ns.api.PotholeActionUploadRequest
 import ca.roadsense.ns.api.PotholeActionUploadResponse
 import ca.roadsense.ns.api.UploadAttemptResult
@@ -9,6 +10,9 @@ import ca.roadsense.ns.data.room.PotholeActionDao
 import ca.roadsense.ns.data.room.PotholeActionEntity
 import ca.roadsense.ns.data.room.PotholeActionType
 import ca.roadsense.ns.data.room.PotholeActionUploadState
+import ca.roadsense.ns.sensor.PrivacyZone
+import ca.roadsense.ns.sensor.PrivacyZoneFilter
+import kotlinx.coroutines.CancellationException
 import retrofit2.Response
 import java.io.IOException
 import java.time.Duration
@@ -40,12 +44,16 @@ class PotholeActionCoordinator(
     private val clientAppVersion: String,
     private val clientOSVersion: String,
     private val clock: () -> Instant = { Instant.now() },
+    /** Checked again at upload time: a report queued before the user added
+     *  a privacy zone around that spot must not leave the device. */
+    private val privacyZones: suspend () -> List<PrivacyZone> = { emptyList() },
 ) {
     sealed class Outcome {
         data object NothingToDo : Outcome()
         data class Submitted(val actionId: UUID, val potholeReportId: UUID) : Outcome()
         data class Retry(val actionId: UUID, val nextAttemptAt: Instant) : Outcome()
         data class FailedPermanent(val actionId: UUID, val httpStatus: Int?) : Outcome()
+        data class DroppedByPrivacyZone(val actionId: UUID) : Outcome()
     }
 
     /** Drains as many due actions as possible in one call. Returns each per-action outcome. */
@@ -56,7 +64,15 @@ class PotholeActionCoordinator(
             now = now,
         )
         if (due.isEmpty()) return listOf(Outcome.NothingToDo)
-        return due.map { submit(it) }
+        val zones = privacyZones()
+        return due.map { action ->
+            if (PrivacyZoneFilter.isInside(action.latitude, action.longitude, zones)) {
+                dao.delete(action.id)
+                Outcome.DroppedByPrivacyZone(action.id)
+            } else {
+                submit(action)
+            }
+        }
     }
 
     /** Submits a single action and updates its row. */
@@ -81,7 +97,14 @@ class PotholeActionCoordinator(
 
         val response: Response<PotholeActionUploadResponse> = try {
             rpc.submit(request)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: IOException) {
+            return handleNetworkFailure(action, attempt = action.uploadAttemptCount + 1)
+        } catch (e: RuntimeException) {
+            // A decoding or client bug must not crash the worker and strand
+            // the whole queue; retry with backoff like a network failure.
+            AppLog.warn("pothole action upload failed unexpectedly", e)
             return handleNetworkFailure(action, attempt = action.uploadAttemptCount + 1)
         }
 

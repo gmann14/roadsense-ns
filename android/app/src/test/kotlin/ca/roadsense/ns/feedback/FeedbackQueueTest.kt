@@ -141,11 +141,11 @@ class FeedbackQueueTest {
     }
 
     @Test
-    fun `network errors stop retrying after the permanent failure threshold`() = runTest {
+    fun `network errors never discard a message, however many attempts failed`() = runTest {
         val queue = FeedbackQueue(db.feedbackDao(), clock)
         val id = queue.enqueue("settings", "bug", "msg", null, false, "en-CA", null)
         db.feedbackDao().update(
-            db.feedbackDao().findById(id)!!.copy(uploadAttemptCount = 5),
+            db.feedbackDao().findById(id)!!.copy(uploadAttemptCount = 40),
         )
         val drainer = FeedbackQueueDrainer(
             dao = db.feedbackDao(),
@@ -157,8 +157,31 @@ class FeedbackQueueTest {
 
         val outcomes = drainer.drain()
 
-        assertTrue(outcomes.first() is FeedbackQueueDrainer.Outcome.FailedPermanent)
+        assertTrue(outcomes.first() is FeedbackQueueDrainer.Outcome.Retry)
         val row = db.feedbackDao().findById(id)!!
+        assertEquals(FeedbackUploadState.PENDING.wireValue, row.uploadState)
+        assertEquals(now.plusSeconds(3_600), row.nextAttemptAt, "backoff caps at one hour")
+    }
+
+    @Test
+    fun `server errors follow the shared upload policy`() = runTest {
+        val queue = FeedbackQueue(db.feedbackDao(), clock)
+        val transient = queue.enqueue("settings", "bug", "a", null, false, "en-CA", null)
+        fun drainer(status: Int) = FeedbackQueueDrainer(
+            dao = db.feedbackDao(),
+            submitter = { FeedbackSubmissionResult.ServerError(status, requestId = "req") },
+            clientAppVersion = "0.1.0",
+            platform = "Android 14",
+            clock = clock,
+        )
+
+        assertTrue(drainer(503).drain().first() is FeedbackQueueDrainer.Outcome.Retry)
+        assertEquals(FeedbackUploadState.PENDING.wireValue, db.feedbackDao().findById(transient)!!.uploadState)
+
+        db.feedbackDao().delete(transient)
+        val rejected = queue.enqueue("settings", "bug", "b", null, false, "en-CA", null)
+        assertTrue(drainer(422).drain().first() is FeedbackQueueDrainer.Outcome.FailedPermanent)
+        val row = db.feedbackDao().findById(rejected)!!
         assertEquals(FeedbackUploadState.FAILED_PERMANENT.wireValue, row.uploadState)
         assertNull(row.nextAttemptAt)
     }

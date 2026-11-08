@@ -33,11 +33,9 @@ class PotholePhotoCoordinatorTest {
     private val clock = { now }
 
     // Realistic device token shape: `DeviceTokenStore.currentToken` issues
-    // 43-char base64url strings (32 random bytes, no padding) — NOT UUIDs.
-    // A UUID-shaped fixture here previously masked a bug where
-    // PotholePhotoCoordinator did `UUID.fromString(deviceToken)`, which
-    // crashes (IllegalArgumentException) on a real token.
-    private val deviceToken = "z0sY9SBhve3koJ5J4wq7P9evV2IlWf3xcKCy-s5cW9Y"
+    // lowercase UUIDv4 strings (the server rejects anything else). The
+    // coordinator must pass the token through as an opaque string.
+    private val deviceToken = "6f1c2a9e-3b7d-4e8a-9c21-5d0f7a3b8e14"
 
     @Before
     fun setUp() {
@@ -228,5 +226,47 @@ class PotholePhotoCoordinatorTest {
         val stored = db.potholePhotoDao().findById(photo.id)!!
         assertEquals(PhotoUploadState.PENDING_METADATA.wireValue, stored.uploadState)
         assertFalse(stored.expectedObjectPath != null) // not yet flipped
+    }
+
+    @Test
+    fun `an expired or rejected signed URL (400, 401, 403) retries and re-requests a fresh URL`() = runTest {
+        for (status in listOf(400, 401, 403)) {
+            val photo = makePhotoRow()
+            db.potholePhotoDao().insert(photo)
+            var metadataCalls = 0
+            var currentNow = now
+            val coordinator = PotholePhotoCoordinator(
+                dao = db.potholePhotoDao(),
+                metadataRpc = PotholePhotoMetadataRpc {
+                    metadataCalls++
+                    PotholePhotoMetadataResult.SignedURLIssued(
+                        reportId = photo.id,
+                        uploadURL = "https://storage.example.test/upload/$metadataCalls",
+                        uploadExpiresAt = currentNow.plusSeconds(3600),
+                        expectedObjectPath = "pending/${photo.id}.jpg",
+                        requestId = "req-$metadataCalls",
+                    )
+                },
+                bytesRpc = PotholePhotoBytesRpc { _, _ ->
+                    PotholePhotoBytesResult.HttpError(statusCode = status, body = null)
+                },
+                deviceTokenProvider = { deviceToken },
+                clientAppVersion = "0.1.0 (1)",
+                clientOSVersion = "Android 15",
+                clock = { currentNow },
+            )
+
+            val first = coordinator.drain().single()
+            assertTrue(first is PotholePhotoCoordinator.Outcome.Retry, "HTTP $status must retry")
+            val stored = db.potholePhotoDao().findById(photo.id)!!
+            assertEquals(PhotoUploadState.PENDING_METADATA.wireValue, stored.uploadState)
+            assertEquals(status, stored.lastHttpStatusCode)
+
+            // After the backoff the next pass goes back to the metadata step.
+            currentNow = first.nextAttemptAt
+            coordinator.drain()
+            assertEquals(2, metadataCalls, "HTTP $status must re-request the signed URL")
+            db.potholePhotoDao().delete(photo.id)
+        }
     }
 }
