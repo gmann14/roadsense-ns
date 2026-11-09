@@ -8,6 +8,14 @@ enum AppBootstrap {
             || environment["ROAD_SENSE_UI_TESTS"] == "1"
     }
 
+    /// App Store screenshot launches set `ROAD_SENSE_SCREENSHOT_LIVE_MAP=1`
+    /// with a test scenario, so seeded data shows over the real map. This is
+    /// safe only because the testing bootstrap's API client is read-only
+    /// (see `TestingNetworkGuard`).
+    static var usesLiveMapInTests: Bool {
+        ProcessInfo.processInfo.environment["ROAD_SENSE_SCREENSHOT_LIVE_MAP"] == "1"
+    }
+
     static func loadConfig(bundle: Bundle = .main) -> AppConfig {
         let keys = [
             "APP_ENV",

@@ -44,7 +44,7 @@ struct RoadQualityMapView: View {
         Group {
             switch RoadQualityMapSurfaceMode.resolve(
                 config: config,
-                isRunningTests: AppBootstrap.isRunningTests
+                isRunningTests: AppBootstrap.isRunningTests && !AppBootstrap.usesLiveMapInTests
             ) {
             case .testingShell:
                 TestingRoadQualityMapView(

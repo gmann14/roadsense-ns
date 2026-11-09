@@ -90,23 +90,25 @@ Do **not** select Photos, Contacts, Health & Fitness, Financial, Browsing/Search
 
 The app is iPhone-only (`TARGETED_DEVICE_FAMILY = 1`), so only iPhone screenshots are required. Upload one set to **6.9" (1320 × 2868)**. ASC scales it down for smaller sizes. If 6.9" isn't offered, use 6.5" (1284 × 2778).
 
-The current `ios/fastlane/screenshots/en-CA/*.png` are **not suitable**:
+Status (2026-11-09): two captioned 6.9" shots are in `ios/fastlane/screenshots/en-CA/`. That folder is gitignored, so the PNGs exist only on the Mac that made them. The old un-captioned mockups were moved to `~/.context/backups/roadsense-ns/appstore-mockups-2026-05/`.
 
-- They're un-captioned 6.5" UI mockups with no map.
-- Two of the four show the large Pothole button and the Photo button on the driving screen. That invites a Guideline 1.4.5 (driver distraction) objection, and Photo isn't in 1.0.
+1. `01-map.png`: the map with the road-quality overlay over Halifax. Caption: "See which Nova Scotia roads are rough". **Done.**
+2. `02-privacy-zones.png`: the privacy-zone editor. Caption: "Your home and work stay private". **Done.**
+3. **Driving screen during an auto-recorded drive.** Caption: "Drive normally. RoadSense records on its own". **To do:** capture it during the real-drive smoke test (gate 3). Don't show a finger on the Pothole button.
+4. **Stats after a real drive.** Caption: "Track the kilometres you've mapped". **To do:** the seeded test data shows 2.4 km but "0 trips", which reads wrong, so take this on a device after the smoke-test drive.
+5. Optional: **Siri phrase.** Caption: "Report potholes hands-free".
 
-Replace them with real captures from the 1.0 build, in this order:
+There is no segment-detail shot. In the 1.0 build (`ENABLE_ROAD_QUALITY_VECTOR_OVERLAY=YES`) the map is the UIKit Mapbox view, which has no tap-to-select. Only the disabled SwiftUI map path supports it. The review notes were changed on 2026-11-09 so they no longer promise it.
 
-1. **The map** with the road-quality overlay over Halifax. Caption: "See which Nova Scotia roads are rough".
-2. **Segment detail** drawer. Caption: "Every road scored from real drives".
-3. **Driving screen during auto-recorded drive.** Caption: "Drive normally. RoadSense records on its own".
-4. **Privacy zones.** Caption: "Your home and work stay private".
-5. **Stats.** Caption: "Track the kilometres you've mapped".
-6. Optional: **Siri phrase.** Caption: "Report potholes hands-free".
+How shots 1 and 2 were made:
 
-Capture on the iPhone 17 Pro Max simulator (`xcrun simctl io booted screenshot`) running a Production-config build. The map overlay needs a real Mapbox token in the gitignored `ios/Config/RoadSenseNS.Production.secrets.xcconfig`. Then add captions with any frame tool, or with `fastlane frameit` (it needs `Framefile.json` and fonts).
+- Write the gitignored `ios/Config/RoadSenseNS.Production.secrets.xcconfig` with the public Mapbox token and `PUBLIC_API_KEY`.
+- Build `Production Release` for the iPhone 17 Pro Max simulator with `CODE_SIGNING_ALLOWED=NO`, then set the status bar with `xcrun simctl status_bar … override --time 9:41`.
+- Launch with `SIMCTL_CHILD_ROAD_SENSE_UI_TESTS=1 SIMCTL_CHILD_ROAD_SENSE_TEST_SCENARIO=ready-shell SIMCTL_CHILD_ROAD_SENSE_SCREENSHOT_LIVE_MAP=1 xcrun simctl launch … ca.roadsense.ios`. The scenario seeds local data, and the screenshot flag keeps the real map on.
+- Capture with `xcrun simctl io booted screenshot`, then caption with `python3 -I ios/fastlane/caption_screenshot.py raw.png "Caption" out.png`.
+- Test-mode launches can't write to the API: `TestingNetworkGuard` blocks every request except GET and HEAD. Before that guard existed, a screenshot launch on 2026-11-09 uploaded the seeded readings to production. Never take screenshots from a normal (non-test) launch while simulating a drive, because that would upload real-looking readings.
 
-Screenshots must show the real app, so take them from the build you submit.
+On a real device, screenshots must also be 1320 × 2868 (an iPhone 16/17 Pro Max) or 1284 × 2778 (6.5"). Screenshots must show the real app, so take them from the build you submit.
 
 ## 6. App Review Information
 

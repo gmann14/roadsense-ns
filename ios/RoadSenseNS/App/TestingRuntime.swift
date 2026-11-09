@@ -69,7 +69,12 @@ extension AppContainer {
         let readingStore = ReadingStore(container: modelContainer)
         let userStatsStore = UserStatsStore(container: modelContainer)
         let uploadQueueStore = UploadQueueStore(container: modelContainer)
-        let apiClient = APIClient(endpoints: Endpoints(config: config))
+        // Read-only: UI tests and screenshot launches must never write seeded
+        // readings, potholes or feedback to the (production) API.
+        let apiClient = APIClient(
+            endpoints: Endpoints(config: config),
+            session: TestingNetworkGuard.makeReadOnlySession()
+        )
         let locationService = TestingLocationService()
         let motionService = TestingMotionService()
         let drivingDetector = TestingDrivingDetector()
