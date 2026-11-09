@@ -5,6 +5,10 @@ import SwiftData
 private enum TestingScenario: String {
     case defaultState = "default"
     case readyShell = "ready-shell"
+    /// App Store screenshots: a week of sealed, already-uploaded Halifax
+    /// drives so Stats and Drives look like real use. Local only; the testing
+    /// API client is read-only (`TestingNetworkGuard`).
+    case screenshot = "screenshot"
 }
 
 @MainActor
@@ -137,6 +141,10 @@ extension AppContainer {
         container: ModelContainer,
         privacyZoneStore: PrivacyZoneStore
     ) {
+        if scenario == .screenshot {
+            seedScreenshotScenario(container: container, privacyZoneStore: privacyZoneStore)
+            return
+        }
         guard scenario == .readyShell else { return }
 
         do {
@@ -204,5 +212,98 @@ extension AppContainer {
         } catch {
             fatalError("Unable to seed UI test scenario: \(error.localizedDescription)")
         }
+    }
+
+    private static func seedScreenshotScenario(
+        container: ModelContainer,
+        privacyZoneStore: PrivacyZoneStore
+    ) {
+        // Halifax routes as waypoint lists (lat, lng). Readings are spaced
+        // about 2 s apart at the drive's speed, as the real pipeline does.
+        let routes: [(waypoints: [(Double, Double)], daysAgo: Double, speedKMH: Double)] = [
+            ([(44.6519, -63.5822), (44.6573, -63.5937), (44.6624, -63.6090), (44.6700, -63.6225), (44.6866, -63.6516)], 6.3, 52),
+            ([(44.6466, -63.5732), (44.6440, -63.5826), (44.6372, -63.5911), (44.6271, -63.6105), (44.6180, -63.6240)], 4.2, 44),
+            ([(44.6574, -63.5869), (44.6650, -63.5710), (44.6702, -63.5576), (44.6806, -63.5440), (44.6960, -63.5310)], 2.4, 58),
+            ([(44.6486, -63.5755), (44.6553, -63.5807), (44.6621, -63.5862), (44.6705, -63.5960), (44.6812, -63.6122)], 0.9, 47),
+        ]
+
+        do {
+            try privacyZoneStore.save(label: "Home", latitude: 44.6488, longitude: -63.5752, radiusM: 300)
+            let context = ModelContext(container)
+            var totalKm = 0.0
+            var lastDriveAt: Date?
+
+            for (routeIndex, route) in routes.enumerated() {
+                let start = Date().addingTimeInterval(-route.daysAgo * 86_400)
+                let metresPerReading = route.speedKMH / 3.6 * 2
+                var points: [(Double, Double)] = []
+                for (a, b) in zip(route.waypoints, route.waypoints.dropFirst()) {
+                    let legMetres = haversineMetres(a, b)
+                    let steps = max(1, Int(legMetres / metresPerReading))
+                    for step in 0..<steps {
+                        let t = Double(step) / Double(steps)
+                        points.append((a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t))
+                    }
+                    totalKm += legMetres / 1000
+                }
+
+                let session = DriveSessionRecord(
+                    startedAt: start,
+                    endedAt: start.addingTimeInterval(Double(points.count) * 2),
+                    startLatitude: points.first?.0 ?? 44.6488,
+                    startLongitude: points.first?.1 ?? -63.5752,
+                    endLatitude: points.last?.0,
+                    endLongitude: points.last?.1,
+                    isSealed: true
+                )
+                context.insert(session)
+
+                for (i, point) in points.enumerated() {
+                    let recordedAt = start.addingTimeInterval(Double(i) * 2)
+                    // The first samples of the drive that starts near Home fall inside the zone.
+                    let inHomeZone = routeIndex == 1 && i < 9
+                    let wave = (sin(Double(i) / 7) + 1) / 2
+                    context.insert(
+                        ReadingRecord(
+                            latitude: point.0,
+                            longitude: point.1,
+                            roughnessRMS: 0.35 + wave * 0.9 + (i % 41 == 0 ? 1.4 : 0),
+                            speedKMH: route.speedKMH,
+                            heading: 0,
+                            gpsAccuracyM: 5,
+                            isPothole: i % 97 == 50,
+                            potholeMagnitude: i % 97 == 50 ? 2.6 : nil,
+                            recordedAt: recordedAt,
+                            driveSessionID: session.id,
+                            uploadedAt: inHomeZone ? nil : recordedAt.addingTimeInterval(600),
+                            uploadReadyAt: recordedAt,
+                            droppedByPrivacyZone: inHomeZone
+                        )
+                    )
+                }
+                lastDriveAt = session.endedAt
+            }
+
+            context.insert(
+                UserStats(
+                    totalKmRecorded: (totalKm * 10).rounded() / 10,
+                    totalSegmentsContributed: 0,
+                    lastDriveAt: lastDriveAt,
+                    potholesReported: 2
+                )
+            )
+            try context.save()
+        } catch {
+            fatalError("Unable to seed screenshot scenario: \(error.localizedDescription)")
+        }
+    }
+
+    private static func haversineMetres(_ a: (Double, Double), _ b: (Double, Double)) -> Double {
+        let r = 6_371_000.0
+        let dLat = (b.0 - a.0) * .pi / 180
+        let dLng = (b.1 - a.1) * .pi / 180
+        let h = sin(dLat / 2) * sin(dLat / 2)
+            + cos(a.0 * .pi / 180) * cos(b.0 * .pi / 180) * sin(dLng / 2) * sin(dLng / 2)
+        return 2 * r * asin(min(1, sqrt(h)))
     }
 }

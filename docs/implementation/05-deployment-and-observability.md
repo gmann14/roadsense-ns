@@ -465,6 +465,17 @@ Week 8: submit for Beta App Review to unlock external testing. Prepare:
   3. PR 3: make column NOT NULL + add constraint
 - Partition additions are automated via cron, but we also pre-create 3 months ahead manually to tolerate cron failure
 
+### Changing the PostGIS image (learned 2026-11-09)
+
+- Production runs a pinned image, `postgis/postgis:16-3.7`. Never use a floating tag like `16-master`: that tag shipped a `3.7.0dev` build which has no upgrade path.
+- Railway CLI 4.59 `railway environment edit --service-config` reports "No changes to apply" and does nothing. To change the image, call the GraphQL API (`backboard.railway.com/graphql/v2`): first `serviceInstanceUpdate(serviceId, environmentId, input: {source: {image}})`, then `serviceInstanceDeployV2`.
+- Take a fresh `pg_dump -Fc` first.
+- If the new image changes the Debian release, glibc collations change too. After the switch:
+  - `REINDEX` every index on a text/varchar column with the default collation (56 in production);
+  - then run `ALTER DATABASE railway REFRESH COLLATION VERSION`.
+- After a PostGIS version change, run `SELECT postgis_extensions_upgrade();`, then check that `postgis_full_version()` reports no "procs need upgrade" warning.
+- Rewrites on the 5 GB volume: never run one statement that rewrites a large table. Batch by `ctid` range and `VACUUM` between batches (see the 2026-11-09 outage in `.claude/tasks.md`). `max_wal_size` is set to 256MB with `ALTER SYSTEM`, which keeps WAL from filling the volume.
+
 ### iOS Local Store Migrations
 
 - Treat SwiftData schema changes with the same discipline as backend migrations

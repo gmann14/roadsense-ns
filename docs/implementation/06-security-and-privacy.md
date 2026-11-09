@@ -116,7 +116,7 @@ Operational note:
 - [10-app-store-and-testflight-readiness.md](10-app-store-and-testflight-readiness.md) is the release-day checklist and copy source-of-truth for App Store Connect fields.
 - This section remains the canonical policy decision for what the answers must be.
 
-What we enter in App Store Connect (must match `ios/RoadSenseNS/PrivacyInfo.xcprivacy`; updated 2026-11-08):
+What we enter in App Store Connect (must match `ios/RoadSenseNS/PrivacyInfo.xcprivacy`; updated 2026-11-09):
 
 | Data type | Linked to user | Tracking | Purpose | Source |
 |---|---|---|---|---|
@@ -127,6 +127,7 @@ What we enter in App Store Connect (must match `ios/RoadSenseNS/PrivacyInfo.xcpr
 | Other Data — Other Data Types | Yes | No | App Functionality | Road-roughness values derived from motion sensors |
 | Diagnostics — Crash Data | No | No | App Functionality | Sentry uncaught exceptions + stack traces |
 | Diagnostics — Performance Data | No | No | App Functionality | Sentry transaction sampling |
+| Diagnostics — Other Diagnostic Data | No | No | App Functionality | Sentry breadcrumbs and device context (added 2026-11-09) |
 
 **Data NOT collected:** name, phone, physical address, health & fitness, financial, photos (off in 1.0), browsing / search history, advertising ID, purchases, usage data, sensitive info, audio.
 

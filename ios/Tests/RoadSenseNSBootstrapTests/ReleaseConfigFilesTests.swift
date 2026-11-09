@@ -144,6 +144,7 @@ struct ReleaseConfigFilesTests {
             "NSPrivacyCollectedDataTypeOtherDataTypes": true,
             "NSPrivacyCollectedDataTypeCrashData": false,
             "NSPrivacyCollectedDataTypePerformanceData": false,
+            "NSPrivacyCollectedDataTypeOtherDiagnosticData": false,
         ])
         // Photos stay undeclared while App Store builds ship with photos off.
         #expect(linkedByType["NSPrivacyCollectedDataTypePhotosorVideos"] == nil)
