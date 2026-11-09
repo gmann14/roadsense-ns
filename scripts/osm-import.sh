@@ -144,9 +144,13 @@ curl -fsSL -o "${OSM_FILE}" "${SNAPSHOT_URL}"
 echo "→ Importing raw OSM ways/nodes via osm2pgsql flex output"
 # Only the database name goes on argv; host, user and password come from
 # the PG* environment set above.
+# --drop removes the slim middle tables (osm.planet_osm_*, about 1.2 GB for
+# Nova Scotia) once the import finishes. Every run is a full --create, so
+# they are never reused, and keeping them filled the 5 GB production volume.
 osm2pgsql \
     --database="${PGDATABASE}" \
     --slim \
+    --drop \
     --create \
     --output=flex \
     --schema=osm \
@@ -202,6 +206,11 @@ SQL
 echo "→ Refreshing public materialized views"
 db -c "REFRESH MATERIALIZED VIEW CONCURRENTLY public_stats_mv;"
 db -c "REFRESH MATERIALIZED VIEW CONCURRENTLY public_worst_segments_mv;"
+
+echo "→ Emptying staging table"
+# Staging (about 1 GB) is only needed during an import; the next run
+# refills it from scratch. TRUNCATE gives the disk space back at once.
+db -c "TRUNCATE road_segments_staging"
 
 echo "→ Refresh complete. Segment count:"
 db -c "SELECT count(*) AS segment_count FROM road_segments;"

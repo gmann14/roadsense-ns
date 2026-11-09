@@ -8,6 +8,8 @@ Running the lane from a Mac: load the API key from `~/.context/secrets/roadsense
 - Move `metadata/en-CA/release_notes.txt` aside while running. Apple rejects "What's New" on a first version.
 - The review-information upload fails unless the version already has a review-detail record with the contact name, email and phone. Those are set in ASC now; keep them out of the repo. Everything else is a one-time App Store Connect (ASC) setting, listed below.
 
+Submitting: `fastlane submit_review` (run from `ios/`, with the same env file loaded). It needs `IOS_BUILD_NUMBER` and refuses to run unless `SUBMIT_CONFIRM` is exactly `submit <version> (<build>)`, for example `submit 1.0 (35)`. Set that only after the owner has approved this exact build. Optional: set `APP_REVIEW_ATTACHMENT` to a video path to attach a review video. Release stays manual.
+
 Last updated 2026-11-08, after the [2026-10-18 review](reviews/2026-10-18-full-codebase-review.md).
 
 ---

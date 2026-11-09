@@ -74,4 +74,12 @@ set -e
 assert_eq 1 "$STATUS" "non-zero exit"
 assert_eq "" "$(cat "$WORK/psql2/argv" 2>/dev/null || true)" "psql never invoked"
 
+begin_test "osm-import.sh leaves no import scratch data on the volume"
+import_script="$REPO_ROOT/scripts/osm-import.sh"
+assert_eq yes "$(yes_no grep -Eq '^[[:space:]]+--drop[[:space:]]+\\$' "$import_script")" "osm2pgsql runs with --drop"
+finalize_line="$(grep -n 'SELECT finalize_road_segment_refresh' "$import_script" | head -1 | cut -d: -f1)"
+truncate_lines="$(grep -n 'TRUNCATE road_segments_staging' "$import_script" | cut -d: -f1 | tr '\n' ' ')"
+last_truncate="$(echo "$truncate_lines" | awk '{print $NF}')"
+assert_eq yes "$(yes_no test "${last_truncate:-0}" -gt "${finalize_line:-999999}")" "staging is emptied after the refresh"
+
 finish_tests
