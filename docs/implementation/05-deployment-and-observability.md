@@ -43,6 +43,7 @@ Run the steps in this order. Each one assumes the previous one finished.
    supabase db push --db-url "$DATABASE_URL"
    ```
    If the dry run lists every migration, stop: the ledger is empty, and a push would replay all of them.
+   **Disk headroom.** The production volume is 5 GB and the database uses about 3.4 GB (2026-11). A migration that rewrites a large table (`road_segments` has 1.74M rows; `readings` partitions are bigger) needs roughly a second copy of the table plus WAL. That filled the disk on 2026-11-09 and the database refused connections until it was restarted. Before pushing such a migration, run the rewrite in committed batches with `VACUUM (PARALLEL 0)` between them, so the migration's own statement matches nothing. Plain `VACUUM` without `PARALLEL 0` fails in this container, because `/dev/shm` is too small for parallel workers.
 4. **Deploy the Cloudflare Worker** (`cloudflare/api-proxy`) with the origin secret:
    ```bash
    cd cloudflare/api-proxy
