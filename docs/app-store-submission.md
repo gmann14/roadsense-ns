@@ -1,6 +1,12 @@
 # App Store Submission Package (v1.0)
 
-This is the single checklist for getting RoadSense NS 1.0 through App Review. The listing text lives in `ios/fastlane/metadata/` and can be pushed with `bundle exec fastlane upload_metadata`. That lane never submits for review. Everything else is a one-time App Store Connect (ASC) setting, listed below.
+This is the single checklist for getting RoadSense NS 1.0 through App Review. The listing text lives in `ios/fastlane/metadata/` and can be pushed with `fastlane upload_metadata` (add `screenshots:true` to replace the screenshots). That lane never submits for review.
+
+**Status (2026-11-09):** every ASC setting below is done and was checked through the API. Build 35 is attached with manual release. The remaining steps are the real-drive gate, the review video and the submit itself.
+
+Running the lane from a Mac: load the API key from `~/.context/secrets/roadsense-asc.env` (it holds the key ID, issuer ID and .p8 path; never commit it). Two gotchas for version 1.0:
+- Move `metadata/en-CA/release_notes.txt` aside while running. Apple rejects "What's New" on a first version.
+- The review-information upload fails unless the version already has a review-detail record with the contact name, email and phone. Those are set in ASC now; keep them out of the repo. Everything else is a one-time App Store Connect (ASC) setting, listed below.
 
 Last updated 2026-11-08, after the [2026-10-18 review](reviews/2026-10-18-full-codebase-review.md).
 
